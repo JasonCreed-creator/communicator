@@ -1,0 +1,188 @@
+// 설계서 v1.1 §4 테이블과 1:1 도메인 타입.
+// 필드명은 DDL의 snake_case를 그대로 유지한다 — SupabaseProvider 이식 시 매핑 계층 없이 row를 그대로 쓰기 위함.
+import type {
+  ApprovalDecision,
+  AttendeeChannel,
+  CommentVisibility,
+  DeliverableArea,
+  DeliverableStatus,
+  InviteStatus,
+  MemberRole,
+} from './enums'
+
+/** uuid */
+export type UUID = string
+/** timestamptz — ISO 8601 문자열 */
+export type IsoDateTime = string
+/** date — YYYY-MM-DD 문자열 */
+export type IsoDate = string
+
+// §4-1 projects
+export interface Project {
+  id: UUID
+  name: string
+  /** 행사 약칭 — 파일명 규약에 사용, 전역 유일 */
+  code: string
+  event_date: IsoDate | null
+  drive_root_folder_id: string | null
+  slack_webhook_url: string | null
+  created_by: UUID | null
+  created_at: IsoDateTime
+}
+
+// §4-2 project_members
+export interface ProjectMember {
+  project_id: UUID
+  user_id: UUID
+  role: MemberRole
+}
+
+// §4-3 client_contacts / client_tokens
+export interface ClientContact {
+  id: UUID
+  project_id: UUID
+  name: string
+  org: string | null
+  email: string | null
+}
+
+export interface ClientToken {
+  /** URL에 그대로 사용 */
+  token: string
+  project_id: UUID
+  contact_id: UUID | null
+  expires_at: IsoDateTime | null
+  revoked_at: IsoDateTime | null
+  last_seen_at: IsoDateTime | null
+  created_at: IsoDateTime
+}
+
+// §4-4 deliverables
+export interface Deliverable {
+  id: UUID
+  project_id: UUID
+  area: DeliverableArea
+  /** '키비주얼','큐시트','명찰' 등 자유 + 프리셋 */
+  category: string
+  title: string
+  status: DeliverableStatus
+  assignee_id: UUID | null
+  due_date: IsoDate | null
+  drive_folder_id: string | null
+  /** common 문서는 false — draft ↔ internal_review만 사용 */
+  requires_approval: boolean
+  created_at: IsoDateTime
+  updated_at: IsoDateTime
+}
+
+// §4-5 versions
+export interface Version {
+  id: UUID
+  deliverable_id: UUID
+  version_no: number
+  drive_file_id: string
+  /** 규약 적용된 최종 파일명 */
+  file_name: string
+  note: string | null
+  uploaded_by: UUID | null
+  created_at: IsoDateTime
+}
+
+// §4-6 approvals
+export interface Approval {
+  id: UUID
+  deliverable_id: UUID
+  version_id: UUID
+  /** PM만 (앱 레벨 강제) */
+  requested_by: UUID | null
+  requested_at: IsoDateTime
+  due_at: IsoDateTime | null
+  decided_at: IsoDateTime | null
+  decision: ApprovalDecision | null
+  client_comment: string | null
+  decided_via_token: string | null
+}
+
+// §4-7 comments (v1.1: 내부/공유 가시성 분리)
+export interface Comment {
+  id: UUID
+  deliverable_id: UUID
+  /** 내부 작성자면 세팅 */
+  author_user_id: UUID | null
+  /** 발주처 작성자면 세팅 — 이 경우 visibility='shared' 강제 */
+  author_token: string | null
+  visibility: CommentVisibility
+  body: string
+  created_at: IsoDateTime
+}
+
+// §4-8 milestones
+export interface Milestone {
+  id: UUID
+  project_id: UUID
+  title: string
+  /** null = 전체 */
+  area: DeliverableArea | null
+  due_date: IsoDate
+  done: boolean
+}
+
+// §4-9 rsvp_contacts
+export interface RsvpContact {
+  id: UUID
+  project_id: UUID
+  name: string
+  org: string | null
+  title: string | null
+  email: string | null
+  phone: string | null
+  /** VIP/미디어/일반 등 */
+  group_tag: string | null
+  invite_status: InviteStatus
+  invited_at: IsoDateTime | null
+  responded_at: IsoDateTime | null
+  memo: string | null
+}
+
+// §4-10 attendees
+export interface Attendee {
+  id: UUID
+  project_id: UUID
+  /** RSVP 전환 시 연결 */
+  rsvp_contact_id: UUID | null
+  name: string
+  org: string | null
+  email: string | null
+  phone: string | null
+  channel: AttendeeChannel
+  registered_at: IsoDateTime
+  checked_in_at: IsoDateTime | null
+  badge_no: string | null
+}
+
+// §4-11 activity_log
+export interface ActivityLogEntry {
+  id: number
+  project_id: UUID
+  /** 'user:{id}' | 'client:{token}' | 'system' */
+  actor: string
+  /** 'version.uploaded','approval.requested' 등 */
+  action: string
+  target_type: string | null
+  target_id: UUID | null
+  meta: Record<string, unknown> | null
+  created_at: IsoDateTime
+}
+
+// §4-12 unregistered_files
+export interface UnregisteredFile {
+  id: UUID
+  project_id: UUID
+  drive_file_id: string
+  file_name: string | null
+  detected_folder: string | null
+  detected_at: IsoDateTime
+  /** 연결 시 세팅 후 versions 생성 */
+  linked_deliverable_id: UUID | null
+  dismissed: boolean
+}
