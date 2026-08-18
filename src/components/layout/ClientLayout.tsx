@@ -1,0 +1,42 @@
+import { NavLink, Outlet, useParams } from 'react-router-dom'
+
+// 발주처 화면 공통 레이아웃 — 모바일(375px) 우선, 토큰은 URL 경로로만 전달
+export default function ClientLayout() {
+  const { token } = useParams()
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <header className="border-b border-gray-200 bg-white">
+        <div className="mx-auto flex max-w-2xl items-center justify-between px-4 py-3">
+          <span className="text-sm font-bold text-gray-900">컨펌 센터</span>
+          <nav className="flex gap-1">
+            <NavLink
+              to={`/c/${token}`}
+              end
+              className={({ isActive }) =>
+                `rounded-md px-3 py-1.5 text-sm ${
+                  isActive ? 'bg-gray-900 font-medium text-white' : 'text-gray-600 hover:bg-gray-100'
+                }`
+              }
+            >
+              컨펌 요청
+            </NavLink>
+            <NavLink
+              to={`/c/${token}/status`}
+              className={({ isActive }) =>
+                `rounded-md px-3 py-1.5 text-sm ${
+                  isActive ? 'bg-gray-900 font-medium text-white' : 'text-gray-600 hover:bg-gray-100'
+                }`
+              }
+            >
+              진행 현황
+            </NavLink>
+          </nav>
+        </div>
+      </header>
+      <main className="mx-auto max-w-2xl">
+        <Outlet />
+      </main>
+    </div>
+  )
+}
