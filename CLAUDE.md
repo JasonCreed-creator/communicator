@@ -1,8 +1,9 @@
-# CLAUDE.md — MICE 커뮤니케이터 구현 지침 v1.1 (Claude Code용)
+# CLAUDE.md — MICE 커뮤니케이터 구현 지침 v1.2 (Claude Code용)
 
-> 레포 루트에 이 파일을 두고, `docs/mice-communicator-설계서-v1.1.md`를 함께 배치할 것.
-> **스키마·상태 머신·API 계약·권한 규칙의 정본은 설계서 v1.1이다.** 본 파일은 작업 순서와 규약만 정의한다. 충돌 시 설계서 우선.
-> v1.1 변경 핵심: **프론트 우선·서버 후행** — Phase 0~3은 서버 0으로 진행하고, Supabase·Drive는 Phase 4~5에서 이식한다.
+> 레포 루트에 이 파일을 두고, `docs/mice-communicator-설계서-v1.2.md`를 함께 배치할 것(v1.1은 대체).
+> **스키마·상태 머신·API 계약·권한 규칙의 정본은 설계서 v1.2다.** 본 파일은 작업 순서와 규약만 정의한다. 충돌 시 설계서 우선.
+> v1.1 변경 핵심: **프론트 우선·서버 후행** — Phase 0~3은 서버 0, Supabase·Drive는 Phase 4~5 이식.
+> v1.2 변경 핵심: **지시(requested)→제작→컨펌→운영계획서(S9) 조립 파이프라인** — Phase 3.5로 프론트 증분(여전히 서버 0). Phase 4 이식은 v1.2 스키마 기준.
 
 ## 1. 프로젝트 정의
 MICE 프로젝트 협업 허브 — 역할별(디자인·운영·등록) 산출물을 Google Drive 단일 저장소에 버전 관리하고, 발주처가 무로그인 토큰 링크로 컨펌하는 웹앱. 파일=Drive, 상태=Supabase의 하이브리드.
@@ -38,6 +39,11 @@ MICE 프로젝트 협업 허브 — 역할별(디자인·운영·등록) 산출�
 - **Phase 3 — 발주처 뷰**: S7 컨펌 큐 → S8 현황, 데모 라우트 `/c/demo` (모바일 대응 필수)
   - 코멘트 visibility 분리(internal/shared)를 프론트에서부터 구현 — 발주처 화면은 shared만 렌더
 
+- **Phase 3.5 — v1.2 증분 (서버 0, 설계서 v1.2 §개정 이력 참조)**
+  - 3.5a 타입 개정+재동결: status 'requested', Deliverable 지시·스펙·content 필드, ProgramSession, Project 행사개요 → MockProvider·픽스처 확장. **동결 해제 근거 = 사용자 v1.2 승인(2026-08-22, 시각안 기반)** — PROGRESS.md 결정 로그에 기록 후 재동결 선언
+  - 3.5b 지시 흐름 UI: S2 (pm) 지시 발행 폼·'지시됨' 뱃지, S3 지시 카드(브리프+스펙 칩), 홈 '받은 지시' 노출. 첫 버전 업로드 시 requested→draft 자동 전이(assertTransition 경유)
+  - 3.5c S9 운영계획서: 섹션 자동 조립(개요·프로그램·존운영·제작물 리스트·등록 통계·일정)+섹션별 진행률+개요·프로그램 인라인 편집(pm·ops)+인쇄 CSS(A4)
+
 ### 서버 이식 구간 (추후 — 착수 전 사용자 승인)
 - **Phase 4 — Supabase 이식**: 마이그레이션(설계서 §4 전체)+RLS(§6.2)+Auth+seed → SupabaseProvider 구현 → MockProvider와 교체(프론트 무수정이 목표)
 - **Phase 5 — Drive 이식**: OAuth(운영 계정·Production)·표준 트리(§7.1)·업로드+파일명 규약(§7.2)·프록시 ReadableStream 패스스루+100MB 캡(§7.4)·Changes API 인박스(§7.3)·final 스냅숏 원자성(§7.5) — `supabase/functions/_shared/drive.ts` 모듈화
@@ -52,8 +58,11 @@ MICE 프로젝트 협업 허브 — 역할별(디자인·운영·등록) 산출�
 | D: supabase-port | 마이그레이션·RLS·SupabaseProvider | 4 | Sonnet |
 | E: drive-core | Drive 서비스 모듈 전체 | 5 | Opus 계열 (인증·스트리밍 난도) |
 | F: notify | 알림·cron | 6 | Haiku |
+| G: types-v12 | 3.5a 타입 개정·재동결·픽스처 | 3.5 | Sonnet |
+| H: brief-ui | 3.5b 지시 흐름 UI | 3.5 | Sonnet |
+| I: plan-doc | 3.5c S9 운영계획서 | 3.5 | Sonnet |
 
-실행 순서: Phase 0(메인 단독) → A → **B·C 병렬**(A의 동결 인터페이스에 의존) → [사용자 승인] → D → E → F.
+실행 순서: Phase 0(메인 단독) → A → **B·C 병렬** → **G → H·I 병렬**(G의 재동결 인터페이스 의존) → [사용자 승인] → D → E → F.
 각 에이전트는 담당 디렉터리 밖 파일 수정 금지. 공유 타입은 A 산출물만 참조. 통합·검수는 메인이 수행.
 
 ## 6. 코딩 규약
@@ -73,6 +82,9 @@ MICE 프로젝트 협업 허브 — 역할별(디자인·운영·등록) 산출�
 4. 등록: CSV 임포트(헤더 매핑 UI) → 테이블 → 체크인 토글 → 통계 3종(응답률·등록수·체크인율)
 5. 홈 대시보드: 미결 컨펌·D-day·인박스(mock)·영역 진행률 렌더
 6. 발주처 화면 모바일(375px) 정상 동작
+7. (v1.2) 지시 발행 → 담당자 화면 '지시됨' 뱃지 → 첫 업로드 시 draft 자동 전환 (테스트로 증명)
+8. (v1.2) S9: mock 데이터로 6개 섹션 전부 렌더 + 섹션 진행률 + 제작물 리스트 표가 지시 스펙에서 자동 생성
+9. (v1.2) S9 인쇄 미리보기(A4)에서 섹션 레이아웃 정상
 
 ## 8. 서버 이식 완료 기준 (Phase 4~6 DoD)
 1. Provider 교체 후 프론트 무수정으로 §7의 1~6 전부 실DB에서 재현
