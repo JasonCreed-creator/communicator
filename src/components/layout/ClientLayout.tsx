@@ -7,15 +7,15 @@ export default function ClientLayout() {
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="border-b border-gray-200 bg-white">
-        <div className="mx-auto flex max-w-2xl items-center justify-between px-4 py-3">
+        <div className="mx-auto flex max-w-2xl flex-wrap items-center justify-between gap-2 px-4 py-2.5">
           <span className="text-sm font-bold text-gray-900">컨펌 센터</span>
           <nav className="flex gap-1">
             <NavLink
               to={`/c/${token}`}
               end
               className={({ isActive }) =>
-                `rounded-md px-3 py-1.5 text-sm ${
-                  isActive ? 'bg-gray-900 font-medium text-white' : 'text-gray-600 hover:bg-gray-100'
+                `flex h-11 items-center whitespace-nowrap rounded-md px-3 text-sm font-medium ${
+                  isActive ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100'
                 }`
               }
             >
@@ -24,8 +24,8 @@ export default function ClientLayout() {
             <NavLink
               to={`/c/${token}/status`}
               className={({ isActive }) =>
-                `rounded-md px-3 py-1.5 text-sm ${
-                  isActive ? 'bg-gray-900 font-medium text-white' : 'text-gray-600 hover:bg-gray-100'
+                `flex h-11 items-center whitespace-nowrap rounded-md px-3 text-sm font-medium ${
+                  isActive ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100'
                 }`
               }
             >
