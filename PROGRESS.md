@@ -3,55 +3,54 @@
 > 가변 상태 파일. 매 세션 체크아웃 시 에이전트가 갱신한다 (CLAUDE.md §9 리추얼).
 
 ## 1. 상태 요약
-- 현재 Phase: **Phase 1 완료 → Phase 2·3 착수 전** (B: 내부 UI · C: 발주처 뷰 — 병렬 가능)
+- 현재 Phase: **Phase 0~3 완료 — 서버 없는 구간(프론트) 종료**. Phase 4(Supabase 이식)는 착수 전 사용자 승인 필요
 - 정본 문서: `docs/mice-communicator-설계서-v1.1.md` (스키마·상태 머신·API SoT)
 - 브랜치: `main` = 정본, 작업은 `claude/extract-zip-to-repo-t6xstr` → main PR 흐름
 
 ## 2. 완료
-- 설계서 v1.0 → jc-redteam Deep Audit(조건부 보완) → v1.1 개정 확정 (2026-08-19)
-- 구현 지침 CLAUDE.md v1.1 확정 — 프론트 우선·서버 후행, DataProvider 어댑터 계층
-- 레포 초기 커밋(문서 5종) + `main` 브랜치 생성 (2026-08-19)
-- **Phase 0 — 스캐폴딩** (2026-08-19, PR #1 머지): Vite 6 + React 18 + TS + Tailwind 4,
-  S1~S8 라우팅 골격, 내부/발주처 레이아웃, `.env.example`
-- **Phase 1 — 타입·어댑터·픽스처** (2026-08-19):
-  - `src/types/` — 설계서 §4와 1:1 도메인 타입(엔티티 13종 + 열거형 7종, snake_case 유지)
-  - `src/lib/statusMachine.ts` — §5 전이표 단일 정본(7규칙) + 미리보기 포맷 발송 조건 + §7.2 파일명 규약
-  - `src/lib/errors.ts` — `{error:{code,message}}` 규약, 400/403/404/409/410 매핑
-  - `src/providers/DataProvider.ts` — **인터페이스 v1 동결** (아래 결정 로그)
-  - `src/providers/mock/MockProvider.ts` — 픽스처+메모리, 업로드 blob URL, §5·§6 규칙 재현
-  - `src/fixtures/sampleProject.ts` — 가상 행사 1건(#RULE-NO-COMPANY 준수): 항목 6(전 상태 분포)·
-    버전 6·컨펌 3·코멘트(internal/shared 혼합)·마일스톤 5·RSVP 5·참관객 3·인박스 2·`demo` 토큰
-  - 검증: vitest 33개 통과(전이표 409·발송 조건·internal 미노출·수정요청 루프·토큰 410·CSV upsert·통계)
-    + `npm run build` 통과
+- 설계서 v1.1 확정 + CLAUDE.md v1.1 (2026-08-19)
+- **Phase 0 — 스캐폴딩** (PR #1 머지): Vite 6 + React 18 + TS + Tailwind 4, S1~S8 라우팅 골격
+- **Phase 1 — 타입·어댑터·픽스처** (PR #2 머지): §4와 1:1 타입, §5 전이표 정본(statusMachine),
+  **DataProvider v1 동결(35메서드)**, MockProvider, 가상 행사 픽스처, vitest 33개
+- **Phase 2 — 내부 UI S1~S6** (2026-08-22, 에이전트 B): 홈 대시보드(미결 컨펌·D-day·인박스 연결/무시·
+  진행률·최근 활동) / 보드(카테고리 그룹·필터·항목 생성·전이) / 상세(버전 이력·미리보기·코멘트
+  internal/shared·컨펌 발송+포맷 검사·업로드) / 등록(CSV 헤더 매핑 임포트·체크인·통계 3종·내보내기) /
+  일정(마일스톤 CRUD+컨펌 기한 오버레이) / 설정(멤버·연락처·토큰 발급/회수, PM 게이팅)
+- **Phase 3 — 발주처 뷰 S7·S8** (2026-08-22, 에이전트 C): `/c/:token` 모바일 375px — 컨펌 큐(승인
+  인라인 확인·수정요청 코멘트 필수·이력), 현황(진행률·마일스톤·확정본 링크), 410/404 분기
+- **§7 프론트 DoD 1~6 전부 충족 확인** (2026-08-22, 메인 통합 검수):
+  1. Mock E2E 컨펌 루프 — 생성→업로드→내부확정→PM 발송(.ai 거부/.png 통과)→`/c/demo` 승인→final→보드 '확정' 반영 (브라우저 검증)
+  2. 수정요청 루프 — 수정요청+코멘트→새 버전 업로드 시 draft 복귀
+  3. internal 코멘트 발주처 미노출 — provider 테스트 + 브라우저 본문 검사 이중 증명
+  4. 등록 CSV 임포트(헤더 매핑 UI)·체크인 토글·통계 3종
+  5. 홈 대시보드 전 위젯 렌더
+  6. 발주처 화면 375px 정상 (21개 어서션)
+  - 통합 후 vitest 33개·빌드 통과, favicon 404 수정(인라인 SVG)
 
 ## 3. 미결
 - GitHub 기본 브랜치가 아직 `claude/extract-zip-to-repo-t6xstr` — Settings → Branches에서 `main`으로 변경 필요
-- Phase 1 PR 리뷰·머지 대기
+- Phase 2·3 PR 리뷰·머지 대기
 
 ## 4. 다음 스텝
-- Phase 2 (B: internal-ui): S1~S6 실제 UI — Mock 구동, 동결 인터페이스만 호출
-- Phase 3 (C: client-view): S7·S8·`/c/demo` — 모바일(375px) 필수, shared 코멘트만 렌더
-- B·C는 병렬 가능(둘 다 동결 인터페이스에만 의존). 완료 기준은 CLAUDE.md §7 DoD 1~6
+- **Phase 4 — Supabase 이식** (★착수 전 사용자 승인 필수): 마이그레이션(§4)+RLS(§6.2)+Auth+seed →
+  SupabaseProvider 구현 → MockProvider 교체(프론트 무수정 목표)
+- 이후 Phase 5(Drive) → Phase 6(알림·cron)
 
 ## 5. 결정 로그
-- 2026-08-19: 아키텍처 하이브리드(파일=Drive, 상태=Supabase) / 발주처 무로그인 토큰 / 컨펌 발송 PM 단독
-- 2026-08-19: 프론트 우선·서버 후행 — Phase 0~3 서버 0, Phase 4 착수 전 사용자 승인 필수
-- 2026-08-19: 컨펌 발송 조건 = 미리보기 포맷(PDF·PNG·JPG) 버전 / 코멘트 visibility 분리
-- 2026-08-19 (Phase 0): 라우트 확정 — `/`(S1) `/board/:area`(S2) `/items/:itemId`(S3) `/registration`(S4)
-  `/schedule`(S5) `/settings`(S6) `/c/:token`(S7) `/c/:token/status`(S8) / Tailwind v4 · react-router v6
-- **2026-08-19 (Phase 1): DataProvider 인터페이스 v1 동결 선언** — `src/providers/DataProvider.ts`,
-  메서드 35개(세션 1·프로젝트 2·대시보드 2·산출물 7·코멘트 1·마일스톤 4·등록 7·설정 5·인박스 3·발주처 3).
-  이후 변경은 **사용자 승인 + 설계서 개정 동반** (CLAUDE.md §9)
-- 2026-08-19 (Phase 1): 도메인 타입 필드명 = DDL snake_case 그대로 — Supabase row 무매핑 이식 목적
-- 2026-08-19 (Phase 1): 상태 전이 규칙에 '경로(via)' 차원 추가 — 같은 전이라도 status_patch/
-  approval_request/client_decision/version_upload/system 경로별로 구분해 우회 진입 차단
-- 2026-08-19 (Phase 1): 테스트 러너 vitest 채택(§7 DoD-3 '테스트로 증명' 대비) / Mock의 final 스냅숏은
-  항상 성공 가정(실 copy·재시도는 Phase 5) / 내부 코멘트 작성 경로는 addComment, 발주처는 decisions 경유만
+- 2026-08-19: 아키텍처 하이브리드 / 무로그인 토큰 / 컨펌 발송 PM 단독 / 프론트 우선·서버 후행 / 미리보기 포맷 발송 조건
+- 2026-08-19 (Phase 0): 라우트 확정 / Tailwind v4 · react-router v6
+- 2026-08-19 (Phase 1): **DataProvider v1 동결(35메서드)** — 변경은 사용자 승인+설계서 개정 동반 /
+  타입 snake_case 유지 / 전이 규칙 via 차원 / vitest 채택
+- 2026-08-22 (Phase 2·3): 상태 라벨·뱃지 색 단일 정본 `src/lib/labels.ts`(시맨틱 고정, 라벨 동반) /
+  발주처 승인 확인은 네이티브 confirm 대신 인라인 확인 패널(모바일 UX·테스트 안정성) /
+  S3 Drive 폴더 링크는 Phase 5로 보류(Drive 미연동) / S6 토큰 값 비노출(링크 복사 버튼만) /
+  favicon 인라인 SVG 추가
+- 2026-08-22: B·C 서브에이전트 병렬 실행(§5) — 파일 경계 분리로 충돌 0, 메인이 통합 검수
 
 ## 6. 세션 로그
-- 2026-08-19 세션 #1 (Claude Code 원격): 스타터 ZIP 배치·초기 커밋 → main 생성 → Phase 0
-  스캐폴딩·검증 → PR #1 머지 → Phase 1 타입·statusMachine·DataProvider 동결·MockProvider·
-  픽스처·테스트 33개 → PR 발행. 다음 = Phase 2·3 (B·C 병렬)
+- 2026-08-19 세션 #1: ZIP 배치→main 생성→Phase 0(PR #1 머지)→Phase 1(동결·테스트 33, PR #2 머지)
+- 2026-08-22 세션 #1 계속: Phase 2(B)·Phase 3(C) 병렬 구현 → 메인 통합 검수(DoD 1~6 브라우저 증명,
+  스크린샷 11장 사용자 공유) → PR 발행. 다음 = Phase 4 (사용자 승인 대기)
 
 ## 7. 세션 잠금
 - 잠금 없음 (한 폴더 = 동시 1세션)
