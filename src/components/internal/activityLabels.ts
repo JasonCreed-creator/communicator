@@ -1,6 +1,7 @@
 // 홈 대시보드(S1) 최근 활동 로그의 action 코드 → 한국어 요약 매핑.
 export const ACTIVITY_ACTION_LABELS: Record<string, string> = {
   'deliverable.created': '항목이 생성되었습니다',
+  'deliverable.requested': '지시가 발행되었습니다',
   'status.transitioned': '상태가 변경되었습니다',
   'version.uploaded': '새 버전이 업로드되었습니다',
   'approval.requested': '컨펌이 발송되었습니다',

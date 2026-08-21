@@ -51,6 +51,7 @@ function AreaBoard({ area }: { area: DeliverableArea }) {
     members.data?.find((m) => m.user_id === userId)?.profile.name ?? '미배정'
 
   const canWrite = currentUser.data && (currentUser.data.role === 'pm' || currentUser.data.role === area)
+  const isPm = currentUser.data?.role === 'pm'
 
   const grouped = new Map<string, BoardRow[]>()
   for (const row of board.data ?? []) {
@@ -130,6 +131,8 @@ function AreaBoard({ area }: { area: DeliverableArea }) {
       ) : currentUser.data ? (
         <p className="text-sm text-gray-400">이 영역에는 쓰기 권한이 없습니다(열람만 가능).</p>
       ) : null}
+
+      {isPm && <IssueBriefForm area={area} onCreated={board.reload} />}
     </section>
   )
 }
@@ -274,6 +277,190 @@ function CreateDeliverableForm({ area, onCreated }: { area: DeliverableArea; onC
         </button>
       </form>
       <ErrorAlert message={create.error} />
+    </Card>
+  )
+}
+
+// ── (v1.2) PM 전용 지시 발행 폼 ────────────────────────────────────────
+// 기존 CreateDeliverableForm(항목 셀프 생성, status='draft')과는 별도 폼 —
+// brief·스펙을 넣어 provider.createDeliverable을 호출하면 status='requested'로 발행된다.
+function IssueBriefForm({ area, onCreated }: { area: DeliverableArea; onCreated: () => void }) {
+  const members = useAsync(() => provider.listMembers(PROJECT_ID), [])
+  const [category, setCategory] = useState('')
+  const [title, setTitle] = useState('')
+  const [assigneeId, setAssigneeId] = useState('')
+  const [dueDate, setDueDate] = useState('')
+  const [brief, setBrief] = useState('')
+  const [briefRefsText, setBriefRefsText] = useState('')
+  const [specSize, setSpecSize] = useState('')
+  const [specQty, setSpecQty] = useState('')
+  const [specLocation, setSpecLocation] = useState('')
+  const [specType, setSpecType] = useState('')
+
+  const issue = useMutation(() => {
+    if (!assigneeId) throw new Error('지시에는 담당자 지정이 필요합니다.')
+    if (!brief.trim()) throw new Error('지시 내용을 입력하세요.')
+    const brief_refs = briefRefsText
+      .split('\n')
+      .map((s) => s.trim())
+      .filter(Boolean)
+    return provider.createDeliverable({
+      project_id: PROJECT_ID,
+      area,
+      category,
+      title,
+      assignee_id: assigneeId,
+      due_date: dueDate || undefined,
+      brief,
+      brief_refs: brief_refs.length > 0 ? brief_refs : undefined,
+      spec_size: specSize || undefined,
+      spec_qty: specQty ? Number(specQty) : undefined,
+      spec_location: specLocation || undefined,
+      spec_type: specType || undefined,
+    })
+  })
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault()
+    const result = await issue.run()
+    if (result) {
+      setCategory('')
+      setTitle('')
+      setAssigneeId('')
+      setDueDate('')
+      setBrief('')
+      setBriefRefsText('')
+      setSpecSize('')
+      setSpecQty('')
+      setSpecLocation('')
+      setSpecType('')
+      onCreated()
+    }
+  }
+
+  return (
+    <Card title="지시 발행" className="border-violet-200">
+      <form onSubmit={handleSubmit} className="space-y-3">
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="flex flex-col gap-1 text-xs text-gray-500">
+            카테고리
+            <input
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              required
+              placeholder="예: 현수막"
+              className="w-32 rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-gray-500">
+            제목
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              required
+              placeholder="항목 제목"
+              className="w-48 rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-gray-500">
+            담당자
+            <select
+              value={assigneeId}
+              onChange={(e) => setAssigneeId(e.target.value)}
+              required
+              className="w-36 rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900"
+            >
+              <option value="">담당자 선택…</option>
+              {members.data?.map((m) => (
+                <option key={m.user_id} value={m.user_id}>
+                  {m.profile.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-gray-500">
+            마감일
+            <input
+              type="date"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+              className="rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900"
+            />
+          </label>
+        </div>
+
+        <label className="flex flex-col gap-1 text-xs text-gray-500">
+          지시 내용
+          <textarea
+            value={brief}
+            onChange={(e) => setBrief(e.target.value)}
+            required
+            rows={3}
+            placeholder="담당자에게 전달할 지시 내용을 입력하세요"
+            className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900"
+          />
+        </label>
+
+        <label className="flex flex-col gap-1 text-xs text-gray-500">
+          참고 링크 (선택, 한 줄에 하나씩)
+          <textarea
+            value={briefRefsText}
+            onChange={(e) => setBriefRefsText(e.target.value)}
+            rows={2}
+            placeholder={'https://…'}
+            className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900"
+          />
+        </label>
+
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <label className="flex flex-col gap-1 text-xs text-gray-500">
+            규격 (선택)
+            <input
+              value={specSize}
+              onChange={(e) => setSpecSize(e.target.value)}
+              placeholder="예: 23000×5000mm"
+              className="rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-gray-500">
+            수량 (선택)
+            <input
+              type="number"
+              min="0"
+              value={specQty}
+              onChange={(e) => setSpecQty(e.target.value)}
+              className="rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-gray-500">
+            위치 (선택)
+            <input
+              value={specLocation}
+              onChange={(e) => setSpecLocation(e.target.value)}
+              placeholder="예: 메인 게이트 외벽"
+              className="rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-gray-500">
+            종류 (선택)
+            <input
+              value={specType}
+              onChange={(e) => setSpecType(e.target.value)}
+              placeholder="예: 현수막"
+              className="rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900"
+            />
+          </label>
+        </div>
+
+        <button
+          type="submit"
+          disabled={issue.pending}
+          className="rounded-md bg-violet-700 px-4 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+        >
+          지시 발행
+        </button>
+      </form>
+      <ErrorAlert message={issue.error} />
     </Card>
   )
 }
