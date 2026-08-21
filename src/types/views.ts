@@ -1,4 +1,4 @@
-// 화면(S1~S8)·API 계약(설계서 §8)이 요구하는 뷰 모델과 입력 타입.
+// 화면(S1~S9)·API 계약(설계서 §8)이 요구하는 뷰 모델과 입력 타입.
 // 엔티티(§4)와 달리 여기는 조합 형태라 프론트 편의에 맞춰 정의하되, 필드명은 snake_case로 통일한다.
 import type {
   ActivityLogEntry,
@@ -9,6 +9,8 @@ import type {
   IsoDate,
   IsoDateTime,
   Milestone,
+  OverviewItem,
+  ProgramSession,
   Project,
   UUID,
   Version,
@@ -63,6 +65,8 @@ export interface DashboardData {
   inbox_count: number
   area_progress: AreaProgress[]
   recent_activity: ActivityLogEntry[]
+  /** v1.2 — 현재 사용자가 담당자인 requested 항목(받은 지시), 마감순 */
+  my_requested: Deliverable[]
 }
 
 // ── S3 항목 상세 ───────────────────────────────────────────────────
@@ -172,6 +176,14 @@ export interface CreateDeliverableInput {
   assignee_id?: UUID
   due_date?: IsoDate
   requires_approval?: boolean
+  // v1.2 지시 발행 (§8 POST /deliverables): brief·스펙 포함 시 status='requested', pm 전용
+  brief?: string
+  brief_refs?: string[]
+  spec_size?: string
+  spec_qty?: number
+  spec_location?: string
+  spec_type?: string
+  content?: string
 }
 
 export interface UploadVersionInput {
@@ -231,4 +243,86 @@ export interface ClientDecisionInput {
 // ── 참관객 뷰 ──────────────────────────────────────────────────────
 export interface AttendeeWithRsvp extends Attendee {
   rsvp_group_tag: string | null
+}
+
+// ── v1.2 프로그램표 (§8 /program-sessions, pm·ops) ─────────────────
+export interface ProgramSessionInput {
+  section?: string
+  /** 'HH:MM' */
+  start_time?: string
+  end_time?: string
+  title: string
+  speaker_name?: string
+  speaker_title?: string
+  speaker_org?: string
+  note?: string
+  sort_order?: number
+}
+
+// ── v1.2 행사개요 편집 (§8 PATCH /projects/{id}/overview, pm·ops) ──
+export interface ProjectOverviewPatch {
+  event_date?: IsoDate | null
+  theme?: string | null
+  venue?: string | null
+  mc_name?: string | null
+  overview_items?: OverviewItem[] | null
+}
+
+// ── v1.2 S9 운영계획서 (§8 GET /projects/{id}/plan) ────────────────
+export type PlanSectionKey =
+  | 'overview'
+  | 'program'
+  | 'zones'
+  | 'production'
+  | 'registration'
+  | 'schedule'
+
+/** 섹션별 진행률 — done/total 산정 기준은 provider 구현(getPlan) 주석이 정본 */
+export interface PlanSectionProgress {
+  key: PlanSectionKey
+  done: number
+  total: number
+}
+
+export interface PlanVersionRef {
+  id: UUID
+  version_no: number
+  file_name: string
+  /** 미리보기 포맷(PDF·PNG·JPG)일 때만 — 그 외 null */
+  preview_url: string | null
+}
+
+/** ③존별 운영 — ops 항목의 content(마크다운)+최신 도면 */
+export interface PlanZoneItem {
+  deliverable_id: UUID
+  category: string
+  title: string
+  status: DeliverableStatus
+  content: string | null
+  latest_version: PlanVersionRef | null
+}
+
+/** ④제작물 리스트 — design 항목의 지시 스펙 표+최신 시안·상태 */
+export interface PlanProductionItem {
+  deliverable_id: UUID
+  category: string
+  title: string
+  status: DeliverableStatus
+  spec_size: string | null
+  spec_qty: number | null
+  spec_location: string | null
+  spec_type: string | null
+  latest_version: PlanVersionRef | null
+}
+
+export interface PlanData {
+  project: Project
+  /** sort_order 순 */
+  program_sessions: ProgramSession[]
+  zones: PlanZoneItem[]
+  production_items: PlanProductionItem[]
+  registration_stats: RegistrationStats
+  /** 기한순 */
+  milestones: Milestone[]
+  section_progress: PlanSectionProgress[]
 }

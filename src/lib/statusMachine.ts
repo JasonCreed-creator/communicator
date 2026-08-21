@@ -23,6 +23,8 @@ export interface TransitionRule {
 
 /** 설계서 §5 전이표와 1:1 */
 export const TRANSITION_RULES: readonly TransitionRule[] = [
+  // v1.2: PM 지시 발행(requested) → 첫 버전 업로드·인박스 연결 시 자동 draft
+  { from: 'requested', to: 'draft', via: 'version_upload' },
   { from: 'draft', to: 'internal_review', via: 'status_patch', roles: ['pm', 'design', 'ops'] },
   { from: 'internal_review', to: 'draft', via: 'status_patch', roles: ['pm'], requires_comment: true },
   { from: 'internal_review', to: 'pending_approval', via: 'approval_request', roles: ['pm'] },

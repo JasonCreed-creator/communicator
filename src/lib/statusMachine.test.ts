@@ -8,11 +8,12 @@ import {
 } from './statusMachine'
 
 describe('statusMachine — 설계서 §5 전이표', () => {
-  it('전이표는 7개 규칙과 1:1이다', () => {
-    expect(TRANSITION_RULES).toHaveLength(7)
+  it('전이표는 8개 규칙과 1:1이다 (v1.2: requested→draft 추가)', () => {
+    expect(TRANSITION_RULES).toHaveLength(8)
   })
 
   it('표 안의 전이는 통과한다', () => {
+    expect(assertTransition('requested', 'draft', 'version_upload').from).toBe('requested')
     expect(assertTransition('draft', 'internal_review', 'status_patch').from).toBe('draft')
     expect(assertTransition('changes_requested', 'draft', 'version_upload').via).toBe('version_upload')
     expect(assertTransition('approved', 'final', 'system').to).toBe('final')
@@ -20,6 +21,8 @@ describe('statusMachine — 설계서 §5 전이표', () => {
 
   it('표 밖의 전이는 409 conflict', () => {
     const cases: Array<[string, string, string]> = [
+      ['requested', 'draft', 'status_patch'], // 지시 해제는 수동 전이 불가 — 업로드·인박스 연결 경로만
+      ['requested', 'internal_review', 'status_patch'], // 산출물 없이 리뷰 진입 금지
       ['draft', 'pending_approval', 'status_patch'], // 내부 리뷰 건너뛰기 금지
       ['draft', 'final', 'status_patch'],
       ['internal_review', 'pending_approval', 'status_patch'], // 발송은 approval_request 경로만
