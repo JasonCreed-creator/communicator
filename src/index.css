@@ -1,1 +1,30 @@
 @import 'tailwindcss';
+
+/* ── S9 운영계획서 인쇄 CSS (A4) — CLAUDE.md §4 Phase 3.5c / 설계서 v1.2 §10 S9 / DoD-9 ──
+   .plan-print-hidden : 편집 버튼·인쇄 버튼 등 문서 아닌 UI를 인쇄 시 숨김
+   .plan-section       : 섹션 컨테이너 — 인쇄 시 섹션 중간에서 페이지가 끊기지 않도록 보호 */
+@page {
+  size: A4;
+  margin: 16mm 14mm;
+}
+
+@media print {
+  .plan-print-hidden {
+    display: none !important;
+  }
+
+  .plan-section {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .plan-doc {
+    max-width: none;
+    width: 100%;
+    padding: 0;
+  }
+
+  body {
+    background: #fff;
+  }
+}
