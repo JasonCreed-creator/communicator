@@ -1,4 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom'
+import BrandLogo from '../BrandLogo'
 
 const NAV_ITEMS = [
   { to: '/', label: '홈', end: true },
@@ -14,7 +15,11 @@ export default function InternalLayout() {
     <div className="min-h-screen bg-gray-50">
       <header className="border-b border-gray-200 bg-white">
         <div className="mx-auto flex max-w-6xl items-center gap-6 px-4 py-3">
-          <span className="text-sm font-bold text-gray-900">MICE 커뮤니케이터</span>
+          <span className="flex items-center gap-2.5">
+            <BrandLogo className="h-4 w-auto" />
+            <span className="text-gray-300">|</span>
+            <span className="text-sm font-bold text-gray-900">MICE 커뮤니케이터</span>
+          </span>
           <nav className="flex flex-wrap gap-1">
             {NAV_ITEMS.map(({ to, label, end }) => (
               <NavLink
