@@ -4,7 +4,7 @@ import ErrorAlert from '../components/internal/ErrorAlert'
 import PageHeader from '../components/internal/PageHeader'
 import StatTile from '../components/internal/StatTile'
 import { downloadCsv, parseCsv, toCsv } from '../components/internal/csvUtils'
-import { PROJECT_ID } from '../fixtures/sampleProject'
+import { useProject } from '../context/ProjectContext'
 import { useAsync, useMutation } from '../hooks/useAsync'
 import { INVITE_STATUS_LABELS, formatDateTime } from '../lib/labels'
 import { getDataProvider } from '../providers'
@@ -28,14 +28,15 @@ const TABS: { id: Tab; label: string }[] = [
 ]
 
 export default function RegistrationPage() {
+  const { projectId } = useProject()
   const [tab, setTab] = useState<Tab>('rsvp')
-  const project = useAsync(() => provider.getProject(PROJECT_ID), [])
+  const project = useAsync(() => provider.getProject(projectId), [projectId])
   // v1.3 유형 토글(§3): general(일반형)이면 RSVP 파이프라인은 표시 계층에서만 숨긴다 — 데이터는 보존.
   const isGeneral = project.data?.event_type === 'general'
   const visibleTabs = isGeneral ? TABS.filter((t) => t.id !== 'rsvp') : TABS
   const activeTab: Tab = isGeneral && tab === 'rsvp' ? 'attendees' : tab
   // 3.9.1 P3 — §6 S4: 상단 통계 3카드 상시 노출. 탭 전환마다 재조회해 체크인 등 변경을 따라간다.
-  const stats = useAsync(() => provider.getRegistrationStats(PROJECT_ID), [activeTab])
+  const stats = useAsync(() => provider.getRegistrationStats(projectId), [projectId, activeTab])
 
   return (
     <section className="space-y-6 p-6">
@@ -86,7 +87,8 @@ export default function RegistrationPage() {
 
 // ── RSVP 탭 ───────────────────────────────────────────────────────────
 function RsvpTab() {
-  const rsvps = useAsync(() => provider.listRsvpContacts(PROJECT_ID), [])
+  const { projectId } = useProject()
+  const rsvps = useAsync(() => provider.listRsvpContacts(projectId), [projectId])
 
   const handleExport = () => {
     const headers = ['이름', '소속', '직함', '이메일', '전화', '그룹', '상태', '메모']
@@ -194,7 +196,8 @@ function RsvpRow({ rsvp, onChanged }: { rsvp: RsvpContact; onChanged: () => void
 
 // ── 참관객 탭 ─────────────────────────────────────────────────────────
 function AttendeesTab() {
-  const attendees = useAsync(() => provider.listAttendees(PROJECT_ID), [])
+  const { projectId } = useProject()
+  const attendees = useAsync(() => provider.listAttendees(projectId), [projectId])
 
   const handleExport = () => {
     const headers = ['이름', '소속', '채널', '등록일', '뱃지번호', '체크인']
@@ -362,12 +365,13 @@ function guessField(header: string): keyof CsvImportRow | 'ignore' {
 }
 
 function CsvImportPanel({ target, onImported }: { target: 'rsvp' | 'attendees'; onImported: () => void }) {
+  const { projectId } = useProject()
   const [parsed, setParsed] = useState<{ headers: string[]; rows: string[][] } | null>(null)
   const [mapping, setMapping] = useState<Record<number, keyof CsvImportRow | 'ignore'>>({})
   const [validationError, setValidationError] = useState<string | null>(null)
   const [result, setResult] = useState<{ inserted: number; updated: number } | null>(null)
   const importMutation = useMutation((rows: CsvImportRow[]) =>
-    provider.importRegistrationCsv(PROJECT_ID, target, rows),
+    provider.importRegistrationCsv(projectId, target, rows),
   )
 
   const handleFile = (e: ChangeEvent<HTMLInputElement>) => {

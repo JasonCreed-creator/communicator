@@ -6,7 +6,7 @@ import RoleCharterGrid from './RoleCharterGrid'
 import WbsChecklist from './WbsChecklist'
 import WbsGantt from './WbsGantt'
 import { phaseOptionsFrom } from './wbsFormat'
-import { PROJECT_ID } from '../../fixtures/sampleProject'
+import { useProject } from '../../context/ProjectContext'
 import { useAsync, useMutation } from '../../hooks/useAsync'
 import { getDataProvider } from '../../providers'
 
@@ -16,16 +16,17 @@ type ViewMode = 'checklist' | 'gantt'
 
 /** S5 상단 — WBS 체크리스트/간트 + 하단 R&R 카드 그리드 (설계서 v1.4 §10 S5) */
 export default function WbsBoard() {
+  const { projectId } = useProject()
   const [phase, setPhase] = useState<number | 'all'>('all')
   const [view, setView] = useState<ViewMode>('checklist')
 
-  const project = useAsync(() => provider.getProject(PROJECT_ID), [])
-  const wbsTasks = useAsync(() => provider.listWbsTasks(PROJECT_ID), [])
-  const roleCharters = useAsync(() => provider.listRoleCharters(PROJECT_ID), [])
-  const deliverables = useAsync(() => provider.listDeliverables(PROJECT_ID), [])
+  const project = useAsync(() => provider.getProject(projectId), [projectId])
+  const wbsTasks = useAsync(() => provider.listWbsTasks(projectId), [projectId])
+  const roleCharters = useAsync(() => provider.listRoleCharters(projectId), [projectId])
+  const deliverables = useAsync(() => provider.listDeliverables(projectId), [projectId])
   const currentUser = useAsync(() => provider.getCurrentUser(), [])
   const isPm = currentUser.data?.role === 'pm'
-  const reexpand = useMutation(() => provider.expandWbs(PROJECT_ID))
+  const reexpand = useMutation(() => provider.expandWbs(projectId))
 
   const allTasks = wbsTasks.data ?? []
   const phases = phaseOptionsFrom(allTasks)

@@ -6,7 +6,7 @@ import Card from '../components/internal/Card'
 import DdayBadge from '../components/internal/DdayBadge'
 import ErrorAlert from '../components/internal/ErrorAlert'
 import StatusBadge from '../components/internal/StatusBadge'
-import { PROJECT_ID } from '../fixtures/sampleProject'
+import { useProject } from '../context/ProjectContext'
 import { useAsync, useMutation } from '../hooks/useAsync'
 import { AREA_LABELS, formatDate, formatDateTime } from '../lib/labels'
 import { getDataProvider } from '../providers'
@@ -28,8 +28,9 @@ export default function ItemDetailPage() {
 }
 
 function ItemDetail({ itemId }: { itemId: string }) {
+  const { projectId } = useProject()
   const currentUser = useAsync(() => provider.getCurrentUser(), [])
-  const members = useAsync(() => provider.listMembers(PROJECT_ID), [])
+  const members = useAsync(() => provider.listMembers(projectId), [projectId])
   const detail = useAsync(() => provider.getDeliverable(itemId), [itemId])
 
   if (detail.error) {

@@ -9,7 +9,7 @@ import ProgramSection from '../components/plan/ProgramSection'
 import RegistrationSection from '../components/plan/RegistrationSection'
 import ScheduleSection from '../components/plan/ScheduleSection'
 import ZonesSection from '../components/plan/ZonesSection'
-import { PROJECT_ID } from '../fixtures/sampleProject'
+import { useProject } from '../context/ProjectContext'
 import { useAsync } from '../hooks/useAsync'
 import { getDataProvider } from '../providers'
 import type { PlanSectionKey, PlanSectionProgress } from '../types/views'
@@ -21,7 +21,8 @@ function progressFor(list: PlanSectionProgress[], key: PlanSectionKey): PlanSect
 }
 
 export default function PlanDocPage() {
-  const plan = useAsync(() => provider.getPlan(PROJECT_ID), [])
+  const { projectId } = useProject()
+  const plan = useAsync(() => provider.getPlan(projectId), [projectId])
   const user = useAsync(() => provider.getCurrentUser(), [])
 
   const canEdit = user.data?.role === 'pm' || user.data?.role === 'ops'

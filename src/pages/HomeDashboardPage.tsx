@@ -7,7 +7,7 @@ import PageHeader from '../components/internal/PageHeader'
 import ProgressBar from '../components/internal/ProgressBar'
 import StatTile from '../components/internal/StatTile'
 import { activityActionLabel, activityActorLabel } from '../components/internal/activityLabels'
-import { PROJECT_ID } from '../fixtures/sampleProject'
+import { useProject } from '../context/ProjectContext'
 import { useAsync, useMutation } from '../hooks/useAsync'
 import { AREA_LABELS, formatDateTime, ddayLabel } from '../lib/labels'
 import { getDataProvider } from '../providers'
@@ -16,9 +16,10 @@ import type { Deliverable } from '../types/entities'
 const provider = getDataProvider()
 
 export default function HomeDashboardPage() {
-  const dashboard = useAsync(() => provider.getDashboard(PROJECT_ID), [])
-  const inbox = useAsync(() => provider.listInbox(PROJECT_ID), [])
-  const deliverables = useAsync(() => provider.listDeliverables(PROJECT_ID), [])
+  const { projectId } = useProject()
+  const dashboard = useAsync(() => provider.getDashboard(projectId), [projectId])
+  const inbox = useAsync(() => provider.listInbox(projectId), [projectId])
+  const deliverables = useAsync(() => provider.listDeliverables(projectId), [projectId])
 
   const reloadAll = () => {
     dashboard.reload()
