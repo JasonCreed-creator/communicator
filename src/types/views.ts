@@ -24,6 +24,7 @@ import type {
   DeliverableStatus,
   EventType,
   MemberRole,
+  ProjectStatus,
   WbsStatus,
 } from './enums'
 
@@ -279,8 +280,74 @@ export interface ProjectOverviewPatch {
 // ── v1.3 프로젝트 기본정보·온보딩 (§8 PATCH /projects/{id}, S0) ────
 export interface ProjectPatch {
   name?: string
+  /** v1.5 — 행사 코드 (전역 유일, 파일명 규약) */
+  code?: string
   event_date?: IsoDate | null
   event_type?: EventType
+  // v1.5 — 행사 설정 ① 개요 전 필드 (§8 PATCH /projects/{id})
+  event_end_date?: IsoDate | null
+  start_time?: string | null
+  end_time?: string | null
+  venue?: string | null
+  expected_headcount?: number | null
+  seating?: string | null
+  theme?: string | null
+  organizer?: string | null
+  mc_name?: string | null
+  target_audience?: string | null
+  overview_items?: OverviewItem[] | null
+}
+
+/** v1.5 — POST /projects 입력(§8): S0 ① 저장 시 개요 필드 일괄 수신, onboarded_at은 null.
+ *  "새 행사 만들기"는 빈 입력으로 호출해 자리표시 행사를 만든 뒤 S0에서 채운다. */
+export interface ProjectCreateInput {
+  name?: string
+  code?: string
+  event_date?: IsoDate | null
+  event_end_date?: IsoDate | null
+  start_time?: string | null
+  end_time?: string | null
+  venue?: string | null
+  expected_headcount?: number | null
+  seating?: string | null
+  theme?: string | null
+  organizer?: string | null
+  mc_name?: string | null
+  target_audience?: string | null
+  overview_items?: OverviewItem[] | null
+  event_type?: EventType
+}
+
+/** v1.5 — 행사 설정 ② 담당자 입력(§8 POST /projects/{id}/members).
+ *  mock은 추가 즉시 멤버로 취급, Phase 4부터 project_invites 경유 승격 */
+export interface MemberInput {
+  display_name: string
+  email: string
+  role: MemberRole
+}
+
+/** v1.5 — GET /projects 요약(§8): 프로젝트 셀렉터·S-1 행사 목록 공용 */
+export interface ProjectSummary {
+  id: UUID
+  name: string
+  code: string
+  event_type: EventType
+  event_date: IsoDate | null
+  venue: string | null
+  expected_headcount: number | null
+  status: ProjectStatus
+  /** onboarded_at !== null 파생값 */
+  onboarded: boolean
+  /** 온보딩 진행 단계(0~3): ①개요 필수 4(행사명·코드·시작일·장소) ②PM 지정 ③완료 처리 */
+  onboarding_steps_done: number
+  pm_name: string | null
+  /** 미결 컨펌(pending_approval 항목 수) */
+  pending_approvals: number
+  /** 지연 WBS 태스크 수 (lib/wbs 산식) */
+  delayed_tasks: number
+  /** 확정(final) 항목 수 / 전체 항목 수 — 전체 진행률 소스 */
+  finals: number
+  deliverable_total: number
 }
 
 /** 온보딩 완료 상태 — 설계서 v1.4.1 §8 GET /projects/{id}/onboarding.

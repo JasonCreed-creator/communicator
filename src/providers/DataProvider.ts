@@ -1,12 +1,15 @@
 // ─────────────────────────────────────────────────────────────────────
-// DataProvider 인터페이스 v3.1 — 2026-08-22 재동결 (CLAUDE.md §4 Phase 3.8a)
+// DataProvider 인터페이스 v4 — 2026-08-22 재동결 (CLAUDE.md §4 Phase 3.10a)
 //   v1: 2026-08-19 동결(35메서드). v2: v1.2 승인 근거로 41메서드 재동결.
 //   v3: 사용자 v1.4 승인(2026-08-22, v1.3 포함)을 근거로 동결 해제 →
 //   온보딩·프로젝트 패치·큐시트 CRUD/스냅숏·WBS 전개/조회/패치·R&R 조회
 //   12메서드 추가(53메서드) 후 재동결.
-//   v3.1: 사용자 v1.4.1 승인(2026-08-22)을 근거로 동결 해제 → 메서드 수 53 불변,
-//   Project.onboarded_at·OnboardingStatus.onboarded_at 필드 추가만(설계서 v1.4.1 §4-1·§8)
-//   후 재동결. 경위는 PROGRESS.md 결정 로그 참조.
+//   v3.1: 사용자 v1.4.1 승인(2026-08-22) — 메서드 수 53 불변, onboarded_at 필드 추가만.
+//   v4: 사용자 v1.5 승인(2026-08-22, 시각안 3화면)을 근거로 동결 해제 → 다중 행사:
+//   listProjects·createProject·closeProject·addMember·removeMember 5메서드 추가(58메서드),
+//   Project·ProjectPatch 개요 필드 확장, ProjectSummary 뷰 타입 신설.
+//   **기존 53메서드 시그니처 불변**(projectId 인자는 이미 전 메서드에 존재) 후 재동결.
+//   경위는 PROGRESS.md 결정 로그 참조.
 //
 // 프론트(S0~S9)는 이 인터페이스만 호출한다. 구현체:
 //   1단계 MockProvider     — 픽스처+메모리, 업로드=blob URL (Phase 1·3.5~3.7)
@@ -52,13 +55,16 @@ import type {
   DeliverableDetail,
   DeliverableFilter,
   IssueTokenInput,
+  MemberInput,
   MemberWithProfile,
   MilestoneInput,
   OnboardingStatus,
   PlanData,
   ProgramSessionInput,
+  ProjectCreateInput,
   ProjectOverviewPatch,
   ProjectPatch,
+  ProjectSummary,
   RegistrationStats,
   RequestApprovalInput,
   RsvpContactPatch,
@@ -72,10 +78,20 @@ export interface DataProvider {
   /** 현재 로그인 사용자 + 프로젝트 내 역할 (역할·영역 검증의 기준) */
   getCurrentUser(): Promise<CurrentUser>
 
-  // ── 프로젝트·멤버 (S6) ────────────────────────────────────────────
+  // ── 프로젝트·멤버 (S-1·S6) ────────────────────────────────────────
+  /** v1.5 §8 GET /projects — 행사 목록+요약. 프로젝트 셀렉터·S-1 공용 */
+  listProjects(): Promise<ProjectSummary[]>
+  /** v1.5 §8 POST /projects — 행사 생성(생성자=pm 자동, onboarded_at=null). 빈 입력이면 자리표시 행사 */
+  createProject(input: ProjectCreateInput): Promise<Project>
+  /** v1.5 §8 POST /projects/{id}/close·reopen — status 토글 (pm). closed면 쓰기 전부 409 */
+  closeProject(projectId: UUID, closed: boolean): Promise<Project>
   getProject(projectId: UUID): Promise<Project>
   listMembers(projectId: UUID): Promise<MemberWithProfile[]>
-  /** v1.3 §8 PATCH /projects/{id} — 행사 유형·기본정보 수정 (pm) */
+  /** v1.5 §8 POST /projects/{id}/members — 담당자 추가(mock은 즉시 멤버, Phase 4부터 초대 승격) */
+  addMember(projectId: UUID, input: MemberInput): Promise<MemberWithProfile>
+  /** v1.5 §8 DELETE /projects/{id}/members/{id} — 제거. 마지막 PM이면 409 */
+  removeMember(projectId: UUID, memberId: UUID): Promise<void>
+  /** v1.3 §8 PATCH /projects/{id} — 행사 유형·기본정보 수정 (pm). v1.5: 개요 전 필드 */
   updateProject(projectId: UUID, patch: ProjectPatch): Promise<Project>
 
   // ── v1.3 S0 온보딩 ────────────────────────────────────────────────
