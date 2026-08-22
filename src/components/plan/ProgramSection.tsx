@@ -6,7 +6,7 @@ import { getDataProvider } from '../../providers'
 import type { ProgramSession } from '../../types/entities'
 import type { ProgramSessionInput } from '../../types/views'
 import PlanSection from './PlanSection'
-import type { SectionProgressData } from './planSections'
+import { PLAN_SECTION_META, type SectionProgressData } from './planSections'
 
 const provider = getDataProvider()
 
@@ -43,7 +43,7 @@ export default function ProgramSection({ sessions, progress, canEdit, onChanged 
   const grouped = groupBySection(sessions)
 
   return (
-    <PlanSection number="②" title="프로그램" progress={progress}>
+    <PlanSection number={PLAN_SECTION_META.program.number} title={PLAN_SECTION_META.program.title} progress={progress}>
       {sessions.length === 0 && <p className="text-xs text-gray-400">등록된 세션이 없습니다.</p>}
       <div className="space-y-5">
         {grouped.map(([section, rows]) => (

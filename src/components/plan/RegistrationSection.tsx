@@ -1,5 +1,5 @@
 import PlanSection from './PlanSection'
-import type { SectionProgressData } from './planSections'
+import { PLAN_SECTION_META, type SectionProgressData } from './planSections'
 import type { RegistrationStats } from '../../types/views'
 
 /** ⑤등록 통계 — 응답률·등록수·체크인율 3종 타일 */
@@ -11,7 +11,7 @@ export default function RegistrationSection({
   progress: SectionProgressData
 }) {
   return (
-    <PlanSection number="⑤" title="등록 통계" progress={progress}>
+    <PlanSection number={PLAN_SECTION_META.registration.number} title={PLAN_SECTION_META.registration.title} progress={progress}>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <StatTile
           label="응답률"

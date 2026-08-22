@@ -1,5 +1,5 @@
 import PlanSection from './PlanSection'
-import type { SectionProgressData } from './planSections'
+import { PLAN_SECTION_META, type SectionProgressData } from './planSections'
 import StatusPill from './StatusPill'
 import type { PlanProductionItem } from '../../types/views'
 
@@ -12,7 +12,7 @@ export default function ProductionSection({
   progress: SectionProgressData
 }) {
   return (
-    <PlanSection number="④" title="제작물 리스트" progress={progress}>
+    <PlanSection number={PLAN_SECTION_META.production.number} title={PLAN_SECTION_META.production.title} progress={progress}>
       {items.length === 0 ? (
         <p className="text-xs text-gray-400">등록된 제작물이 없습니다.</p>
       ) : (

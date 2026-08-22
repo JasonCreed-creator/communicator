@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import Card from '../components/internal/Card'
 import DdayBadge from '../components/internal/DdayBadge'
 import ErrorAlert from '../components/internal/ErrorAlert'
+import WbsBoard from '../components/wbs/WbsBoard'
 import { PROJECT_ID } from '../fixtures/sampleProject'
 import { useAsync, useMutation } from '../hooks/useAsync'
 import { AREA_LABELS, formatDate, formatDateTime } from '../lib/labels'
@@ -65,46 +66,54 @@ export default function SchedulePage() {
     <section className="space-y-6 p-6">
       <div>
         <p className="font-mono text-xs text-gray-400">S5</p>
-        <h1 className="mt-1 text-2xl font-bold text-gray-900">일정·마일스톤</h1>
+        <h1 className="mt-1 text-2xl font-bold text-gray-900">일정·WBS·R&R</h1>
       </div>
 
-      <ErrorAlert message={milestones.error} />
-      <ErrorAlert message={dashboard.error} />
+      <WbsBoard />
 
-      <div className="flex items-center gap-2">
-        {FILTER_OPTIONS.map((opt) => (
-          <button
-            key={opt.value}
-            type="button"
-            onClick={() => setFilter(opt.value)}
-            className={`rounded-md px-3 py-1.5 text-sm ${
-              filter === opt.value
-                ? 'bg-gray-900 text-white'
-                : 'border border-gray-300 text-gray-600 hover:bg-gray-50'
-            }`}
-          >
-            {opt.label}
-          </button>
-        ))}
+      <div>
+        <h2 className="mb-3 text-lg font-semibold text-gray-900">마일스톤·컨펌 기한</h2>
+
+        <ErrorAlert message={milestones.error} />
+        <ErrorAlert message={dashboard.error} />
+
+        <div className="mb-4 flex items-center gap-2">
+          {FILTER_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => setFilter(opt.value)}
+              className={`rounded-md px-3 py-1.5 text-sm ${
+                filter === opt.value
+                  ? 'bg-gray-900 text-white'
+                  : 'border border-gray-300 text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="space-y-6">
+          <Card title="타임라인">
+            {milestones.loading && <p className="text-sm text-gray-400">불러오는 중…</p>}
+            {!milestones.loading && entries.length === 0 && (
+              <p className="text-sm text-gray-400">표시할 일정이 없습니다.</p>
+            )}
+            <ul className="divide-y divide-gray-100">
+              {entries.map((entry) =>
+                entry.kind === 'milestone' ? (
+                  <MilestoneRow key={`m-${entry.milestone.id}`} milestone={entry.milestone} onChanged={reloadAll} />
+                ) : (
+                  <ApprovalOverlayRow key={`a-${entry.item.approval.id}`} item={entry.item} />
+                ),
+              )}
+            </ul>
+          </Card>
+
+          <MilestoneForm onCreated={reloadAll} />
+        </div>
       </div>
-
-      <Card title="타임라인">
-        {milestones.loading && <p className="text-sm text-gray-400">불러오는 중…</p>}
-        {!milestones.loading && entries.length === 0 && (
-          <p className="text-sm text-gray-400">표시할 일정이 없습니다.</p>
-        )}
-        <ul className="divide-y divide-gray-100">
-          {entries.map((entry) =>
-            entry.kind === 'milestone' ? (
-              <MilestoneRow key={`m-${entry.milestone.id}`} milestone={entry.milestone} onChanged={reloadAll} />
-            ) : (
-              <ApprovalOverlayRow key={`a-${entry.item.approval.id}`} item={entry.item} />
-            ),
-          )}
-        </ul>
-      </Card>
-
-      <MilestoneForm onCreated={reloadAll} />
     </section>
   )
 }

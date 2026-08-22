@@ -1,6 +1,6 @@
 import { renderLiteMarkdown } from './markdown'
 import PlanSection from './PlanSection'
-import type { SectionProgressData } from './planSections'
+import { PLAN_SECTION_META, type SectionProgressData } from './planSections'
 import StatusPill from './StatusPill'
 import type { PlanZoneItem } from '../../types/views'
 
@@ -13,7 +13,7 @@ export default function ZonesSection({
   progress: SectionProgressData
 }) {
   return (
-    <PlanSection number="③" title="존별 운영" progress={progress}>
+    <PlanSection number={PLAN_SECTION_META.zones.number} title={PLAN_SECTION_META.zones.title} progress={progress}>
       {zones.length === 0 && <p className="text-xs text-gray-400">등록된 운영 항목이 없습니다.</p>}
       <div className="space-y-5">
         {zones.map((z) => (

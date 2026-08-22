@@ -1,5 +1,6 @@
 // S9 운영계획서 — 설계서 v1.2 §10 S9. 6개 섹션 자동 조립 + 섹션별 진행률 + 인라인 편집(pm·ops) + 인쇄(A4).
 import ErrorAlert from '../components/internal/ErrorAlert'
+import CuesheetSection from '../components/plan/CuesheetSection'
 import OverviewSection from '../components/plan/OverviewSection'
 import PlanProgressSummary from '../components/plan/PlanProgressSummary'
 import ProductionSection from '../components/plan/ProductionSection'
@@ -60,6 +61,11 @@ export default function PlanDocPage() {
             progress={progressFor(plan.data.section_progress, 'program')}
             canEdit={canEdit}
             onChanged={plan.reload}
+          />
+
+          <CuesheetSection
+            cuesheet={plan.data.cuesheet}
+            progress={progressFor(plan.data.section_progress, 'cuesheet')}
           />
 
           <ZonesSection zones={plan.data.zones} progress={progressFor(plan.data.section_progress, 'zones')} />
