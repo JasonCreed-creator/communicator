@@ -49,28 +49,28 @@ export default function CuesheetEditor({
 
   return (
     <Card title="큐시트">
-      {cues.loading && <p className="text-sm text-gray-400">불러오는 중…</p>}
+      {cues.loading && <p className="text-sm text-ink-cap">불러오는 중…</p>}
       <ErrorAlert message={cues.error} />
       <ErrorAlert message={moveError} />
 
-      {!cues.loading && list.length === 0 && <p className="text-sm text-gray-400">작성된 큐가 없습니다.</p>}
+      {!cues.loading && list.length === 0 && <p className="text-sm text-ink-cap">작성된 큐가 없습니다.</p>}
 
       {list.length > 0 && (
         <div className="overflow-x-auto">
           <table className="w-full min-w-[820px] border-collapse text-sm">
             <thead>
-              <tr className="border-b border-gray-200 text-left text-xs text-gray-500">
-                <th className="py-1.5 pr-3 font-medium">큐번호</th>
-                <th className="py-1.5 pr-3 font-medium">시간</th>
-                <th className="py-1.5 pr-3 font-medium">구분</th>
-                <th className="py-1.5 pr-3 font-medium">내용</th>
-                <th className="py-1.5 pr-3 font-medium">음향</th>
-                <th className="py-1.5 pr-3 font-medium">조명</th>
-                <th className="py-1.5 pr-3 font-medium">스크린</th>
-                <th className="py-1.5 font-medium">액션</th>
+              <tr>
+                <th className="ui-th">큐번호</th>
+                <th className="ui-th">시간</th>
+                <th className="ui-th">구분</th>
+                <th className="ui-th">내용</th>
+                <th className="ui-th">음향</th>
+                <th className="ui-th">조명</th>
+                <th className="ui-th">스크린</th>
+                <th className="ui-th">액션</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-border">
               {list.map((c, i) => (
                 <CueRow
                   key={c.id}
@@ -107,8 +107,8 @@ function CueAddForm({ deliverableId, onAdded }: { deliverableId: string; onAdded
   }
 
   return (
-    <div className="mt-4 border-t border-gray-100 pt-4">
-      <p className="mb-2 text-xs font-semibold text-gray-500">행 추가</p>
+    <div className="mt-4 border-t border-border pt-4">
+      <p className="mb-2 t-caption font-semibold">행 추가</p>
       <CueFieldsForm
         values={values}
         onChange={(p) => setValues((v) => ({ ...v, ...p }))}

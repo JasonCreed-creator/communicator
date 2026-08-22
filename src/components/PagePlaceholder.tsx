@@ -14,10 +14,10 @@ export default function PagePlaceholder({
 }: PagePlaceholderProps) {
   return (
     <section className="p-6">
-      <p className="font-mono text-xs text-gray-400">{screenId}</p>
-      <h1 className="mt-1 text-2xl font-bold text-gray-900">{title}</h1>
-      <p className="mt-2 text-sm text-gray-500">{description}</p>
-      <div className="mt-6 rounded-lg border border-dashed border-gray-300 p-10 text-center text-sm text-gray-400">
+      <p className="t-caption font-mono">{screenId}</p>
+      <h1 className="t-page-title mt-1">{title}</h1>
+      <p className="mt-2 text-sm text-ink-sub">{description}</p>
+      <div className="mt-6 rounded-xl border border-dashed border-border p-10 text-center text-sm text-ink-cap">
         {implementedIn} 구현 예정
       </div>
     </section>

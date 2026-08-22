@@ -65,7 +65,7 @@ describe('DoD-13 S5 WBS 뷰', () => {
     expect(screen.getByText('6.1')).toBeTruthy()
   })
 
-  it('간트 토글 시 바가 렌더된다 — 필터된 태스크 수만큼, 완료 태스크는 emerald', async () => {
+  it('간트 토글 시 바가 렌더된다 — 필터된 태스크 수만큼, 바 색은 역할 컬러·완료는 40% 투명', async () => {
     const { container } = renderRoute('/schedule')
     await screen.findByText('1.1')
 
@@ -75,9 +75,11 @@ describe('DoD-13 S5 WBS 뷰', () => {
     expect(bars.length).toBe(37)
 
     const bar11 = Array.from(bars).find((b) => (b.getAttribute('title') ?? '').startsWith('1.1 '))!
-    expect(bar11.className).toContain('bg-emerald-500') // 1.1은 done 픽스처
+    expect(bar11.className).toContain('bg-brown') // 1.1은 done 픽스처 (pm 역할 컬러 §3)
+    expect(bar11.className).toContain('opacity-40') // 완료 바는 40% 투명 (§6 S5)
     const bar13 = Array.from(bars).find((b) => (b.getAttribute('title') ?? '').startsWith('1.3 '))!
-    expect(bar13.className).toContain('bg-gray-400') // 1.3은 doing(지연·임박 아님) → 기본색
+    expect(bar13.className).toContain('bg-brown') // 1.3은 doing(지연·임박 아님) → 역할 컬러 그대로
+    expect(bar13.className).not.toContain('opacity-40')
 
     // 단계 필터와 결합해도 바 개수가 줄어든다
     await userEvent.click(within(wbsCard()).getByRole('button', { name: /^1\. 사전착수$/ }))

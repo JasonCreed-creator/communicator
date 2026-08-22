@@ -29,14 +29,14 @@ describe('DoD-14 WBS 지연/임박 UI 반영', () => {
 
     const delayedRow = screen.getByText('6.5').closest('tr')!
     expect(within(delayedRow).getByText('지연')).toBeTruthy()
-    expect(delayedRow.className).toContain('bg-red-50')
+    expect(delayedRow.className).toContain('bg-negative-tint')
 
     const imminentRow = screen.getByText('6.6').closest('tr')!
     expect(within(imminentRow).getByText('임박')).toBeTruthy()
-    expect(imminentRow.className).toContain('bg-amber-50')
+    expect(imminentRow.className).toContain('bg-accent-tint')
   })
 
-  it('간트 뷰에서 지연 바는 red, 임박 바는 amber로 렌더된다', async () => {
+  it('간트 뷰에서 지연 바는 negative, 임박 바는 accent로 렌더된다 (§3)', async () => {
     const { container } = renderRoute('/schedule')
     await screen.findByText('6.5')
 
@@ -44,9 +44,9 @@ describe('DoD-14 WBS 지연/임박 UI 반영', () => {
 
     const bars = Array.from(container.querySelectorAll('[data-testid="wbs-gantt-bar"]'))
     const bar65 = bars.find((b) => (b.getAttribute('title') ?? '').startsWith('6.5 '))!
-    expect(bar65.className).toContain('bg-red-500')
+    expect(bar65.className).toContain('bg-negative')
     const bar66 = bars.find((b) => (b.getAttribute('title') ?? '').startsWith('6.6 '))!
-    expect(bar66.className).toContain('bg-amber-500')
+    expect(bar66.className).toContain('bg-accent')
   })
 
   it('홈 대시보드에 지연/임박 집계 위젯이 카운트와 함께 렌더된다', async () => {

@@ -47,40 +47,27 @@ export default function WbsTaskEditForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-3 rounded-md bg-gray-50 p-3">
-      <label className="flex flex-col gap-1 text-xs text-gray-500">
+    <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-3 rounded-md bg-canvas p-3">
+      <label className="flex flex-col gap-1 t-caption">
         태스크명
-        <input
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          className="w-48 rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900"
-        />
+        <input value={title} onChange={(e) => setTitle(e.target.value)} className="ui-input w-48" />
       </label>
-      <label className="flex flex-col gap-1 text-xs text-gray-500">
+      <label className="flex flex-col gap-1 t-caption">
         시작일
         <input
           type="date"
           value={startDate}
           onChange={(e) => setStartDate(e.target.value)}
-          className="rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900"
+          className="ui-input"
         />
       </label>
-      <label className="flex flex-col gap-1 text-xs text-gray-500">
+      <label className="flex flex-col gap-1 t-caption">
         종료일
-        <input
-          type="date"
-          value={endDate}
-          onChange={(e) => setEndDate(e.target.value)}
-          className="rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900"
-        />
+        <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="ui-input" />
       </label>
-      <label className="flex flex-col gap-1 text-xs text-gray-500">
+      <label className="flex flex-col gap-1 t-caption">
         담당 역할
-        <select
-          value={role}
-          onChange={(e) => setRole(e.target.value as MemberRole)}
-          className="rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900"
-        >
+        <select value={role} onChange={(e) => setRole(e.target.value as MemberRole)} className="ui-input">
           {MEMBER_ROLES.map((r) => (
             <option key={r} value={r}>
               {ROLE_LABELS[r]}
@@ -88,21 +75,13 @@ export default function WbsTaskEditForm({
           ))}
         </select>
       </label>
-      <label className="flex flex-col gap-1 text-xs text-gray-500">
+      <label className="flex flex-col gap-1 t-caption">
         메모
-        <input
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          className="w-40 rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900"
-        />
+        <input value={note} onChange={(e) => setNote(e.target.value)} className="ui-input w-40" />
       </label>
-      <label className="flex flex-col gap-1 text-xs text-gray-500">
+      <label className="flex flex-col gap-1 t-caption">
         연결 산출물
-        <select
-          value={linkedId}
-          onChange={(e) => setLinkedId(e.target.value)}
-          className="w-48 rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900"
-        >
+        <select value={linkedId} onChange={(e) => setLinkedId(e.target.value)} className="ui-input w-48">
           <option value="">연결 없음</option>
           {deliverables.map((d) => (
             <option key={d.id} value={d.id}>
@@ -112,18 +91,10 @@ export default function WbsTaskEditForm({
         </select>
       </label>
       <div className="flex gap-2">
-        <button
-          type="submit"
-          disabled={save.pending}
-          className="h-9 rounded-md bg-gray-900 px-3 text-xs font-medium text-white disabled:opacity-50"
-        >
+        <button type="submit" disabled={save.pending} className="btn btn-primary">
           저장
         </button>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="h-9 rounded-md border border-gray-300 px-3 text-xs text-gray-600 hover:bg-gray-50"
-        >
+        <button type="button" onClick={onCancel} className="btn btn-ghost">
           취소
         </button>
       </div>

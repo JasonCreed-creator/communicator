@@ -7,15 +7,16 @@ interface CardProps {
   className?: string
 }
 
-/** 내부 화면 공용 카드 — 흰 배경 + 얇은 테두리, 헤더에 제목·우측 액션 슬롯 */
+/** 내부 화면 공용 카드 — §5: --card + 1px --border + r12 + 그림자 1단계.
+ *  헤더에 카드 타이틀(16/600)·우측 액션 슬롯. 카드 안 카드 금지(면 분리는 --canvas 인셋). */
 export default function Card({ title, action, children, className = '' }: CardProps) {
   return (
-    <div className={`rounded-lg border border-gray-200 bg-white ${className}`}>
-      <div className="flex items-center justify-between gap-3 border-b border-gray-100 px-4 py-3">
-        <h2 className="text-sm font-semibold text-gray-900">{title}</h2>
+    <div className={`ui-card ${className}`}>
+      <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-3.5">
+        <h2 className="t-card-title">{title}</h2>
         {action}
       </div>
-      <div className="p-4">{children}</div>
+      <div className="p-5">{children}</div>
     </div>
   )
 }

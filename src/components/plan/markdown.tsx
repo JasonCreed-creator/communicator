@@ -33,7 +33,7 @@ export function renderLiteMarkdown(source: string): ReactNode {
     if (line.startsWith('### ')) {
       flushBullets()
       blocks.push(
-        <h4 key={`h-${key++}`} className="mt-2 text-sm font-semibold text-gray-900 first:mt-0">
+        <h4 key={`h-${key++}`} className="mt-2 text-sm font-semibold text-ink first:mt-0">
           {line.slice(4)}
         </h4>,
       )
@@ -45,7 +45,7 @@ export function renderLiteMarkdown(source: string): ReactNode {
     }
     flushBullets()
     blocks.push(
-      <p key={`p-${key++}`} className="text-sm text-gray-700">
+      <p key={`p-${key++}`} className="text-sm text-ink-sub">
         {line}
       </p>,
     )

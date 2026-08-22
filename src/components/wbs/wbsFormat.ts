@@ -11,11 +11,12 @@ export const WBS_STATUS_LABELS: Record<WbsStatus, string> = {
   done: '완료',
 }
 
-/** 뱃지/토글 버튼용 색 — 시맨틱 고정(라벨 텍스트 동반 원칙, CLAUDE.md §6) */
+/** 뱃지/토글 버튼용 색 — 시맨틱 고정(라벨 텍스트 동반 원칙, CLAUDE.md §6).
+ *  디자인지시서 v1 §3 상태 컬러 체계 차용: todo=draft 톤, doing=internal_review 톤, done=approved 톤. */
 export const WBS_STATUS_BADGE_CLASSES: Record<WbsStatus, string> = {
-  todo: 'bg-gray-100 text-gray-700',
-  doing: 'bg-blue-50 text-blue-800',
-  done: 'bg-emerald-50 text-emerald-800',
+  todo: 'bg-track text-ink-sub',
+  doing: 'bg-steel-tint text-steel',
+  done: 'bg-positive-tint text-positive',
 }
 
 const WBS_STATUS_CYCLE: readonly WbsStatus[] = ['todo', 'doing', 'done']

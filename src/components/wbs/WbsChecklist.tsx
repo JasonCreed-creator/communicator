@@ -20,30 +20,30 @@ export default function WbsChecklist({ tasks, deliverables, isPm, onChanged }: W
   const groups = groupTasksByPhase(tasks)
 
   if (tasks.length === 0) {
-    return <p className="text-sm text-gray-400">표시할 태스크가 없습니다.</p>
+    return <p className="text-sm text-ink-cap">표시할 태스크가 없습니다.</p>
   }
 
   return (
     <div className="space-y-6">
       {groups.map((g) => (
         <div key={g.phase_no}>
-          <h3 className="mb-2 text-xs font-semibold text-gray-500">
+          <h3 className="mb-2 text-xs font-semibold text-brown">
             {g.phase_no}. {g.phase_name}
           </h3>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[860px] border-collapse text-sm">
               <thead>
-                <tr className="border-b border-gray-200 text-left text-xs text-gray-500">
-                  <th className="py-1.5 pr-3 font-medium">코드</th>
-                  <th className="py-1.5 pr-3 font-medium">태스크</th>
-                  <th className="py-1.5 pr-3 font-medium">기간</th>
-                  <th className="py-1.5 pr-3 font-medium">담당</th>
-                  <th className="py-1.5 pr-3 font-medium">상태</th>
-                  <th className="py-1.5 pr-3 font-medium">연결 산출물</th>
-                  {isPm && <th className="py-1.5 pr-3 font-medium">편집</th>}
+                <tr>
+                  <th className="ui-th">코드</th>
+                  <th className="ui-th">태스크</th>
+                  <th className="ui-th">기간</th>
+                  <th className="ui-th">담당</th>
+                  <th className="ui-th">상태</th>
+                  <th className="ui-th">연결 산출물</th>
+                  {isPm && <th className="ui-th">편집</th>}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-border">
                 {g.tasks.map((task) => (
                   <WbsTaskRow
                     key={task.id}
@@ -63,6 +63,12 @@ export default function WbsChecklist({ tasks, deliverables, isPm, onChanged }: W
   )
 }
 
+function rowHighlightClass(delayed: boolean, imminent: boolean): string {
+  if (delayed) return 'bg-negative-tint'
+  if (imminent) return 'bg-accent-tint'
+  return 'hover:bg-accent-tint/30'
+}
+
 function WbsTaskRow({
   task,
   deliverables,
@@ -79,48 +85,44 @@ function WbsTaskRow({
   const [editing, setEditing] = useState(false)
   const delayed = isDelayed(task, today)
   const imminent = isImminent(task, today)
-  const rowClass = delayed ? 'bg-red-50' : imminent ? 'bg-amber-50' : ''
+  const rowClass = rowHighlightClass(delayed, imminent)
   const colCount = isPm ? 7 : 6
 
   return (
     <>
       <tr className={rowClass}>
-        <td className="py-2 pr-3 font-mono text-xs text-gray-500">{task.code}</td>
-        <td className="py-2 pr-3">
+        <td className="py-2.5 pr-3 font-mono text-xs text-ink-cap">{task.code}</td>
+        <td className="py-2.5 pr-3">
           <div className="flex flex-wrap items-center gap-1.5">
-            <span className={task.status === 'done' ? 'text-gray-400 line-through' : 'font-medium text-gray-900'}>
+            <span className={task.status === 'done' ? 'text-ink-cap line-through' : 'font-medium text-ink'}>
               {task.title}
             </span>
             {task.origin_role && (
-              <span className="inline-flex shrink-0 items-center rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500">
+              <span className="inline-flex shrink-0 items-center rounded bg-track px-1.5 py-0.5 text-[10px] font-medium text-ink-cap">
                 {task.origin_role}
               </span>
             )}
-            {delayed && <span className="text-xs font-medium text-red-700">지연</span>}
-            {imminent && <span className="text-xs font-medium text-amber-700">임박</span>}
+            {delayed && <span className="text-xs font-medium text-negative">지연</span>}
+            {imminent && <span className="text-xs font-medium text-accent-deep">임박</span>}
           </div>
         </td>
-        <td className="whitespace-nowrap py-2 pr-3 text-xs tabular-nums text-gray-600">
+        <td className="whitespace-nowrap py-2.5 pr-3 text-xs text-ink-sub">
           {dateRangeLabel(task.start_date, task.end_date, task.offset_start, task.offset_end)}
         </td>
-        <td className="py-2 pr-3">
-          <span className="inline-flex shrink-0 items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700">
+        <td className="py-2.5 pr-3">
+          <span className="inline-flex shrink-0 items-center rounded-full bg-track px-2 py-0.5 text-xs font-medium text-ink-sub">
             {ROLE_LABELS[task.role]}
           </span>
         </td>
-        <td className="py-2 pr-3">
+        <td className="py-2.5 pr-3">
           <WbsStatusControl taskId={task.id} status={task.status} onChanged={onChanged} />
         </td>
-        <td className="py-2 pr-3">
+        <td className="py-2.5 pr-3">
           <LinkedDeliverableBadge deliverableId={task.linked_deliverable_id} deliverables={deliverables} />
         </td>
         {isPm && (
-          <td className="py-2 pr-3">
-            <button
-              type="button"
-              onClick={() => setEditing((v) => !v)}
-              className="rounded-md border border-gray-300 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50"
-            >
+          <td className="py-2.5 pr-3">
+            <button type="button" onClick={() => setEditing((v) => !v)} className="btn btn-ghost btn-sm">
               {editing ? '닫기' : '편집'}
             </button>
           </td>

@@ -2,7 +2,6 @@
 // 유형 라벨은 아직 어디에도 정의되어 있지 않아 이 스텝(및 EventBasicsCard·RegistrationPage)에서
 // 자체 정의한다: 일반형 = 참관객 명단·체크인 중심 / 모객형 = 리드젠·RSVP 파이프라인 전체.
 import { useState } from 'react'
-import Card from '../internal/Card'
 import ErrorAlert from '../internal/ErrorAlert'
 import { PROJECT_ID } from '../../fixtures/sampleProject'
 import { useMutation } from '../../hooks/useAsync'
@@ -38,14 +37,17 @@ export default function EventTypeStep({
   }
 
   return (
-    <Card title="② 행사 유형">
+    <section>
+      <h2 className="t-section-title mb-4">② 행사 유형</h2>
       <fieldset className="space-y-3">
         <legend className="sr-only">행사 유형 선택</legend>
         {OPTIONS.map((opt) => (
           <label
             key={opt.value}
-            className={`flex cursor-pointer items-start gap-3 rounded-lg border p-4 text-sm transition-colors ${
-              value === opt.value ? 'border-gray-900 bg-gray-50' : 'border-gray-200 hover:bg-gray-50'
+            className={`flex cursor-pointer items-start gap-3 rounded-lg p-4 text-sm transition-colors ${
+              value === opt.value
+                ? 'border-2 border-accent bg-accent-tint'
+                : 'border border-border bg-card hover:border-border-strong'
             }`}
           >
             <input
@@ -57,8 +59,8 @@ export default function EventTypeStep({
               className="mt-0.5"
             />
             <span>
-              <span className="block font-semibold text-gray-900">{opt.title}</span>
-              <span className="mt-0.5 block text-xs text-gray-500">{opt.desc}</span>
+              <span className="block font-semibold text-ink">{opt.title}</span>
+              <span className="mt-0.5 block text-xs text-ink-sub">{opt.desc}</span>
             </span>
           </label>
         ))}
@@ -67,22 +69,13 @@ export default function EventTypeStep({
       <ErrorAlert message={save.error} />
 
       <div className="mt-4 flex justify-between">
-        <button
-          type="button"
-          onClick={onPrev}
-          className="rounded-md border border-gray-300 px-4 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
-        >
+        <button type="button" onClick={onPrev} className="btn btn-ghost">
           이전
         </button>
-        <button
-          type="button"
-          onClick={handleNext}
-          disabled={save.pending}
-          className="rounded-md bg-gray-900 px-4 py-1.5 text-sm font-medium text-white disabled:opacity-50"
-        >
+        <button type="button" onClick={handleNext} disabled={save.pending} className="btn btn-primary">
           다음
         </button>
       </div>
-    </Card>
+    </section>
   )
 }

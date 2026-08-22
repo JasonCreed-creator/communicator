@@ -2,11 +2,13 @@ import { useState, type FormEvent, type MouseEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import Card from '../components/internal/Card'
 import DdayBadge from '../components/internal/DdayBadge'
+import EmptyState from '../components/internal/EmptyState'
 import ErrorAlert from '../components/internal/ErrorAlert'
+import PageHeader from '../components/internal/PageHeader'
 import StatusBadge from '../components/internal/StatusBadge'
 import { PROJECT_ID } from '../fixtures/sampleProject'
 import { useAsync, useMutation } from '../hooks/useAsync'
-import { AREA_LABELS, STATUS_LABELS, formatDate } from '../lib/labels'
+import { AREA_LABELS, STATUS_LABELS, STATUS_STRIP_CLASSES, formatDate } from '../lib/labels'
 import { getDataProvider } from '../providers'
 import type { Deliverable } from '../types/entities'
 import type { DeliverableArea, DeliverableStatus } from '../types/enums'
@@ -62,20 +64,17 @@ function AreaBoard({ area }: { area: DeliverableArea }) {
 
   return (
     <section className="space-y-6 p-6">
-      <div>
-        <p className="font-mono text-xs text-gray-400">S2</p>
-        <h1 className="mt-1 text-2xl font-bold text-gray-900">{AREA_LABELS[area]} 보드</h1>
-      </div>
+      <PageHeader caption={`S2 · ${AREA_LABELS[area]} 보드`} title={`${AREA_LABELS[area]} 보드`} />
 
       <ErrorAlert message={board.error} />
 
       <div className="flex flex-wrap items-center gap-3">
-        <label className="flex items-center gap-2 text-sm text-gray-600">
+        <label className="flex items-center gap-2 text-sm text-ink-sub">
           상태
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as DeliverableStatus | '')}
-            className="rounded-md border border-gray-300 px-2 py-1 text-sm text-gray-700"
+            className="ui-input"
           >
             <option value="">전체</option>
             {(Object.keys(STATUS_LABELS) as DeliverableStatus[]).map((s) => (
@@ -85,12 +84,12 @@ function AreaBoard({ area }: { area: DeliverableArea }) {
             ))}
           </select>
         </label>
-        <label className="flex items-center gap-2 text-sm text-gray-600">
+        <label className="flex items-center gap-2 text-sm text-ink-sub">
           담당
           <select
             value={assigneeFilter}
             onChange={(e) => setAssigneeFilter(e.target.value)}
-            className="rounded-md border border-gray-300 px-2 py-1 text-sm text-gray-700"
+            className="ui-input"
           >
             <option value="">전체</option>
             {members.data?.map((m) => (
@@ -102,15 +101,17 @@ function AreaBoard({ area }: { area: DeliverableArea }) {
         </label>
       </div>
 
-      {board.loading && <p className="text-sm text-gray-400">불러오는 중…</p>}
-      {board.data && board.data.length === 0 && (
-        <p className="text-sm text-gray-400">조건에 맞는 항목이 없습니다.</p>
-      )}
+      {board.loading && <p className="text-sm text-ink-cap">불러오는 중…</p>}
+      {board.data && board.data.length === 0 && <EmptyState message="조건에 맞는 항목이 없습니다." />}
 
       <div className="space-y-6">
         {[...grouped.entries()].map(([category, rows]) => (
-          <Card key={category} title={category}>
-            <ul className="divide-y divide-gray-100">
+          <div key={category} className="space-y-3">
+            <div className="flex items-baseline gap-2 px-1">
+              <span className="text-xs font-medium tracking-wide text-brown">{category}</span>
+              <span className="text-xs text-ink-cap">{rows.length}건</span>
+            </div>
+            <ul className="space-y-2">
               {rows.map(({ deliverable, latestVersionNo }) => (
                 <BoardRowItem
                   key={deliverable.id}
@@ -122,14 +123,14 @@ function AreaBoard({ area }: { area: DeliverableArea }) {
                 />
               ))}
             </ul>
-          </Card>
+          </div>
         ))}
       </div>
 
       {canWrite ? (
         <CreateDeliverableForm area={area} onCreated={board.reload} />
       ) : currentUser.data ? (
-        <p className="text-sm text-gray-400">이 영역에는 쓰기 권한이 없습니다(열람만 가능).</p>
+        <p className="text-sm text-ink-cap">이 영역에는 쓰기 권한이 없습니다(열람만 가능).</p>
       ) : null}
 
       {isPm && <IssueBriefForm area={area} onCreated={board.reload} />}
@@ -160,34 +161,37 @@ function BoardRowItem({
   }
 
   return (
-    <li className="py-2.5 first:pt-0 last:pb-0">
-      <Link to={`/items/${deliverable.id}`} className="flex flex-wrap items-center gap-3 hover:opacity-70">
+    <li className="ui-card relative overflow-hidden">
+      <span aria-hidden className={`absolute inset-y-0 left-0 w-[3px] ${STATUS_STRIP_CLASSES[deliverable.status]}`} />
+      <Link
+        to={`/items/${deliverable.id}`}
+        className="flex flex-wrap items-center gap-3 py-3 pr-4 pl-5 hover:opacity-70"
+      >
         <StatusBadge status={deliverable.status} />
-        <span className="min-w-0 flex-1 truncate text-sm font-medium text-gray-900">{deliverable.title}</span>
-        <span className="shrink-0 text-xs text-gray-500">
+        <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink">{deliverable.title}</span>
+        <span className="shrink-0 text-xs text-ink-sub">
           {latestVersionNo > 0 ? `v${latestVersionNo}` : '버전 없음'}
         </span>
-        <span className="shrink-0 text-xs text-gray-500">{assigneeName}</span>
+        <span className="shrink-0 text-xs text-ink-sub">{assigneeName}</span>
         {deliverable.due_date ? (
-          <span className="flex shrink-0 items-center gap-1.5 text-xs text-gray-500">
+          <span className="flex shrink-0 items-center gap-1.5 text-xs text-ink-sub">
             {formatDate(deliverable.due_date)}
             <DdayBadge isoDate={deliverable.due_date} />
           </span>
         ) : (
-          <span className="shrink-0 text-xs text-gray-400">마감 미정</span>
+          <span className="shrink-0 text-xs text-ink-cap">마감 미정</span>
         )}
         {canWrite && deliverable.status === 'draft' && (
-          <button
-            type="button"
-            onClick={handleTransition}
-            disabled={transition.pending}
-            className="shrink-0 rounded-md border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-          >
+          <button type="button" onClick={handleTransition} disabled={transition.pending} className="btn btn-ghost btn-sm shrink-0">
             내부검토 요청
           </button>
         )}
       </Link>
-      <ErrorAlert message={transition.error} />
+      {transition.error && (
+        <div className="px-5 pb-3">
+          <ErrorAlert message={transition.error} />
+        </div>
+      )}
     </li>
   )
 }
@@ -224,32 +228,32 @@ function CreateDeliverableForm({ area, onCreated }: { area: DeliverableArea; onC
   return (
     <Card title="새 항목 생성">
       <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-3">
-        <label className="flex flex-col gap-1 text-xs text-gray-500">
+        <label className="flex flex-col gap-1 t-caption">
           카테고리
           <input
             value={category}
             onChange={(e) => setCategory(e.target.value)}
             required
             placeholder="예: 배너"
-            className="w-32 rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900"
+            className="ui-input w-32"
           />
         </label>
-        <label className="flex flex-col gap-1 text-xs text-gray-500">
+        <label className="flex flex-col gap-1 t-caption">
           제목
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             required
             placeholder="항목 제목"
-            className="w-48 rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900"
+            className="ui-input w-48"
           />
         </label>
-        <label className="flex flex-col gap-1 text-xs text-gray-500">
+        <label className="flex flex-col gap-1 t-caption">
           담당
           <select
             value={assigneeId}
             onChange={(e) => setAssigneeId(e.target.value)}
-            className="w-36 rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900"
+            className="ui-input w-36"
           >
             <option value="">미배정</option>
             {members.data?.map((m) => (
@@ -259,20 +263,16 @@ function CreateDeliverableForm({ area, onCreated }: { area: DeliverableArea; onC
             ))}
           </select>
         </label>
-        <label className="flex flex-col gap-1 text-xs text-gray-500">
+        <label className="flex flex-col gap-1 t-caption">
           마감
           <input
             type="date"
             value={dueDate}
             onChange={(e) => setDueDate(e.target.value)}
-            className="rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900"
+            className="ui-input"
           />
         </label>
-        <button
-          type="submit"
-          disabled={create.pending}
-          className="rounded-md bg-gray-900 px-4 py-1.5 text-sm font-medium text-white disabled:opacity-50"
-        >
+        <button type="submit" disabled={create.pending} className="btn btn-primary">
           생성
         </button>
       </form>
@@ -339,36 +339,36 @@ function IssueBriefForm({ area, onCreated }: { area: DeliverableArea; onCreated:
   }
 
   return (
-    <Card title="지시 발행" className="border-violet-200">
+    <Card title="지시 발행">
       <form onSubmit={handleSubmit} className="space-y-3">
         <div className="flex flex-wrap items-end gap-3">
-          <label className="flex flex-col gap-1 text-xs text-gray-500">
+          <label className="flex flex-col gap-1 t-caption">
             카테고리
             <input
               value={category}
               onChange={(e) => setCategory(e.target.value)}
               required
               placeholder="예: 현수막"
-              className="w-32 rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900"
+              className="ui-input w-32"
             />
           </label>
-          <label className="flex flex-col gap-1 text-xs text-gray-500">
+          <label className="flex flex-col gap-1 t-caption">
             제목
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               required
               placeholder="항목 제목"
-              className="w-48 rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900"
+              className="ui-input w-48"
             />
           </label>
-          <label className="flex flex-col gap-1 text-xs text-gray-500">
+          <label className="flex flex-col gap-1 t-caption">
             담당자
             <select
               value={assigneeId}
               onChange={(e) => setAssigneeId(e.target.value)}
               required
-              className="w-36 rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900"
+              className="ui-input w-36"
             >
               <option value="">담당자 선택…</option>
               {members.data?.map((m) => (
@@ -378,18 +378,18 @@ function IssueBriefForm({ area, onCreated }: { area: DeliverableArea; onCreated:
               ))}
             </select>
           </label>
-          <label className="flex flex-col gap-1 text-xs text-gray-500">
+          <label className="flex flex-col gap-1 t-caption">
             마감일
             <input
               type="date"
               value={dueDate}
               onChange={(e) => setDueDate(e.target.value)}
-              className="rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900"
+              className="ui-input"
             />
           </label>
         </div>
 
-        <label className="flex flex-col gap-1 text-xs text-gray-500">
+        <label className="flex flex-col gap-1 t-caption">
           지시 내용
           <textarea
             value={brief}
@@ -397,66 +397,62 @@ function IssueBriefForm({ area, onCreated }: { area: DeliverableArea; onCreated:
             required
             rows={3}
             placeholder="담당자에게 전달할 지시 내용을 입력하세요"
-            className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900"
+            className="ui-input w-full"
           />
         </label>
 
-        <label className="flex flex-col gap-1 text-xs text-gray-500">
+        <label className="flex flex-col gap-1 t-caption">
           참고 링크 (선택, 한 줄에 하나씩)
           <textarea
             value={briefRefsText}
             onChange={(e) => setBriefRefsText(e.target.value)}
             rows={2}
             placeholder={'https://…'}
-            className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900"
+            className="ui-input w-full"
           />
         </label>
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <label className="flex flex-col gap-1 text-xs text-gray-500">
+          <label className="flex flex-col gap-1 t-caption">
             규격 (선택)
             <input
               value={specSize}
               onChange={(e) => setSpecSize(e.target.value)}
               placeholder="예: 23000×5000mm"
-              className="rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900"
+              className="ui-input"
             />
           </label>
-          <label className="flex flex-col gap-1 text-xs text-gray-500">
+          <label className="flex flex-col gap-1 t-caption">
             수량 (선택)
             <input
               type="number"
               min="0"
               value={specQty}
               onChange={(e) => setSpecQty(e.target.value)}
-              className="rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900"
+              className="ui-input"
             />
           </label>
-          <label className="flex flex-col gap-1 text-xs text-gray-500">
+          <label className="flex flex-col gap-1 t-caption">
             위치 (선택)
             <input
               value={specLocation}
               onChange={(e) => setSpecLocation(e.target.value)}
               placeholder="예: 메인 게이트 외벽"
-              className="rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900"
+              className="ui-input"
             />
           </label>
-          <label className="flex flex-col gap-1 text-xs text-gray-500">
+          <label className="flex flex-col gap-1 t-caption">
             종류 (선택)
             <input
               value={specType}
               onChange={(e) => setSpecType(e.target.value)}
               placeholder="예: 현수막"
-              className="rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900"
+              className="ui-input"
             />
           </label>
         </div>
 
-        <button
-          type="submit"
-          disabled={issue.pending}
-          className="rounded-md bg-violet-700 px-4 py-1.5 text-sm font-medium text-white disabled:opacity-50"
-        >
+        <button type="submit" disabled={issue.pending} className="btn btn-accent">
           지시 발행
         </button>
       </form>
