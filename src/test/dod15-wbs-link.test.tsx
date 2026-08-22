@@ -9,12 +9,12 @@ import { mockProvider, renderRoute } from './testUtils'
 afterEach(cleanup)
 
 describe('DoD-15 WBS 산출물 연결 뱃지·자동 완료', () => {
-  it('2.8 태스크에 연결된 dlv-007의 상태 뱃지(지시됨)가 렌더된다', async () => {
+  it('2.8 태스크에 연결된 dlv-007의 상태 뱃지(가이드됨)가 렌더된다', async () => {
     renderRoute('/schedule')
     await screen.findByText('2.8')
 
     const row = screen.getByText('2.8').closest('tr')!
-    expect(within(row).getByText('지시됨')).toBeTruthy()
+    expect(within(row).getByText('가이드됨')).toBeTruthy()
     expect(within(row).getByText('메인 게이트 현수막')).toBeTruthy()
   })
 

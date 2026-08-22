@@ -7,7 +7,7 @@ export const DELIVERABLE_AREAS = ['design', 'ops', 'common'] as const
 export type DeliverableArea = (typeof DELIVERABLE_AREAS)[number]
 
 export const DELIVERABLE_STATUSES = [
-  // v1.2: requested = PM 지시 발행 상태 (산출물 없음)
+  // v1.2: requested = PM 가이드 발행 상태 (산출물 없음)
   'requested',
   'draft',
   'internal_review',

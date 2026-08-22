@@ -10,7 +10,7 @@ import type {
 } from '../types/enums'
 
 export const STATUS_LABELS: Record<DeliverableStatus, string> = {
-  requested: '지시됨',
+  requested: '가이드됨',
   draft: '초안',
   internal_review: '내부검토',
   pending_approval: '컨펌대기',

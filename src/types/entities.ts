@@ -142,8 +142,8 @@ export interface Deliverable {
   drive_folder_id: string | null
   /** common 문서는 false — draft ↔ internal_review만 사용 */
   requires_approval: boolean
-  // v1.2 지시서·스펙 (전부 선택적 — 지시 없이 만든 항목은 null)
-  /** 지시 내용 */
+  // v1.2 가이드 문서·스펙 (전부 선택적 — 가이드 없이 만든 항목은 null)
+  /** 가이드 내용 */
   brief: string | null
   /** 참고자료 링크 배열 (첨부 테이블은 2차) */
   brief_refs: string[] | null

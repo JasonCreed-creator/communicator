@@ -7,8 +7,8 @@ type BriefFields = Pick<
 >
 
 /**
- * S3 지시 카드 (v1.2) — brief·brief_refs·spec_* 중 하나라도 있으면 렌더.
- * PM 지시 발행(§8 POST /deliverables)의 결과를 담당자 화면에 보여주는 용도.
+ * S3 가이드 카드 (v1.2) — brief·brief_refs·spec_* 중 하나라도 있으면 렌더.
+ * PM 가이드 발행(§8 POST /deliverables)의 결과를 담당자 화면에 보여주는 용도.
  * 값이 없는 필드는 표시하지 않는다(스펙은 전부 선택적).
  */
 export default function BriefCard({ deliverable }: { deliverable: BriefFields }) {
@@ -23,9 +23,9 @@ export default function BriefCard({ deliverable }: { deliverable: BriefFields })
   if (!hasBrief && refs.length === 0 && specs.length === 0) return null
 
   return (
-    // §6 S3: 지시 카드는 accent-tint 배경 카드(Card의 className 확장 — 흰 배경 오버라이드는
+    // §6 S3: 가이드 카드는 accent-tint 배경 카드(Card의 className 확장 — 흰 배경 오버라이드는
     // utilities 레이어가 components 레이어(.ui-card)보다 우선하는 Tailwind v4 레이어 순서로 성립).
-    <Card title="지시 카드" className="bg-accent-tint">
+    <Card title="가이드 카드" className="bg-accent-tint">
       <div className="space-y-4">
         {hasBrief && <p className="whitespace-pre-wrap text-sm text-ink-sub">{deliverable.brief}</p>}
 

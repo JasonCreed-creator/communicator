@@ -289,7 +289,7 @@ function CreateDeliverableForm({ area, onCreated }: { area: DeliverableArea; onC
   )
 }
 
-// ── (v1.2) PM 전용 지시 발행 폼 ────────────────────────────────────────
+// ── (v1.2) PM 전용 가이드 발행 폼 ────────────────────────────────────────
 // 기존 CreateDeliverableForm(항목 셀프 생성, status='draft')과는 별도 폼 —
 // brief·스펙을 넣어 provider.createDeliverable을 호출하면 status='requested'로 발행된다.
 function IssueBriefForm({ area, onCreated }: { area: DeliverableArea; onCreated: () => void }) {
@@ -307,8 +307,8 @@ function IssueBriefForm({ area, onCreated }: { area: DeliverableArea; onCreated:
   const [specType, setSpecType] = useState('')
 
   const issue = useMutation(() => {
-    if (!assigneeId) throw new Error('지시에는 담당자 지정이 필요합니다.')
-    if (!brief.trim()) throw new Error('지시 내용을 입력하세요.')
+    if (!assigneeId) throw new Error('가이드에는 담당자 지정이 필요합니다.')
+    if (!brief.trim()) throw new Error('가이드 내용을 입력하세요.')
     const brief_refs = briefRefsText
       .split('\n')
       .map((s) => s.trim())
@@ -348,7 +348,7 @@ function IssueBriefForm({ area, onCreated }: { area: DeliverableArea; onCreated:
   }
 
   return (
-    <Card title="지시 발행">
+    <Card title="가이드 발행">
       <form onSubmit={handleSubmit} className="space-y-3">
         <div className="flex flex-wrap items-end gap-3">
           <label className="flex flex-col gap-1 t-caption">
@@ -399,13 +399,13 @@ function IssueBriefForm({ area, onCreated }: { area: DeliverableArea; onCreated:
         </div>
 
         <label className="flex flex-col gap-1 t-caption">
-          지시 내용
+          가이드 내용
           <textarea
             value={brief}
             onChange={(e) => setBrief(e.target.value)}
             required
             rows={3}
-            placeholder="담당자에게 전달할 지시 내용을 입력하세요"
+            placeholder="담당자에게 전달할 가이드 내용을 입력하세요"
             className="ui-input w-full"
           />
         </label>
@@ -462,7 +462,7 @@ function IssueBriefForm({ area, onCreated }: { area: DeliverableArea; onCreated:
         </div>
 
         <button type="submit" disabled={issue.pending} className="btn btn-accent">
-          지시 발행
+          가이드 발행
         </button>
       </form>
       <ErrorAlert message={issue.error} />

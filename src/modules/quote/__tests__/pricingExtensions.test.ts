@@ -4,7 +4,7 @@
 import { describe, it, expect } from "vitest";
 import ExcelJS from "exceljs";
 import { exportEstimate } from "../export/exportEstimate";
-import { calcEstimate, calcMncEstimate, calcPkExcludingOptions, applyAdjustments, BOOTH_PREMIUM_UNIT_PRICE, GEN_ATTENDEE_UNIT_PRICE } from "../engine/calcEstimate";
+import { calcEstimate, calcMncEstimate, calcPkExcludingOptions, applyAdjustments, normalizeOptions, BOOTH_PREMIUM_UNIT_PRICE, GEN_ATTENDEE_UNIT_PRICE, LED_OPERATING_PRICE, SCREEN_RELAY_PRICE, SCREEN_RELAY_CAMERAS, ONLINE_RELAY_ADDON_PRICE, ONLINE_RELAY_TOTAL_PRICE, ONLINE_RELAY_CAMERAS, FULL_RECORDING_PRICE } from "../engine/calcEstimate";
 import { selectedVenueRental, type VenueEntry } from "../engine/venueOptions";
 
 /**
@@ -201,23 +201,121 @@ describe("exportEstimate — 2차 고도화 정합", () => {
     expect(sum).toBe(p.pk);
   });
 
-  it("화면중계는 LED에서만 과금(250만), 전체 녹화·편집은 350만", () => {
-    const led = calcEstimate({ ...BASE, displayType: "led", options: { screenRelay: true } });
-    const proj = calcEstimate({ ...BASE, displayType: "projector", options: { screenRelay: true } });
-    expect(led.ot).toBe(2_500_000);
-    expect(proj.ot).toBe(0); // 프로젝터에서는 옵션이 남아 있어도 미과금
-    const rec = calcEstimate({ ...BASE, options: { fullRecording: true } });
-    expect(rec.ot).toBe(3_500_000);
-  });
-
-  it("4K 스케일러: 100명 이상이라도 빔프로젝터면 미포함, LED면 포함", () => {
+  it("LED 오퍼레이팅: 100명 이상이라도 빔프로젝터면 미포함, LED면 포함", () => {
     const led = calcEstimate({ ...BASE, target: 150, displayType: "led" });
     const proj = calcEstimate({ ...BASE, target: 150, displayType: "projector" });
     const legacy = calcEstimate({ ...BASE, target: 150 }); // displayType 미지정 — v1 호환(포함)
-    expect(led.sysBreakdown.scaler4k).toBe(2_500_000);
+    expect(led.sysBreakdown.ledOperating).toBe(LED_OPERATING_PRICE);
+    expect(proj.sysBreakdown.ledOperating).toBe(0);
+    expect(legacy.sysBreakdown.ledOperating).toBe(LED_OPERATING_PRICE);
+    expect(led.s2 - proj.s2).toBe(LED_OPERATING_PRICE);
+    // 구 키 scaler4k 미러 — 구버전 호출부 호환 (값 동일, s2에는 1회만 반영)
+    expect(led.sysBreakdown.scaler4k).toBe(led.sysBreakdown.ledOperating);
     expect(proj.sysBreakdown.scaler4k).toBe(0);
-    expect(legacy.sysBreakdown.scaler4k).toBe(2_500_000);
-    expect(led.s2 - proj.s2).toBe(2_500_000);
+  });
+});
+
+describe("LED 오퍼레이팅 ↔ 중계 비용 분리", () => {
+  const LED: Cfg = { ...BASE, target: 150, displayType: "led" };
+  const PROJ: Cfg = { ...BASE, target: 150, displayType: "projector" };
+
+  it("LED만 쓰고 중계 없이 진행 가능 — LED 오퍼레이팅에 중계비가 섞이지 않는다", () => {
+    const p = calcEstimate(LED);
+    expect(p.sysBreakdown.ledOperating).toBe(LED_OPERATING_PRICE);
+    expect(p.relayBreakdown.total).toBe(0);
+    expect(p.ot).toBe(0);
+  });
+
+  it("화면중계는 200만원 (카메라 2대) — LED 오퍼레이팅과 별도 가산", () => {
+    const p = calcEstimate({ ...LED, options: { screenRelay: true } });
+    expect(p.relayBreakdown.screenRelay).toBe(SCREEN_RELAY_PRICE);
+    expect(p.relayBreakdown.onlineRelay).toBe(0);
+    expect(p.relayBreakdown.cameras).toBe(SCREEN_RELAY_CAMERAS);
+    expect(p.ot).toBe(SCREEN_RELAY_PRICE);
+    expect(p.s2).toBe(calcEstimate(LED).s2); // 시스템은 중계 선택과 무관
+  });
+
+  it("온라인중계는 화면중계 +150만원 = 합계 350만원 (카메라 3대)", () => {
+    const p = calcEstimate({ ...LED, options: { onlineRelay: true } });
+    expect(p.relayBreakdown.screenRelay).toBe(SCREEN_RELAY_PRICE);
+    expect(p.relayBreakdown.onlineRelay).toBe(ONLINE_RELAY_ADDON_PRICE);
+    expect(p.relayBreakdown.total).toBe(ONLINE_RELAY_TOTAL_PRICE);
+    expect(p.relayBreakdown.cameras).toBe(ONLINE_RELAY_CAMERAS);
+    expect(p.ot).toBe(3_500_000);
+    expect(p.ot - calcEstimate({ ...LED, options: { screenRelay: true } }).ot).toBe(ONLINE_RELAY_ADDON_PRICE);
+  });
+
+  it("화면중계+온라인중계 동시 선택해도 화면중계가 이중 청구되지 않는다", () => {
+    const both = calcEstimate({ ...LED, options: { screenRelay: true, onlineRelay: true } });
+    const onlineOnly = calcEstimate({ ...LED, options: { onlineRelay: true } });
+    expect(both.ot).toBe(onlineOnly.ot);
+    expect(both.ot).toBe(ONLINE_RELAY_TOTAL_PRICE);
+  });
+
+  it("중계 2종 모두 LED 필수 — 프로젝터면 옵션이 남아 있어도 미과금", () => {
+    for (const options of [{ screenRelay: true }, { onlineRelay: true }, { screenRelay: true, onlineRelay: true }]) {
+      const p = calcEstimate({ ...PROJ, options });
+      expect(p.ot).toBe(0);
+      expect(p.relayBreakdown.total).toBe(0);
+      expect(p.relayBreakdown.cameras).toBe(0);
+    }
+  });
+
+  it("displayType 미지정(구버전 호출)에서도 중계는 미과금 — LED 명시 필수", () => {
+    const p = calcEstimate({ ...BASE, target: 150, options: { screenRelay: true, onlineRelay: true } });
+    expect(p.relayBreakdown.total).toBe(0);
+    expect(p.ot).toBe(0);
+  });
+});
+
+describe("전체 녹화·편집 — 중계 시스템 종속 + 100만원", () => {
+  const LED: Cfg = { ...BASE, target: 150, displayType: "led" };
+
+  it("중계 없이 단독 선택하면 미과금", () => {
+    const p = calcEstimate({ ...LED, options: { fullRecording: true } });
+    expect(p.relayBreakdown.fullRecording).toBe(0);
+    expect(p.ot).toBe(0);
+  });
+
+  it("화면중계 위에서는 +100만원 (합계 300만원)", () => {
+    const p = calcEstimate({ ...LED, options: { screenRelay: true, fullRecording: true } });
+    expect(p.relayBreakdown.fullRecording).toBe(FULL_RECORDING_PRICE);
+    expect(p.ot).toBe(3_000_000);
+  });
+
+  it("온라인중계 위에서도 +100만원 (합계 450만원)", () => {
+    const p = calcEstimate({ ...LED, options: { onlineRelay: true, fullRecording: true } });
+    expect(p.relayBreakdown.fullRecording).toBe(FULL_RECORDING_PRICE);
+    expect(p.ot).toBe(4_500_000);
+  });
+
+  it("프로젝터면 중계가 죽으므로 전체 녹화·편집도 함께 미과금", () => {
+    const p = calcEstimate({ ...BASE, target: 150, displayType: "projector", options: { screenRelay: true, fullRecording: true } });
+    expect(p.ot).toBe(0);
+  });
+});
+
+describe("옵션 키 정규화 (scaler4k → ledOperating)", () => {
+  it("구 키 options.scaler4k는 신 키와 동일하게 과금된다 (100명 미만 옵션분)", () => {
+    const legacy = calcEstimate({ ...BASE, target: 80, displayType: "led", options: { scaler4k: true } });
+    const modern = calcEstimate({ ...BASE, target: 80, displayType: "led", options: { ledOperating: true } });
+    expect(legacy.ot).toBe(LED_OPERATING_PRICE);
+    expect(legacy.ot).toBe(modern.ot);
+    expect(legacy.pk).toBe(modern.pk);
+  });
+
+  it("normalizeOptions가 구 키를 신 키로 승계하고 구 키를 제거한다", () => {
+    expect(normalizeOptions({ scaler4k: true, emcee: true })).toEqual({ ledOperating: true, emcee: true });
+    expect(normalizeOptions({ scaler4k: false })).toEqual({ ledOperating: false });
+    expect(normalizeOptions({ scaler4k: true, ledOperating: false })).toEqual({ ledOperating: false });
+    expect(normalizeOptions(null)).toEqual({});
+    expect(normalizeOptions(undefined)).toEqual({});
+  });
+
+  it("isCustom(별도 협의)에서도 relayBreakdown 형태가 유지된다", () => {
+    const p = calcEstimate({ target: 9999, guarantee: 100, displayType: "led", options: { onlineRelay: true, fullRecording: true } });
+    expect(p.isCustom).toBe(true);
+    expect(p.relayBreakdown).toEqual({ screenRelay: 0, onlineRelay: 0, fullRecording: 0, total: 0, cameras: 0 });
   });
 
   it("일반 참관객: 전용 행 기록 + PCO 운영비 참조에 포함 + 총액 0원 일치", async () => {

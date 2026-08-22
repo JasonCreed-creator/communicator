@@ -162,7 +162,7 @@ Phase 3.8과 3.9는 **별도 커밋·별도 PR**로 분리한다(3.8 = 타입·�
 18. (v1.5) 셀렉터·S-1에서 행사 전환 시 홈·보드·일정·설정이 해당 행사 데이터로 바뀌고 새로고침 후 유지(localStorage), `grep -rn "PROJECT_ID" src --include=*.tsx` 0건 (테스트로 증명)
 19. (v1.5) 행사 설정 ①에서 필수 4 미입력 저장 거부·세팅 미완료 뱃지, ②에서 담당자 추가/삭제·마지막 PM 삭제 409, 저장 값이 S9 ① 개요에 반영 (테스트로 증명)
 20. (v1.5) 새 행사 만들기 → S0 3단계 → 완료 시 onboarded_at 기록·WBS 전개·R&R 시드·목록에 등장; 세팅 미완료 행사 진입 시 차단이 아닌 /settings 유도 (테스트로 증명). 기존 dod10 가드 테스트는 '유도' 의미로 갱신
-21. (v2.0) 엔진 등가: pricing-dataset 전 벡터(14+1) 산출이 원본과 0원 차이 (테스트로 증명)
+21. (v2.0) 엔진 등가: pricing-dataset 전 벡터(21+1) 산출이 원본과 0원 차이 (테스트로 증명). 데이터셋 v1.1.0 = LED 오퍼레이팅↔중계 분리 반영본
 22. (v2.0) Excel 등가: 동일 입력의 .xlsx 셀 값·수식이 원본 테스트 26케이스 통과, 외부 업로드 호출 0건
 23. (v2.0) 비노출: quotes·breakdown·total_amount 키가 `/c/*` 응답·운영계획서 조립 데이터·activity_log·알림 페이로드 타입과 런타임 객체 어디에도 없음 (테스트로 증명) + `grep -rn "total_amount\|breakdown" src/pages/Client* src/components/plan src/components/client` 0건
 24. (v2.0) 핸드오프: 확정 견적 → 행사 만들기 → S0 ① 프리필(§16 매핑 전 필드) → 완료 시 quote.project_id·project.quote_id 상호 링크; 견적 없는 S-1 → S0 경로 그대로 동작; 미확정 견적은 버튼 비활성 (테스트로 증명)
