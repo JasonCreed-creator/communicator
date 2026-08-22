@@ -5,9 +5,10 @@ import PhaseFilterBar from './PhaseFilterBar'
 import RoleCharterGrid from './RoleCharterGrid'
 import WbsChecklist from './WbsChecklist'
 import WbsGantt from './WbsGantt'
-import { phaseOptionsFrom } from './wbsFormat'
+import { GANTT_AXIS_MAX, GANTT_AXIS_MIN, diffDays, offsetLabel, phaseOptionsFrom } from './wbsFormat'
 import { useProject } from '../../context/ProjectContext'
 import { useAsync, useMutation } from '../../hooks/useAsync'
+import { toIsoDate } from '../../lib/wbs'
 import { getDataProvider } from '../../providers'
 
 const provider = getDataProvider()
@@ -31,6 +32,10 @@ export default function WbsBoard() {
   const allTasks = wbsTasks.data ?? []
   const phases = phaseOptionsFrom(allTasks)
   const filteredTasks = phase === 'all' ? allTasks : allTasks.filter((t) => t.phase_no === phase)
+
+  // 3.10.1 R2 — 오늘이 간트 축(D-42~D+30) 밖이면 안내 캡션을 토글 왼쪽에 표시(축 행은 눈금만)
+  const todayOffset = project.data?.event_date ? diffDays(toIsoDate(new Date()), project.data.event_date) : null
+  const todayOutOfAxis = todayOffset !== null && (todayOffset < GANTT_AXIS_MIN || todayOffset > GANTT_AXIS_MAX)
 
   const handleReexpand = async () => {
     const confirmed = window.confirm(
@@ -59,25 +64,32 @@ export default function WbsBoard() {
 
           <div className="flex flex-wrap items-center justify-between gap-3">
             <PhaseFilterBar phases={phases} value={phase} onChange={setPhase} />
-            <div className="flex shrink-0 items-center gap-1 rounded-md border border-border p-0.5 text-xs">
-              <button
-                type="button"
-                onClick={() => setView('checklist')}
-                className={`rounded px-2.5 py-1 font-medium ${
-                  view === 'checklist' ? 'bg-dark text-white' : 'text-ink-sub'
-                }`}
-              >
-                체크리스트
-              </button>
-              <button
-                type="button"
-                onClick={() => setView('gantt')}
-                className={`rounded px-2.5 py-1 font-medium ${
-                  view === 'gantt' ? 'bg-dark text-white' : 'text-ink-sub'
-                }`}
-              >
-                간트
-              </button>
+            <div className="flex shrink-0 items-center gap-3">
+              {view === 'gantt' && todayOutOfAxis && (
+                <span className="t-caption whitespace-nowrap">
+                  오늘 {offsetLabel(todayOffset as number)} · 축 범위 밖
+                </span>
+              )}
+              <div className="flex shrink-0 items-center gap-1 rounded-md border border-border p-0.5 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setView('checklist')}
+                  className={`rounded px-2.5 py-1 font-medium ${
+                    view === 'checklist' ? 'bg-dark text-white' : 'text-ink-sub'
+                  }`}
+                >
+                  체크리스트
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setView('gantt')}
+                  className={`rounded px-2.5 py-1 font-medium ${
+                    view === 'gantt' ? 'bg-dark text-white' : 'text-ink-sub'
+                  }`}
+                >
+                  간트
+                </button>
+              </div>
             </div>
           </div>
 

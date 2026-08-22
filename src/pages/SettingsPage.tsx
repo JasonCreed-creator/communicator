@@ -63,7 +63,10 @@ export default function SettingsPage() {
               </span>
             ) : (
               <span className="inline-flex items-center rounded-full bg-negative-tint px-3 py-1 text-xs font-medium text-negative">
-                세팅 미완료 · 필수 {missingCount}개 남음
+                {/* 3.10.1 R5 — 필수 4가 모두 입력돼도 온보딩 미완료면 '필수 0개 남음' 대신 확인 유도 문구 */}
+                {missingCount === 0
+                  ? '세팅 미완료 · 온보딩 확인 필요'
+                  : `세팅 미완료 · 필수 ${missingCount}개 남음`}
               </span>
             )
           ) : undefined
@@ -77,8 +80,9 @@ export default function SettingsPage() {
       {project.data && !onboarded && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-accent/30 bg-accent-tint px-4 py-3 text-sm text-ink">
           <p>
-            필수 항목 {missingCount}개를 입력하면 행사를 활성화할 수 있습니다 — 입력 후 '행사 목록'에서
-            온보딩을 완료하세요.
+            {missingCount === 0
+              ? "필수 항목은 모두 입력됐습니다 — '온보딩 이어서 하기'에서 담당자·유형을 확인하면 행사가 활성화됩니다."
+              : `필수 항목 ${missingCount}개를 입력하면 행사를 활성화할 수 있습니다 — 입력 후 '행사 목록'에서 온보딩을 완료하세요.`}
           </p>
           <button
             type="button"

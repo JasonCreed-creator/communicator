@@ -19,7 +19,8 @@ describe('DoD-19 행사 설정 3탭', () => {
 
     expect(await screen.findByRole('heading', { name: '행사 설정' })).toBeTruthy()
     expect(await screen.findByText(/세팅 미완료/)).toBeTruthy()
-    expect(await screen.findByText(/필수 항목 .*개를 입력하면 행사를 활성화할 수 있습니다/)).toBeTruthy()
+    // 3.10.1 R5 — ③은 필수 4가 모두 입력된 상태(missingCount 0)라 '필수 0개' 대신 확인 유도 문구가 뜬다
+    expect(await screen.findByText(/필수 항목은 모두 입력됐습니다/)).toBeTruthy()
     expect(screen.getByRole('button', { name: '온보딩 이어서 하기' })).toBeTruthy()
 
     // 필수인 장소를 비우고 저장 → 클라이언트 검증이 거부

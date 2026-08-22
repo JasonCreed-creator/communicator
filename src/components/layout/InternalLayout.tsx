@@ -182,7 +182,8 @@ function ProjectSelector({ onNavigate }: { onNavigate?: () => void }) {
             onClick={close}
             className="fixed inset-0 z-40 cursor-default"
           />
-          <div className="absolute left-5 right-5 top-full z-50 mt-1.5 max-h-[70vh] overflow-y-auto rounded-[10px] border border-border bg-card p-2 shadow-card">
+          {/* 3.10.1 R4 — 데스크톱은 사이드바 밖으로 300px 오버레이(행사명 truncate 여유), 모바일 드로어는 현행(좌우 20px) 유지 */}
+          <div className="absolute left-5 right-5 top-full z-50 mt-1.5 max-h-[70vh] overflow-y-auto rounded-[10px] border border-border bg-card p-2 shadow-card md:left-3 md:right-auto md:w-[300px]">
             {active.length > 0 && (
               <div className="mb-1">
                 <p className="t-caption px-2 py-1">진행 중 {active.length}</p>

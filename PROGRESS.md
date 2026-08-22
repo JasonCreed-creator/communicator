@@ -3,16 +3,18 @@
 > 가변 상태 파일. 매 세션 체크아웃 시 에이전트가 갱신한다 (CLAUDE.md §9 리추얼).
 
 ## 1. 상태 요약
-- 현재 Phase: **Phase 0~3.10 완료(다중 행사·행사 설정, v1.5)** — 다음 = Phase 4(Supabase 이식,
-  ★착수 전 사용자 승인·**v1.5 스키마 기준**). Configurator(jsx-easy-shift) 읽기 분석은 **새 세션**에서
-  v2 브리프로 착수(사용자 지시 2026-08-22)
+- 현재 Phase: **Phase 0~3.10 완료 + 3.10.1 폴리시(3.9.1 잔여 2건 + 3.10 검수 3건, 문구·스타일만)** —
+  다음 = Phase 4(Supabase 이식, ★착수 전 사용자 승인·**v1.5 스키마 기준**). Configurator(jsx-easy-shift)
+  읽기 분석은 **새 세션**에서 v2 브리프로 착수(사용자 지시 2026-08-22)
 - 정본 문서: `docs/mice-communicator-설계서-v1.5.md` (스키마·상태 머신·API·WBS 템플릿 SoT — v1.4.1 대체)
   + `docs/mice-communicator-디자인지시서-v1.md` (디자인 토큰·레이아웃·컴포넌트 규격 정본, Phase 3.9)
-- 브랜치: `main` = 정본 — 3.8은 PR #9, 3.9는 PR #10, 3.9.1은 PR #11 머지. **Phase 3.10 =
-  `claude/phase-3.10-multi-project`(base=main)** — 머지된 브랜치 재사용 금지 원칙(신규 브랜치 분기)
+- 브랜치: `main` = 정본 — 3.8은 PR #9, 3.9는 PR #10, 3.9.1은 PR #11, 3.10은 PR #12 머지.
+  **Phase 3.10.1 = `claude/phase-3.10.1-fix`(base=main)** — 머지된 브랜치 재사용 금지 원칙(신규 브랜치 분기)
 - **Phase 3.10 결과: vitest 124개(22파일) = 기준치 117 + dod18(3)·dod19(2)·dod20(2) 전부 통과 +
   tsc 클린 + vite build 성공 + `grep -rn "gray-\|slate-" src` 0건 +
   `grep -rn "PROJECT_ID" src --include=*.tsx` 0건(픽스처 .ts 내 정의만) + 스크린샷 6장 (DoD 18~20 충족)**
+- **Phase 3.10.1 결과: vitest 124개·tsc·build·grep 2종 0건 유지 + 1280 큐시트 표
+  scrollWidth==clientWidth 실측(958==958) + 스크린샷 5장(액션 열·발주처 표·셀렉터·0개 분기 배너·간트 우측 끝)**
 
 ## 2. 완료
 - 설계서 v1.1 확정 + CLAUDE.md v1.1 (2026-08-19)
@@ -148,6 +150,13 @@
   전환·localStorage 유지·② 일반형 28건), dod19(필수 미입력 저장 거부·미완료 뱃지·담당자 추가/삭제·
   마지막 PM 409), dod20(S-1 새 행사→S0 3단계→onboarded_at·WBS 28건·R&R 시드·목록 반영 + 미완료 행사
   /settings 유도 동선). **vitest 124개(22파일)·tsc·vite build 전부 통과, PROJECT_ID grep(*.tsx) 0건**
+- **Phase 3.10.1 — 검수 후속 폴리시 5건(문구·스타일만, 로직·데이터 무변경)** (2026-08-22, 메인 단독):
+  R1 큐시트 표 1280 수납(대본→내용 셀 하단 캡션 링크, 콘솔 3열 124px·액션 열 132px·↑↓/삭제 28px
+  컴팩트·삭제=아이콘+title) / R3 발주처 연락처 표 열 규격(이름 nowrap·소속 truncate+title·만료일은
+  뱃지 아래 캡션, 폭 부족 시 가로 스크롤) / R4 셀렉터 드롭다운 데스크톱 300px 오버레이(모바일 드로어
+  현행 유지) / R5 세팅 미완료 missingCount 0 분기 문구(뱃지 '온보딩 확인 필요'·배너 '필수 항목은 모두
+  입력됐습니다…') / R2 간트 '축 범위 밖' 캡션을 토글 왼쪽으로 이동(축 행은 눈금만)+D+28 눈금은
+  D+30과 28px 미만 겹침 시 생략(실측 폭 기반)
 
 ## 3. 미결
 - GitHub 기본 브랜치가 아직 `claude/extract-zip-to-repo-t6xstr` — Settings → Branches에서 `main`으로
@@ -245,6 +254,12 @@
   기준은 §5와 동일), H·I는 서브에이전트 병렬 — 파일 경계 분리(공유 라우트·index.css는 I 단독 소유)로
   충돌 0. brief_refs 입력은 줄바꿈 구분 textarea 채택. dod9의 CSS 파일 검증은 @types/node 없이 국소
   dynamic import 우회(테스트 파일 내 한정)
+- 2026-08-22 (Phase 3.10.1 구현 판단 — 문구·스타일 범위): ① R2 D+28 생략 판정은 축 컨테이너 실측 폭
+  (getBoundingClientRect+resize 리스너) 기반 픽셀 환산 — jsdom(폭 0)에선 항상 생략되나 눈금 존재를
+  가드하는 테스트 없음 확인 ② R5 문구 변경으로 픽스처 ③(필수 4 모두 입력·onboarded_at null)이
+  missingCount 0 분기에 해당 → dod19 (a)의 배너 가드를 새 문구로 갱신(의미 유지 — 유도 배너 존재 증명)
+  ③ 간트 '축 범위 밖' 캡션 판정 로직은 WbsBoard로 이동(WbsGantt는 축 안 오늘 선만 담당) ④ 큐시트
+  표 min-w 820→936 상향(열 규격 합계와 일치 — 1280 콘텐츠 폭 958 안에서 무스크롤 실측)
 
 ## 6. 세션 로그
 - 2026-08-19 세션 #1: ZIP 배치→main 생성→Phase 0(PR #1 머지)→Phase 1(동결·테스트 33, PR #2 머지)
@@ -278,6 +293,10 @@
   PR 발행·머지(사용자 사전 승인 "작업 완료되면 머지/커밋 진행")·데모 아티팩트 재발행.
   **다음 세션 = ① Configurator 읽기 분석(v2 브리프) ② Phase 4 게이트(착수 전 사용자 승인·
   Supabase 프로젝트 정보 필요)**
+- 2026-08-22 세션 #5: PR #12 사용자 검수 완료 접수(main f97c794) → **Phase 3.10.1 폴리시**(메인 단독,
+  브랜치 `claude/phase-3.10.1-fix`, base=main — 3.9.1 잔여 R1·R2 + 3.10 검수 R3·R4·R5, 문구·스타일만) →
+  검증(vitest 124·tsc·빌드·grep 2종 0건·1280 무스크롤 실측·스크린샷 5장) → PR 발행·체크아웃 보고,
+  **머지는 사용자 승인 후**. 다음 = ① Configurator 읽기 분석(v2 브리프, 새 세션) ② Phase 4 게이트
 
 ## 7. 세션 잠금
 - 잠금 없음 (한 폴더 = 동시 1세션)

@@ -5,7 +5,6 @@
 import { useState, type FormEvent } from 'react'
 import ErrorAlert from '../internal/ErrorAlert'
 import { useAsync, useMutation } from '../../hooks/useAsync'
-import { formatDateTime } from '../../lib/labels'
 import { getDataProvider } from '../../providers'
 import type { ClientToken, UUID } from '../../types/entities'
 
@@ -25,6 +24,12 @@ const STATUS_CLASSES: Record<TokenStatus, string> = {
   회수됨: 'bg-track text-ink-sub',
   만료됨: 'bg-track text-ink-sub',
   미발급: 'bg-track text-ink-sub',
+}
+
+/** 3.10.1 R3 — 뱃지 아래 만료 캡션용 단축 날짜(월/일). 반폭 카드에서 한 줄 유지가 목적 */
+function shortDateLabel(iso: string): string {
+  const d = new Date(iso)
+  return `${d.getMonth() + 1}/${d.getDate()}`
 }
 
 function latestTokenOf(tokens: ClientToken[], contactId: UUID): ClientToken | undefined {
@@ -80,14 +85,16 @@ export default function ClientContactsEditor({
       <ErrorAlert message={tokens.error} />
       {contacts.data && tokens.data && (
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
+          {/* 3.10.1 R3 — 열 규격: 이름 72 nowrap·소속 96 truncate·이메일 truncate·상태 뱃지+만료 캡션·액션 140.
+              반폭 카드에서 셀이 세로 1글자씩 깨지던 문제 — 폭 부족 시 컨테이너 가로 스크롤로 수납 */}
+          <table className="w-full min-w-[520px] text-left text-sm">
             <thead>
               <tr>
-                <th className="ui-th">이름</th>
-                <th className="ui-th">소속</th>
+                <th className="ui-th min-w-[72px] whitespace-nowrap">이름</th>
+                <th className="ui-th min-w-[96px]">소속</th>
                 <th className="ui-th">이메일</th>
-                <th className="ui-th">토큰 상태</th>
-                <th className="ui-th">액션</th>
+                <th className="ui-th whitespace-nowrap">토큰 상태</th>
+                <th className="ui-th w-[140px] whitespace-nowrap">액션</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -96,19 +103,23 @@ export default function ClientContactsEditor({
                 const status = statusOf(latest)
                 return (
                   <tr key={c.id}>
-                    <td className="py-2 pr-4 text-ink">{c.name}</td>
-                    <td className="py-2 pr-4 text-ink-sub">{c.org ?? '-'}</td>
-                    <td className="py-2 pr-4 text-ink-sub">{c.email ?? '-'}</td>
-                    <td className="py-2 pr-4">
+                    <td className="min-w-[72px] whitespace-nowrap py-2 pr-4 align-top text-ink">{c.name}</td>
+                    <td className="min-w-[96px] max-w-[160px] truncate py-2 pr-4 align-top text-ink-sub" title={c.org ?? undefined}>
+                      {c.org ?? '-'}
+                    </td>
+                    <td className="max-w-[180px] truncate py-2 pr-4 align-top text-ink-sub">{c.email ?? '-'}</td>
+                    <td className="py-2 pr-4 align-top">
                       <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_CLASSES[status]}`}>
                         {status}
                       </span>
                       {latest?.expires_at && (
-                        <span className="ml-2 text-xs text-ink-cap">만료 {formatDateTime(latest.expires_at)}</span>
+                        <span className="mt-0.5 block whitespace-nowrap text-xs text-ink-cap">
+                          만료 {shortDateLabel(latest.expires_at)}
+                        </span>
                       )}
                     </td>
-                    <td className="py-2">
-                      <div className="flex items-center gap-2">
+                    <td className="w-[140px] whitespace-nowrap py-2 align-top">
+                      <div className="flex flex-nowrap items-center gap-2">
                         {status === '활성' && latest ? (
                           <>
                             <button type="button" onClick={() => handleCopy(latest.token)} className="btn btn-ghost btn-sm">
