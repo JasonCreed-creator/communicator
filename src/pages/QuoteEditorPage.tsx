@@ -67,7 +67,16 @@ function EditorBody({ quoteId, initialStep }: { quoteId: string | null; initialS
 
   useEffect(() => {
     let cancelled = false
-    if (!quoteId) return
+    if (!quoteId) {
+      // /quotes/new 로 전환 — 새 견적 초기화
+      setSavedQuote((prev) => {
+        if (prev) setForm(emptyForm())
+        return null
+      })
+      return
+    }
+    // 저장 직후 자체 navigate(URL 동기화)로 quoteId가 바뀐 경우 — 이미 최신 상태라 재로드하지 않는다
+    if (savedQuote?.id === quoteId) return
     setLoading(true)
     provider
       .getQuote(quoteId)
@@ -85,6 +94,8 @@ function EditorBody({ quoteId, initialStep }: { quoteId: string | null; initialS
     return () => {
       cancelled = true
     }
+    // savedQuote는 내부 저장 동기화 가드 용도 — deps에 넣으면 저장 때마다 재조회가 돈다
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quoteId])
 
   const input = useMemo(() => formToInput(form), [form])
@@ -385,9 +396,7 @@ export default function QuoteEditorPage() {
   const { quoteId } = useParams<{ quoteId: string }>()
   const location = useLocation()
   const initialStep = Number(new URLSearchParams(location.search).get('step')) || 1
-  return (
-    <QuoteGate>
-      {() => <EditorBody key={quoteId ?? 'new'} quoteId={quoteId ?? null} initialStep={initialStep} />}
-    </QuoteGate>
-  )
+  // key 없음 — 저장 시 자체 navigate(/quotes/{id}/edit)로 quoteId가 바뀌어도 리마운트하지 않는다
+  // (스텝·저장 상태 유지). 다른 견적으로의 전환은 위 useEffect가 quoteId 기준으로 재로드한다.
+  return <QuoteGate>{() => <EditorBody quoteId={quoteId ?? null} initialStep={initialStep} />}</QuoteGate>
 }

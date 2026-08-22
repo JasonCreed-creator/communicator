@@ -3,18 +3,18 @@
 > 가변 상태 파일. 매 세션 체크아웃 시 에이전트가 갱신한다 (CLAUDE.md §9 리추얼).
 
 ## 1. 상태 요약
-- 현재 Phase: **Phase 0~3.10.1 완료** — main=3.10.1 머지 커밋(PR #13, `bbb2c52` — 검수 통과·사용자
-  머지 승인 2026-08-22). 다음 = Phase 4(Supabase 이식, ★착수 전 사용자 승인·**v1.5 스키마 기준**).
-  Configurator(jsx-easy-shift) 읽기 분석은 **새 세션**에서 v2 브리프로 착수(사용자 지시 2026-08-22)
-- 정본 문서: `docs/mice-communicator-설계서-v1.5.md` (스키마·상태 머신·API·WBS 템플릿 SoT — v1.4.1 대체)
-  + `docs/mice-communicator-디자인지시서-v1.md` (디자인 토큰·레이아웃·컴포넌트 규격 정본, Phase 3.9)
-- 브랜치: `main` = 정본 — 3.8은 PR #9, 3.9는 PR #10, 3.9.1은 PR #11, 3.10은 PR #12, 3.10.1은
-  PR #13(`claude/phase-3.10.1-fix`) 머지. 머지된 브랜치 재사용 금지 원칙(신규 브랜치 분기) 유지
-- **Phase 3.10 결과: vitest 124개(22파일) = 기준치 117 + dod18(3)·dod19(2)·dod20(2) 전부 통과 +
-  tsc 클린 + vite build 성공 + `grep -rn "gray-\|slate-" src` 0건 +
-  `grep -rn "PROJECT_ID" src --include=*.tsx` 0건(픽스처 .ts 내 정의만) + 스크린샷 6장 (DoD 18~20 충족)**
-- **Phase 3.10.1 결과: vitest 124개·tsc·build·grep 2종 0건 유지 + 1280 큐시트 표
-  scrollWidth==clientWidth 실측(958==958) + 스크린샷 5장(액션 열·발주처 표·셀렉터·0개 분기 배너·간트 우측 끝)**
+- 현재 Phase: **Phase 0~3.11 구현 완료(머지 대기)** — main=3.10.1 머지 커밋(`bbb2c52`+문서 `a61c577`),
+  Phase 3.11(v2.0 견적 모듈)은 브랜치 `claude/progress-9jxt7x`에서 완료·PR 발행(**머지는 챗 검수 후** —
+  세션 브리프 §1). 다음 = Phase 4(새 Supabase 이식, ★착수 전 사용자 승인 + 새 프로젝트 3키 수령)
+- 정본 문서: `docs/mice-communicator-설계서-v2.0.md` (스키마·상태 머신·API·WBS §15·핸드오프 §16·
+  이식 인벤토리 §17·인프라 전환 §18 SoT — v1.5 대체) + `docs/mice-communicator-디자인지시서-v1.md`
+- 브랜치: `main` = 정본. 3.11은 하네스 지정 브랜치 `claude/progress-9jxt7x`(base=main)로 개발·PR —
+  브리프의 `claude/phase-3.11-quote-module` 명명 대신 세션 하네스 지정을 따름(§5 결정 로그)
+- **Phase 3.11 결과: vitest 312개(33파일) = 기준치 124 + 견적 모듈 159(골든 벡터 15/15 0원·그리드
+  47행·이식 84케이스) + dod23(5)·dod24(7)·dod25(10)·리다이렉트(7) 전부 통과(2회 연속 실행 검증) +
+  tsc 클린 + vite build 성공 + grep 가드 4종 0건(gray/slate·PROJECT_ID(*.tsx)·발주처/plan 금액 키·
+  onboarding_completed) + 스크린샷 7장(지시분 6장+S5 컴플라이언스 추가컷)**
+- Phase 3.10.1 결과(기준치): vitest 124개·tsc·build·grep 2종 0건 + 1280 큐시트 무스크롤 실측
 
 ## 2. 완료
 - 설계서 v1.1 확정 + CLAUDE.md v1.1 (2026-08-19)
@@ -158,6 +158,40 @@
   입력됐습니다…') / R2 간트 '축 범위 밖' 캡션을 토글 왼쪽으로 이동(축 행은 눈금만)+D+28 눈금은
   D+30과 28px 미만 겹침 시 생략(실측 폭 기반)
 
+- **설계서 v2.0 + CLAUDE.md v2.0 채택** (2026-08-22, 커밋 `89c84a2`): v1.5 대체 — 견적 Configurator
+  (jsx-easy-shift) 단일 플랫폼 흡수, #RULE-NO-PRICE-TO-CLIENT, profiles(app_role)·quotes·
+  compliance_cards·모객 필드 4종·wbs_tasks.target, Phase 3.11/4/4.6 로드맵, DoD 21~26
+- **Phase 3.11a — 엔진·데이터 이식 + DataProvider v5 재동결** (2026-08-22, 메인이 W 역할 수행):
+  jsx-easy-shift main `6047834`에서 §17.1 전 파일 이식(`src/modules/quote/{engine,data,export}` +
+  `src/lib/dateFormat.ts`) — 로직·상수 불변·TS 타입만 부여. 예외 2건: venuedb reference_cases(+동일
+  사유의 source_files) 제거 / exportEstimate Drive 백업 경로 제거. **골든 벡터 14+조정 1 = 15/15 0원
+  일치(DoD 21) + headcount_grid 47행 전량 대조 + 이식 테스트 84케이스(calcEstimate 14·exportEstimate
+  26·kpiRules 5·pricingExtensions 28·rememberQuote 11) + 외부 fetch 0건 어서션(DoD 22)**. 타입 v5:
+  Quote·QuoteInput·QuoteBreakdown·QuoteStatus·ComplianceCard·Profile(app_role)·Targeting,
+  Project 모객 4종·WbsTask.target·CurrentUser.app_role. Mock: 견적 4건(①연결 v1 보관·v2 제안·v3
+  확정=quo-003↔prj-stc26 상호 링크 + 미연결 초안 quo-010 "파트너 서밋 2026") — 금액은 전부 엔진 산출,
+  setAppRole 토글(기본 sales), WBS 템플릿 target 시드(39건), 컴플라이언스 2종 시드(①②)
+- **Phase 3.11b — S-2 견적 UI** (2026-08-22, 메인이 X 역할 수행): 사이드바 [행사 목록 → **준비**(견적·
+  행사 설정) → **운영**(홈~운영계획서)] 그룹 캡션 + 견적 메뉴 admin·sales 게이트 + 셀렉터 "견적만
+  있음 · 행사 미생성" 그룹(지연 로드) / `/quotes` 목록(행사 연결·미연결 그룹별 버전 표: 버전·인원·
+  베뉴·모객·총액 tabular·상태 pill + 우측 선택 버전 요약 s1~s5·옵션·모객·참관객·VAT 별도/포함 +
+  Excel 내려받기·새 버전·새 견적) / 에디터 5스텝(①규모·유형: 일자·시간·행사 성격 7종·모객 토글·
+  KPI 게이지·참관객·타겟팅 5축 ②베뉴: venuedb 20곳 지역 필터·홀 적합도(getScaledHalls)·후보 택1·
+  직접 입력·디스플레이 ③옵션 12종+부스 2타입+기념품 오버라이드 ④확인·확정: 조정 에디터·고객 정보·
+  확정 잠금·Excel ⑤행사 만들기: 확정 전 비활성) — RQC 로직 분해 이식·tokens.css 전면 교체·한/영
+  유지·다크 토글 제거 / staff 403 화면(QuoteGate)
+- **Phase 3.11c — 핸드오프·흡수 기능** (2026-08-22, 메인이 Y 역할 수행): ⑤ → `createProjectFromQuote`
+  (§16 매핑 그대로: venue=이름·홀 결합, event_type=include_leads 매핑, 타겟팅 요약+notes →
+  target_audience, overview_items 3종, kpi_show_rate 90 기본, 코드 이니셜+연도 제안, 금액 키 전달
+  없음) → S0 ① 프리필(주황 틴트 `--accent-tint`+배너·전부 수정 가능) → 상호 링크 / 행사 설정 ①
+  모객형 전용 그룹(보장 인원·쇼업 KPI·타겟팅 5축 칩·"견적 vN 확정 기준" 링크·견적 연결 액션
+  admin·sales) — 일반형 숨김·데이터 보존 / S5 소통 대상 열(3버킷 칩) + R&R 옆 컴플라이언스 카드
+  2종(체크 왕복) / §10 옛 라우트 리다이렉트 6종 + `?client_view=1` 410 안내
+- **§7 DoD 21~25 테스트 코드화·통과** (2026-08-22, 메인 통합 검수): dod23(금액 키 런타임 부재
+  4경로 + 소스 grep 가드), dod24(§16 전 필드·상호 링크·미확정 409·⑤ 비활성·견적 없는 S0 경로·
+  완료 후 링크 유지), dod25(staff 메뉴 미표시/403·admin 접근·모객형 그룹 숨김/보존·컴플라이언스
+  왕복), 리다이렉트 가드 7건. **vitest 312개(33파일) 2회 연속 전부 통과 + tsc + build + grep 4종 0건**
+
 ## 3. 미결
 - GitHub 기본 브랜치가 아직 `claude/extract-zip-to-repo-t6xstr` — Settings → Branches에서 `main`으로
   변경 필요 (세션 브리프 부록에 사용자 직접 수행 절차 안내됨). 머지된 `claude/*` 브랜치 삭제도
@@ -167,6 +201,14 @@
 - (경미) 큐시트 발송 시 RequestApprovalInput.version_id에 'auto' 센티널 전달(동결 인터페이스 관례) —
   다음 동결 해제 기회에 version_id 옵셔널화 검토. v1.4.1 ⑤는 스냅숏 파일 규약을 정본화한 것이고
   이 항목은 인터페이스 형상 문제라 별개로 유지
+- **(열린 질문 — v2.0 ①) DataProvider v5 메서드 수**: 설계서 §2.1·CLAUDE.md·브리프는 8메서드
+  열거인데 §8에 `PATCH /compliance-cards`(체크=멤버)가 있고 DoD 25가 "체크 왕복"을 테스트로 요구 —
+  §8·DoD 우선으로 해석해 `updateComplianceCard`를 9번째로 추가(v5=67메서드). 설계서 v2.0.1에서
+  §2.1 열거를 "8+1"로 정정할지 사용자 확인 필요
+- **(열린 질문 — v2.0 ②) 견적서 Excel 로고 판**: 브리프는 `remember-logo-black.png` 지정이나
+  견적서 헤더 밴드가 블랙(#0A0A0A)이라 블랙 로고는 비가시 — 원본(크림/화이트 워드마크)과의 시각
+  등가를 위해 `remember-logo-offwhite.png` 사용. 설계서 §17.1은 "public/brand png 사용"만 규정하므로
+  무저촉으로 판단, 사용자 확인 후 필요 시 교체(1줄)
 - **(백로그 — v2.0, 지금 수정 금지)** 3.10.1 R3 잔여: 발주처 연락처 표가 **반폭 카드**에서는 액션 열이
   가로 스크롤 뒤에 숨음(전폭에선 정상) — v2.0에서 행사 설정 ② 담당자 탭을 상하 1단 배치로 전환해
   해소 예정(사용자 결정 2026-08-22, 현 단계 수정 금지)
@@ -177,18 +219,48 @@
   (설계서 v1.4.1 §4-15·§8·§15 정본화 — 열린 질문 ①~⑤ 전부 종결)
 
 ## 4. 다음 스텝
-- **Configurator(jsx-easy-shift) 읽기 분석 — 새 세션에서 v2 브리프로 착수** (사용자 지시 2026-08-22):
-  add_repo 읽기 전용·해당 레포 브랜치/커밋/파일 생성 금지·보고서는 대화창 출력만(communicator에도
-  미저장)·"## 0. 이식 인벤토리" 절 포함 확인. 맥락: Lovable 폐기 확정, 통합 베이스=communicator,
-  가격 엔진·베뉴 DB → `src/modules/quote` 이식 예정(분석 세션에선 이식 코드 작성 금지 — 인벤토리·
-  사실 보고까지만)
-- **Phase 4 — Supabase 이식** (★착수 전 사용자 승인 필수, **v1.5 스키마 기준**): 마이그레이션(§4 전체 —
-  projects 복수·status/closed_at·행사개요 확장·invites·cues·wbs_tasks·role_charters·event_type·
-  onboarded_at 포함)+RLS(§6.2)+Auth+seed → SupabaseProvider 구현(v4 58메서드) → MockProvider 교체
-  (프론트 무수정 목표). Supabase 프로젝트 정보(URL·anon key·service role key) 필요
+- **Phase 3.11 PR 챗 검수 → 머지** (세션 브리프 §1 — 머지는 챗 실측 검수 후). 검수 포인트:
+  스크린샷 7장·골든 벡터 15/15 0원·열린 질문 v2.0 ①②
+- **Phase 4 — 새 Supabase 프로젝트 이식** (★착수 전 사용자 승인 + **새 프로젝트 3키**(URL·anon·
+  service role — env·Vault만, 문서 기재 금지) 수령, **v2.0 스키마 기준**): 4a 마이그레이션+RLS(§6.2 —
+  quotes·profiles·compliance_cards 포함)+seed(픽스처 4행사+견적) → 4b SupabaseProvider v5(67메서드,
+  견적 저장 서버 재계산) → 4c 이메일 매직링크 로그인·AuthContext·app_role 게이트 → 4d DoD 26 검증.
+  권장 모델: Fable 5 엑스트라(CLAUDE.md §5)
+- **Phase 4.6 — 인프라 전환** (설계서 §18, ■ 게이트마다 사용자 확인): 새 Vercel·env → 옛 Configurator
+  DB 1회 임포트(선택·dry-run) → 도메인 rmb-mice.com 이전 → 옛 라우트 301 → jsx-easy-shift 아카이브
 - 이후 Phase 5(Drive) → Phase 6(알림·cron)
 
 ## 5. 결정 로그
+- 2026-08-22 (Phase 3.11a): **DataProvider v4 동결 해제** — 근거: **사용자 v2.0 승인(2026-08-22,
+  시각안 3화면·설계서 v2.0 개정 동반 — §9 준수)**. listQuotes·getQuote·createQuote·saveQuoteVersion·
+  finalizeQuote·createProjectFromQuote·exportQuoteXlsx·listComplianceCards 8메서드 + updateComplianceCard
+  (§8 PATCH /compliance-cards·DoD 25 대응 — §2.1 8메서드 열거와의 충돌은 §8 우선 해석, 열린 질문
+  v2.0 ① 기록) 추가, Project 모객 필드 4종·WbsTask.target·CurrentUser.app_role·ProjectPatch 확장
+  (기존 58메서드 시그니처 불변) → **v5(67메서드)로 개정 후 재동결 선언**
+- 2026-08-22 (Phase 3.11 사용자 지시 — 챗 중간 접수 2건): ① "견적 단계에서 행사 세팅·금액을 설계해
+  운영으로 가져오되 운영 단계에서 수정 가능해야" → §16 핸드오프+S0 프리필(수정 가능)+행사 설정 상시
+  편집으로 충족(설계 무변경) ② "**/configurator(신규견적)·/quote(리멤버 견적) 분리 폐지 — 신규견적
+  탭 불필요, 하나로 통합**" → §17.2(MiceConfigurator 미이식)·§10 리다이렉트와 일치. S-2는 리멤버
+  견적 로직 단일 기반 에디터 1개, 두 옛 URL 모두 /quotes로 리다이렉트(가드 테스트 포함)
+- 2026-08-22 (Phase 3.11 구현 판단 — 설계서 무저촉 범위):
+  ① venuedb 이식 시 reference_cases와 함께 **source_files도 제거**(견적서 파일명에 실고객사명 포함 —
+  §12 #RULE-NO-COMPANY 동일 사유). 20곳·halls·pricing·extraction_confidence·missing_fields는 유지
+  ② 컴플라이언스 카드 템플릿의 실회사 표기(리멤버/엠앤씨)는 origin_role 코드(영업 RS·운영 RO·
+  협력 총괄 MC-PM·협력 RSVP MC-AT)로 치환 — 규약 본문은 원문 유지(§15 역할 매핑 원칙 준거)
+  ③ exportEstimate 이식 테스트의 화이트라벨 공급자 픽스처(실사업자 정보)를 가상 명칭으로 치환 —
+  richSupplier/mncLayout 렌더 메커니즘 검증은 동일(#RULE-NO-COMPANY)
+  ④ WBS 소통 대상 = 원본 event_tasks.target을 §4-15b 예시 3버킷으로 매핑(고객→고객사 / 엠앤씨
+  계열→협력사 / 리멤버 계열→내부, 복수 대상은 '·' 결합) — 정본 구현 src/fixtures/wbsTemplates.ts
+  ⑤ 견적 저장은 항상 스냅샷 신규(생성 또는 새 버전) — §8에 PATCH /quotes가 없음(불변 스냅숏 계약).
+  에디터는 미변경 시 재저장 생략(dirty 판정), 확정본 저장 시 새 버전·확정본 잠금 유지
+  ⑥ "견적 연결" 액션은 ProjectPatch.quote_id 경유(updateProject) — app_role admin·sales 게이트 +
+  quote.project_id 상호 동기화(시그니처 불변·필드 추가만)
+  ⑦ mock 견적 픽스처 ID는 100 미만 대역(quo-010) — nextId('quo')가 quo-101부터 발급해 충돌 방지
+  ⑧ R&R 카드 그리드 4열→2열 — 컴플라이언스 카드와 좌우 반폭 배치 시 4열이 뭉개짐(§6 의미 유지)
+  ⑨ QuoteInput.selected_venue는 §16의 객체 접근(name·hall)과 엔진 택1 인덱스를 겸하도록
+  {…후보, index} 형태로 정의. breakdown.subtotal = 엔진 pk(VAT별도) = total_amount
+  ⑩ 브랜치: 브리프의 claude/phase-3.11-quote-module 대신 **하네스 지정 claude/progress-9jxt7x**로
+  개발·푸시(웹 세션 지정 브랜치 준수) — PR 제목은 브리프 그대로
 - 2026-08-22 (Phase 3.10a): **DataProvider v3.1 동결 해제** — 근거: **사용자 v1.5 승인(2026-08-22,
   설계서 v1.5 개정 동반 — §9 준수)**. listProjects·createProject·closeProject·addMember·removeMember
   5메서드 추가, 기존 53 시그니처 불변 → **v4(58메서드)로 개정 후 재동결 선언** — 이후 변경은 다시
@@ -304,6 +376,14 @@
 - 2026-08-22 운영 지시(사용자): **이후 작업 완료 시마다 오토머지·커밋 + 데모 아티팩트(실기) 재발행**을
   기본 동선으로 함 — 단, CLAUDE.md·설계서 개정, DataProvider 동결 해제, Phase 4 착수 같은 게이트 항목은
   §9 리추얼대로 여전히 사용자 승인 선행
+
+- 2026-08-22 세션 #6 (Phase 3.11, 새 세션·레포 2개 연결): 설계서 v2.0·CLAUDE.md v2.0 채택 커밋 →
+  **Phase 3.11** — 3.11a(메인=W: jsx-easy-shift 6047834 §17.1 이식·골든 벡터 15/15 0원·타입 v5
+  재동결·mock 견적/컴플라이언스) → 3.11b(메인=X: 사이드바 준비/운영 그룹·/quotes·5스텝 에디터·확정
+  잠금·Excel) → 3.11c(메인=Y: §16 핸드오프·S0 프리필·모객형 그룹·S5 소통 대상+컴플라이언스·옛 라우트
+  리다이렉트) → DoD 21~25 코드화 → 검증(vitest 312 ×2·tsc·build·grep 4종 0건·스크린샷 7장·jsx-easy-shift
+  쓰기 0) → PR 발행(드래프트, **머지는 챗 검수 후**). 챗 중간 지시 2건 반영(결정 로그).
+  **다음 세션 = Phase 4 게이트(사용자 승인 + 새 Supabase 3키, Fable 5 엑스트라 권장)**
 
 ## 7. 세션 잠금
 - 잠금 없음 (한 폴더 = 동시 1세션)
