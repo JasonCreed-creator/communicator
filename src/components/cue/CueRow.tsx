@@ -24,13 +24,13 @@ interface CueRowProps {
 }
 
 /** 콘솔 채널 값 — 값이 있으면 t-caption 톤의 칩, 없으면 대시 (§6 S3: 콘솔 3채널 칩은 t-caption 톤).
- *  3.9.1 P1: 칩은 항상 1줄(whitespace-nowrap) — 열 최대폭을 넘으면 말줄임 + title 툴팁. */
+ *  3.9.1 P1: 칩은 항상 1줄(whitespace-nowrap) — 열 최대폭(3.10.1 R1: 124px 열)을 넘으면 말줄임 + title 툴팁. */
 function ConsoleChip({ value }: { value: string | null }) {
   if (!value) return <span className="text-ink-cap">—</span>
   return (
     <span
       title={value}
-      className="t-caption inline-block max-w-[150px] truncate whitespace-nowrap rounded-full bg-canvas px-2 py-0.5"
+      className="t-caption inline-block max-w-[112px] truncate whitespace-nowrap rounded-full bg-canvas px-2 py-0.5"
     >
       {value}
     </span>
@@ -89,7 +89,18 @@ export default function CueRow({ cue, canEdit, isFirst, isLast, onMoveUp, onMove
         <td className="py-2 pr-3 align-top font-medium text-ink">{cue.cue_no ?? '—'}</td>
         <td className="py-2 pr-3 align-top text-ink-sub">{cue.time_at ?? '—'}</td>
         <td className="py-2 pr-3 align-top text-ink-sub">{cue.segment ?? '—'}</td>
-        <td className="py-2 pr-3 align-top text-ink-sub">{summaryLine(cue.body)}</td>
+        <td className="py-2 pr-3 align-top text-ink-sub">
+          {summaryLine(cue.body)}
+          {/* 3.10.1 R1 — 대본 토글을 액션 열에서 내용 셀 하단 캡션 링크로 이동(읽기 전용 역할도 동일 위치) */}
+          <button
+            type="button"
+            onClick={() => setScriptOpen((v) => !v)}
+            aria-expanded={scriptOpen}
+            className="mt-1 block text-xs font-medium text-steel underline underline-offset-2"
+          >
+            대본
+          </button>
+        </td>
         <td className="py-2 pr-3 align-top">
           <ConsoleChip value={cue.console_audio} />
         </td>
@@ -99,52 +110,56 @@ export default function CueRow({ cue, canEdit, isFirst, isLast, onMoveUp, onMove
         <td className="py-2 pr-3 align-top">
           <ConsoleChip value={cue.console_screen} />
         </td>
-        <td className="py-2 align-top">
-          <div className="flex flex-nowrap items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => setScriptOpen((v) => !v)}
-              aria-expanded={scriptOpen}
-              className="text-xs font-medium text-steel underline underline-offset-2"
-            >
-              대본
-            </button>
-            {canEdit && (
-              <>
-                <button
-                  type="button"
-                  onClick={onMoveUp}
-                  disabled={isFirst}
-                  aria-label="위로"
-                  title="위로"
-                  className="btn btn-sm btn-ghost"
+        <td className="py-2 align-top whitespace-nowrap">
+          {/* 3.10.1 R1 — 액션 열 132px 수납: ↑·↓·삭제는 28px 정사각 컴팩트, 삭제는 아이콘+title */}
+          {canEdit && (
+            <div className="flex flex-nowrap items-center gap-1">
+              <button
+                type="button"
+                onClick={onMoveUp}
+                disabled={isFirst}
+                aria-label="위로"
+                title="위로"
+                className="btn btn-sm btn-ghost w-7 px-0"
+              >
+                ↑
+              </button>
+              <button
+                type="button"
+                onClick={onMoveDown}
+                disabled={isLast}
+                aria-label="아래로"
+                title="아래로"
+                className="btn btn-sm btn-ghost w-7 px-0"
+              >
+                ↓
+              </button>
+              <button type="button" onClick={handleEdit} className="btn btn-sm btn-ghost px-1.5">
+                편집
+              </button>
+              <button
+                type="button"
+                onClick={handleDelete}
+                disabled={remove.pending}
+                aria-label="삭제"
+                title="삭제"
+                className="btn btn-sm btn-ghost-negative w-7 px-0"
+              >
+                <svg
+                  aria-hidden
+                  viewBox="0 0 24 24"
+                  className="size-3.5"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.7"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
                 >
-                  ↑
-                </button>
-                <button
-                  type="button"
-                  onClick={onMoveDown}
-                  disabled={isLast}
-                  aria-label="아래로"
-                  title="아래로"
-                  className="btn btn-sm btn-ghost"
-                >
-                  ↓
-                </button>
-                <button type="button" onClick={handleEdit} className="btn btn-sm btn-ghost">
-                  편집
-                </button>
-                <button
-                  type="button"
-                  onClick={handleDelete}
-                  disabled={remove.pending}
-                  className="btn btn-sm btn-ghost-negative"
-                >
-                  삭제
-                </button>
-              </>
-            )}
-          </div>
+                  <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m3 0-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6" />
+                </svg>
+              </button>
+            </div>
+          )}
           <ErrorAlert message={remove.error} />
         </td>
       </tr>

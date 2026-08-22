@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef, useState } from 'react'
 import { ROLE_BAR_CLASSES } from '../../lib/labels'
 import { isDelayed, isImminent, toIsoDate } from '../../lib/wbs'
 import type { IsoDate, WbsTask } from '../../types/entities'
@@ -30,6 +31,9 @@ const TICK_OFFSETS: readonly number[] = (() => {
 /** 축 폭 대비 바 폭이 라벨(≈28px@1280)보다 좁아지는 경계 — 기간 3일 미만이면 라벨을 바 밖에 표시 */
 const LABEL_OUTSIDE_UNDER_DAYS = 3
 
+/** 3.10.1 R2 — 축 끝 눈금(D+30)과 직전 7일 눈금(D+28)의 픽셀 간격이 이보다 좁으면 직전 눈금을 생략 */
+const MIN_LAST_TICK_GAP_PX = 28
+
 /** 바 색 위 코드 라벨 잉크 — 연한 reg(#F3B48A) 위만 --ink, 그 외(brown·steel·accent·negative)는 --dark-ink */
 function barLabelInk(colorClass: string): string {
   return colorClass.startsWith('bg-role-reg') ? 'text-ink' : 'text-dark-ink'
@@ -44,7 +48,7 @@ interface WbsGanttProps {
  * S5 간트 뷰 — 순수 CSS 바 차트. 가로축 D-42~D+30, offset 기반 % 포지셔닝.
  * 완료=역할색 40% 투명·지연=negative·임박=accent·기본=역할 컬러.
  * 3.9.1 P2: 행 좌측 160px 라벨 컬럼(코드+제목) + 바 코드 라벨 + 7일 간격 눈금(D-day는 brown 실선).
- * 3.9.1 P4: 오늘이 축 범위 안이면 세로선+라벨, 밖이면 축 캡션 행 우측에 안내 캡션.
+ * 3.10.1 R2: 오늘이 축 범위 안이면 세로선+라벨, 밖이면 캡션은 WBS 카드 토글 왼쪽(WbsBoard 담당) — 축 행은 눈금만.
  */
 export default function WbsGantt({ tasks, eventDate }: WbsGanttProps) {
   const today = toIsoDate(new Date())
@@ -52,51 +56,60 @@ export default function WbsGantt({ tasks, eventDate }: WbsGanttProps) {
   const todayOffset = eventDate ? diffDays(today, eventDate) : null
   const showTodayLine = todayOffset !== null && todayOffset >= GANTT_AXIS_MIN && todayOffset <= GANTT_AXIS_MAX
 
+  // 3.10.1 R2 — 축 실측 폭으로 D+28↔D+30 간격을 픽셀 환산해 겹침(28px 미만) 시 D+28을 생략
+  const axisRef = useRef<HTMLDivElement | null>(null)
+  const [axisWidth, setAxisWidth] = useState(0)
+  useLayoutEffect(() => {
+    const measure = () => setAxisWidth(axisRef.current?.getBoundingClientRect().width ?? 0)
+    measure()
+    window.addEventListener('resize', measure)
+    return () => window.removeEventListener('resize', measure)
+  }, [])
+  const lastTick = TICK_OFFSETS[TICK_OFFSETS.length - 1]
+  const prevTick = TICK_OFFSETS[TICK_OFFSETS.length - 2]
+  const lastGapPx = ((offsetToPercent(lastTick) - offsetToPercent(prevTick)) / 100) * axisWidth
+  const omitPrevTick = lastGapPx < MIN_LAST_TICK_GAP_PX
+  const ticks = omitPrevTick ? TICK_OFFSETS.filter((t) => t !== prevTick) : TICK_OFFSETS
+
   if (tasks.length === 0) {
     return <p className="text-sm text-ink-cap">표시할 태스크가 없습니다.</p>
   }
 
   return (
     <div className="space-y-5">
-      {/* 축 캡션 행 — 라벨 컬럼 폭만큼 들여쓰고 눈금 위치에 정렬. 마지막 눈금(D+30)은 겹침 방지로 아랫줄 우측 정렬 */}
-      <div>
-        <div className="flex">
-          <div className="w-[160px] shrink-0" />
-          <div className={`relative flex-1 ${showTodayLine ? 'h-9' : 'h-5'}`}>
-            {TICK_OFFSETS.map((t, i) => {
-              const isFirst = i === 0
-              const isLast = i === TICK_OFFSETS.length - 1
-              return (
-                <span
-                  key={t}
-                  className={`absolute whitespace-nowrap text-[11px] font-medium tracking-[0.02em] ${
-                    t === 0 ? 'text-brown' : 'text-ink-cap'
-                  } ${isLast ? 'top-4' : 'top-0'}`}
-                  style={{
-                    left: `${offsetToPercent(t)}%`,
-                    // Tailwind 이동 유틸리티 클래스명이 DoD 금지 grep 패턴과 부분 일치해 인라인 transform 사용
-                    transform: isFirst ? undefined : isLast ? 'translateX(-100%)' : 'translateX(-50%)',
-                  }}
-                >
-                  {offsetLabel(t)}
-                </span>
-              )
-            })}
-            {showTodayLine && (
+      {/* 축 눈금 행 — 라벨 컬럼 폭만큼 들여쓰고 눈금 위치에 정렬.
+          D+28 생략 시 D+30은 같은 줄 우측 정렬, 공존 시(광폭)만 겹침 방지로 아랫줄 */}
+      <div className="flex">
+        <div className="w-[160px] shrink-0" />
+        <div ref={axisRef} className={`relative flex-1 ${showTodayLine ? 'h-9' : 'h-5'}`}>
+          {ticks.map((t, i) => {
+            const isFirst = i === 0
+            const isLast = i === ticks.length - 1
+            return (
               <span
-                className="absolute bottom-0 whitespace-nowrap text-[11px] font-semibold text-accent-deep"
-                style={{ left: `${offsetToPercent(todayOffset as number)}%`, transform: 'translateX(-50%)' }}
+                key={t}
+                className={`absolute whitespace-nowrap text-[11px] font-medium tracking-[0.02em] ${
+                  t === 0 ? 'text-brown' : 'text-ink-cap'
+                } ${isLast && !omitPrevTick ? 'top-4' : 'top-0'}`}
+                style={{
+                  left: `${offsetToPercent(t)}%`,
+                  // Tailwind 이동 유틸리티 클래스명이 DoD 금지 grep 패턴과 부분 일치해 인라인 transform 사용
+                  transform: isFirst ? undefined : isLast ? 'translateX(-100%)' : 'translateX(-50%)',
+                }}
               >
-                오늘
+                {offsetLabel(t)}
               </span>
-            )}
-          </div>
+            )
+          })}
+          {showTodayLine && (
+            <span
+              className="absolute bottom-0 whitespace-nowrap text-[11px] font-semibold text-accent-deep"
+              style={{ left: `${offsetToPercent(todayOffset as number)}%`, transform: 'translateX(-50%)' }}
+            >
+              오늘
+            </span>
+          )}
         </div>
-        {!showTodayLine && todayOffset !== null && (
-          <p className="t-caption mt-1 text-right">
-            오늘 {offsetLabel(todayOffset)} · 축 범위 밖
-          </p>
-        )}
       </div>
 
       {groups.map((g) => (
@@ -117,8 +130,8 @@ export default function WbsGantt({ tasks, eventDate }: WbsGanttProps) {
               ))}
             </div>
             <div className="relative min-w-0 flex-1 space-y-1.5">
-              {/* 눈금 세로선 — 7일 간격 대시(--border), D-day만 brown 실선 */}
-              {TICK_OFFSETS.map((t) => (
+              {/* 눈금 세로선 — 7일 간격 대시(--border), D-day만 brown 실선. 생략된 눈금은 세로선도 함께 생략 */}
+              {ticks.map((t) => (
                 <div
                   key={t}
                   aria-hidden="true"
