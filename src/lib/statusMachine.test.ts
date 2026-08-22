@@ -21,7 +21,7 @@ describe('statusMachine — 설계서 §5 전이표', () => {
 
   it('표 밖의 전이는 409 conflict', () => {
     const cases: Array<[string, string, string]> = [
-      ['requested', 'draft', 'status_patch'], // 지시 해제는 수동 전이 불가 — 업로드·인박스 연결 경로만
+      ['requested', 'draft', 'status_patch'], // 가이드 해제는 수동 전이 불가 — 업로드·인박스 연결 경로만
       ['requested', 'internal_review', 'status_patch'], // 산출물 없이 리뷰 진입 금지
       ['draft', 'pending_approval', 'status_patch'], // 내부 리뷰 건너뛰기 금지
       ['draft', 'final', 'status_patch'],

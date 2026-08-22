@@ -56,7 +56,7 @@ export interface MockState {
   onboarding_completed: boolean
 }
 
-/** v1.2 지시서·스펙·본문 필드 기본값 — 지시 없이 만든 항목은 전부 null (§4) */
+/** v1.2 가이드 문서·스펙·본문 필드 기본값 — 가이드 없이 만든 항목은 전부 null (§4) */
 const NO_BRIEF = {
   brief: null,
   brief_refs: null,
@@ -144,7 +144,7 @@ const FIXTURE: MockState = {
   ],
 
   // 상태 분포: pending_approval / final / draft / internal_review / changes_requested /
-  //           common(internal_review) / requested(v1.2 지시) / ops 존운영(content)
+  //           common(internal_review) / requested(v1.2 가이드) / ops 존운영(content)
   deliverables: [
     {
       id: 'dlv-001',
@@ -157,7 +157,7 @@ const FIXTURE: MockState = {
       due_date: '2026-09-04',
       drive_folder_id: 'drv-dlv-001',
       requires_approval: true,
-      ...NO_BRIEF, // 지시 없이 만든 항목 — v1.2 필드 전부 null 허용 사례
+      ...NO_BRIEF, // 가이드 없이 만든 항목 — v1.2 필드 전부 null 허용 사례
       created_at: '2026-08-05T09:00:00.000Z',
       updated_at: '2026-08-17T02:00:00.000Z',
     },
@@ -244,7 +244,7 @@ const FIXTURE: MockState = {
       created_at: '2026-08-02T09:00:00.000Z',
       updated_at: '2026-08-04T09:00:00.000Z',
     },
-    // v1.2 지시 발행 상태 — PM 지시서(브리프+스펙 완비), 산출물 없음 (DoD-7 기준점)
+    // v1.2 가이드 발행 상태 — PM 가이드 문서(브리프+스펙 완비), 산출물 없음 (DoD-7 기준점)
     {
       id: 'dlv-007',
       project_id: PROJECT_ID,
@@ -531,7 +531,7 @@ export function createFixtureState(): MockState {
     note: null,
     sort_order: i + 1,
   }))
-  // 데모용 상태 분포: 1.1·1.2 완료, 1.3 진행 중, 2.8 제작물 ↔ dlv-007(현수막 지시) 연결
+  // 데모용 상태 분포: 1.1·1.2 완료, 1.3 진행 중, 2.8 제작물 ↔ dlv-007(현수막 가이드) 연결
   const byCode = new Map(state.wbs_tasks.map((task) => [task.code, task]))
   byCode.get('1.1')!.status = 'done'
   byCode.get('1.1')!.done_at = '2026-09-12T09:00:00.000Z'

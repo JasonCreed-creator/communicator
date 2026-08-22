@@ -92,7 +92,7 @@ export interface DataProvider {
   listDeliverables(projectId: UUID, filter?: DeliverableFilter): Promise<Deliverable[]>
   getDeliverable(deliverableId: UUID): Promise<DeliverableDetail>
   /**
-   * 항목 생성 (§8 POST /deliverables). v1.2: brief·스펙 포함 시 지시 발행 —
+   * 항목 생성 (§8 POST /deliverables). v1.2: brief·스펙 포함 시 가이드 발행 —
    * pm 전용, status='requested', 담당자(assignee_id) 필수. 그 외에는 draft로 시작.
    */
   createDeliverable(input: CreateDeliverableInput): Promise<Deliverable>

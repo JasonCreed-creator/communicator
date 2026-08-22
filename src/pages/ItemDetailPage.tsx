@@ -235,7 +235,7 @@ function StatusActionBar({
   if (status === 'requested') {
     return (
       <Card title="상태 액션">
-        <p className="text-sm text-gray-700">지시가 발행되었습니다.</p>
+        <p className="text-sm text-gray-700">가이드가 발행되었습니다.</p>
         <p className="mt-1 text-xs text-gray-400">첫 버전을 업로드하면 자동으로 초안(draft) 상태로 전환됩니다.</p>
       </Card>
     )

@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 // DoD-8: S9 운영계획서 — mock 데이터로 7개 섹션(v1.3부터 ③큐시트 추가, 프로그램 다음 배치) 전부
-// 렌더 + 섹션별 진행률 + 제작물 리스트 표가 지시 스펙에서 자동 생성 + 인라인 편집 권한 게이팅·왕복
+// 렌더 + 섹션별 진행률 + 제작물 리스트 표가 가이드 스펙에서 자동 생성 + 인라인 편집 권한 게이팅·왕복
 // (CLAUDE.md v1.4 §7 DoD-8). 픽스처 초기화 단위 = 이 파일 — 시나리오 순서대로 실행된다.
 //
 // 섹션 번호는 planSections.ts(PLAN_SECTION_META)가 정본이나, 개별 섹션 컴포넌트(Zones·Production·
@@ -17,7 +17,7 @@ import { mockProvider, renderRoute } from './testUtils'
 afterEach(cleanup)
 
 describe('DoD-8 S9 운영계획서', () => {
-  it('(a) 7개 섹션 전부 렌더 + 섹션별 진행률 + 제작물 리스트가 지시 스펙에서 자동 생성된다', async () => {
+  it('(a) 7개 섹션 전부 렌더 + 섹션별 진행률 + 제작물 리스트가 가이드 스펙에서 자동 생성된다', async () => {
     renderRoute('/plan')
 
     // ── 7개 섹션 헤더 ──────────────────────────────────────────────
@@ -65,15 +65,15 @@ describe('DoD-8 S9 운영계획서', () => {
     const scenarioRow = within(zonesSection).getByText('운영 시나리오').closest('article')!
     expect(within(scenarioRow).getByText('본문 미작성')).toBeTruthy()
 
-    // ⑤ 제작물 리스트 — 지시 스펙 표 자동 생성 (dlv-007 메인 게이트 현수막)
+    // ⑤ 제작물 리스트 — 가이드 스펙 표 자동 생성 (dlv-007 메인 게이트 현수막)
     const banner = screen.getByText('메인 게이트 현수막')
     const bannerRow = banner.closest('tr')!
     expect(within(bannerRow).getByText('23000×5000mm')).toBeTruthy()
     expect(within(bannerRow).getByText('1')).toBeTruthy()
     expect(within(bannerRow).getByText('메인 게이트 외벽')).toBeTruthy()
-    // 카테고리·종류 셀 둘 다 '현수막' — 지시 스펙(spec_type)에서 자동 채워진 종류 셀 포함 2건
+    // 카테고리·종류 셀 둘 다 '현수막' — 가이드 스펙(spec_type)에서 자동 채워진 종류 셀 포함 2건
     expect(within(bannerRow).getAllByText('현수막')).toHaveLength(2)
-    expect(within(bannerRow).getByText('지시됨')).toBeTruthy()
+    expect(within(bannerRow).getByText('가이드됨')).toBeTruthy()
     // 스펙 없는 항목(dlv-001 메인 키비주얼)은 '—'로 표기
     const keyvisualRow = screen.getByText('메인 키비주얼').closest('tr')!
     expect(within(keyvisualRow).getAllByText('—').length).toBeGreaterThan(0)

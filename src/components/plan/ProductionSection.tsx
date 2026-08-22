@@ -3,7 +3,7 @@ import { PLAN_SECTION_META, type SectionProgressData } from './planSections'
 import StatusPill from './StatusPill'
 import type { PlanProductionItem } from '../../types/views'
 
-/** ④제작물 리스트 — design 항목의 지시 스펙 표 + 최신 시안·상태. 지시 스펙에서 자동 생성된다(DoD-8) */
+/** ④제작물 리스트 — design 항목의 가이드 스펙 표 + 최신 시안·상태. 가이드 스펙에서 자동 생성된다(DoD-8) */
 export default function ProductionSection({
   items,
   progress,
