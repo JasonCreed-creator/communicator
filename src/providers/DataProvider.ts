@@ -13,6 +13,10 @@
 //   (§8 PATCH /compliance-cards·DoD 25 체크 왕복 대응 — §2.1 열거와의 충돌은 §8 우선 해석,
 //   PROGRESS 열린 질문 기록) 추가 = 67메서드. Project 모객 필드 4종·WbsTask.target·
 //   CurrentUser.app_role·ProjectPatch 확장(필드 추가만). **기존 58메서드 시그니처 불변** 후 재동결.
+//   v6: 사용자 v2.1 승인(2026-08-22, 랜딩보드 4문항 승인)을 근거로 동결 해제 → 랜딩보드:
+//   listLandingPages·getLandingPage·createLandingPage·updateLandingPage·publishLandingPage·
+//   deleteLandingPage·listLandingMetrics·submitLandingLead 8메서드 추가 = 75메서드.
+//   **기존 67메서드 시그니처 불변** 후 재동결.
 //   경위는 PROGRESS.md 결정 로그 참조.
 //
 // 프론트(S-2·S0~S9)는 이 인터페이스만 호출한다. 구현체:
@@ -33,6 +37,8 @@ import type {
   ComplianceCard,
   Cue,
   Deliverable,
+  LandingDailyMetric,
+  LandingPage,
   Milestone,
   ProgramSession,
   Project,
@@ -255,6 +261,31 @@ export interface DataProvider {
   /** items 체크 = 멤버 / title 편집 = pm (§6.1) */
   updateComplianceCard(cardId: UUID, patch: ComplianceCardPatch): Promise<ComplianceCard>
 
+  // ── S-3 랜딩보드 (v2.1 §4-19~§4-22) ───────────────────────────────
+  /** 현재 행사의 랜딩 목록 (최신 수정순) */
+  listLandingPages(): Promise<LandingPage[]>
+  getLandingPage(landingId: UUID): Promise<LandingPage>
+  /**
+   * 새 랜딩. 섹션·폼·동의는 기본 템플릿으로 시드되고,
+   * autofill 섹션은 행사 데이터(개요·세션·존)에서 즉시 조립된다.
+   */
+  createLandingPage(input: LandingPageInput): Promise<LandingPage>
+  /** 부분 수정 — 배열 필드(sections·form_fields·consents)는 통째로 교체된다 */
+  updateLandingPage(landingId: UUID, patch: LandingPagePatch): Promise<LandingPage>
+  /**
+   * 발행 표시. 내보낸 HTML을 올린 공개 주소를 기록한다 (앱이 서빙하지는 않는다).
+   * publicUrl을 null로 주면 draft로 되돌린다.
+   */
+  publishLandingPage(landingId: UUID, publicUrl: string | null): Promise<LandingPage>
+  deleteLandingPage(landingId: UUID): Promise<void>
+  /** 일자별 유입 지표 (mock=픽스처 / Phase 4=GA Data API) */
+  listLandingMetrics(landingId: UUID): Promise<LandingDailyMetric[]>
+  /**
+   * 랜딩 폼 제출 → 등록(S4) 유입. submit_target='registration'일 때만 유효하며
+   * Attendee(channel='rsvp')로 적재하고 그 행을 돌려준다.
+   */
+  submitLandingLead(landingId: UUID, values: Record<string, string>): Promise<Attendee>
+
   // ── 발주처 뷰 (S7·S8) — 토큰 스코프, 만료·회수 시 410 ─────────────
   /** 컨펌 대기 큐 + 처리 이력. 코멘트는 shared만 포함(§6.2) */
   getClientQueue(token: string): Promise<ClientQueue>
@@ -262,3 +293,32 @@ export interface DataProvider {
   submitClientDecision(token: string, input: ClientDecisionInput): Promise<void>
   getClientStatus(token: string): Promise<ClientStatusData>
 }
+
+
+// ── S-3 랜딩보드 입출력 (v2.1) ────────────────────────────────────────
+export interface LandingPageInput {
+  title: string
+  slug: string
+  /** 미지정 시 샘플 구조(13섹션)로 시드 */
+  sections?: LandingPage['sections']
+  form_fields?: LandingPage['form_fields']
+  consents?: LandingPage['consents']
+  analytics?: Partial<LandingPage['analytics']>
+}
+
+export type LandingPagePatch = Partial<
+  Pick<
+    LandingPage,
+    | 'title'
+    | 'slug'
+    | 'status'
+    | 'sticky_nav'
+    | 'cta_label'
+    | 'submit_target'
+    | 'external_submit_url'
+    | 'analytics'
+    | 'sections'
+    | 'form_fields'
+    | 'consents'
+  >
+>

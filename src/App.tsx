@@ -14,6 +14,8 @@ import OnboardingPage from './pages/OnboardingPage'
 import PlanDocPage from './pages/PlanDocPage'
 import ProjectListPage from './pages/ProjectListPage'
 import QuoteEditorPage from './pages/QuoteEditorPage'
+import LandingBoardPage from './pages/LandingBoardPage'
+import LandingEditorPage from './pages/LandingEditorPage'
 import QuotesPage from './pages/QuotesPage'
 import RegistrationPage from './pages/RegistrationPage'
 import SchedulePage from './pages/SchedulePage'
@@ -58,6 +60,10 @@ export function AppRoutes() {
           {/* v2.0 S-2 견적 — 행사 없이도 접근(견적→행사 생성이 첫 단계)하므로 가드 밖.
               app_role 게이트(admin·sales)는 페이지 내부(QuoteGate)가 수행 — staff는 403 화면 */}
           <Route path="/quotes" element={<QuotesPage />} />
+
+          {/* v2.1 S-3 랜딩보드 — 준비 단계(견적 다음). 온보딩 가드 밖: 랜딩은 세팅 전에도 손댈 수 있다 */}
+          <Route path="/landing" element={<LandingBoardPage />} />
+          <Route path="/landing/:landingId" element={<LandingEditorPage />} />
           <Route path="/quotes/new" element={<QuoteEditorPage />} />
           <Route path="/quotes/:quoteId/edit" element={<QuoteEditorPage />} />
 

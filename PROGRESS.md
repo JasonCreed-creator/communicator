@@ -306,6 +306,21 @@
 - 이후 Phase 5(Drive) → Phase 6(알림·cron)
 
 ## 5. 결정 로그
+- 2026-08-22 (Phase 3.13 — v2.1 랜딩보드): **DataProvider v5 동결 해제 → v6 재동결(75메서드)** —
+  근거: **사용자 v2.1 승인(2026-08-22, 범위 4문항 승인)**. listLandingPages·getLandingPage·
+  createLandingPage·updateLandingPage·publishLandingPage·deleteLandingPage·listLandingMetrics·
+  submitLandingLead 8메서드 추가, **기존 67메서드 시그니처 불변**. 타입 LandingPage·LandingSection·
+  LandingItem·LandingFormField·LandingConsent·LandingAnalytics·LandingDailyMetric + 열거 4종 신설.
+  사용자 승인 4건: ①범위=빌더+지표 동시 ②발행=단일 HTML 내보내기 ③행사 데이터 적극 연동 ④리드=등록(S4) 유입.
+  · 섹션 카탈로그 13종은 실측 B2B 행사 랜딩을 뜯어 정규화한 것 — 문구는 전부 자리표시자(#RULE-NO-COMPANY 준수)
+  · **autofill이 이 기능의 본령** — 세션·개요·존이 랜딩으로 흘러들어 이중 입력을 없앤다. 끄면 저장값 보존
+  · GA는 형식 검증(G-/GTM- 정규식) 통과 ID만 주입 — 임의 문자열이 <script>로 새는 경로를 만들지 않는다.
+    측정 ID 미설정이면 내보낸 HTML의 외부 요청은 0건
+  · 지표는 mock 픽스처(결정론적 30일) — Phase 4에서 **GA Data API 실연동으로 교체**(서버 필요)
+  · Attendee 스키마는 늘리지 않았다 — 유입 출처는 activity_log의 `landing.lead`(landing_id)로 남긴다
+  **미결**: ①앱 내 공개 URL 서빙은 Phase 4.6 이후 ②설계서 v2.0에 §4-19~§4-22(랜딩) 절 추가 필요(코드 선행)
+  ③데모 아티팩트 검사기에 googletagmanager 호스트와 <style> 2개를 판정 기록으로 추가
+  (내보내기 템플릿 문자열이며 페이지 자체 요청 아님 — 브라우저로 외부 요청 0건 확인)
 - 2026-08-22 (견적 단가 개정 — LED↔중계 분리): **엔진 상수·산식 변경** — 근거: **사용자 승인(2026-08-22)**
   + jsx-easy-shift 원본 동반 개정(PR #45 머지 `5dafc52`). CLAUDE.md §9 "0원 일치가 깨지면 머지 금지 —
   변경은 골든 벡터 갱신과 함께" 규약에 따라 **골든 벡터 데이터셋을 v1.0.0(14벡터) → v1.1.0(21벡터)로
@@ -549,6 +564,9 @@
   Phase 4 착수 시 챗이 설계서 v2.0.1(§2.1 9메서드 정정판) 첨부 예정**
 - 2026-08-22 세션 #4: 견적 모듈 단가 개정(LED↔중계 분리·온라인중계 신설) — 엔진·Excel·UI·테스트·골든
   벡터 전량 이식. vitest 342(323+19)·tsc·빌드·demo 3단 통과, 아티팩트에서 옵션 화면 직접 확인.
+- 2026-08-22 세션 #5: Phase 3.13 랜딩보드 신설 — 타입·v6 재동결·MockProvider 8메서드·섹션 템플릿 13종·
+  autofill·HTML 내보내기(GA 주입)·빌더/보드 2화면·DoD-27 27케이스. vitest 369(342+27)·tsc·빌드·demo 통과,
+  브라우저로 보드·빌더·외부요청 0건 확인.
 
 ## 7. 세션 잠금
 - 잠금 없음 (한 폴더 = 동시 1세션)
