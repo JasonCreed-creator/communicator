@@ -74,7 +74,7 @@ export interface DashboardData {
   inbox_count: number
   area_progress: AreaProgress[]
   recent_activity: ActivityLogEntry[]
-  /** v1.2 — 현재 사용자가 담당자인 requested 항목(받은 지시), 마감순 */
+  /** v1.2 — 현재 사용자가 담당자인 requested 항목(받은 가이드), 마감순 */
   my_requested: Deliverable[]
   /** v1.4 — 지연 WBS 태스크(미완료·end_date<오늘), 마감 오래된 순 */
   wbs_delayed: WbsTask[]
@@ -189,7 +189,7 @@ export interface CreateDeliverableInput {
   assignee_id?: UUID
   due_date?: IsoDate
   requires_approval?: boolean
-  // v1.2 지시 발행 (§8 POST /deliverables): brief·스펙 포함 시 status='requested', pm 전용
+  // v1.2 가이드 발행 (§8 POST /deliverables): brief·스펙 포함 시 status='requested', pm 전용
   brief?: string
   brief_refs?: string[]
   spec_size?: string
@@ -449,7 +449,7 @@ export interface PlanZoneItem {
   latest_version: PlanVersionRef | null
 }
 
-/** ④제작물 리스트 — design 항목의 지시 스펙 표+최신 시안·상태 */
+/** ④제작물 리스트 — design 항목의 가이드 스펙 표+최신 시안·상태 */
 export interface PlanProductionItem {
   deliverable_id: UUID
   category: string

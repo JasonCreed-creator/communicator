@@ -44,7 +44,7 @@ export const REBUILD27_TOKEN = 'rb27'
 const RB26 = PROJECT_ID_REBUILD26
 const RB27 = PROJECT_ID_REBUILD27
 
-/** 지시·스펙·본문 기본값 (sampleProject의 NO_BRIEF와 동일 규약 — 파일 간 결합을 만들지 않으려 재정의) */
+/** 가이드·스펙·본문 기본값 (sampleProject의 NO_BRIEF와 동일 규약 — 파일 간 결합을 만들지 않으려 재정의) */
 const NO_BRIEF = {
   brief: null,
   brief_refs: null,
@@ -906,7 +906,7 @@ export function appendRebuildFixtures(state: MockState): void {
     })
   })
 
-  // 큐시트 — 아직 지시만 발행된 상태(requested)
+  // 큐시트 — 아직 가이드만 발행된 상태(requested)
   state.deliverables.push({
     id: 'dlv-rb27-cue-01',
     project_id: RB27,
@@ -1012,7 +1012,7 @@ export function appendRebuildFixtures(state: MockState): void {
       task.status = 'doing'
     }
   }
-  // 2.8 제작물 ↔ 지시 발행된 LED 키비주얼 연결 (산출물 연결 뱃지 시연)
+  // 2.8 제작물 ↔ 가이드 발행된 LED 키비주얼 연결 (산출물 연결 뱃지 시연)
   const task28 = rb27Tasks.find((t) => t.code === '2.8')
   if (task28) task28.linked_deliverable_id = 'dlv-rb27-prd-002'
   state.wbs_tasks.push(...rb27Tasks)

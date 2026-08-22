@@ -68,7 +68,7 @@ function ItemDetail({ itemId }: { itemId: string }) {
         </p>
       </div>
 
-      {/* §6 S3: 일반 항목 = 2단 분할 — 좌(주 콘텐츠) 지시 카드·상태 액션·미리보기·코멘트 / 우(300 고정)
+      {/* §6 S3: 일반 항목 = 2단 분할 — 좌(주 콘텐츠) 가이드 카드·상태 액션·미리보기·코멘트 / 우(300 고정)
           메타 사이드(상태·담당·마감·버전 타임라인).
           3.9.1 P1: 큐시트 항목 = 1단 전폭 — 7열 정형 표가 깨지지 않도록 메타를 에디터 위
           가로 스트립 카드로 재배치(버전 이력은 최신 1건 + 전체 보기 토글). */}
@@ -358,7 +358,7 @@ function StatusActionBar({
   if (status === 'requested') {
     return (
       <Card title="상태 액션">
-        <p className="text-sm text-ink-sub">지시가 발행되었습니다.</p>
+        <p className="text-sm text-ink-sub">가이드가 발행되었습니다.</p>
         <p className="mt-1 text-xs text-ink-cap">첫 버전을 업로드하면 자동으로 초안(draft) 상태로 전환됩니다.</p>
       </Card>
     )

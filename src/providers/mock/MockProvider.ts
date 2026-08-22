@@ -454,7 +454,7 @@ export class MockProvider implements DataProvider {
       ).length,
       area_progress: this.areaProgress(projectId),
       recent_activity: await this.listActivity(projectId, 10),
-      // v1.2: 받은 지시 — 내가 담당자인 requested 항목, 마감순
+      // v1.2: 받은 가이드 — 내가 담당자인 requested 항목, 마감순
       my_requested: this.state.deliverables
         .filter(
           (d) => d.project_id === projectId && d.status === 'requested' && d.assignee_id === user.id,
@@ -515,7 +515,7 @@ export class MockProvider implements DataProvider {
     if (!input.title.trim() || !input.category.trim()) {
       throw new ProviderError('validation', '카테고리와 제목은 필수입니다.')
     }
-    // v1.2 §8: brief·스펙 포함 시 지시 발행 — pm 전용, status='requested', 담당자 필수
+    // v1.2 §8: brief·스펙 포함 시 가이드 발행 — pm 전용, status='requested', 담당자 필수
     const isBriefIssue =
       !!input.brief?.trim() ||
       input.spec_size !== undefined ||
@@ -524,10 +524,10 @@ export class MockProvider implements DataProvider {
       input.spec_type !== undefined
     if (isBriefIssue) {
       if (user.role !== 'pm') {
-        throw new ProviderError('forbidden', '지시 발행은 PM만 할 수 있습니다.')
+        throw new ProviderError('forbidden', '가이드 발행은 PM만 할 수 있습니다.')
       }
       if (!input.assignee_id) {
-        throw new ProviderError('validation', '지시에는 담당자 지정이 필요합니다.')
+        throw new ProviderError('validation', '가이드에는 담당자 지정이 필요합니다.')
       }
     }
     const deliverable: Deliverable = {
@@ -553,7 +553,7 @@ export class MockProvider implements DataProvider {
     }
     this.state.deliverables.push(deliverable)
     if (isBriefIssue) {
-      // §5 부수 효과: 지시서 작성 + 담당자 알림 (Slack 실연동은 Phase 6)
+      // §5 부수 효과: 가이드 문서 작성 + 담당자 알림 (Slack 실연동은 Phase 6)
       this.log(deliverable.project_id, `user:${user.id}`, 'deliverable.requested', 'deliverable', deliverable.id, {
         assignee_id: deliverable.assignee_id,
       })

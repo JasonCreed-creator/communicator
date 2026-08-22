@@ -121,7 +121,7 @@ const COMMON_CHARTERS: readonly RoleCharterTemplate[] = [
     title: '총괄 PM',
     items: [
       '계약·정산·발주처 컨펌 게이트 총괄',
-      '지시 발행과 일정·리스크 관리',
+      '가이드 발행과 일정·리스크 관리',
       '킥오프·실행 계획 미팅 주재와 내부 현황 취합',
     ],
   },
@@ -132,7 +132,7 @@ const COMMON_CHARTERS: readonly RoleCharterTemplate[] = [
     items: [
       '랜딩페이지·키비주얼·제작물 산출',
       '시안 버전 관리와 내부 검토 대응',
-      '지시 스펙(규격·수량·위치·종류) 기준 제작 진행',
+      '가이드 스펙(규격·수량·위치·종류) 기준 제작 진행',
     ],
   },
   {

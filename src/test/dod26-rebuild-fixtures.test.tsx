@@ -58,21 +58,21 @@ describe('DoD-26 (a) RE:BUILD 26 — 종료 행사', () => {
     expect((await p.listWbsTasks(RB26)).length).toBe(37)
   })
 
-  it('종료 행사의 S2 보드에는 생성·지시 발행 폼이 뜨지 않고 열람 안내만 뜬다', async () => {
+  it('종료 행사의 S2 보드에는 생성·가이드 발행 폼이 뜨지 않고 열람 안내만 뜬다', async () => {
     localStorage.setItem('communicator.currentProjectId', RB26)
     renderRoute('/board/design')
     // 실적 제작물은 그대로 읽힌다
     expect(await screen.findByText('외관 대형 현수막')).toBeTruthy()
     expect(screen.getByText('종료된 행사입니다 — 열람만 가능합니다.')).toBeTruthy()
     expect(screen.queryByRole('heading', { name: '새 항목 생성' })).toBeNull()
-    expect(screen.queryByRole('heading', { name: '지시 발행' })).toBeNull()
+    expect(screen.queryByRole('heading', { name: '가이드 발행' })).toBeNull()
     cleanup()
 
     // 대조군: 진행 중 행사(RE:BUILD 27)에서는 두 폼이 정상 노출된다 (현재 사용자 = PM)
     localStorage.setItem('communicator.currentProjectId', RB27)
     renderRoute('/board/design')
     expect(await screen.findByRole('heading', { name: '새 항목 생성' })).toBeTruthy()
-    expect(screen.getByRole('heading', { name: '지시 발행' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: '가이드 발행' })).toBeTruthy()
     expect(screen.queryByText('종료된 행사입니다 — 열람만 가능합니다.')).toBeNull()
   })
 })
@@ -166,7 +166,7 @@ describe('DoD-26 (c) 실적 데이터가 S9 운영계획서로 조립된다', ()
     const insight = plan.zones.find((z) => z.title.startsWith('인사이트존'))!
     expect(insight.content).toContain('LED 12×3m')
 
-    // ⑤ 제작물 리스트 — 지시 스펙에서 자동 생성
+    // ⑤ 제작물 리스트 — 가이드 스펙에서 자동 생성
     expect(plan.production_items).toHaveLength(42)
     const banner = plan.production_items.find((d) => d.title === '외관 대형 현수막')!
     expect(banner.spec_size).toBe('23,000×5,000mm')

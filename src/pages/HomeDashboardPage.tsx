@@ -79,7 +79,7 @@ export default function HomeDashboardPage() {
             )}
 
           {dashboard.data && dashboard.data.my_requested.length > 0 && (
-            <Card title="받은 지시">
+            <Card title="받은 가이드">
               <ul className="divide-y divide-border">
                 {dashboard.data.my_requested.map((d) => (
                   <li key={d.id} className="py-2.5 first:pt-0 last:pb-0">

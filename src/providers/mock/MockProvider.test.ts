@@ -238,7 +238,7 @@ describe('대시보드 (S1·DoD-5)', () => {
     expect(design).toEqual({ area: 'design', total: 4, done: 1 })
   })
 
-  it('받은 지시(my_requested)는 담당자에게만 노출된다 (v1.2)', async () => {
+  it('받은 가이드(my_requested)는 담당자에게만 노출된다 (v1.2)', async () => {
     const pmView = await p.getDashboard(PROJECT_ID)
     expect(pmView.my_requested).toHaveLength(0)
     p.switchUser('usr-design')
@@ -247,7 +247,7 @@ describe('대시보드 (S1·DoD-5)', () => {
   })
 })
 
-describe('v1.2 지시 파이프라인 — requested (§5·§8)', () => {
+describe('v1.2 가이드 파이프라인 — requested (§5·§8)', () => {
   it('brief·스펙 포함 생성은 pm 전용 status=requested, 담당자 필수', async () => {
     await expectError(
       () =>
@@ -276,7 +276,7 @@ describe('v1.2 지시 파이프라인 — requested (§5·§8)', () => {
     expect(d.spec_qty).toBe(500)
   })
 
-  it('pm이 아닌 지시 발행은 403', async () => {
+  it('pm이 아닌 가이드 발행은 403', async () => {
     p.switchUser('usr-design')
     await expectError(
       () =>
@@ -286,7 +286,7 @@ describe('v1.2 지시 파이프라인 — requested (§5·§8)', () => {
           category: '포스터',
           title: '포스터',
           assignee_id: 'usr-design',
-          brief: '셀프 지시 시도',
+          brief: '셀프 가이드 시도',
         }),
       403,
     )
@@ -470,7 +470,7 @@ describe('v1.2 S9 운영계획서 조립 — getPlan (§8·DoD-8)', () => {
     expect(plan.program_sessions.map((s) => s.id)).toEqual([
       'pgs-001', 'pgs-002', 'pgs-003', 'pgs-004', 'pgs-005',
     ])
-    // 제작물 리스트는 design 항목 지시 스펙에서 자동 생성
+    // 제작물 리스트는 design 항목 가이드 스펙에서 자동 생성
     const banner = plan.production_items.find((i) => i.deliverable_id === 'dlv-007')
     expect(banner?.spec_size).toBe('23000×5000mm')
     // 존운영은 ops 항목 content 기반
