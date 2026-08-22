@@ -28,6 +28,12 @@ import { addDays, offsetToDate, toIsoDate } from '../lib/wbs'
 import { COMPLIANCE_CARD_TEMPLATES } from './complianceTemplates'
 import { createFixtureQuotes, FINAL_QUOTE_ID } from './quoteFixtures'
 import { RECRUITING_WBS_TEMPLATE, ROLE_CHARTER_TEMPLATES, wbsTemplateFor } from './wbsTemplates'
+import {
+  appendRebuildFixtures,
+  PROJECT_ID_REBUILD26,
+  PROJECT_ID_REBUILD27,
+  REBUILD27_TOKEN,
+} from './rebuildFixtures'
 
 /** `/c/demo` 데모 라우트용 토큰 값 (CLAUDE.md §4 Phase 3) */
 export const DEMO_TOKEN = 'demo'
@@ -43,6 +49,8 @@ export const PROJECT_ID_PARTNER = 'prj-partner-day'
 export const PROJECT_ID_DRAFT = 'prj-forum-h2'
 /** v1.5 — ④ 종료(closed, 읽기 전용) */
 export const PROJECT_ID_CLOSED = 'prj-ai-summit'
+// v2.0 Phase 3.12 — 실제 운영 행사 2건(⑤ 종료 · ⑥ 진행 중·데모 기본). 정의는 rebuildFixtures.ts
+export { PROJECT_ID_REBUILD26, PROJECT_ID_REBUILD27, REBUILD27_TOKEN }
 
 export interface MockState {
   users: UserRef[]
@@ -815,6 +823,9 @@ export function createFixtureState(): MockState {
       sort_order: tpl.sort_order,
     }))
   state.compliance_cards = [...seedCompliance(PROJECT_ID, 'stc'), ...seedCompliance(PROJECT_ID_PARTNER, 'ptd')]
+
+  // ── Phase 3.12 — 실제 운영 행사 2건 추가 (기존 ①~④는 위에서 조립된 그대로 유지) ──
+  appendRebuildFixtures(state)
 
   return state
 }
