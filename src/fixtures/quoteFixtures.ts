@@ -4,8 +4,9 @@
 import type { Quote, QuoteInput } from '../types/entities'
 import { computeQuoteOutputs } from '../modules/quote/engine/quoteInput'
 
-/** 행사 미연결 견적("견적만 있음 · 행사 미생성" 셀렉터 그룹 검증용) */
-export const UNLINKED_QUOTE_ID = 'quo-101'
+/** 행사 미연결 견적("견적만 있음 · 행사 미생성" 셀렉터 그룹 검증용).
+ *  주의: mock nextId('quo')가 quo-101부터 발급하므로 픽스처 ID는 100 미만 대역을 쓴다. */
+export const UNLINKED_QUOTE_ID = 'quo-010'
 /** 샘플 행사의 확정 견적 (projects.quote_id와 상호 링크) */
 export const FINAL_QUOTE_ID = 'quo-003'
 

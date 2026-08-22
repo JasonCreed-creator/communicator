@@ -14,7 +14,7 @@ interface WbsChecklistProps {
   onChanged: () => void
 }
 
-/** S5 체크리스트 뷰 — 단계별 그룹 표. 코드·태스크명(+origin_role)·기간·담당·상태·연결 산출물, pm 편집 */
+/** S5 체크리스트 뷰 — 단계별 그룹 표. 코드·태스크명(+origin_role)·기간·담당·소통 대상(v2.0)·상태·연결 산출물, pm 편집 */
 export default function WbsChecklist({ tasks, deliverables, isPm, onChanged }: WbsChecklistProps) {
   const today = toIsoDate(new Date())
   const groups = groupTasksByPhase(tasks)
@@ -31,13 +31,14 @@ export default function WbsChecklist({ tasks, deliverables, isPm, onChanged }: W
             {g.phase_no}. {g.phase_name}
           </h3>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[860px] border-collapse text-sm">
+            <table className="w-full min-w-[940px] border-collapse text-sm">
               <thead>
                 <tr>
                   <th className="ui-th">코드</th>
                   <th className="ui-th">태스크</th>
                   <th className="ui-th">기간</th>
                   <th className="ui-th">담당</th>
+                  <th className="ui-th">소통 대상</th>
                   <th className="ui-th">상태</th>
                   <th className="ui-th">연결 산출물</th>
                   {isPm && <th className="ui-th">편집</th>}
@@ -86,7 +87,7 @@ function WbsTaskRow({
   const delayed = isDelayed(task, today)
   const imminent = isImminent(task, today)
   const rowClass = rowHighlightClass(delayed, imminent)
-  const colCount = isPm ? 7 : 6
+  const colCount = isPm ? 8 : 7
 
   return (
     <>
@@ -113,6 +114,23 @@ function WbsTaskRow({
           <span className="inline-flex shrink-0 items-center rounded-full bg-track px-2 py-0.5 text-xs font-medium text-ink-sub">
             {ROLE_LABELS[task.role]}
           </span>
+        </td>
+        <td className="py-2.5 pr-3">
+          {/* v2.0 §4-15b — 소통 대상 (템플릿 시드, 복수는 '·' 결합) */}
+          {task.target ? (
+            <span className="flex flex-wrap gap-1">
+              {task.target.split('·').map((target) => (
+                <span
+                  key={target}
+                  className="inline-flex shrink-0 items-center rounded bg-steel-tint px-1.5 py-0.5 text-[10px] font-medium text-steel"
+                >
+                  {target}
+                </span>
+              ))}
+            </span>
+          ) : (
+            <span className="text-xs text-ink-cap">—</span>
+          )}
         </td>
         <td className="py-2.5 pr-3">
           <WbsStatusControl taskId={task.id} status={task.status} onChanged={onChanged} />
