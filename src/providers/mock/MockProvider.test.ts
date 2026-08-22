@@ -6,6 +6,7 @@ import {
   REVOKED_TOKEN,
 } from '../../fixtures/sampleProject'
 import { ProviderError } from '../../lib/errors'
+import { addDays, toIsoDate } from '../../lib/wbs'
 import { MockProvider } from './MockProvider'
 
 let p: MockProvider
@@ -61,12 +62,12 @@ describe('컨펌 발송 — requestApproval (§5 발송 조건)', () => {
   })
 
   it('미리보기 포맷이 아닌 버전은 400', async () => {
-    // dlv-001을 internal_review로 되돌린 뒤 .ai 버전(ver-001)으로 발송 시도해야 하지만
-    // 픽스처 dlv-001은 pending — dlv-004(internal_review)에 .ai 버전을 만들어 검증
-    p.switchUser('usr-ops')
-    const v = await p.uploadVersion('dlv-004', { file_name: '원본.ai' })
+    // v1.3부터 큐시트(dlv-004)는 스냅숏 자동 등록으로 항상 조건 충족 — 비큐시트 항목으로 검증
+    p.switchUser('usr-design')
+    await p.transitionStatus('dlv-003', 'internal_review')
+    const v = await p.uploadVersion('dlv-003', { file_name: '원본.ai' })
     p.switchUser('usr-pm')
-    await expectError(() => p.requestApproval('dlv-004', { version_id: v.id }), 400)
+    await expectError(() => p.requestApproval('dlv-003', { version_id: v.id }), 400)
   })
 
   it('internal_review의 미리보기 버전은 발송 성공 → pending_approval', async () => {
@@ -347,6 +348,119 @@ describe('v1.2 프로그램표·행사개요 (pm·ops 전용 — §6.1)', () => 
     expect(project.venue).toBe('가상컨벤션센터 5F 오디토리움')
     p.switchUser('usr-design')
     await expectError(() => p.updateProjectOverview(PROJECT_ID, { theme: 'x' }), 403)
+  })
+})
+
+describe('v1.3 온보딩·유형·큐시트', () => {
+  it('온보딩 완료 시 유형별 WBS 자동 전개 + R&R 시드 (모객형 37건)', async () => {
+    p.resetOnboarding()
+    expect((await p.getOnboardingStatus(PROJECT_ID)).completed).toBe(false)
+    await p.completeOnboarding(PROJECT_ID)
+    expect((await p.getOnboardingStatus(PROJECT_ID)).completed).toBe(true)
+    expect(await p.listWbsTasks(PROJECT_ID)).toHaveLength(37)
+    expect(await p.listRoleCharters(PROJECT_ID)).toHaveLength(4)
+  })
+
+  it('updateProject는 pm 전용, 일반형 재전개는 28건 + origin_role 보존 (DoD-13)', async () => {
+    p.switchUser('usr-design')
+    await expectError(() => p.updateProject(PROJECT_ID, { event_type: 'general' }), 403)
+    p.switchUser('usr-pm')
+    await p.updateProject(PROJECT_ID, { event_type: 'general' })
+    const tasks = await p.expandWbs(PROJECT_ID)
+    expect(tasks).toHaveLength(28)
+    expect(tasks.find((t) => t.code === '3.1')).toBeUndefined() // 리드젠 제외
+    expect(tasks.find((t) => t.code === '4.6')?.origin_role).toBe('MC-AT') // 존치 + 원본 태그 보존
+    expect(tasks.find((t) => t.code === '3G.1')?.role).toBe('reg') // 일반형 대체 태스크
+  })
+
+  it('큐 CRUD는 pm·ops 전용, sort_order 순 조회', async () => {
+    p.switchUser('usr-ops')
+    const cue = await p.createCue('dlv-004', {
+      cue_no: 'C05',
+      time_at: '10:05',
+      segment: '세션',
+      body: '기조연설 시작',
+    })
+    expect(cue.sort_order).toBe(5)
+    await p.updateCue(cue.id, { time_at: '10:06' })
+    p.switchUser('usr-design')
+    await expectError(() => p.deleteCue(cue.id), 403)
+    p.switchUser('usr-ops')
+    await p.deleteCue(cue.id)
+    expect((await p.listCues('dlv-004')).map((c) => c.cue_no)).toEqual(['C01', 'C02', 'C03', 'C04'])
+  })
+
+  it('큐시트 컨펌 발송 시 .pdf 스냅숏 버전 자동 등록 (DoD-12)', async () => {
+    const approval = await p.requestApproval('dlv-004', { version_id: 'ver-004' })
+    const detail = await p.getDeliverable('dlv-004')
+    expect(detail.versions[0].note).toContain('큐시트 스냅숏')
+    expect(detail.versions[0].file_name).toMatch(/\.pdf$/)
+    expect(approval.version_id).toBe(detail.versions[0].id)
+    expect(detail.status).toBe('pending_approval')
+  })
+})
+
+describe('v1.4 WBS — 전개·권한·지연/임박·자동 완료', () => {
+  it('event_date 기준 날짜 전개 + 오프셋 원본 보존 (DoD-13)', async () => {
+    const tasks = await p.listWbsTasks(PROJECT_ID)
+    const contract = tasks.find((t) => t.code === '1.1')!
+    expect(contract.offset_start).toBe(-42)
+    expect(contract.start_date).toBe('2026-09-10') // 2026-10-22의 D-42
+    expect(contract.end_date).toBe('2026-09-12')
+    expect(contract.origin_role).toBe('RS')
+    expect(tasks.find((t) => t.code === '5.4')!.start_date).toBe('2026-10-22') // D-Day
+  })
+
+  it('재전개는 code 매칭으로 상태·연결 보존', async () => {
+    const target = (await p.listWbsTasks(PROJECT_ID)).find((t) => t.code === '2.1')!
+    await p.updateWbsTask(target.id, { status: 'done' })
+    const tasks = await p.expandWbs(PROJECT_ID)
+    expect(tasks.find((t) => t.code === '2.1')?.status).toBe('done')
+    expect(tasks.find((t) => t.code === '2.8')?.linked_deliverable_id).toBe('dlv-007')
+  })
+
+  it('status 체크는 담당 역할+pm, 그 외 편집은 pm 전용', async () => {
+    const siteVisit = (await p.listWbsTasks(PROJECT_ID)).find((t) => t.code === '1.4')! // ops 담당
+    p.switchUser('usr-design')
+    await expectError(() => p.updateWbsTask(siteVisit.id, { status: 'doing' }), 403)
+    p.switchUser('usr-ops')
+    await expectError(() => p.updateWbsTask(siteVisit.id, { note: '메모' }), 403)
+    const updated = await p.updateWbsTask(siteVisit.id, { status: 'done' })
+    expect(updated.done_at).not.toBeNull()
+  })
+
+  it('지연/임박이 대시보드에 집계된다 — 경계값 (DoD-14)', async () => {
+    const today = toIsoDate(new Date())
+    const tasks = await p.listWbsTasks(PROJECT_ID)
+    const byCode = (code: string) => tasks.find((t) => t.code === code)!.id
+    await p.updateWbsTask(byCode('6.5'), { end_date: addDays(today, -1) }) // 어제 마감 → 지연
+    await p.updateWbsTask(byCode('6.6'), { end_date: today }) // 오늘 마감 → 임박
+    await p.updateWbsTask(byCode('6.7'), { end_date: addDays(today, 2) }) // +2 → 임박
+    await p.updateWbsTask(byCode('6.8'), { end_date: addDays(today, 3) }) // +3 → 해당 없음
+    await p.updateWbsTask(byCode('6.1'), { end_date: addDays(today, -1) })
+    await p.updateWbsTask(byCode('6.1'), { status: 'done' }) // 완료면 지연 아님
+    const dash = await p.getDashboard(PROJECT_ID)
+    const delayed = dash.wbs_delayed.map((t) => t.code)
+    const imminent = dash.wbs_imminent.map((t) => t.code)
+    expect(delayed).toContain('6.5')
+    expect(delayed).not.toContain('6.6')
+    expect(delayed).not.toContain('6.1')
+    expect(imminent).toEqual(expect.arrayContaining(['6.6', '6.7']))
+    expect(imminent).not.toContain('6.5') // 지연과 배타
+    expect(imminent).not.toContain('6.8')
+  })
+
+  it('연결 산출물 final 전환 시 태스크 자동 done (DoD-15)', async () => {
+    p.switchUser('usr-design')
+    await p.uploadVersion('dlv-007', { file_name: '시안.png' }) // requested → draft
+    await p.transitionStatus('dlv-007', 'internal_review')
+    p.switchUser('usr-pm')
+    const latest = (await p.getDeliverable('dlv-007')).versions[0]
+    const approval = await p.requestApproval('dlv-007', { version_id: latest.id })
+    await p.submitClientDecision(DEMO_TOKEN, { approval_id: approval.id, decision: 'approved' })
+    const production = (await p.listWbsTasks(PROJECT_ID)).find((t) => t.code === '2.8')!
+    expect(production.status).toBe('done')
+    expect(production.done_at).not.toBeNull()
   })
 })
 
