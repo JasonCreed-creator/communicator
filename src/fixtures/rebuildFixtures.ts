@@ -112,8 +112,8 @@ const REBUILD27_PROJECT: Project = {
   id: RB27,
   name: 'RE:BUILD 27',
   code: 'RB27',
-  event_date: '2026-09-24',
-  event_end_date: '2026-09-24',
+  event_date: '2026-09-10',
+  event_end_date: '2026-09-10',
   start_time: '10:30',
   end_time: '18:00',
   expected_headcount: 800,
@@ -134,7 +134,7 @@ const REBUILD27_PROJECT: Project = {
   venue: '어린이대공원 파이팩토리 (후보 · 계약 전)',
   mc_name: null,
   overview_items: [
-    { label: '안내', value: '행사일은 데모용 가안입니다 — 실제 차기 행사 일정은 미정' },
+    { label: '안내', value: '행사일(2026-09-10 목)은 데모용 가안입니다 — 실제 차기 행사 일정은 미정' },
     { label: '기준', value: 'RE:BUILD 26(2026-05-07 · 참석 703명) 실적을 기준으로 준비' },
     { label: '목표', value: '사전신청 1,400명 · 현장참석 800명' },
   ],
@@ -428,16 +428,19 @@ const REBUILD26_PRODUCTION: ProductionRow[] = [
   { category: '전시존', title: '부스 중앙 데스크 폼보드', size: '2,200×250mm', qty: 2, place: '전시존', kind: '폼보드 5T (JPG/Ai)', note: '좌/우 2종', due: '2026-04-24' },
 ]
 
-/** RE:BUILD 27 제작물 — 26 리스트에서 착수분만. 상태는 WBS 진행도(2.5 진행·2.8 미착수)에 맞춘 혼합 */
-const REBUILD27_PRODUCTION: (ProductionRow & { status: DeliverableStatus })[] = [
-  { category: '내부 제작물', title: '키비주얼', size: '16:9 비율', qty: 1, place: '디자인 베리에이션용', kind: '이미지 (JPG/PNG/Ai)', note: '기재: 행사명, 행사일시, 장소, 로고 · 26년 톤 계승 여부 검토', due: '2026-09-05', status: 'internal_review' },
-  { category: '내부 제작물', title: 'LED 키비주얼 (루핑 타이틀)', size: '12,000×3,000mm (3,072×768px)', qty: 1, place: '메인세션장', kind: '이미지/영상 (PNG/PPT/mp4)', note: '기재: 행사명, 행사일시, 장소, 로고', due: '2026-09-11', status: 'requested' },
-  { category: '내부 제작물', title: 'LED 브릿지', size: '4,608×1,152px', qty: 1, place: '메인세션장', kind: 'PNG/PPT', note: '기재: 행사명, 주제, 로고, 연사사진, 아젠다 · 연사 확정 후 착수', due: '2026-09-14', status: 'requested' },
-  { category: '내부 제작물', title: '등록 키오스크 DID', size: '9:16 비율', qty: 1, place: '등록데스크', kind: '이미지 (JPG/Ai)', note: '기재: 행사명, 로고', due: '2026-09-14', status: 'requested' },
-  { category: '내부 제작물', title: '유튜브 중계 템플릿', size: '16:9 비율', qty: 1, place: '중계룸', kind: '이미지 (JPG)', note: '발표자료/연사 송출 2종', due: '2026-09-14', status: 'draft' },
-  { category: '발주 제작물', title: '명찰', size: '100×120mm', qty: 4, place: '등록데스크', kind: '합지/스티커 (JPG/Ai)', note: '4종 · 26년 규격 그대로 · 수량은 모객 확정 후 발주', due: '2026-09-11', status: 'draft' },
-  { category: '발주 제작물', title: '외관 대형 현수막', size: '23,000×5,000mm', qty: 1, place: '파이팩토리 외부', kind: '현수막 (JPG/Ai)', note: '베뉴 계약 확정 후 실측 재확인 · 고소작업 여부 확인', due: '2026-09-11', status: 'pending_approval' },
-  { category: '발주 제작물', title: '포토월 (I배너)', size: '4,000×2,500mm', qty: 1, place: '전시존', kind: '텐트천 (JPG/Ai)', note: '기재: 행사명, 행사주제, 로고', due: '2026-09-11', status: 'pending_approval' },
+/** RE:BUILD 27 제작물 — 26 리스트에서 착수분만. 상태는 WBS 진행도(2.5 진행·2.8 미착수)에 맞춘 혼합.
+ *  마감일은 event_date 기준 오프셋으로 둔다 — WBS 2.8 제작물 구간(D-13~D-5) 안에 들어오도록. */
+type Rb27ProductionRow = Omit<ProductionRow, 'due'> & { status: DeliverableStatus; dueOffset: number }
+
+const REBUILD27_PRODUCTION: Rb27ProductionRow[] = [
+  { category: '내부 제작물', title: '키비주얼', size: '16:9 비율', qty: 1, place: '디자인 베리에이션용', kind: '이미지 (JPG/PNG/Ai)', note: '기재: 행사명, 행사일시, 장소, 로고 · 26년 톤 계승 여부 검토', dueOffset: -13, status: 'internal_review' },
+  { category: '내부 제작물', title: 'LED 키비주얼 (루핑 타이틀)', size: '12,000×3,000mm (3,072×768px)', qty: 1, place: '메인세션장', kind: '이미지/영상 (PNG/PPT/mp4)', note: '기재: 행사명, 행사일시, 장소, 로고', dueOffset: -10, status: 'requested' },
+  { category: '내부 제작물', title: 'LED 브릿지', size: '4,608×1,152px', qty: 1, place: '메인세션장', kind: 'PNG/PPT', note: '기재: 행사명, 주제, 로고, 연사사진, 아젠다 · 연사 확정 후 착수', dueOffset: -8, status: 'requested' },
+  { category: '내부 제작물', title: '등록 키오스크 DID', size: '9:16 비율', qty: 1, place: '등록데스크', kind: '이미지 (JPG/Ai)', note: '기재: 행사명, 로고', dueOffset: -8, status: 'requested' },
+  { category: '내부 제작물', title: '유튜브 중계 템플릿', size: '16:9 비율', qty: 1, place: '중계룸', kind: '이미지 (JPG)', note: '발표자료/연사 송출 2종', dueOffset: -8, status: 'draft' },
+  { category: '발주 제작물', title: '명찰', size: '100×120mm', qty: 4, place: '등록데스크', kind: '합지/스티커 (JPG/Ai)', note: '4종 · 26년 규격 그대로 · 수량은 모객 확정 후 발주', dueOffset: -13, status: 'draft' },
+  { category: '발주 제작물', title: '외관 대형 현수막', size: '23,000×5,000mm', qty: 1, place: '파이팩토리 외부', kind: '현수막 (JPG/Ai)', note: '베뉴 계약 확정 후 실측 재확인 · 고소작업 여부 확인', dueOffset: -13, status: 'pending_approval' },
+  { category: '발주 제작물', title: '포토월 (I배너)', size: '4,000×2,500mm', qty: 1, place: '전시존', kind: '텐트천 (JPG/Ai)', note: '기재: 행사명, 행사주제, 로고', dueOffset: -13, status: 'pending_approval' },
 ]
 
 // ── 큐시트 (운영계획서 p34 · 결과보고서 p36) ───────────────────────
@@ -534,30 +537,30 @@ const REBUILD26_MILESTONES: { title: string; area: 'design' | 'ops' | null; due:
 ]
 
 const REBUILD27_MILESTONES: { title: string; area: 'design' | 'ops' | null; offset: number; done: boolean }[] = [
-  { title: '베뉴 계약 확정', area: null, offset: -30, done: false },
+  { title: '베뉴 계약 확정', area: null, offset: -17, done: false },
   { title: '랜딩페이지 최종 컨펌 · URL 오픈', area: 'design', offset: -16, done: false },
+  { title: '연사 라인업 확정', area: 'ops', offset: -15, done: false },
   { title: '제작물 DB 마감 · 발주', area: 'design', offset: -13, done: false },
-  { title: '연사 라인업 확정', area: 'ops', offset: -20, done: false },
   { title: '전체 리허설 · 테크니컬 체크', area: 'ops', offset: -1, done: false },
 ]
 
 // ── 견적 (RE:BUILD 27 · 2버전) ─────────────────────────────────────
 // 베뉴는 venuedb 실존 항목(pie_factory)을 선택한다. 계약 전이라 대관료는 0(미정)으로 두고,
 // 금액은 전부 엔진(computeQuoteOutputs) 산출값만 저장한다 — 실제 정산 금액을 임의로 적지 않는다.
-// ※ 목표 인원 800·700명은 엔진의 TARGET_MAX(500)를 넘어 '별도 협의 모드'(isCustom)로 산출된다.
-//    이 경우 엔진이 전 섹션 0원을 반환하는 것이 정상 동작이며, S-2 화면이 안내 배너를 띄운다.
+// ※ 엔진의 자동 견적 상한은 TARGET_MAX(500명)다. 총 참관 목표 800명은 이 상한을 넘으므로
+//    견적 인원은 상한 안(v1 480 · v2 400)으로 잡고, 상한 초과분은 별도 협의로 남긴다(notes 참조).
 const RB27_VENUE = {
   venue_id: 'pie_factory',
   name: '파이팩토리',
   hall: null,
-  date: '2026-09-24',
+  date: '2026-09-10',
   rental: 0,
 }
 
 const RB27_QUOTE_BASE: Omit<QuoteInput, 'headcount' | 'guarantee' | 'notes'> = {
   event_name: 'RE:BUILD 27',
-  event_date: '2026-09-24',
-  event_end_date: '2026-09-24',
+  event_date: '2026-09-10',
+  event_end_date: '2026-09-10',
   start_time: '10:30',
   end_time: '18:00',
   event_type: '컨퍼런스',
@@ -875,7 +878,7 @@ export function appendRebuildFixtures(state: MockState): void {
     token: REBUILD27_TOKEN,
     project_id: RB27,
     contact_id: rb27Contact.id,
-    expires_at: '2026-10-24T00:00:00.000Z', // 행사일 +30일 (§6.3 기본)
+    expires_at: '2026-10-10T00:00:00.000Z', // 행사일 +30일 (§6.3 기본)
     revoked_at: null,
     last_seen_at: null,
     created_at: '2026-08-12T09:00:00.000Z',
@@ -893,7 +896,7 @@ export function appendRebuildFixtures(state: MockState): void {
       title: zone.title,
       status: 'draft',
       assignee_id: 'usr-ops',
-      due_date: offsetToDate(rb27Date, -25),
+      due_date: offsetToDate(rb27Date, -13),
       drive_folder_id: null,
       requires_approval: true,
       ...NO_BRIEF,
@@ -936,7 +939,7 @@ export function appendRebuildFixtures(state: MockState): void {
       title: item.title,
       status: item.status,
       assignee_id: 'usr-design',
-      due_date: item.due,
+      due_date: offsetToDate(rb27Date, item.dueOffset),
       drive_folder_id: null,
       requires_approval: true,
       ...NO_BRIEF,
@@ -993,34 +996,20 @@ export function appendRebuildFixtures(state: MockState): void {
     })
   })
 
-  // WBS 37건 — 브리프 §1의 기본 시드 + '지연 2건' 고정 보정
+  // WBS 37건 — 고정 시드(사용자 확정 2026-08-22).
+  // event_date=2026-09-10 기준으로 마감이 지난 태스크는 1.1~1.4 · 2.1~2.4 · 3.1 · 3.2 열 건뿐이고,
+  // 그중 2.2(기초 자료 수령 리마인더)·2.3(기초 자료 수령)만 미완료로 남겨 **지연 2건**이 된다.
+  // 상대 보정 규칙 없이 코드로 못박았으므로 조회 시점이 달라져도 지연 목록의 앞 2건은 늘 2.2·2.3이다.
   const rb27Tasks = buildWbs(RB27, 'rb27', rb27Date)
-  // 브리프 §1은 '1.x 전부 done'을 전제했지만, §15 템플릿 오프셋상 1단계는 D-42~D-28 =
-  // 2026-08-13~08-27로 아직 진행 구간이다. 지연 시연(§5 ②)을 살리려면 마감이 지난 1.1·1.2가
-  // 미완료여야 하므로, 1단계는 '1.3 진행 중(오늘 마감=임박) / 1.4·2.1·2.4 완료'로 시드한다.
-  const DONE_CODES = new Set(['1.4', '2.1', '2.4'])
-  const DOING_CODES = new Set(['1.3', '2.5', '3.1'])
+  const DONE_CODES = new Set(['1.1', '1.2', '1.3', '1.4', '2.1', '2.4', '3.1', '3.2'])
+  const DOING_CODES = new Set(['2.5']) // 랜딩페이지 1차 — 마감 임박
   for (const task of rb27Tasks) {
-    if (DONE_CODES.has(task.code)) task.status = 'done'
-    else if (DOING_CODES.has(task.code)) task.status = 'doing'
-  }
-  // 마감이 지난 태스크는 완료 처리하되 가장 최근 2건만 미완료로 남겨 '지연 2'를 조회 시점과 무관하게 고정한다
-  // (prj-partner-day와 같은 방식). 9월 초 시점에는 이 2건이 브리프가 지목한 2.2·2.3과 일치한다.
-  const pastDue = rb27Tasks
-    .filter((t) => t.end_date! < today)
-    .sort((a, b) => a.end_date!.localeCompare(b.end_date!) || a.sort_order - b.sort_order)
-  pastDue.forEach((task, i) => {
-    if (i < pastDue.length - 2) {
+    if (DONE_CODES.has(task.code)) {
       task.status = 'done'
-    } else {
-      task.status = 'todo'
-      task.done_at = null
-    }
-  })
-  for (const task of rb27Tasks) {
-    if (task.status === 'done' && !task.done_at) {
       const at = task.end_date! < today ? task.end_date! : today
       task.done_at = `${at}T09:00:00.000Z`
+    } else if (DOING_CODES.has(task.code)) {
+      task.status = 'doing'
     }
   }
   // 2.8 제작물 ↔ 지시 발행된 LED 키비주얼 연결 (산출물 연결 뱃지 시연)
@@ -1051,20 +1040,20 @@ export function appendRebuildFixtures(state: MockState): void {
   const quotes: Quote[] = [
     buildQuote('quo-020', 1, 'proposed', {
       ...RB27_QUOTE_BASE,
-      headcount: 800,
-      guarantee: 700,
+      headcount: 480,
+      guarantee: 420,
       notes:
-        '1안 — RE:BUILD 26(참석 703명) 실적 기준 확대안. 현장참석 800명 · 모객(리드젠) 포함. ' +
+        '1안 — RE:BUILD 26(참석 703명) 실적 기준 확대안. 모객(리드젠) 포함. ' +
         '베뉴는 파이팩토리 후보(계약 전이라 대관료 미정). ' +
-        `※ 참석 인원이 자동 견적 상한(500명)을 넘어 별도 협의 모드로 산출됨.`,
+        '자동 견적 상한 500명 — 총 참관 800명 규모는 별도 협의.',
     }, '2026-08-12'),
     buildQuote('quo-021', 2, 'draft', {
       ...RB27_QUOTE_BASE,
-      headcount: 700,
-      guarantee: 700,
+      headcount: 400,
+      guarantee: 350,
       notes:
-        '2안 — 1안 대비 현장참석 700명으로 축소한 대안(RE:BUILD 26 동일 규모). ' +
-        `※ 참석 인원이 자동 견적 상한(500명)을 넘어 별도 협의 모드로 산출됨.`,
+        '2안 — 1안 대비 축소한 대안. 베뉴는 파이팩토리 후보(계약 전이라 대관료 미정). ' +
+        '자동 견적 상한 500명 — 총 참관 800명 규모는 별도 협의.',
     }, '2026-08-18'),
   ]
   state.quotes.push(...quotes)

@@ -29,7 +29,7 @@ export default function AreaBoardPage() {
 }
 
 function AreaBoard({ area }: { area: DeliverableArea }) {
-  const { projectId } = useProject()
+  const { projectId, summaries } = useProject()
   const [statusFilter, setStatusFilter] = useState<DeliverableStatus | ''>('')
   const [assigneeFilter, setAssigneeFilter] = useState('')
 
@@ -53,8 +53,12 @@ function AreaBoard({ area }: { area: DeliverableArea }) {
   const memberName = (userId: string | null) =>
     members.data?.find((m) => m.user_id === userId)?.profile.name ?? '미배정'
 
-  const canWrite = currentUser.data && (currentUser.data.role === 'pm' || currentUser.data.role === area)
-  const isPm = currentUser.data?.role === 'pm'
+  // v1.5 §8: 종료 행사는 읽기 전용 — provider가 쓰기 API를 409로 막으므로 생성 폼도 내린다.
+  // (폼이 남아 있으면 지난 행사를 참고 자료로 열람할 때 아직 쓸 수 있는 것처럼 읽힌다.)
+  const isClosed = summaries.find((s) => s.id === projectId)?.status === 'closed'
+  const canWrite =
+    !isClosed && currentUser.data && (currentUser.data.role === 'pm' || currentUser.data.role === area)
+  const isPm = !isClosed && currentUser.data?.role === 'pm'
 
   const grouped = new Map<string, BoardRow[]>()
   for (const row of board.data ?? []) {
@@ -130,6 +134,8 @@ function AreaBoard({ area }: { area: DeliverableArea }) {
 
       {canWrite ? (
         <CreateDeliverableForm area={area} onCreated={board.reload} />
+      ) : isClosed ? (
+        <p className="text-sm text-ink-cap">종료된 행사입니다 — 열람만 가능합니다.</p>
       ) : currentUser.data ? (
         <p className="text-sm text-ink-cap">이 영역에는 쓰기 권한이 없습니다(열람만 가능).</p>
       ) : null}

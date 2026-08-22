@@ -10,11 +10,16 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { createFixtureState } from '../fixtures/sampleProject'
-import { isDelayed, toIsoDate } from '../lib/wbs'
+import { isDelayed, isImminent, toIsoDate } from '../lib/wbs'
+import { TARGET_MAX } from '../modules/quote/engine/calcEstimate'
+import { computeQuoteOutputs } from '../modules/quote/engine/quoteInput'
 import { mockProvider, renderRoute } from './testUtils'
 
 const RB26 = 'prj-rebuild26'
 const RB27 = 'prj-rebuild27'
+const RB27_EVENT_DATE = '2026-09-10'
+/** WBS 시드가 코드로 고정돼 있으므로 판정 기준일을 박아 결정적으로 검증한다 */
+const REFERENCE_TODAY = '2026-08-22'
 
 afterEach(cleanup)
 
@@ -52,6 +57,24 @@ describe('DoD-26 (a) RE:BUILD 26 — 종료 행사', () => {
     // 읽기는 막지 않는다 — 지난 행사를 참고 자료로 열람하는 것이 데모의 목적
     expect((await p.listWbsTasks(RB26)).length).toBe(37)
   })
+
+  it('종료 행사의 S2 보드에는 생성·지시 발행 폼이 뜨지 않고 열람 안내만 뜬다', async () => {
+    localStorage.setItem('communicator.currentProjectId', RB26)
+    renderRoute('/board/design')
+    // 실적 제작물은 그대로 읽힌다
+    expect(await screen.findByText('외관 대형 현수막')).toBeTruthy()
+    expect(screen.getByText('종료된 행사입니다 — 열람만 가능합니다.')).toBeTruthy()
+    expect(screen.queryByRole('heading', { name: '새 항목 생성' })).toBeNull()
+    expect(screen.queryByRole('heading', { name: '지시 발행' })).toBeNull()
+    cleanup()
+
+    // 대조군: 진행 중 행사(RE:BUILD 27)에서는 두 폼이 정상 노출된다 (현재 사용자 = PM)
+    localStorage.setItem('communicator.currentProjectId', RB27)
+    renderRoute('/board/design')
+    expect(await screen.findByRole('heading', { name: '새 항목 생성' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: '지시 발행' })).toBeTruthy()
+    expect(screen.queryByText('종료된 행사입니다 — 열람만 가능합니다.')).toBeNull()
+  })
 })
 
 describe('DoD-26 (b) RE:BUILD 27 — 진행 중·데모 기본', () => {
@@ -61,12 +84,13 @@ describe('DoD-26 (b) RE:BUILD 27 — 진행 중·데모 기본', () => {
     const firstActive = summaries.find((s) => s.status === 'active')!
     expect(firstActive.id).toBe(RB27)
 
+    expect((await p.getProject(RB27)).event_date).toBe(RB27_EVENT_DATE)
     const tasks = await p.listWbsTasks(RB27)
     expect(tasks).toHaveLength(37)
-    // 전개 기준일 = 2026-09-24. 1.1(D-42~D-40)의 실제 날짜가 오프셋과 일치해야 한다
+    // 전개 기준일 = 2026-09-10. 1.1(D-42~D-40)의 실제 날짜가 오프셋과 일치해야 한다
     const first = tasks.find((t) => t.code === '1.1')!
-    expect(first.start_date).toBe('2026-08-13')
-    expect(first.end_date).toBe('2026-08-15')
+    expect(first.start_date).toBe('2026-07-30')
+    expect(first.end_date).toBe('2026-08-01')
     // 모객형 전용 코드가 살아 있다(일반형 파생본이 아니다)
     expect(tasks.some((t) => t.code === '3.1')).toBe(true)
     expect(tasks.every((t) => t.origin_role !== undefined)).toBe(true)
@@ -75,17 +99,26 @@ describe('DoD-26 (b) RE:BUILD 27 — 진행 중·데모 기본', () => {
     expect((await p.listComplianceCards(RB27)).length).toBeGreaterThan(0)
   })
 
-  it('지연 태스크가 조회 시점과 무관하게 정확히 2건이고 홈 대시보드에 집계된다', async () => {
+  it('지연 태스크가 2.2·2.3 두 건이고 홈 대시보드에 집계된다', async () => {
     const p = mockProvider()
-    const today = toIsoDate(new Date())
-    const delayed = (await p.listWbsTasks(RB27)).filter((t) => isDelayed(t, today))
-    expect(delayed.length).toBe(2)
-    // 지연 = 미완료 + 마감 경과
-    for (const t of delayed) {
-      expect(t.status).not.toBe('done')
-      expect(t.end_date! < today).toBe(true)
-    }
+    const tasks = await p.listWbsTasks(RB27)
 
+    // 시드는 코드로 고정돼 있으므로 기준일을 박아 결정적으로 검증한다(테스트가 실행 날짜에 흔들리지 않게).
+    const seeded = tasks.filter((t) => isDelayed(t, REFERENCE_TODAY))
+    expect(seeded.map((t) => t.code)).toEqual(['2.2', '2.3'])
+    expect(seeded.map((t) => t.title)).toEqual(['기초 자료 수령 리마인더', '기초 자료 수령'])
+    // 2.2·2.3은 마감이 2026-08-15·08-18이라 그 이후 어느 시점에 봐도 계속 지연으로 남는다
+    for (const t of seeded) {
+      expect(t.status).not.toBe('done')
+      expect(t.end_date! < REFERENCE_TODAY).toBe(true)
+    }
+    // 임박(마감 2일 내 미완료)도 최소 1건 — 2.5 랜딩페이지 1차가 'doing'으로 시드돼 있다
+    expect(tasks.find((t) => t.code === '2.5')!.status).toBe('doing')
+    expect(tasks.filter((t) => isImminent(t, REFERENCE_TODAY)).length).toBeGreaterThanOrEqual(1)
+
+    // 실제 조회 시점(오늘) 기준으로도 홈 집계가 provider 계산과 일치한다
+    const today = toIsoDate(new Date())
+    const delayed = tasks.filter((t) => isDelayed(t, today))
     const dashboard = await p.getDashboard(RB27)
     expect(dashboard.wbs_delayed.length).toBeGreaterThanOrEqual(1)
     expect(dashboard.wbs_delayed.length).toBe(delayed.length)
@@ -95,6 +128,7 @@ describe('DoD-26 (b) RE:BUILD 27 — 진행 중·데모 기본', () => {
     await screen.findByRole('heading', { name: '홈 대시보드' })
     const delayTile = (await screen.findByText('지연 태스크')).closest('div')!.parentElement!
     expect(within(delayTile).getByText(String(delayed.length))).toBeTruthy()
+    expect(await screen.findByText('기초 자료 수령 리마인더')).toBeTruthy()
     // 미결 컨펌(제작물 2건)이 RE:BUILD 27 것으로 렌더된다
     expect(await screen.findByText('외관 대형 현수막')).toBeTruthy()
   })
@@ -168,11 +202,17 @@ describe('DoD-26 (c) 실적 데이터가 S9 운영계획서로 조립된다', ()
     const quotes = (await p.listQuotes()).filter((q) => q.project_id === RB27)
     expect(quotes).toHaveLength(2)
     expect(quotes.map((q) => q.status).sort()).toEqual(['draft', 'proposed'])
-    expect(quotes.map((q) => q.input.headcount).sort((a, b) => a - b)).toEqual([700, 800])
+    expect(quotes.map((q) => q.input.headcount).sort((a, b) => a - b)).toEqual([400, 480])
     // 파이팩토리는 venuedb 실존 항목 — 후보로 선택되어 있어야 한다
     for (const q of quotes) {
       expect(q.input.selected_venue?.venue_id).toBe('pie_factory')
-      // breakdown은 엔진 재계산과 일치해야 한다 (§4-18) — 합계 항등식으로 검증
+      // 엔진 자동 견적 상한(500명) 안이라 실제 금액이 산출돼야 한다
+      expect(q.input.headcount).toBeLessThanOrEqual(TARGET_MAX)
+      expect(q.total_amount).toBeGreaterThan(0)
+      // breakdown은 엔진 재계산과 일치해야 한다 (§4-18)
+      const recomputed = computeQuoteOutputs(q.input)
+      expect(q.breakdown).toEqual(recomputed.breakdown)
+      expect(q.total_amount).toBe(recomputed.total_amount)
       expect(q.total_amount).toBe(q.breakdown.subtotal)
       expect(q.breakdown.total).toBe(q.breakdown.subtotal + q.breakdown.vat)
       expect(q.is_final).toBe(false)
