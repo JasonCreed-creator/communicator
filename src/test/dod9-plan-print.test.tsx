@@ -44,9 +44,9 @@ describe('DoD-9 S9 인쇄 미리보기(A4)', () => {
     const printBtn = screen.getByRole('button', { name: '인쇄' })
     expect(printBtn.className).toContain('plan-print-hidden')
 
-    // 기본 사용자는 pm — 행사개요 편집 버튼이 노출되며 인쇄 시엔 숨겨져야 한다
-    const editBtn = screen.getByRole('button', { name: '편집' })
-    expect(editBtn.className).toContain('plan-print-hidden')
+    // v1.5: 개요 인라인 편집 제거 — '행사 설정에서 편집' 링크가 인쇄 시 숨겨져야 한다
+    const editLink = screen.getByRole('link', { name: '행사 설정에서 편집' })
+    expect(editLink.className).toContain('plan-print-hidden')
 
     // 프로그램표 관리 열 헤더(섹션 블록마다 반복)도 인쇄 시 숨김 대상
     const manageHeaders = screen.getAllByText('관리')

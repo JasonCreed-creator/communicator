@@ -1,0 +1,204 @@
+// 발주처 연락처+토큰 통합 표 — 행사 설정(S6) ②탭과 온보딩(S0) ②단계가 공용으로 쓴다.
+// 기존 SettingsPage의 연락처·토큰 카드 기능(추가·발급·회수·링크 복사)을 한 컴포넌트로 흡수한다.
+// createClientContact·issueClientToken·revokeClientToken은 pm 전용(서버 assertPm) —
+// readOnly=true(비 pm)면 추가 폼·발급/회수 버튼을 숨기고 표시(조회·복사)만 남긴다.
+import { useState, type FormEvent } from 'react'
+import ErrorAlert from '../internal/ErrorAlert'
+import { useAsync, useMutation } from '../../hooks/useAsync'
+import { formatDateTime } from '../../lib/labels'
+import { getDataProvider } from '../../providers'
+import type { ClientToken, UUID } from '../../types/entities'
+
+const provider = getDataProvider()
+
+type TokenStatus = '활성' | '회수됨' | '만료됨' | '미발급'
+
+function statusOf(token: ClientToken | undefined): TokenStatus {
+  if (!token) return '미발급'
+  if (token.revoked_at) return '회수됨'
+  if (token.expires_at && new Date(token.expires_at).getTime() < Date.now()) return '만료됨'
+  return '활성'
+}
+
+const STATUS_CLASSES: Record<TokenStatus, string> = {
+  활성: 'bg-positive-tint text-positive',
+  회수됨: 'bg-track text-ink-sub',
+  만료됨: 'bg-track text-ink-sub',
+  미발급: 'bg-track text-ink-sub',
+}
+
+function latestTokenOf(tokens: ClientToken[], contactId: UUID): ClientToken | undefined {
+  return tokens
+    .filter((t) => t.contact_id === contactId)
+    .sort((a, b) => b.created_at.localeCompare(a.created_at))[0]
+}
+
+export default function ClientContactsEditor({
+  projectId,
+  readOnly = false,
+}: {
+  projectId: UUID
+  readOnly?: boolean
+}) {
+  const contacts = useAsync(() => provider.listClientContacts(projectId), [projectId])
+  const tokens = useAsync(() => provider.listClientTokens(projectId), [projectId])
+  const [copiedToken, setCopiedToken] = useState<string | null>(null)
+
+  const reloadAll = () => {
+    contacts.reload()
+    tokens.reload()
+  }
+
+  const issue = useMutation((contactId: UUID) => provider.issueClientToken({ project_id: projectId, contact_id: contactId }))
+  const revoke = useMutation((token: string) => provider.revokeClientToken(token))
+
+  const handleIssue = async (contactId: UUID) => {
+    const token = await issue.run(contactId)
+    if (token) reloadAll()
+  }
+
+  const handleRevoke = async (token: ClientToken) => {
+    if (!window.confirm('이 토큰을 회수하시겠습니까? 회수 후에는 링크가 즉시 무효화됩니다.')) return
+    const result = await revoke.run(token.token)
+    if (result) reloadAll()
+  }
+
+  const handleCopy = async (token: string) => {
+    const url = `${window.location.origin}/c/${token}`
+    try {
+      await navigator.clipboard.writeText(url)
+      setCopiedToken(token)
+      setTimeout(() => setCopiedToken((t) => (t === token ? null : t)), 1500)
+    } catch {
+      setCopiedToken(null)
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <ErrorAlert message={contacts.error} />
+      <ErrorAlert message={tokens.error} />
+      {contacts.data && tokens.data && (
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead>
+              <tr>
+                <th className="ui-th">이름</th>
+                <th className="ui-th">소속</th>
+                <th className="ui-th">이메일</th>
+                <th className="ui-th">토큰 상태</th>
+                <th className="ui-th">액션</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {contacts.data.map((c) => {
+                const latest = latestTokenOf(tokens.data ?? [], c.id)
+                const status = statusOf(latest)
+                return (
+                  <tr key={c.id}>
+                    <td className="py-2 pr-4 text-ink">{c.name}</td>
+                    <td className="py-2 pr-4 text-ink-sub">{c.org ?? '-'}</td>
+                    <td className="py-2 pr-4 text-ink-sub">{c.email ?? '-'}</td>
+                    <td className="py-2 pr-4">
+                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_CLASSES[status]}`}>
+                        {status}
+                      </span>
+                      {latest?.expires_at && (
+                        <span className="ml-2 text-xs text-ink-cap">만료 {formatDateTime(latest.expires_at)}</span>
+                      )}
+                    </td>
+                    <td className="py-2">
+                      <div className="flex items-center gap-2">
+                        {status === '활성' && latest ? (
+                          <>
+                            <button type="button" onClick={() => handleCopy(latest.token)} className="btn btn-ghost btn-sm">
+                              {copiedToken === latest.token ? '복사됨' : '링크 복사'}
+                            </button>
+                            {!readOnly && (
+                              <button
+                                type="button"
+                                onClick={() => handleRevoke(latest)}
+                                disabled={revoke.pending}
+                                className="btn btn-ghost-negative btn-sm"
+                              >
+                                회수
+                              </button>
+                            )}
+                          </>
+                        ) : (
+                          !readOnly && (
+                            <button
+                              type="button"
+                              onClick={() => handleIssue(c.id)}
+                              disabled={issue.pending}
+                              className="btn btn-ghost btn-sm"
+                            >
+                              발급
+                            </button>
+                          )
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
+              {contacts.data.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="py-3 text-center text-xs text-ink-cap">
+                    등록된 발주처 연락처가 없습니다.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <ErrorAlert message={issue.error} />
+      <ErrorAlert message={revoke.error} />
+
+      {!readOnly && <AddContactForm projectId={projectId} onCreated={reloadAll} />}
+    </div>
+  )
+}
+
+function AddContactForm({ projectId, onCreated }: { projectId: UUID; onCreated: () => void }) {
+  const [name, setName] = useState('')
+  const [org, setOrg] = useState('')
+  const [email, setEmail] = useState('')
+  const create = useMutation(() =>
+    provider.createClientContact({ project_id: projectId, name, org: org || undefined, email: email || undefined }),
+  )
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!name.trim()) return
+    const result = await create.run()
+    if (result) {
+      setName('')
+      setOrg('')
+      setEmail('')
+      onCreated()
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-3 border-t border-border pt-3">
+      <label className="flex flex-col gap-1 t-caption">
+        이름
+        <input value={name} onChange={(e) => setName(e.target.value)} className="ui-input w-32" />
+      </label>
+      <label className="flex flex-col gap-1 t-caption">
+        소속
+        <input value={org} onChange={(e) => setOrg(e.target.value)} className="ui-input w-32" />
+      </label>
+      <label className="flex flex-col gap-1 t-caption">
+        이메일
+        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="ui-input w-44" />
+      </label>
+      <button type="submit" disabled={create.pending} className="btn btn-primary btn-sm">
+        연락처 추가
+      </button>
+      <ErrorAlert message={create.error} />
+    </form>
+  )
+}

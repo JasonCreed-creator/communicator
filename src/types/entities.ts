@@ -9,6 +9,7 @@ import type {
   EventType,
   InviteStatus,
   MemberRole,
+  ProjectStatus,
   WbsStatus,
 } from './enums'
 
@@ -31,7 +32,24 @@ export interface Project {
   name: string
   /** 행사 약칭 — 파일명 규약에 사용, 전역 유일 */
   code: string
+  /** 시작일 (WBS 전개·D-day 기준) */
   event_date: IsoDate | null
+  /** v1.5 — 종료일 (null=당일 행사) */
+  event_end_date: IsoDate | null
+  /** v1.5 — 운영 시간 (HH:MM) */
+  start_time: string | null
+  end_time: string | null
+  /** v1.5 — 예상 인원 */
+  expected_headcount: number | null
+  /** v1.5 — 좌석 형태 (극장식·라운드·교실식·스탠딩·혼합 — 자유 텍스트, enum 아님) */
+  seating: string | null
+  /** v1.5 — 주최·주관 */
+  organizer: string | null
+  /** v1.5 — 참가 대상 */
+  target_audience: string | null
+  /** v1.5 — active|closed. 종료 행사는 읽기 전용·목록 접힘 */
+  status: ProjectStatus
+  closed_at: IsoDateTime | null
   drive_root_folder_id: string | null
   slack_webhook_url: string | null
   /** v1.3 — S0 온보딩에서 선택. general이면 등록 모듈 경량 모드(표시 계층 토글) */
@@ -52,6 +70,21 @@ export interface ProjectMember {
   project_id: UUID
   user_id: UUID
   role: MemberRole
+}
+
+// §4-2 project_invites (v1.5) — 행사 설정 ②의 담당자 '입력'.
+// Phase 4 전(mock)은 추가 즉시 멤버로 취급하므로 mock 상태에는 저장하지 않지만,
+// 타입은 §4 스키마와 1:1로 유지한다(SupabaseProvider 이식 대비).
+export interface ProjectInvite {
+  id: UUID
+  project_id: UUID
+  email: string
+  display_name: string
+  role: MemberRole
+  invited_by: UUID | null
+  invited_at: IsoDateTime
+  accepted_at: IsoDateTime | null
+  accepted_user_id: UUID | null
 }
 
 // §4-3 client_contacts / client_tokens

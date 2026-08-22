@@ -37,3 +37,7 @@ export type EventType = (typeof EVENT_TYPES)[number]
 // v1.4: WBS 태스크 상태
 export const WBS_STATUSES = ['todo', 'doing', 'done'] as const
 export type WbsStatus = (typeof WBS_STATUSES)[number]
+
+// v1.5: 프로젝트 상태 — 종료 행사는 읽기 전용·목록 접힘 (§4-1)
+export const PROJECT_STATUSES = ['active', 'closed'] as const
+export type ProjectStatus = (typeof PROJECT_STATUSES)[number]

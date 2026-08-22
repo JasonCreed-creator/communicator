@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import ErrorAlert from '../internal/ErrorAlert'
-import { PROJECT_ID } from '../../fixtures/sampleProject'
+import { useProject } from '../../context/ProjectContext'
 import { useMutation } from '../../hooks/useAsync'
 import { getDataProvider } from '../../providers'
 import type { ProgramSession } from '../../types/entities'
@@ -295,8 +295,9 @@ function ProgramRow({
 }
 
 function ProgramAddForm({ onCreated }: { onCreated: () => void }) {
+  const { projectId } = useProject()
   const [values, setValues] = useState<ProgramFormValues>(() => toFormValues(null))
-  const create = useMutation((input: ProgramSessionInput) => provider.createProgramSession(PROJECT_ID, input))
+  const create = useMutation((input: ProgramSessionInput) => provider.createProgramSession(projectId, input))
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()

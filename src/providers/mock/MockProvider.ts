@@ -22,6 +22,7 @@ import type {
   Milestone,
   ProgramSession,
   Project,
+  ProjectMember,
   RoleCharter,
   RsvpContact,
   UnregisteredFile,
@@ -46,14 +47,17 @@ import type {
   DeliverableDetail,
   DeliverableFilter,
   IssueTokenInput,
+  MemberInput,
   MemberWithProfile,
   MilestoneInput,
   OnboardingStatus,
   PlanData,
   PlanVersionRef,
   ProgramSessionInput,
+  ProjectCreateInput,
   ProjectOverviewPatch,
   ProjectPatch,
+  ProjectSummary,
   RegistrationStats,
   RequestApprovalInput,
   RsvpContactPatch,
@@ -149,10 +153,25 @@ export class MockProvider implements DataProvider {
   }
 
   private mustFindProject(projectId: UUID): Project {
-    if (this.state.project.id !== projectId) {
+    const project = this.state.projects.find((p) => p.id === projectId)
+    if (!project) {
       throw new ProviderError('not_found', '프로젝트를 찾을 수 없습니다.')
     }
-    return this.state.project
+    return project
+  }
+
+  /** v1.5 §8: closed 행사에 대한 쓰기 API는 전부 409 */
+  private assertWritable(projectId: UUID): Project {
+    const project = this.mustFindProject(projectId)
+    if (project.status === 'closed') {
+      throw new ProviderError('conflict', '종료된 행사입니다 — 재개(pm) 후 수정할 수 있습니다.')
+    }
+    return project
+  }
+
+  /** 산출물이 속한 프로젝트 (파일명 규약·쓰기 가드용) */
+  private projectOf(deliverable: Deliverable): Project {
+    return this.mustFindProject(deliverable.project_id)
   }
 
   private mustFindDeliverable(deliverableId: UUID): Deliverable {
@@ -168,11 +187,18 @@ export class MockProvider implements DataProvider {
     throw new ProviderError('forbidden', '해당 영역에 대한 쓰기 권한이 없습니다.')
   }
 
-  private log(actor: string, action: string, targetType: string, targetId: UUID, meta?: Record<string, unknown>): void {
+  private log(
+    projectId: UUID,
+    actor: string,
+    action: string,
+    targetType: string,
+    targetId: UUID,
+    meta?: Record<string, unknown>,
+  ): void {
     const maxId = this.state.activity_log.reduce((m, e) => Math.max(m, e.id), 0)
     this.state.activity_log.push({
       id: maxId + 1,
-      project_id: this.state.project.id,
+      project_id: projectId,
       actor,
       action,
       target_type: targetType,
@@ -199,10 +225,12 @@ export class MockProvider implements DataProvider {
       .sort((a, b) => b.version_no - a.version_no)
   }
 
-  private areaProgress(): { area: DeliverableArea; total: number; done: number }[] {
+  private areaProgress(projectId: UUID): { area: DeliverableArea; total: number; done: number }[] {
     const areas: DeliverableArea[] = ['design', 'ops', 'common']
     return areas.map((area) => {
-      const items = this.state.deliverables.filter((d) => d.area === area)
+      const items = this.state.deliverables.filter(
+        (d) => d.project_id === projectId && d.area === area,
+      )
       return { area, total: items.length, done: items.filter((d) => d.status === 'final').length }
     })
   }
@@ -219,10 +247,144 @@ export class MockProvider implements DataProvider {
 
   async listMembers(projectId: UUID): Promise<MemberWithProfile[]> {
     this.mustFindProject(projectId)
-    return this.state.members.map((m) => ({
-      ...m,
-      profile: this.mustFindUser(m.user_id),
-    }))
+    return this.state.members
+      .filter((m) => m.project_id === projectId)
+      .map((m) => ({
+        ...m,
+        profile: this.mustFindUser(m.user_id),
+      }))
+  }
+
+  // ── v1.5 다중 행사 (§8 GET/POST /projects·close·members) ──────────
+  async listProjects(): Promise<ProjectSummary[]> {
+    this.currentUser()
+    const today = toIsoDate(new Date())
+    const summaries = this.state.projects.map((p) => {
+      const deliverables = this.state.deliverables.filter((d) => d.project_id === p.id)
+      const pmMember = this.state.members.find((m) => m.project_id === p.id && m.role === 'pm')
+      const overviewComplete = !!(p.name.trim() && p.code.trim() && p.event_date && p.venue)
+      const steps = (overviewComplete ? 1 : 0) + (pmMember ? 1 : 0) + (p.onboarded_at ? 1 : 0)
+      return {
+        id: p.id,
+        name: p.name,
+        code: p.code,
+        event_type: p.event_type,
+        event_date: p.event_date,
+        venue: p.venue,
+        expected_headcount: p.expected_headcount,
+        status: p.status,
+        onboarded: p.onboarded_at !== null,
+        onboarding_steps_done: steps,
+        pm_name: pmMember ? this.mustFindUser(pmMember.user_id).name : null,
+        pending_approvals: deliverables.filter((d) => d.status === 'pending_approval').length,
+        delayed_tasks: this.state.wbs_tasks.filter(
+          (t) => t.project_id === p.id && isDelayed(t, today),
+        ).length,
+        finals: deliverables.filter((d) => d.status === 'final').length,
+        deliverable_total: deliverables.length,
+      }
+    })
+    // 진행 중 먼저(등록순 — 기본 선택이 결정적이도록 created_at 기준), 종료는 뒤로(최근 종료순)
+    const createdAt = (id: UUID) => this.mustFindProject(id).created_at
+    return summaries.sort((a, b) => {
+      if (a.status !== b.status) return a.status === 'active' ? -1 : 1
+      if (a.status === 'closed') return createdAt(b.id).localeCompare(createdAt(a.id))
+      return createdAt(a.id).localeCompare(createdAt(b.id))
+    })
+  }
+
+  async createProject(input: ProjectCreateInput): Promise<Project> {
+    const user = this.currentUser()
+    const code = input.code?.trim() || this.nextId('EVT')
+    if (this.state.projects.some((p) => p.code === code)) {
+      throw new ProviderError('conflict', '이미 사용 중인 행사 코드입니다.')
+    }
+    const project: Project = {
+      id: this.nextId('prj'),
+      name: input.name?.trim() || '새 행사',
+      code,
+      event_date: input.event_date ?? null,
+      event_end_date: input.event_end_date ?? null,
+      start_time: input.start_time ?? null,
+      end_time: input.end_time ?? null,
+      expected_headcount: input.expected_headcount ?? null,
+      seating: input.seating ?? null,
+      organizer: input.organizer ?? null,
+      target_audience: input.target_audience ?? null,
+      status: 'active',
+      closed_at: null,
+      drive_root_folder_id: null, // Drive 표준 트리 생성은 Phase 5
+      slack_webhook_url: null,
+      event_type: input.event_type ?? 'general',
+      theme: input.theme ?? null,
+      venue: input.venue ?? null,
+      mc_name: input.mc_name ?? null,
+      overview_items: input.overview_items ?? null,
+      onboarded_at: null, // §8: S0 완료 전까지 null
+      created_by: user.id,
+      created_at: nowIso(),
+    }
+    this.state.projects.push(project)
+    // §8: 생성자 = pm 자동
+    this.state.members.push({ project_id: project.id, user_id: user.id, role: 'pm' })
+    this.log(project.id, `user:${user.id}`, 'project.created', 'project', project.id)
+    return project
+  }
+
+  async closeProject(projectId: UUID, closed: boolean): Promise<Project> {
+    const user = this.assertPm()
+    const project = this.mustFindProject(projectId)
+    project.status = closed ? 'closed' : 'active'
+    project.closed_at = closed ? nowIso() : null
+    this.log(projectId, `user:${user.id}`, closed ? 'project.closed' : 'project.reopened', 'project', projectId)
+    return project
+  }
+
+  async addMember(projectId: UUID, input: MemberInput): Promise<MemberWithProfile> {
+    const user = this.assertPm()
+    this.assertWritable(projectId)
+    const name = input.display_name.trim()
+    const email = input.email.trim().toLowerCase()
+    if (!name || !email) {
+      throw new ProviderError('validation', '이름과 이메일은 필수입니다.')
+    }
+    // §4-2 invites: unique(project_id, lower(email)) — mock은 즉시 멤버라 멤버 기준으로 검증
+    let profile = this.state.users.find((u) => u.email?.toLowerCase() === email)
+    if (profile && this.state.members.some((m) => m.project_id === projectId && m.user_id === profile!.id)) {
+      throw new ProviderError('conflict', '이미 이 행사의 담당자입니다.')
+    }
+    if (!profile) {
+      profile = { id: this.nextId('usr'), name, email: input.email.trim() }
+      this.state.users.push(profile)
+    }
+    const member: ProjectMember = { project_id: projectId, user_id: profile.id, role: input.role }
+    this.state.members.push(member)
+    this.log(projectId, `user:${user.id}`, 'member.added', 'project', projectId, {
+      user_id: profile.id,
+      role: input.role,
+    })
+    return { ...member, profile }
+  }
+
+  async removeMember(projectId: UUID, memberId: UUID): Promise<void> {
+    const user = this.assertPm()
+    this.assertWritable(projectId)
+    const idx = this.state.members.findIndex(
+      (m) => m.project_id === projectId && m.user_id === memberId,
+    )
+    if (idx < 0) throw new ProviderError('not_found', '담당자를 찾을 수 없습니다.')
+    // §4-2 앱 레벨 제약: 행사당 pm 최소 1명 — 마지막 PM 삭제 거부
+    const target = this.state.members[idx]
+    if (
+      target.role === 'pm' &&
+      this.state.members.filter((m) => m.project_id === projectId && m.role === 'pm').length <= 1
+    ) {
+      throw new ProviderError('conflict', '마지막 PM은 삭제할 수 없습니다 — 먼저 다른 PM을 지정하세요.')
+    }
+    this.state.members.splice(idx, 1)
+    this.log(projectId, `user:${user.id}`, 'member.removed', 'project', projectId, {
+      user_id: memberId,
+    })
   }
 
   // ── 홈 대시보드 ───────────────────────────────────────────────────
@@ -237,39 +399,47 @@ export class MockProvider implements DataProvider {
         if (!version) throw new ProviderError('not_found', '컨펌 대상 버전이 없습니다.')
         return { approval, deliverable, version }
       })
-      .filter(({ deliverable }) => deliverable.status === 'pending_approval')
+      .filter(
+        ({ deliverable }) =>
+          deliverable.project_id === projectId && deliverable.status === 'pending_approval',
+      )
       .sort((a, b) => (a.approval.due_at ?? '9999').localeCompare(b.approval.due_at ?? '9999'))
 
     return {
       project,
       pending_approvals: pending,
       upcoming_milestones: this.state.milestones
-        .filter((m) => !m.done)
+        .filter((m) => m.project_id === projectId && !m.done)
         .sort((a, b) => a.due_date.localeCompare(b.due_date)),
-      inbox_count: this.state.unregistered_files.filter((f) => !f.dismissed && !f.linked_deliverable_id).length,
-      area_progress: this.areaProgress(),
+      inbox_count: this.state.unregistered_files.filter(
+        (f) => f.project_id === projectId && !f.dismissed && !f.linked_deliverable_id,
+      ).length,
+      area_progress: this.areaProgress(projectId),
       recent_activity: await this.listActivity(projectId, 10),
       // v1.2: 받은 지시 — 내가 담당자인 requested 항목, 마감순
       my_requested: this.state.deliverables
-        .filter((d) => d.status === 'requested' && d.assignee_id === user.id)
+        .filter(
+          (d) => d.project_id === projectId && d.status === 'requested' && d.assignee_id === user.id,
+        )
         .sort((a, b) => (a.due_date ?? '9999').localeCompare(b.due_date ?? '9999')),
       // v1.4: 지연/임박 WBS 집계 (lib/wbs 정본 산식, 지연·임박 배타)
-      wbs_delayed: this.wbsByUrgency('delayed'),
-      wbs_imminent: this.wbsByUrgency('imminent'),
+      wbs_delayed: this.wbsByUrgency(projectId, 'delayed'),
+      wbs_imminent: this.wbsByUrgency(projectId, 'imminent'),
     }
   }
 
-  private wbsByUrgency(kind: 'delayed' | 'imminent'): WbsTask[] {
+  private wbsByUrgency(projectId: UUID, kind: 'delayed' | 'imminent'): WbsTask[] {
     const today = toIsoDate(new Date())
     const pick = kind === 'delayed' ? isDelayed : isImminent
     return this.state.wbs_tasks
-      .filter((task) => pick(task, today))
+      .filter((task) => task.project_id === projectId && pick(task, today))
       .sort((a, b) => (a.end_date ?? '9999').localeCompare(b.end_date ?? '9999'))
   }
 
   async listActivity(projectId: UUID, limit = 20): Promise<ActivityLogEntry[]> {
     this.mustFindProject(projectId)
-    return [...this.state.activity_log]
+    return this.state.activity_log
+      .filter((e) => e.project_id === projectId)
       .sort((a, b) => b.created_at.localeCompare(a.created_at))
       .slice(0, limit)
   }
@@ -279,6 +449,7 @@ export class MockProvider implements DataProvider {
     this.mustFindProject(projectId)
     return this.state.deliverables.filter(
       (d) =>
+        d.project_id === projectId &&
         (!filter?.area || d.area === filter.area) &&
         (!filter?.status || d.status === filter.status) &&
         (!filter?.assignee_id || d.assignee_id === filter.assignee_id),
@@ -301,7 +472,7 @@ export class MockProvider implements DataProvider {
 
   async createDeliverable(input: CreateDeliverableInput): Promise<Deliverable> {
     const user = this.currentUser()
-    this.mustFindProject(input.project_id)
+    this.assertWritable(input.project_id)
     this.assertAreaRole(input.area, user.role)
     if (!input.title.trim() || !input.category.trim()) {
       throw new ProviderError('validation', '카테고리와 제목은 필수입니다.')
@@ -345,11 +516,11 @@ export class MockProvider implements DataProvider {
     this.state.deliverables.push(deliverable)
     if (isBriefIssue) {
       // §5 부수 효과: 지시서 작성 + 담당자 알림 (Slack 실연동은 Phase 6)
-      this.log(`user:${user.id}`, 'deliverable.requested', 'deliverable', deliverable.id, {
+      this.log(deliverable.project_id, `user:${user.id}`, 'deliverable.requested', 'deliverable', deliverable.id, {
         assignee_id: deliverable.assignee_id,
       })
     } else {
-      this.log(`user:${user.id}`, 'deliverable.created', 'deliverable', deliverable.id)
+      this.log(deliverable.project_id, `user:${user.id}`, 'deliverable.created', 'deliverable', deliverable.id)
     }
     return deliverable
   }
@@ -361,6 +532,7 @@ export class MockProvider implements DataProvider {
   ): Promise<Deliverable> {
     const user = this.currentUser()
     const d = this.mustFindDeliverable(deliverableId)
+    this.assertWritable(d.project_id)
     const rule = assertTransition(d.status, to, 'status_patch')
     if (rule.roles && !rule.roles.includes(user.role)) {
       throw new ProviderError('forbidden', '이 전이를 수행할 권한이 없습니다.')
@@ -375,13 +547,14 @@ export class MockProvider implements DataProvider {
     }
     d.status = to
     d.updated_at = nowIso()
-    this.log(`user:${user.id}`, 'status.transitioned', 'deliverable', d.id, { from: rule.from, to })
+    this.log(d.project_id, `user:${user.id}`, 'status.transitioned', 'deliverable', d.id, { from: rule.from, to })
     return d
   }
 
   async uploadVersion(deliverableId: UUID, input: UploadVersionInput): Promise<Version> {
     const user = this.currentUser()
     const d = this.mustFindDeliverable(deliverableId)
+    this.assertWritable(d.project_id)
     this.assertAreaRole(d.area, user.role)
     if (!UPLOADABLE_STATUSES.includes(d.status)) {
       throw new ProviderError('conflict', `현재 상태(${d.status})에서는 업로드할 수 없습니다.`)
@@ -394,7 +567,7 @@ export class MockProvider implements DataProvider {
       drive_file_id: this.nextId('drv-f'),
       file_name: buildVersionFileName({
         date: new Date(),
-        project_code: this.state.project.code,
+        project_code: this.projectOf(d).code,
         category: d.category,
         title: d.title,
         version_no: versionNo,
@@ -419,7 +592,7 @@ export class MockProvider implements DataProvider {
       d.status = 'draft'
     }
     d.updated_at = nowIso()
-    this.log(`user:${user.id}`, 'version.uploaded', 'version', version.id, {
+    this.log(d.project_id, `user:${user.id}`, 'version.uploaded', 'version', version.id, {
       deliverable_id: deliverableId,
       version_no: versionNo,
     })
@@ -432,6 +605,7 @@ export class MockProvider implements DataProvider {
       throw new ProviderError('forbidden', '컨펌 발송은 PM만 할 수 있습니다.')
     }
     const d = this.mustFindDeliverable(deliverableId)
+    this.assertWritable(d.project_id)
     if (!d.requires_approval) {
       throw new ProviderError('conflict', '컨펌 루프를 사용하지 않는 항목입니다.')
     }
@@ -466,7 +640,7 @@ export class MockProvider implements DataProvider {
     this.state.approvals.push(approval)
     d.status = 'pending_approval'
     d.updated_at = nowIso()
-    this.log(`user:${user.id}`, 'approval.requested', 'approval', approval.id, {
+    this.log(d.project_id, `user:${user.id}`, 'approval.requested', 'approval', approval.id, {
       deliverable_id: deliverableId,
     })
     return approval
@@ -483,7 +657,7 @@ export class MockProvider implements DataProvider {
   // ── 코멘트 ────────────────────────────────────────────────────────
   async addComment(deliverableId: UUID, input: AddCommentInput): Promise<Comment> {
     const user = this.currentUser()
-    this.mustFindDeliverable(deliverableId)
+    this.assertWritable(this.mustFindDeliverable(deliverableId).project_id)
     if (!input.body.trim()) throw new ProviderError('validation', '코멘트 내용이 비어 있습니다.')
     const comment: Comment = {
       id: this.nextId('cmt'),
@@ -501,12 +675,14 @@ export class MockProvider implements DataProvider {
   // ── 일정·마일스톤 ─────────────────────────────────────────────────
   async listMilestones(projectId: UUID): Promise<Milestone[]> {
     this.mustFindProject(projectId)
-    return [...this.state.milestones].sort((a, b) => a.due_date.localeCompare(b.due_date))
+    return this.state.milestones
+      .filter((m) => m.project_id === projectId)
+      .sort((a, b) => a.due_date.localeCompare(b.due_date))
   }
 
   async createMilestone(projectId: UUID, input: MilestoneInput): Promise<Milestone> {
     this.currentUser()
-    this.mustFindProject(projectId)
+    this.assertWritable(projectId)
     const milestone: Milestone = {
       id: this.nextId('mls'),
       project_id: projectId,
@@ -526,6 +702,7 @@ export class MockProvider implements DataProvider {
     this.currentUser()
     const m = this.state.milestones.find((x) => x.id === milestoneId)
     if (!m) throw new ProviderError('not_found', '마일스톤을 찾을 수 없습니다.')
+    this.assertWritable(m.project_id)
     if (patch.title !== undefined) m.title = patch.title
     if (patch.area !== undefined) m.area = patch.area ?? null
     if (patch.due_date !== undefined) m.due_date = patch.due_date
@@ -537,6 +714,7 @@ export class MockProvider implements DataProvider {
     this.currentUser()
     const idx = this.state.milestones.findIndex((x) => x.id === milestoneId)
     if (idx < 0) throw new ProviderError('not_found', '마일스톤을 찾을 수 없습니다.')
+    this.assertWritable(this.state.milestones[idx].project_id)
     this.state.milestones.splice(idx, 1)
   }
 
@@ -551,13 +729,14 @@ export class MockProvider implements DataProvider {
 
   async listRsvpContacts(projectId: UUID): Promise<RsvpContact[]> {
     this.mustFindProject(projectId)
-    return [...this.state.rsvp_contacts]
+    return this.state.rsvp_contacts.filter((r) => r.project_id === projectId)
   }
 
   async updateRsvpContact(rsvpId: UUID, patch: RsvpContactPatch): Promise<RsvpContact> {
     this.assertRegRole()
     const r = this.state.rsvp_contacts.find((x) => x.id === rsvpId)
     if (!r) throw new ProviderError('not_found', 'RSVP 대상을 찾을 수 없습니다.')
+    this.assertWritable(r.project_id)
     if (patch.invite_status !== undefined) {
       r.invite_status = patch.invite_status
       if (patch.invite_status === 'sent' && !r.invited_at) r.invited_at = nowIso()
@@ -574,11 +753,13 @@ export class MockProvider implements DataProvider {
 
   async listAttendees(projectId: UUID): Promise<AttendeeWithRsvp[]> {
     this.mustFindProject(projectId)
-    return this.state.attendees.map((a) => ({
-      ...a,
-      rsvp_group_tag:
-        this.state.rsvp_contacts.find((r) => r.id === a.rsvp_contact_id)?.group_tag ?? null,
-    }))
+    return this.state.attendees
+      .filter((a) => a.project_id === projectId)
+      .map((a) => ({
+        ...a,
+        rsvp_group_tag:
+          this.state.rsvp_contacts.find((r) => r.id === a.rsvp_contact_id)?.group_tag ?? null,
+      }))
   }
 
   async importRegistrationCsv(
@@ -587,7 +768,7 @@ export class MockProvider implements DataProvider {
     rows: CsvImportRow[],
   ): Promise<CsvImportResult> {
     this.assertRegRole()
-    this.mustFindProject(projectId)
+    this.assertWritable(projectId)
     let inserted = 0
     let updated = 0
     for (const row of rows) {
@@ -595,7 +776,9 @@ export class MockProvider implements DataProvider {
       const emailKey = row.email?.trim().toLowerCase() || null
       if (target === 'rsvp') {
         const existing = emailKey
-          ? this.state.rsvp_contacts.find((r) => r.email?.toLowerCase() === emailKey)
+          ? this.state.rsvp_contacts.find(
+              (r) => r.project_id === projectId && r.email?.toLowerCase() === emailKey,
+            )
           : undefined
         if (existing) {
           existing.name = row.name
@@ -624,7 +807,9 @@ export class MockProvider implements DataProvider {
         }
       } else {
         const existing = emailKey
-          ? this.state.attendees.find((a) => a.email?.toLowerCase() === emailKey)
+          ? this.state.attendees.find(
+              (a) => a.project_id === projectId && a.email?.toLowerCase() === emailKey,
+            )
           : undefined
         if (existing) {
           existing.name = row.name
@@ -656,6 +841,7 @@ export class MockProvider implements DataProvider {
     this.assertRegRole()
     const a = this.state.attendees.find((x) => x.id === attendeeId)
     if (!a) throw new ProviderError('not_found', '참관객을 찾을 수 없습니다.')
+    this.assertWritable(a.project_id)
     a.checked_in_at = a.checked_in_at ? null : nowIso()
     return a
   }
@@ -664,6 +850,7 @@ export class MockProvider implements DataProvider {
     this.assertRegRole()
     const r = this.state.rsvp_contacts.find((x) => x.id === rsvpId)
     if (!r) throw new ProviderError('not_found', 'RSVP 대상을 찾을 수 없습니다.')
+    this.assertWritable(r.project_id)
     if (this.state.attendees.some((a) => a.rsvp_contact_id === rsvpId)) {
       throw new ProviderError('conflict', '이미 참관객으로 전환된 대상입니다.')
     }
@@ -686,8 +873,8 @@ export class MockProvider implements DataProvider {
 
   async getRegistrationStats(projectId: UUID): Promise<RegistrationStats> {
     this.mustFindProject(projectId)
-    const rsvps = this.state.rsvp_contacts
-    const attendees = this.state.attendees
+    const rsvps = this.state.rsvp_contacts.filter((r) => r.project_id === projectId)
+    const attendees = this.state.attendees.filter((a) => a.project_id === projectId)
     const sent = rsvps.filter((r) => r.invite_status !== 'none').length
     const accepted = rsvps.filter((r) => r.invite_status === 'accepted').length
     const declined = rsvps.filter((r) => r.invite_status === 'declined').length
@@ -713,12 +900,12 @@ export class MockProvider implements DataProvider {
 
   async listClientContacts(projectId: UUID): Promise<ClientContact[]> {
     this.mustFindProject(projectId)
-    return [...this.state.client_contacts]
+    return this.state.client_contacts.filter((c) => c.project_id === projectId)
   }
 
   async createClientContact(input: ClientContactInput): Promise<ClientContact> {
     this.assertPm()
-    this.mustFindProject(input.project_id)
+    this.assertWritable(input.project_id)
     const contact: ClientContact = {
       id: this.nextId('cct'),
       project_id: input.project_id,
@@ -733,12 +920,12 @@ export class MockProvider implements DataProvider {
   async listClientTokens(projectId: UUID): Promise<ClientToken[]> {
     this.assertPm()
     this.mustFindProject(projectId)
-    return [...this.state.client_tokens]
+    return this.state.client_tokens.filter((t) => t.project_id === projectId)
   }
 
   async issueClientToken(input: IssueTokenInput): Promise<ClientToken> {
     const user = this.assertPm()
-    const project = this.mustFindProject(input.project_id)
+    const project = this.assertWritable(input.project_id)
     // §4 무결성 보조: contact의 project_id 일치를 앱 레벨에서 검증(교차 프로젝트 차단)
     const contact = this.state.client_contacts.find(
       (c) => c.id === input.contact_id && c.project_id === input.project_id,
@@ -760,7 +947,7 @@ export class MockProvider implements DataProvider {
       created_at: nowIso(),
     }
     this.state.client_tokens.push(token)
-    this.log(`user:${user.id}`, 'token.issued', 'client_token', token.token)
+    this.log(input.project_id, `user:${user.id}`, 'token.issued', 'client_token', token.token)
     return token
   }
 
@@ -769,14 +956,16 @@ export class MockProvider implements DataProvider {
     const t = this.state.client_tokens.find((x) => x.token === token)
     if (!t) throw new ProviderError('not_found', '토큰을 찾을 수 없습니다.')
     if (!t.revoked_at) t.revoked_at = nowIso()
-    this.log(`user:${user.id}`, 'token.revoked', 'client_token', t.token)
+    this.log(t.project_id, `user:${user.id}`, 'token.revoked', 'client_token', t.token)
     return t
   }
 
   // ── 미등록 파일 인박스 ────────────────────────────────────────────
   async listInbox(projectId: UUID): Promise<UnregisteredFile[]> {
     this.mustFindProject(projectId)
-    return this.state.unregistered_files.filter((f) => !f.dismissed && !f.linked_deliverable_id)
+    return this.state.unregistered_files.filter(
+      (f) => f.project_id === projectId && !f.dismissed && !f.linked_deliverable_id,
+    )
   }
 
   async linkInboxFile(inboxId: UUID, deliverableId: UUID): Promise<Version> {
@@ -787,6 +976,7 @@ export class MockProvider implements DataProvider {
       throw new ProviderError('conflict', '이미 처리된 인박스 파일입니다.')
     }
     const d = this.mustFindDeliverable(deliverableId)
+    this.assertWritable(d.project_id)
     this.assertAreaRole(d.area, user.role)
     if (!UPLOADABLE_STATUSES.includes(d.status)) {
       throw new ProviderError('conflict', `현재 상태(${d.status})에서는 버전을 추가할 수 없습니다.`)
@@ -811,7 +1001,7 @@ export class MockProvider implements DataProvider {
       d.status = 'draft'
     }
     d.updated_at = nowIso()
-    this.log(`user:${user.id}`, 'inbox.linked', 'version', version.id, {
+    this.log(d.project_id, `user:${user.id}`, 'inbox.linked', 'version', version.id, {
       deliverable_id: deliverableId,
     })
     return version
@@ -821,8 +1011,9 @@ export class MockProvider implements DataProvider {
     const user = this.currentUser()
     const f = this.state.unregistered_files.find((x) => x.id === inboxId)
     if (!f) throw new ProviderError('not_found', '인박스 파일을 찾을 수 없습니다.')
+    this.assertWritable(f.project_id)
     f.dismissed = true
-    this.log(`user:${user.id}`, 'inbox.dismissed', 'unregistered_file', f.id)
+    this.log(f.project_id, `user:${user.id}`, 'inbox.dismissed', 'unregistered_file', f.id)
   }
 
   // ── v1.2 프로그램표·행사개요·운영계획서 ───────────────────────────
@@ -837,14 +1028,18 @@ export class MockProvider implements DataProvider {
 
   async listProgramSessions(projectId: UUID): Promise<ProgramSession[]> {
     this.mustFindProject(projectId)
-    return [...this.state.program_sessions].sort((a, b) => a.sort_order - b.sort_order)
+    return this.state.program_sessions
+      .filter((s) => s.project_id === projectId)
+      .sort((a, b) => a.sort_order - b.sort_order)
   }
 
   async createProgramSession(projectId: UUID, input: ProgramSessionInput): Promise<ProgramSession> {
     this.assertPmOps()
-    this.mustFindProject(projectId)
+    this.assertWritable(projectId)
     if (!input.title.trim()) throw new ProviderError('validation', '세션 제목은 필수입니다.')
-    const maxOrder = this.state.program_sessions.reduce((m, s) => Math.max(m, s.sort_order), 0)
+    const maxOrder = this.state.program_sessions
+      .filter((s) => s.project_id === projectId)
+      .reduce((m, s) => Math.max(m, s.sort_order), 0)
     const session: ProgramSession = {
       id: this.nextId('pgs'),
       project_id: projectId,
@@ -869,6 +1064,7 @@ export class MockProvider implements DataProvider {
     this.assertPmOps()
     const s = this.state.program_sessions.find((x) => x.id === sessionId)
     if (!s) throw new ProviderError('not_found', '프로그램 세션을 찾을 수 없습니다.')
+    this.assertWritable(s.project_id)
     if (patch.title !== undefined) {
       if (!patch.title.trim()) throw new ProviderError('validation', '세션 제목은 필수입니다.')
       s.title = patch.title
@@ -888,33 +1084,53 @@ export class MockProvider implements DataProvider {
     this.assertPmOps()
     const idx = this.state.program_sessions.findIndex((x) => x.id === sessionId)
     if (idx < 0) throw new ProviderError('not_found', '프로그램 세션을 찾을 수 없습니다.')
+    this.assertWritable(this.state.program_sessions[idx].project_id)
     this.state.program_sessions.splice(idx, 1)
   }
 
   async updateProjectOverview(projectId: UUID, patch: ProjectOverviewPatch): Promise<Project> {
     const user = this.assertPmOps()
-    const project = this.mustFindProject(projectId)
+    const project = this.assertWritable(projectId)
     if (patch.event_date !== undefined) project.event_date = patch.event_date
     if (patch.theme !== undefined) project.theme = patch.theme
     if (patch.venue !== undefined) project.venue = patch.venue
     if (patch.mc_name !== undefined) project.mc_name = patch.mc_name
     if (patch.overview_items !== undefined) project.overview_items = patch.overview_items
-    this.log(`user:${user.id}`, 'project.overview_updated', 'project', project.id)
+    this.log(projectId, `user:${user.id}`, 'project.overview_updated', 'project', project.id)
     return project
   }
 
-  // ── v1.3 프로젝트 기본정보·온보딩 ─────────────────────────────────
+  // ── v1.3 프로젝트 기본정보·온보딩 (v1.5: 개요 전 필드 §8 PATCH /projects/{id}) ──
   async updateProject(projectId: UUID, patch: ProjectPatch): Promise<Project> {
     const user = this.assertPm()
-    const project = this.mustFindProject(projectId)
+    const project = this.assertWritable(projectId)
     if (patch.name !== undefined) {
       if (!patch.name.trim()) throw new ProviderError('validation', '행사명은 비울 수 없습니다.')
       project.name = patch.name
     }
+    if (patch.code !== undefined) {
+      const code = patch.code.trim()
+      if (!code) throw new ProviderError('validation', '행사 코드는 비울 수 없습니다.')
+      if (this.state.projects.some((p) => p.id !== projectId && p.code === code)) {
+        throw new ProviderError('conflict', '이미 사용 중인 행사 코드입니다.')
+      }
+      project.code = code
+    }
     if (patch.event_date !== undefined) project.event_date = patch.event_date
     if (patch.event_type !== undefined) project.event_type = patch.event_type
-    // 행사일·유형 변경 후 WBS 날짜/구성 갱신은 명시적 재전개(expandWbs)로 수행 — S5 pm 버튼
-    this.log(`user:${user.id}`, 'project.updated', 'project', project.id)
+    if (patch.event_end_date !== undefined) project.event_end_date = patch.event_end_date
+    if (patch.start_time !== undefined) project.start_time = patch.start_time
+    if (patch.end_time !== undefined) project.end_time = patch.end_time
+    if (patch.venue !== undefined) project.venue = patch.venue
+    if (patch.expected_headcount !== undefined) project.expected_headcount = patch.expected_headcount
+    if (patch.seating !== undefined) project.seating = patch.seating
+    if (patch.theme !== undefined) project.theme = patch.theme
+    if (patch.organizer !== undefined) project.organizer = patch.organizer
+    if (patch.mc_name !== undefined) project.mc_name = patch.mc_name
+    if (patch.target_audience !== undefined) project.target_audience = patch.target_audience
+    if (patch.overview_items !== undefined) project.overview_items = patch.overview_items
+    // 행사일·유형 변경 후 WBS 날짜/구성 갱신은 명시적 재전개(expandWbs)로 수행 — S5 pm 배너·버튼
+    this.log(projectId, `user:${user.id}`, 'project.updated', 'project', project.id)
     return project
   }
 
@@ -926,7 +1142,7 @@ export class MockProvider implements DataProvider {
 
   async completeOnboarding(projectId: UUID): Promise<void> {
     const user = this.assertPm()
-    const project = this.mustFindProject(projectId)
+    const project = this.assertWritable(projectId)
     if (project.onboarded_at !== null) {
       throw new ProviderError('conflict', '이미 온보딩이 완료된 프로젝트입니다.')
     }
@@ -934,12 +1150,14 @@ export class MockProvider implements DataProvider {
     // v1.4 부수 효과: 유형별 WBS 자동 전개 + R&R 카드 시드
     await this.expandWbs(projectId)
     this.seedRoleCharters(projectId)
-    this.log(`user:${user.id}`, 'onboarding.completed', 'project', projectId)
+    this.log(projectId, `user:${user.id}`, 'onboarding.completed', 'project', projectId)
   }
 
-  /** Mock 전용 (인터페이스 외) — S0 라우트 가드 테스트용 온보딩 리셋 (v1.4.1: onboarded_at=null 복원) */
-  resetOnboarding(): void {
-    this.state.project.onboarded_at = null
+  /** Mock 전용 (인터페이스 외) — S0 라우트 가드 테스트용 온보딩 리셋 (v1.4.1: onboarded_at=null 복원).
+   *  대상 미지정 시 픽스처 첫 행사(샘플 테크 컨퍼런스) 기준 — 기존 테스트 시그니처 유지 */
+  resetOnboarding(projectId?: UUID): void {
+    const project = projectId ? this.mustFindProject(projectId) : this.state.projects[0]
+    project.onboarded_at = null
   }
 
   // ── v1.3 큐시트 (pm·ops — §8 /cues) ───────────────────────────────
@@ -952,7 +1170,7 @@ export class MockProvider implements DataProvider {
 
   async createCue(deliverableId: UUID, input: CueInput): Promise<Cue> {
     this.assertPmOps()
-    this.mustFindDeliverable(deliverableId)
+    this.assertWritable(this.mustFindDeliverable(deliverableId).project_id)
     const siblings = await this.listCues(deliverableId)
     const maxOrder = siblings.reduce((m, c) => Math.max(m, c.sort_order), 0)
     const cue: Cue = {
@@ -975,6 +1193,7 @@ export class MockProvider implements DataProvider {
     this.assertPmOps()
     const cue = this.state.cues.find((c) => c.id === cueId)
     if (!cue) throw new ProviderError('not_found', '큐를 찾을 수 없습니다.')
+    this.assertWritable(this.mustFindDeliverable(cue.deliverable_id).project_id)
     if (patch.cue_no !== undefined) cue.cue_no = patch.cue_no.trim() || null
     if (patch.time_at !== undefined) cue.time_at = patch.time_at || null
     if (patch.segment !== undefined) cue.segment = patch.segment.trim() || null
@@ -990,6 +1209,7 @@ export class MockProvider implements DataProvider {
     this.assertPmOps()
     const idx = this.state.cues.findIndex((c) => c.id === cueId)
     if (idx < 0) throw new ProviderError('not_found', '큐를 찾을 수 없습니다.')
+    this.assertWritable(this.mustFindDeliverable(this.state.cues[idx].deliverable_id).project_id)
     this.state.cues.splice(idx, 1)
   }
 
@@ -1012,7 +1232,7 @@ export class MockProvider implements DataProvider {
       // 파일명은 .pdf 규약(§5 발송 조건) — mock 내용물은 인쇄용 HTML, 실제 PDF는 Phase 5
       file_name: buildVersionFileName({
         date: new Date(),
-        project_code: this.state.project.code,
+        project_code: this.projectOf(d).code,
         category: d.category,
         title: d.title,
         version_no: versionNo,
@@ -1033,7 +1253,7 @@ export class MockProvider implements DataProvider {
         ? URL.createObjectURL(new Blob([renderCueSnapshotHtml(d, cues)], { type: 'text/html' }))
         : `mock://files/${version.id}`,
     )
-    this.log(`user:${user.id}`, 'cue.snapshot', 'version', version.id, {
+    this.log(d.project_id, `user:${user.id}`, 'cue.snapshot', 'version', version.id, {
       deliverable_id: deliverableId,
     })
     return version
@@ -1042,14 +1262,17 @@ export class MockProvider implements DataProvider {
   // ── v1.4 WBS·R&R ──────────────────────────────────────────────────
   async expandWbs(projectId: UUID): Promise<WbsTask[]> {
     const user = this.assertPm()
-    const project = this.mustFindProject(projectId)
+    const project = this.assertWritable(projectId)
     if (!project.event_date) {
       throw new ProviderError('validation', '행사일이 있어야 WBS를 전개할 수 있습니다.')
     }
     const template = wbsTemplateFor(project.event_type)
-    // 재전개: code 매칭으로 기존 진행 상태·연결·메모 보존 (PROGRESS 결정 로그)
-    const prev = new Map(this.state.wbs_tasks.map((task) => [task.code, task]))
-    this.state.wbs_tasks = template.map((tpl, i) => {
+    // 재전개: code 매칭으로 기존 진행 상태·연결·메모 보존 (설계서 v1.4.1 §4-15) —
+    // v1.5: 다른 행사 태스크는 건드리지 않는다(프로젝트 단위 치환)
+    const mine = this.state.wbs_tasks.filter((task) => task.project_id === projectId)
+    const others = this.state.wbs_tasks.filter((task) => task.project_id !== projectId)
+    const prev = new Map(mine.map((task) => [task.code, task]))
+    const expanded = template.map((tpl, i) => {
       const old = prev.get(tpl.code)
       return {
         id: old?.id ?? this.nextId('wbs'),
@@ -1064,22 +1287,25 @@ export class MockProvider implements DataProvider {
         end_date: offsetToDate(project.event_date!, tpl.offset_end),
         role: tpl.role,
         origin_role: tpl.origin_role,
-        status: old?.status ?? 'todo',
+        status: old?.status ?? ('todo' as const),
         done_at: old?.done_at ?? null,
         linked_deliverable_id: old?.linked_deliverable_id ?? null,
         note: old?.note ?? null,
         sort_order: i + 1,
       }
     })
-    this.log(`user:${user.id}`, 'wbs.expanded', 'project', projectId, {
+    this.state.wbs_tasks = [...others, ...expanded]
+    this.log(projectId, `user:${user.id}`, 'wbs.expanded', 'project', projectId, {
       event_type: project.event_type,
-      count: this.state.wbs_tasks.length,
+      count: expanded.length,
     })
-    return [...this.state.wbs_tasks]
+    return [...expanded]
   }
 
   private seedRoleCharters(projectId: UUID): void {
-    this.state.role_charters = ROLE_CHARTER_TEMPLATES[this.state.project.event_type].map((tpl) => ({
+    const project = this.mustFindProject(projectId)
+    const others = this.state.role_charters.filter((c) => c.project_id !== projectId)
+    const seeded = ROLE_CHARTER_TEMPLATES[project.event_type].map((tpl) => ({
       id: this.nextId('rrc'),
       project_id: projectId,
       role: tpl.role,
@@ -1087,6 +1313,7 @@ export class MockProvider implements DataProvider {
       title: tpl.title,
       items: [...tpl.items],
     }))
+    this.state.role_charters = [...others, ...seeded]
   }
 
   async listWbsTasks(projectId: UUID, filter?: WbsTaskFilter): Promise<WbsTask[]> {
@@ -1094,6 +1321,7 @@ export class MockProvider implements DataProvider {
     return this.state.wbs_tasks
       .filter(
         (task) =>
+          task.project_id === projectId &&
           (filter?.phase_no === undefined || task.phase_no === filter.phase_no) &&
           (filter?.role === undefined || task.role === filter.role) &&
           (filter?.status === undefined || task.status === filter.status),
@@ -1105,6 +1333,7 @@ export class MockProvider implements DataProvider {
     const user = this.currentUser()
     const task = this.state.wbs_tasks.find((t) => t.id === taskId)
     if (!task) throw new ProviderError('not_found', 'WBS 태스크를 찾을 수 없습니다.')
+    this.assertWritable(task.project_id)
     // §6.1·S5: status 체크 = 담당 역할+pm / 그 외 필드 편집 = pm 전용
     const editKeys = Object.keys(patch).filter((k) => k !== 'status')
     if (editKeys.length > 0 && user.role !== 'pm') {
@@ -1116,7 +1345,7 @@ export class MockProvider implements DataProvider {
     if (patch.status !== undefined && patch.status !== task.status) {
       task.status = patch.status
       task.done_at = patch.status === 'done' ? nowIso() : null
-      this.log(`user:${user.id}`, 'wbs.status_changed', 'wbs_task', task.id, {
+      this.log(task.project_id, `user:${user.id}`, 'wbs.status_changed', 'wbs_task', task.id, {
         status: patch.status,
       })
     }
@@ -1137,7 +1366,7 @@ export class MockProvider implements DataProvider {
 
   async listRoleCharters(projectId: UUID): Promise<RoleCharter[]> {
     this.mustFindProject(projectId)
-    return [...this.state.role_charters]
+    return this.state.role_charters.filter((c) => c.project_id === projectId)
   }
 
   /** 최신 버전 참조 — 미리보기 포맷일 때만 preview_url 세팅 */
@@ -1168,7 +1397,9 @@ export class MockProvider implements DataProvider {
     const project = this.mustFindProject(projectId)
     const sessions = await this.listProgramSessions(projectId)
     // v1.3 ⑦큐시트 — 첫 큐시트 항목의 큐 표 (프로그램 다음 배치)
-    const cueDeliverable = this.state.deliverables.find((d) => d.category === '큐시트')
+    const cueDeliverable = this.state.deliverables.find(
+      (d) => d.project_id === projectId && d.category === '큐시트',
+    )
     const cues = cueDeliverable ? await this.listCues(cueDeliverable.id) : []
     const cuesheet = cueDeliverable
       ? {
@@ -1178,8 +1409,12 @@ export class MockProvider implements DataProvider {
           cues,
         }
       : null
-    const opsItems = this.state.deliverables.filter((d) => d.area === 'ops')
-    const designItems = this.state.deliverables.filter((d) => d.area === 'design')
+    const opsItems = this.state.deliverables.filter(
+      (d) => d.project_id === projectId && d.area === 'ops',
+    )
+    const designItems = this.state.deliverables.filter(
+      (d) => d.project_id === projectId && d.area === 'design',
+    )
 
     const zones = await Promise.all(
       opsItems.map(async (d) => ({
@@ -1205,9 +1440,9 @@ export class MockProvider implements DataProvider {
       })),
     )
     const stats = await this.getRegistrationStats(projectId)
-    const milestones = [...this.state.milestones].sort((a, b) =>
-      a.due_date.localeCompare(b.due_date),
-    )
+    const milestones = this.state.milestones
+      .filter((m) => m.project_id === projectId)
+      .sort((a, b) => a.due_date.localeCompare(b.due_date))
 
     const overviewSlots = [
       project.event_date,
@@ -1243,6 +1478,7 @@ export class MockProvider implements DataProvider {
   // ── 발주처 뷰 (토큰 스코프 — §6.2 화이트리스트 쿼리 재현) ─────────
   async getClientQueue(token: string): Promise<ClientQueue> {
     const t = this.resolveToken(token)
+    const project = this.mustFindProject(t.project_id)
     const contact = this.state.client_contacts.find((c) => c.id === t.contact_id)
 
     const queue = this.state.approvals
@@ -1252,7 +1488,9 @@ export class MockProvider implements DataProvider {
         const v = this.state.versions.find((x) => x.id === a.version_id)
         return { a, d, v }
       })
-      .filter(({ d, v }) => d.status === 'pending_approval' && !!v)
+      .filter(
+        ({ d, v }) => d.project_id === t.project_id && d.status === 'pending_approval' && !!v,
+      )
       .sort((x, y) => (x.a.due_at ?? '9999').localeCompare(y.a.due_at ?? '9999'))
 
     const items = await Promise.all(
@@ -1278,7 +1516,12 @@ export class MockProvider implements DataProvider {
     )
 
     const history = this.state.approvals
-      .filter((a) => a.decided_at && a.decision)
+      .filter(
+        (a) =>
+          a.decided_at &&
+          a.decision &&
+          this.mustFindDeliverable(a.deliverable_id).project_id === t.project_id,
+      )
       .sort((a, b) => b.decided_at!.localeCompare(a.decided_at!))
       .map((a) => ({
         approval_id: a.id,
@@ -1289,7 +1532,7 @@ export class MockProvider implements DataProvider {
       }))
 
     return {
-      project_name: this.state.project.name,
+      project_name: project.name,
       contact_name: contact?.name ?? null,
       queue: items,
       history,
@@ -1314,7 +1557,7 @@ export class MockProvider implements DataProvider {
     approval.decided_at = nowIso()
     approval.decision = input.decision
     approval.decided_via_token = t.token
-    this.log(`client:${t.token}`, 'approval.decided', 'approval', approval.id, {
+    this.log(d.project_id, `client:${t.token}`, 'approval.decided', 'approval', approval.id, {
       decision: input.decision,
     })
 
@@ -1324,13 +1567,13 @@ export class MockProvider implements DataProvider {
       // 실제 Drive copy·재시도 큐는 Phase 5 DriveFileStore에서 구현.
       assertTransition(d.status, 'final', 'system')
       d.status = 'final'
-      this.log('system', 'deliverable.finalized', 'deliverable', d.id)
+      this.log(d.project_id, 'system', 'deliverable.finalized', 'deliverable', d.id)
       // v1.4: 이 산출물에 연결된 WBS 태스크는 자동 done (§4-15)
       for (const task of this.state.wbs_tasks) {
         if (task.linked_deliverable_id === d.id && task.status !== 'done') {
           task.status = 'done'
           task.done_at = nowIso()
-          this.log('system', 'wbs.auto_done', 'wbs_task', task.id, { deliverable_id: d.id })
+          this.log(d.project_id, 'system', 'wbs.auto_done', 'wbs_task', task.id, { deliverable_id: d.id })
         }
       }
     } else {
@@ -1351,16 +1594,19 @@ export class MockProvider implements DataProvider {
   }
 
   async getClientStatus(token: string): Promise<ClientStatusData> {
-    this.resolveToken(token)
+    const t = this.resolveToken(token)
+    const project = this.mustFindProject(t.project_id)
     const finals = this.state.deliverables
-      .filter((d) => d.status === 'final')
+      .filter((d) => d.project_id === t.project_id && d.status === 'final')
       .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
 
     return {
-      project_name: this.state.project.name,
-      event_date: this.state.project.event_date,
-      area_progress: this.areaProgress(),
-      milestones: [...this.state.milestones].sort((a, b) => a.due_date.localeCompare(b.due_date)),
+      project_name: project.name,
+      event_date: project.event_date,
+      area_progress: this.areaProgress(t.project_id),
+      milestones: this.state.milestones
+        .filter((m) => m.project_id === t.project_id)
+        .sort((a, b) => a.due_date.localeCompare(b.due_date)),
       recent_finals: await Promise.all(
         finals.map(async (d) => {
           const latest = this.versionsOf(d.id)[0]

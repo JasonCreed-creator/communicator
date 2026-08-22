@@ -6,7 +6,7 @@ import EmptyState from '../components/internal/EmptyState'
 import ErrorAlert from '../components/internal/ErrorAlert'
 import PageHeader from '../components/internal/PageHeader'
 import StatusBadge from '../components/internal/StatusBadge'
-import { PROJECT_ID } from '../fixtures/sampleProject'
+import { useProject } from '../context/ProjectContext'
 import { useAsync, useMutation } from '../hooks/useAsync'
 import { AREA_LABELS, STATUS_LABELS, STATUS_STRIP_CLASSES, formatDate } from '../lib/labels'
 import { getDataProvider } from '../providers'
@@ -29,14 +29,15 @@ export default function AreaBoardPage() {
 }
 
 function AreaBoard({ area }: { area: DeliverableArea }) {
+  const { projectId } = useProject()
   const [statusFilter, setStatusFilter] = useState<DeliverableStatus | ''>('')
   const [assigneeFilter, setAssigneeFilter] = useState('')
 
   const currentUser = useAsync(() => provider.getCurrentUser(), [])
-  const members = useAsync(() => provider.listMembers(PROJECT_ID), [])
+  const members = useAsync(() => provider.listMembers(projectId), [projectId])
 
   const board = useAsync<BoardRow[]>(async () => {
-    const items = await provider.listDeliverables(PROJECT_ID, {
+    const items = await provider.listDeliverables(projectId, {
       area,
       status: statusFilter || undefined,
       assignee_id: assigneeFilter || undefined,
@@ -47,7 +48,7 @@ function AreaBoard({ area }: { area: DeliverableArea }) {
         return { deliverable, latestVersionNo: detail.versions[0]?.version_no ?? 0 }
       }),
     )
-  }, [area, statusFilter, assigneeFilter])
+  }, [projectId, area, statusFilter, assigneeFilter])
 
   const memberName = (userId: string | null) =>
     members.data?.find((m) => m.user_id === userId)?.profile.name ?? '미배정'
@@ -197,14 +198,15 @@ function BoardRowItem({
 }
 
 function CreateDeliverableForm({ area, onCreated }: { area: DeliverableArea; onCreated: () => void }) {
-  const members = useAsync(() => provider.listMembers(PROJECT_ID), [])
+  const { projectId } = useProject()
+  const members = useAsync(() => provider.listMembers(projectId), [projectId])
   const [category, setCategory] = useState('')
   const [title, setTitle] = useState('')
   const [assigneeId, setAssigneeId] = useState('')
   const [dueDate, setDueDate] = useState('')
   const create = useMutation(() =>
     provider.createDeliverable({
-      project_id: PROJECT_ID,
+      project_id: projectId,
       area,
       category,
       title,
@@ -285,7 +287,8 @@ function CreateDeliverableForm({ area, onCreated }: { area: DeliverableArea; onC
 // 기존 CreateDeliverableForm(항목 셀프 생성, status='draft')과는 별도 폼 —
 // brief·스펙을 넣어 provider.createDeliverable을 호출하면 status='requested'로 발행된다.
 function IssueBriefForm({ area, onCreated }: { area: DeliverableArea; onCreated: () => void }) {
-  const members = useAsync(() => provider.listMembers(PROJECT_ID), [])
+  const { projectId } = useProject()
+  const members = useAsync(() => provider.listMembers(projectId), [projectId])
   const [category, setCategory] = useState('')
   const [title, setTitle] = useState('')
   const [assigneeId, setAssigneeId] = useState('')
@@ -305,7 +308,7 @@ function IssueBriefForm({ area, onCreated }: { area: DeliverableArea; onCreated:
       .map((s) => s.trim())
       .filter(Boolean)
     return provider.createDeliverable({
-      project_id: PROJECT_ID,
+      project_id: projectId,
       area,
       category,
       title,

@@ -5,9 +5,10 @@ import DdayBadge from '../components/internal/DdayBadge'
 import ErrorAlert from '../components/internal/ErrorAlert'
 import PageHeader from '../components/internal/PageHeader'
 import WbsBoard from '../components/wbs/WbsBoard'
-import { PROJECT_ID } from '../fixtures/sampleProject'
+import { useProject } from '../context/ProjectContext'
 import { useAsync, useMutation } from '../hooks/useAsync'
 import { AREA_LABELS, formatDate, formatDateTime } from '../lib/labels'
+import { offsetToDate } from '../lib/wbs'
 import { getDataProvider } from '../providers'
 import type { Milestone } from '../types/entities'
 import type { DeliverableArea } from '../types/enums'
@@ -38,9 +39,18 @@ type TimelineEntry =
   | { kind: 'approval'; date: string; item: PendingApprovalItem }
 
 export default function SchedulePage() {
+  const { projectId } = useProject()
   const [filter, setFilter] = useState<AreaFilter>('all')
-  const milestones = useAsync(() => provider.listMilestones(PROJECT_ID), [])
-  const dashboard = useAsync(() => provider.getDashboard(PROJECT_ID), [])
+  const milestones = useAsync(() => provider.listMilestones(projectId), [projectId])
+  const dashboard = useAsync(() => provider.getDashboard(projectId), [projectId])
+  // v1.5 §5: 행사일 변경 후 WBS 미재전개 감지 — project·wbs 태스크는 여기서 별도 조회한다
+  // (WbsBoard 내부 조회와는 독립적으로, 배너 판정 전용).
+  const project = useAsync(() => provider.getProject(projectId), [projectId])
+  const wbsTasks = useAsync(() => provider.listWbsTasks(projectId), [projectId])
+  const needsReexpand =
+    !!project.data?.event_date &&
+    (wbsTasks.data?.length ?? 0) > 0 &&
+    wbsTasks.data!.some((t) => t.start_date !== offsetToDate(project.data!.event_date!, t.offset_start))
 
   const filteredMilestones = (milestones.data ?? []).filter((m) => matchesFilter(m.area, filter))
   const filteredApprovals = (dashboard.data?.pending_approvals ?? []).filter((p) =>
@@ -66,6 +76,12 @@ export default function SchedulePage() {
   return (
     <section className="space-y-6 p-6">
       <PageHeader caption="S5" title="일정·WBS·R&R" />
+
+      {needsReexpand && (
+        <div className="rounded-md border border-accent/30 bg-accent-tint px-3 py-2 text-xs text-accent-deep">
+          행사일이 변경되었습니다 — 템플릿 재전개로 일정을 갱신하세요.
+        </div>
+      )}
 
       <WbsBoard />
 
@@ -176,11 +192,12 @@ function ApprovalOverlayRow({ item }: { item: PendingApprovalItem }) {
 }
 
 function MilestoneForm({ onCreated }: { onCreated: () => void }) {
+  const { projectId } = useProject()
   const [title, setTitle] = useState('')
   const [area, setArea] = useState<AreaFilter>('all')
   const [dueDate, setDueDate] = useState('')
   const create = useMutation(() =>
-    provider.createMilestone(PROJECT_ID, {
+    provider.createMilestone(projectId, {
       title,
       area: area === 'all' ? null : area,
       due_date: dueDate,

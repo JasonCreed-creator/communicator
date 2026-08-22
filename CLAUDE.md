@@ -1,12 +1,13 @@
-# CLAUDE.md — MICE 커뮤니케이터 구현 지침 v1.4.1 (Claude Code용)
+# CLAUDE.md — MICE 커뮤니케이터 구현 지침 v1.5 (Claude Code용)
 
-> 레포 루트에 이 파일을 두고, `docs/mice-communicator-설계서-v1.4.1.md`를 함께 배치할 것(v1.4는 대체). `docs/mice-communicator-디자인지시서-v1.md`도 함께 배치(Phase 3.9 정본).
-> **스키마·상태 머신·API 계약·권한 규칙·WBS 템플릿(부록 §15)의 정본은 설계서 v1.4.1이다.** 디자인 토큰·레이아웃·컴포넌트 규격의 정본은 디자인지시서 v1이다. 본 파일은 작업 순서와 규약만 정의한다. 충돌 시 설계서 우선.
+> 레포 루트에 이 파일을 두고, `docs/mice-communicator-설계서-v1.5.md`를 함께 배치할 것(v1.4.1은 대체). `docs/mice-communicator-디자인지시서-v1.md`도 함께 배치(Phase 3.9 정본).
+> **스키마·상태 머신·API 계약·권한 규칙·WBS 템플릿(부록 §15)·핸드오프 계약(부록 §16)의 정본은 설계서 v1.5다.** 디자인 토큰·레이아웃·컴포넌트 규격의 정본은 디자인지시서 v1이다. 본 파일은 작업 순서와 규약만 정의한다. 충돌 시 설계서 우선.
 > v1.1 변경 핵심: **프론트 우선·서버 후행** — Phase 0~3은 서버 0, Supabase·Drive는 Phase 4~5 이식.
 > v1.2 변경 핵심: **지시(requested)→제작→컨펌→운영계획서(S9) 조립 파이프라인** — Phase 3.5 프론트 증분.
 > v1.3 변경 핵심: **S0 온보딩 → 유형 토글 → 큐시트 에디터** — Phase 3.6 프론트 증분.
 > v1.4 변경 핵심: **유형별 WBS 템플릿 자동 전개 + 역할별 R&R** — Phase 3.7 프론트 증분(여전히 서버 0).
-> v1.4.1 변경 핵심: **구현 해석 정본화(onboarded_at 등 5건) → Phase 3.8** + **디자인 스프린트(웜 페이퍼 룩 전환, 기능 무변경) → Phase 3.9**. 여전히 서버 0. Phase 4 이식은 v1.4.1 스키마 기준.
+> v1.4.1 변경 핵심: **구현 해석 정본화(onboarded_at 등 5건) → Phase 3.8** + **디자인 스프린트(웜 페이퍼 룩 전환, 기능 무변경) → Phase 3.9**.
+> v1.5 변경 핵심: **다중 행사(프로젝트 셀렉터·S-1 행사 목록) + 행사 설정 메뉴(개요·담당자 입력) + S0 동일 폼 → Phase 3.10**. 여전히 서버 0. Phase 4 이식은 v1.5 스키마 기준.
 
 ## 1. 프로젝트 정의
 MICE 프로젝트 협업 허브 — 역할별(디자인·운영·등록) 산출물을 Google Drive 단일 저장소에 버전 관리하고, 발주처가 무로그인 토큰 링크로 컨펌하는 웹앱. 파일=Drive, 상태=Supabase의 하이브리드.
@@ -24,7 +25,8 @@ MICE 프로젝트 협업 허브 — 역할별(디자인·운영·등록) 산출�
 ├ PROGRESS.md          # 세션 상태 (체크아웃 시 갱신 — §9)
 ├ docs/                # 설계서 v1.4.1 + 감수 리포트 + 디자인지시서 v1
 ├ src/
-│  ├ pages/            # S0~S9 (설계서 §10)
+│  ├ pages/            # S-1·S0~S9 (설계서 §10)
+│  ├ context/          # ProjectContext — 현재 행사 (v1.5, PROJECT_ID 상수 대체)
 │  ├ components/
 │  ├ providers/        # ★ DataProvider 인터페이스 + mock/ + supabase/(후행)
 │  ├ fixtures/         # Mock 픽스처 (샘플 행사 1건: 항목·버전·RSVP·마일스톤·코멘트)
@@ -67,6 +69,12 @@ MICE 프로젝트 협업 허브 — 역할별(디자인·운영·등록) 산출�
   - 작업 분할: 3.9a 토큰·로고·레이아웃 셸(사이드바·상단 바·페이지 헤더 패턴) → 3.9b 내부 화면 S0~S6·S9 → 3.9c 발주처 S7·S8(375px) — 3.9b·3.9c는 3.9a 머지 후 병렬
   - 금지: gray-*/slate-* 잔존, #000, 임의 그라디언트, 기능 코드 수정(테스트 파일은 클래스 계약 가드 갱신만 허용 — 예: max-w-2xl·h-11 같은 구조 계약은 새 규격으로 치환하되 의미 유지)
 
+- **Phase 3.10 — v1.5 증분: 다중 행사·행사 설정 (서버 0, Phase 3.9.1 폴리시 머지 후 착수)**
+  - 3.10a 타입 개정+재동결 v4 (에이전트 T): `Project` 개요 필드 7종·`status`·`closed_at`, `ProjectPatch` 확장, `ProjectSummary`(D-day·유형·status·미결 컨펌·지연·확정 비율·온보딩 단계 1~3), `ProjectInvite`, DataProvider에 `listProjects()`·`createProject(input)`·`closeProject(id, closed)`·`addMember(projectId, {display_name,email,role})`·`removeMember(projectId, memberId)` 5메서드 추가(기존 시그니처 불변). **동결 해제 근거 = 사용자 v1.5 승인(2026-08-22, 시각안 3화면)** — 결정 로그 기록 후 재동결. 픽스처: 행사 4건 — ①기존 샘플(모객형·온보딩 완료) ②일반형 진행 중(지연 2·미결 3) ③세팅 미완료(onboarded_at null, 개요만 입력) ④종료(closed). 모든 기존 테스트는 ①을 기본 선택으로 통과해야 함
+  - 3.10b 컨텍스트·셀렉터·S-1 (에이전트 U): `src/context/ProjectContext.tsx`(localStorage `communicator.currentProjectId`, 없으면 첫 active) → **`PROJECT_ID` import 전수 제거(grep 0건, 픽스처 내부 정의만 허용)** → 사이드바 최상단 셀렉터(드롭다운: 진행 중/종료 그룹·요약·새 행사·전체 목록) → `/projects` S-1 카드 그리드(종료 접힘·세팅 미완료 표시·종료/재개 pm). 사이드바 메뉴 순서 = 설계서 §10 진입점 원칙
+  - 3.10c 행사 설정·S0 재구성 (에이전트 V): 공용 폼 컴포넌트 `ProjectOverviewForm`·`MembersEditor`·`ClientContactsEditor` 작성 → `/settings`를 **행사 설정 3탭**(①개요 ②담당자 ③유형·연동)으로 재구성(메뉴 2번째, 상단 세팅 완료/미완료 뱃지, 필수 4 검증) → S0 위저드는 같은 컴포넌트를 3단계로 배치(①개요→②담당자→③유형·확인), `OnboardingGuard`는 **차단 대신 유도**(세팅 미완료 행사 진입 시 /settings로 리다이렉트 + 배너, /c/* 제외) → S9 ① 개요 섹션을 읽기 조립로 전환(인라인 편집 제거, "행사 설정에서 편집" 링크) → event_date 변경 시 S5에 "WBS 재전개 필요" 배너
+  - 금지: Configurator 연동 코드 작성(부록 §16은 가정 — 분석 보고 후 v1.5.1). 라우트 prefix 변경 금지
+
 ### 서버 이식 구간 (추후 — 착수 전 사용자 승인)
 - **Phase 4 — Supabase 이식**: 마이그레이션(설계서 §4 전체)+RLS(§6.2)+Auth+seed → SupabaseProvider 구현 → MockProvider와 교체(프론트 무수정이 목표)
 - **Phase 5 — Drive 이식**: OAuth(운영 계정·Production)·표준 트리(§7.1)·업로드+파일명 규약(§7.2)·프록시 ReadableStream 패스스루+100MB 캡(§7.4)·Changes API 인박스(§7.3)·final 스냅숏 원자성(§7.5) — `supabase/functions/_shared/drive.ts` 모듈화
@@ -94,8 +102,11 @@ MICE 프로젝트 협업 허브 — 역할별(디자인·운영·등록) 산출�
 | Q: design-shell | 3.9a 토큰·로고·레이아웃 셸 | 3.9 | Opus 계열 (전 화면 일관성 판단) |
 | R: design-internal | 3.9b 내부 화면 S0~S6·S9 | 3.9 | Sonnet |
 | S: design-client | 3.9c 발주처 S7·S8 모바일 | 3.9 | Sonnet |
+| T: types-v15 | 3.10a 타입 v4·픽스처 4행사·재동결 | 3.10 | Sonnet |
+| U: multi-project | 3.10b ProjectContext·셀렉터·S-1 | 3.10 | Sonnet |
+| V: project-setup | 3.10c 행사 설정 3탭·S0 동일 폼·S9 ① 조립 | 3.10 | Sonnet |
 
-실행 순서: Phase 0(메인 단독) → A → **B·C 병렬** → **G → H·I 병렬** → **J → K·L 병렬** → **M → N·O 병렬**(각 타입 에이전트의 재동결 인터페이스 의존) → **P → Q → R·S 병렬** → [사용자 승인] → D → E → F.
+실행 순서: Phase 0(메인 단독) → A → **B·C 병렬** → **G → H·I 병렬** → **J → K·L 병렬** → **M → N·O 병렬**(각 타입 에이전트의 재동결 인터페이스 의존) → **P → Q → R·S 병렬** → (3.9.1 폴리시) → **T → U·V 병렬** → [사용자 승인] → D → E → F.
 Phase 3.8과 3.9는 **별도 커밋·별도 PR**로 분리한다(3.8 = 타입·로직, 3.9 = 스타일만 — 리뷰 diff 분리 목적). 3.9 착수 전 3.8 머지 시점의 테스트 수를 PROGRESS.md에 기준치로 기록한다.
 각 에이전트는 담당 디렉터리 밖 파일 수정 금지. 공유 타입은 A 산출물만 참조. 통합·검수는 메인이 수행.
 
@@ -127,6 +138,9 @@ Phase 3.8과 3.9는 **별도 커밋·별도 PR**로 분리한다(3.8 = 타입·�
 15. (v1.4) 태스크-산출물 연결 시 상태 뱃지 표시, 연결 산출물 final 전환 시 태스크 자동 done (테스트로 증명)
 16. (v1.4.1) 온보딩 완료 판정이 `Project.onboarded_at`에서만 파생: 완료 시 타임스탬프 기록, 재완료 시도 409, null이면 가드 리다이렉트 (테스트로 증명) + `grep -rn "onboarding_completed" src` 0건
 17. (v1.4.1 디자인) 디자인지시서 §8 전부: `grep -rn "gray-\|slate-" src` 0건 / 3.8 기준 테스트 수 전부 통과 + tsc 클린 / 스크린샷 11장(S0·S1·S2·S3 일반·S3 큐시트·S4·S5 체크리스트·S5 간트·S9·발주처 큐 375px·발주처 현황 375px) / 데모 아티팩트 재발행 — 체크아웃 보고에 11장 첨부
+18. (v1.5) 셀렉터·S-1에서 행사 전환 시 홈·보드·일정·설정이 해당 행사 데이터로 바뀌고 새로고침 후 유지(localStorage), `grep -rn "PROJECT_ID" src --include=*.tsx` 0건 (테스트로 증명)
+19. (v1.5) 행사 설정 ①에서 필수 4 미입력 저장 거부·세팅 미완료 뱃지, ②에서 담당자 추가/삭제·마지막 PM 삭제 409, 저장 값이 S9 ① 개요에 반영 (테스트로 증명)
+20. (v1.5) 새 행사 만들기 → S0 3단계 → 완료 시 onboarded_at 기록·WBS 전개·R&R 시드·목록에 등장; 세팅 미완료 행사 진입 시 차단이 아닌 /settings 유도 (테스트로 증명). 기존 dod10 가드 테스트는 '유도' 의미로 갱신
 
 ## 8. 서버 이식 완료 기준 (Phase 4~6 DoD)
 1. Provider 교체 후 프론트 무수정으로 §7의 1~6 전부 실DB에서 재현
