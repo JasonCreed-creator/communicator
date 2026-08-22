@@ -14,6 +14,40 @@ export const GEN_ATTENDEE_UNIT_PRICE = 20_000;      // 일반 참관객 관리 (
 export const SOUVENIR_UNIT_PRICE = 50_000;          // 기념품 기본 단가 (기존 상수 명명화 — 값 무변경)
 export const VENUE_PER_PAX_5STAR = 180_000;
 
+// ─── LED 운용 · 중계 (v1.1 분리) ───
+// LED 오퍼레이팅과 중계는 완전히 별개 비용이다. LED를 쓰더라도 중계 없이 진행할 수 있고,
+// LED 오퍼레이팅 단가에는 어떤 중계 비용도 포함되지 않는다.
+// LED 오퍼레이팅 = V-mix 스위칭 + 전담 엔지니어 (구 '4K 스케일러/KVM' 슬롯 · 단가 동결)
+export const LED_OPERATING_PRICE = 2_500_000;
+// 화면중계 = 발표자·무대 실황을 행사장 화면에 실시간 송출 (카메라 최소 2대)
+export const SCREEN_RELAY_PRICE = 2_000_000;
+export const SCREEN_RELAY_CAMERAS = 2;
+// 온라인중계 = 외부 온라인 송출 + 중계녹화 (카메라 3대). 화면중계 시스템 위에 얹히는
+// 증분 단가이므로 화면중계(200만)를 기반으로 깔고 +150만 → 합계 350만원.
+export const ONLINE_RELAY_ADDON_PRICE = 1_500_000;
+export const ONLINE_RELAY_TOTAL_PRICE = SCREEN_RELAY_PRICE + ONLINE_RELAY_ADDON_PRICE;
+export const ONLINE_RELAY_CAMERAS = 3;
+// 전체 녹화·편집 = 전 세션 풀 녹화 + 세션별 편집본. 중계 시스템(카메라·스위칭) 위에 얹히는
+// 증분이라 화면중계/온라인중계 중 하나가 반드시 선행되어야 한다.
+export const FULL_RECORDING_PRICE = 1_000_000;
+
+// 옵션 키 정규화 — 구 저장 견적의 options.scaler4k를 신 키 ledOperating으로 승계한다.
+// (엔진은 양쪽 키를 모두 인정하지만, UI/저장 경로는 신 키 단일로 수렴시킨다)
+export function normalizeOptions(
+  options: Record<string, boolean | undefined> | null | undefined,
+): Record<string, boolean | undefined> {
+  if (!options || typeof options !== "object" || Array.isArray(options)) return {};
+  const o = { ...options };
+  if ("scaler4k" in o) {
+    if (o.ledOperating === undefined) o.ledOperating = o.scaler4k;
+    delete o.scaler4k;
+  }
+  return o;
+}
+
+// 빈 중계 내역 (isCustom·미선택 공통 형태)
+const EMPTY_RELAY = { screenRelay: 0, onlineRelay: 0, fullRecording: 0, total: 0, cameras: 0 };
+
 /** 엔진 입력 — Configurator config 스키마 승계 (느슨한 형태: 숫자 문자열·누락 허용, 가드는 산식이 수행) */
 export interface CalcConfig {
   target?: number | string
@@ -54,6 +88,8 @@ export interface EstimateResult {
   opCost: number
   pk: number
   sysBreakdown: Record<string, number>
+  /** 중계 계열 내역 (화면중계·온라인중계·전체 녹화·편집) — 과금 판정의 단일 출처 */
+  relayBreakdown: Record<string, number>
   desBreakdown: Record<string, number>
   opsBreakdown: Record<string, number>
   adjusted?: boolean
@@ -81,7 +117,7 @@ export function calcEstimate(c: CalcConfig): EstimateResult {
       isCustom: true, t, g, u: t,
       s1: 0, s2: 0, s3: 0, s4: 0, s5: 0, ot: 0,
       rsvpOrig: 0, rsvpPkg: 0, leadOrig: 0, leadPkg: 0, showup: 0, genManage: 0, genCount: 0, opCost: 0, pk: 0,
-      sysBreakdown: {}, desBreakdown: {}, opsBreakdown: {},
+      sysBreakdown: {}, desBreakdown: {}, opsBreakdown: {}, relayBreakdown: { ...EMPTY_RELAY },
     };
   }
 
@@ -90,11 +126,11 @@ export function calcEstimate(c: CalcConfig): EstimateResult {
 
   // ─── 시스템 ───
   const video = 2_000_000;
-  // 4K 스케일러: target≥100 시 자동 포함 (LED 운용 필수). 옵션 중복 청구 금지.
-  // 4K 스케일러/KVM: 100명 이상 + LED 운용 시에만 기본 포함.
+  // LED 오퍼레이팅(V-mix 스위칭 + 전담 엔지니어): 100명 이상 + LED 운용 시에만 기본 포함.
+  // ※ 이 단가에 중계 비용은 일절 포함되지 않는다 — 중계는 아래 옵션(screenRelay/onlineRelay)에서만 과금.
   // 100명 이상이어도 빔프로젝터 단독 행사장이 있어 displayType이 명시적으로 "projector"면 제외.
   // (displayType 미지정 구버전 호출은 기존과 동일하게 포함 — v1 호환)
-  const scaler4k = t >= 100 && c.displayType !== "projector" ? 2_500_000 : 0;
+  const ledOperating = t >= 100 && c.displayType !== "projector" ? LED_OPERATING_PRICE : 0;
   const audio = 1_500_000 + Math.ceil(Math.max(0, t - 50) / 100) * 500_000;
   const engineer = 1_000_000;
   const presentation = 1_200_000;
@@ -103,7 +139,7 @@ export function calcEstimate(c: CalcConfig): EstimateResult {
     ? 1_000_000 + kioskCount * 1_000_000
     : 1_000_000 + Math.max(0, t - 100) * 5_000;
   const misc = 500_000 + Math.ceil(Math.max(0, t - 50) / 100) * 500_000;
-  const s2 = video + scaler4k + audio + engineer + presentation + registration + misc;
+  const s2 = video + ledOperating + audio + engineer + presentation + registration + misc;
 
   // ─── 디자인 ───
   const env = t <= 50 ? 2_000_000 : t <= 100 ? 2_500_000 : t <= 150 ? 3_000_000 : 3_500_000;
@@ -118,8 +154,10 @@ export function calcEstimate(c: CalcConfig): EstimateResult {
   const s4 = desk + ops + insurance;
 
   // ─── 옵션 ───
-  // 4K 스케일러는 t<100 일 때만 옵션으로 추가 가능. t>=100 은 시스템 자동 포함이므로 옵션 중복 금지.
+  // LED 오퍼레이팅은 t<100 일 때만 옵션으로 추가 가능. t>=100 은 시스템 자동 포함이므로 옵션 중복 금지.
   const opts = c.options || {};
+  // 구 키 scaler4k = 신 키 ledOperating (저장된 구 견적 복원 호환)
+  const wantsLedOperatingOpt = !!(opts.ledOperating || opts.scaler4k);
   let ot = 0;
   // 기념품: 단가·수량을 입력값으로 오버라이드 가능 (미지정 시 기존과 동일 — 인당 5만원 × 참석인원)
   const souvenirUnit = resolveOverride(c.souvenirPrice, SOUVENIR_UNIT_PRICE);
@@ -129,12 +167,31 @@ export function calcEstimate(c: CalcConfig): EstimateResult {
   if (opts.photo) ot += 800_000;
   if (opts.video) ot += 2_000_000;
   if (opts.aving) ot += 2_500_000;
-  if (opts.scaler4k && t < 100) ot += 2_500_000;
-  // 화면중계: 카메라 중계 시스템(캠 2대+스위칭+오퍼레이터) — LED 화면 선택 시에만 유효.
-  // 빔프로젝터에서는 불필요하므로 displayType이 led가 아니면 옵션이 남아 있어도 미과금.
-  if (opts.screenRelay && c.displayType === "led") ot += 2_500_000;
-  // 전체 녹화·편집: 전 세션 풀 녹화 + 세션별 편집본 (스케치 영상과 별개 산출물)
-  if (opts.fullRecording) ot += 3_500_000;
+  if (wantsLedOperatingOpt && t < 100) ot += LED_OPERATING_PRICE;
+
+  // ─── 중계 (화면중계 · 온라인중계) — LED 오퍼레이팅과 완전 분리된 별도 비용 ───
+  // · LED를 선택해도 중계는 자동 선택되지 않는다 (LED만 쓰고 중계 없이 진행 가능).
+  // · 화면중계(카메라 2대)와 온라인중계(카메라 3대 + 중계녹화)는 내용이 다른 별개 항목이다.
+  // · 온라인중계는 화면중계 시스템 위에 송출·녹화 시스템이 얹히는 구조라 화면중계를 기반으로
+  //   깔고 증분 150만원만 가산한다 → 온라인중계 단독 선택 시에도 합계 350만원으로 수렴하고,
+  //   둘 다 켜도 화면중계가 이중 청구되지 않는다.
+  // · 둘 다 LED 디스플레이 필수 — displayType이 led가 아니면 옵션이 남아 있어도 미과금.
+  // · 전체 녹화·편집은 중계 시스템(카메라·스위칭) 위에 얹히는 증분이라 중계 선행이 필수다.
+  const relayEligible = c.displayType === "led";
+  const onlineRelayOn = relayEligible && !!opts.onlineRelay;
+  const screenRelayOn = relayEligible && (!!opts.screenRelay || onlineRelayOn);
+  const screenRelayCost = screenRelayOn ? SCREEN_RELAY_PRICE : 0;
+  const onlineRelayCost = onlineRelayOn ? ONLINE_RELAY_ADDON_PRICE : 0;
+  const fullRecordingOn = screenRelayOn && !!opts.fullRecording;
+  const fullRecordingCost = fullRecordingOn ? FULL_RECORDING_PRICE : 0;
+  ot += screenRelayCost + onlineRelayCost + fullRecordingCost;
+  const relayBreakdown = {
+    screenRelay: screenRelayCost,
+    onlineRelay: onlineRelayCost,
+    fullRecording: fullRecordingCost,
+    total: screenRelayCost + onlineRelayCost + fullRecordingCost,
+    cameras: onlineRelayOn ? ONLINE_RELAY_CAMERAS : screenRelayOn ? SCREEN_RELAY_CAMERAS : 0,
+  };
   if (opts.survey) ot += 1_000_000;
   if (opts.photowall_basic) ot += 500_000;
   if (opts.photowall_premium) ot += 2_000_000;
@@ -173,9 +230,12 @@ export function calcEstimate(c: CalcConfig): EstimateResult {
     s1, s2, s3, s4, s5, ot,
     rsvpOrig, rsvpPkg, leadOrig, leadPkg, showup, genManage, genCount,
     opCost, pk,
-    sysBreakdown: { video, scaler4k, audio, engineer, presentation, registration, misc },
+    // scaler4k는 구 키 미러 — 구버전 호출부/저장 견적 호환용이며 값은 ledOperating과 동일하다.
+    // (합산에 쓰면 이중 계상되므로 s2 산식에는 ledOperating만 반영된다)
+    sysBreakdown: { video, ledOperating, scaler4k: ledOperating, audio, engineer, presentation, registration, misc },
     desBreakdown: { env, web, kv },
     opsBreakdown: { desk, ops, insurance },
+    relayBreakdown,
   };
 }
 

@@ -1,4 +1,4 @@
-// DoD 21 — 엔진 등가: pricing-dataset 전 벡터(14+1)에 대해 이식 엔진 산출이 원본과 0원 차이.
+// DoD 21 — 엔진 등가: pricing-dataset 전 벡터(21+1)에 대해 이식 엔진 산출이 원본과 0원 차이.
 // 정본 기준 = 설계서 §17.3-1 (Configurator README_코웍이식 합격 기준 그대로).
 // 추가로 headcount_grid 47행(무옵션·모객제외)도 전량 대조해 구간 산식 회귀를 잠근다.
 import { describe, it, expect } from "vitest";
@@ -44,8 +44,8 @@ const adjustmentVector = dataset.adjustment_vector as unknown as {
 const grid = dataset.headcount_grid as unknown as GridRow[];
 
 describe("DoD 21 — 골든 벡터 0원 일치", () => {
-  it("골든 벡터가 14건이다 (데이터셋 무결성)", () => {
-    expect(vectors).toHaveLength(14);
+  it("골든 벡터가 21건이다 (데이터셋 무결성)", () => {
+    expect(vectors).toHaveLength(21);
   });
 
   it.each(vectors.map((v) => ({ id: v.id, v })))("$id — 전 필드 0원 일치", ({ v }) => {
