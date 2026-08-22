@@ -21,6 +21,8 @@ import type {
   UnregisteredFile,
   Version,
   WbsTask,
+  LandingDailyMetric,
+  LandingPage,
 } from '../types/entities'
 import type { DeliverableArea, DeliverableStatus } from '../types/enums'
 import type { UserRef } from '../types/views'
@@ -34,6 +36,7 @@ import {
   PROJECT_ID_REBUILD27,
   REBUILD27_TOKEN,
 } from './rebuildFixtures'
+import { seedLandingFixtures } from './landingFixtures'
 
 /** `/c/demo` 데모 라우트용 토큰 값 (CLAUDE.md §4 Phase 3) */
 export const DEMO_TOKEN = 'demo'
@@ -78,6 +81,10 @@ export interface MockState {
   quotes: Quote[]
   /** v2.0 §4-17 — 컴플라이언스 카드 (온보딩 시 시드) */
   compliance_cards: ComplianceCard[]
+  /** v2.1 §4-19 — 랜딩보드 */
+  landing_pages: LandingPage[]
+  /** v2.1 §4-22 — 일자별 유입 지표 (mock 픽스처 / Phase 4는 GA Data API) */
+  landing_metrics: Record<string, LandingDailyMetric[]>
 }
 
 /** v1.2 가이드 문서·스펙·본문 필드 기본값 — 가이드 없이 만든 항목은 전부 null (§4) */
@@ -552,6 +559,10 @@ const FIXTURE: MockState = {
   quotes: [],
   compliance_cards: [],
 
+  // v2.1 랜딩보드 — createFixtureState()에서 샘플 랜딩 1건 + 30일치 지표를 시드
+  landing_pages: [],
+  landing_metrics: {},
+
   unregistered_files: [
     {
       id: 'inb-001',
@@ -826,6 +837,9 @@ export function createFixtureState(): MockState {
 
   // ── Phase 3.12 — 실제 운영 행사 2건 추가 (기존 ①~④는 위에서 조립된 그대로 유지) ──
   appendRebuildFixtures(state)
+
+  // ── v2.1 랜딩보드 — 샘플 행사에 랜딩 1건 + 최근 30일 지표 ──
+  seedLandingFixtures(state, PROJECT_ID, today)
 
   return state
 }

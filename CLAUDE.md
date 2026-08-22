@@ -85,6 +85,17 @@ MICE 프로젝트 협업 허브 — 역할별(디자인·운영·등록) 산출�
   - 3.11c 핸드오프·흡수 기능 (에이전트 Y): ⑤'이 견적으로 행사 만들기' → `createProjectFromQuote`(§16 매핑) → S0 ① 프리필(주황 틴트·수정 가능) → 상호 링크 · 행사 설정 ① 모객형 그룹(보장 인원·쇼업 KPI·타겟팅 5축 칩·연결 견적 링크, 일반형 숨김) · S5 컴플라이언스 카드 2종(온보딩 시드·체크) · WBS target 열(템플릿 시드 포함) · §10 옛 라우트 리다이렉트 · 비노출 테스트(DoD 23)
   - 금지: 단가·베뉴·옵션 값 변경(엔진 등가 깨짐), 금액 필드를 Project·PlanDoc·ActivityLog·발주처 뷰 타입에 추가, shadcn 도입
 
+- **Phase 3.13 — v2.1 랜딩보드 (서버 0, Phase 3.12 머지 후)**
+  - S-3 랜딩보드: 행사 랜딩페이지를 13종 섹션 블록으로 조립하는 빌더 + GA 측정 삽입 + 유입 지표 대시보드.
+    실측 B2B 행사 랜딩(히어로·연사·타임테이블·티켓·혜택·존·오시는 길·FAQ·신청 폼·푸터)의 구성을 정규화했다.
+  - **행사 데이터 자동 연동(autofill)** — hero←Project 개요, speakers·agenda←ProgramSession, zones←ops 존 항목,
+    venue←Project 장소. 끄면 저장값으로 직접 편집(입력 보존). 범용 빌더와 갈라지는 지점.
+  - **발행 = 단일 HTML 내보내기** — 자가완결 .html 1개를 기존 호스팅에 올리고 공개 주소만 기록한다.
+    앱 내 서빙은 Phase 4.6 이후. GA4/GTM 스니펫은 형식 검증(G-/GTM- 정규식)을 통과한 ID만 <head>에 주입.
+  - **리드 → 등록(S4) 유입** — 폼 제출이 Attendee(channel='rsvp')로 적재되고 당일 지표에 반영된다.
+  - 지표는 mock 픽스처(30일) → Phase 4에서 GA Data API로 교체. DataProvider v6(8메서드 추가, 75메서드).
+  - 금지: 랜딩에 견적 금액(total_amount·breakdown) 노출, 측정 ID 형식 검증 우회
+
 ### 서버 이식 구간 (Phase 3.11 머지 후 — 착수 전 사용자 승인 + 새 Supabase 3키 수령)
 - **Phase 4 — 새 Supabase 프로젝트 이식** (설계서 §4 v2.0 전체 기준)
   - 4a 마이그레이션+RLS+seed (에이전트 D): §4 순서대로, RLS §6.2(quotes·profiles·compliance_cards 포함), seed = 픽스처 4행사+견적 3버전. **Supabase 3키는 env·Vault만 — 코드·문서·PR 본문 기재 금지**
@@ -168,6 +179,7 @@ Phase 3.8과 3.9는 **별도 커밋·별도 PR**로 분리한다(3.8 = 타입·�
 24. (v2.0) 핸드오프: 확정 견적 → 행사 만들기 → S0 ① 프리필(§16 매핑 전 필드) → 완료 시 quote.project_id·project.quote_id 상호 링크; 견적 없는 S-1 → S0 경로 그대로 동작; 미확정 견적은 버튼 비활성 (테스트로 증명)
 25. (v2.0) 권한: app_role staff는 견적 메뉴 미표시·/quotes 접근 시 403 화면, sales·admin은 접근; 행사 설정 ① 모객형 그룹은 일반형에서 숨김·데이터 보존; 컴플라이언스 카드 체크 왕복 (테스트로 증명)
 26. (Phase 4) `VITE_DATA_PROVIDER=supabase`에서 DoD 1~25 전부 재현 + RLS 거부 3종(staff→quotes, 비멤버→project, 토큰 경로→quotes) + 로그인 매직링크 왕복 + 서버 재계산(클라이언트가 보낸 total과 다르면 서버 값 저장) (테스트로 증명)
+27. (v2.1) 랜딩보드: 기본 13섹션 시드 · autofill이 세션/개요/존에서 조립(끄면 입력 보존) · 유효한 GA4/GTM ID일 때만 스니펫 주입(형식 불일치는 미주입) · 측정 ID 없으면 내보낸 HTML의 외부 요청 0건 · 사용자 입력 이스케이프 · 폼 제출이 등록(S4) Attendee로 유입되고 당일 지표 반영 (테스트로 증명)
 
 ## 8. 서버 이식 완료 기준 (Phase 4~6 DoD)
 0. (v2.0) Phase 4 = §7 DoD 26 / Phase 4.6 = 설계서 §18 1~6 전 게이트 통과 + 옛 라우트 301 + 임포트 dry-run 로그 첨부

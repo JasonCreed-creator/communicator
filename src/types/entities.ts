@@ -10,6 +10,10 @@ import type {
   DeliverableStatus,
   EventType,
   InviteStatus,
+  LandingFieldKind,
+  LandingSectionType,
+  LandingStatus,
+  LandingSubmitTarget,
   MemberRole,
   ProjectStatus,
   QuoteStatus,
@@ -481,4 +485,112 @@ export interface UnregisteredFile {
   /** 연결 시 세팅 후 versions 생성 */
   linked_deliverable_id: UUID | null
   dismissed: boolean
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// v2.1 랜딩보드 (§4-19 ~ §4-22)
+// 행사 랜딩페이지를 섹션 블록으로 조립하고, GA를 심어 유입·전환을 추적한다.
+// 발행은 "단일 HTML 내보내기" — 자가완결 .html 한 개를 기존 호스팅에 올리는 방식이라
+// 앱은 파일을 만들어 줄 뿐 서빙하지 않는다(앱 내 공개 URL은 Phase 4.6 이후).
+// ─────────────────────────────────────────────────────────────────────
+
+/** 섹션 안의 반복 항목 — 연사·세션·티켓·혜택·존·로고·FAQ를 공통 표현으로 담는다 */
+export interface LandingItem {
+  id: UUID
+  /** 주 텍스트 — 연사명 · 세션명 · 티켓 종류 · 질문 · 혜택명 · 존 이름 */
+  label: string
+  /** 부 텍스트 — 직함 · 세션 설명 · 답변 · 혜택 설명 */
+  detail: string | null
+  /** 보조값 — 소속 · 시간대 · 가격 · 분류 탭 */
+  meta: string | null
+  /** 이미지·로고 (data: URI 또는 절대 URL. mock 업로드는 blob URL 허용) */
+  image_url: string | null
+  sort_order: number
+}
+
+export interface LandingSection {
+  id: UUID
+  type: LandingSectionType
+  /** 헤드라인 — null이면 타입별 기본 문구 */
+  headline: string | null
+  /** 보조 카피 (마크다운 아님 — 줄바꿈만 유지) */
+  body: string | null
+  /** 숨김 처리해도 내용은 보존한다 (유형 토글과 같은 원칙) */
+  visible: boolean
+  /**
+   * 행사 데이터 자동 연동. true면 items를 저장값 대신 행사 데이터에서 조립한다
+   * (agenda←ProgramSession, hero←Project 개요, zones←존 운영 항목).
+   * 수동 편집이 필요하면 false로 내려 오버라이드한다.
+   */
+  autofill: boolean
+  items: LandingItem[]
+  sort_order: number
+}
+
+/** 신청 폼 입력 필드 (§4-21) */
+export interface LandingFormField {
+  id: UUID
+  label: string
+  kind: LandingFieldKind
+  placeholder: string | null
+  required: boolean
+  /** select·rank 전용 선택지 */
+  choices: string[]
+  sort_order: number
+}
+
+/** 동의 항목 — 개인정보 수집·이용, 마케팅 수신 등 */
+export interface LandingConsent {
+  id: UUID
+  title: string
+  /** 펼침 본문 (전문) */
+  body: string
+  required: boolean
+  sort_order: number
+}
+
+/** 측정 설정 (§4-22). 내보낸 HTML의 <head>에 그대로 주입된다 */
+export interface LandingAnalytics {
+  /** GA4 측정 ID — 'G-XXXXXXXXXX' */
+  ga_measurement_id: string | null
+  /** GTM 컨테이너 ID — 'GTM-XXXXXXX' (GA와 병행 가능) */
+  gtm_container_id: string | null
+  /** 폼 제출 시 발화할 전환 이벤트 이름 */
+  conversion_event: string
+}
+
+/** 일자별 유입 지표 — mock에선 픽스처, Phase 4에서 GA Data API로 교체 */
+export interface LandingDailyMetric {
+  date: IsoDate
+  views: number
+  unique_visitors: number
+  /** 폼을 연 횟수 */
+  form_starts: number
+  /** 제출 완료 */
+  submits: number
+}
+
+export interface LandingPage {
+  id: UUID
+  project_id: UUID
+  title: string
+  /** URL 조각 — 내보낸 파일명·공개 주소에 쓰인다 */
+  slug: string
+  status: LandingStatus
+  /** 공개 주소 — 내보낸 HTML을 올린 위치(수동 입력). 미발행이면 null */
+  public_url: string | null
+  /** 상단 고정 내비 노출 */
+  sticky_nav: boolean
+  /** CTA 라벨 — status가 closed면 이 값 대신 마감 문구가 렌더된다 */
+  cta_label: string
+  submit_target: LandingSubmitTarget
+  /** submit_target='external'일 때 제출 대상 URL */
+  external_submit_url: string | null
+  analytics: LandingAnalytics
+  sections: LandingSection[]
+  form_fields: LandingFormField[]
+  consents: LandingConsent[]
+  created_at: IsoDateTime
+  updated_at: IsoDateTime
+  published_at: IsoDateTime | null
 }

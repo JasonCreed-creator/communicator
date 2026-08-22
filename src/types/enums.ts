@@ -53,3 +53,33 @@ export type QuoteStatus = (typeof QUOTE_STATUSES)[number]
 // v2.0: 컴플라이언스 카드 종류 (§4-17)
 export const COMPLIANCE_KINDS = ['internal', 'client'] as const
 export type ComplianceKind = (typeof COMPLIANCE_KINDS)[number]
+
+// v2.1: 랜딩 페이지 상태 (§4-19) — closed = 신청 마감(페이지는 살아 있고 CTA만 잠김)
+export const LANDING_STATUSES = ['draft', 'published', 'closed'] as const
+export type LandingStatus = (typeof LANDING_STATUSES)[number]
+
+// v2.1: 랜딩 섹션 블록 13종 (§4-20). 순서는 기본 조립 순서이기도 하다.
+export const LANDING_SECTION_TYPES = [
+  'hero',     // 타이틀·일시·장소·태그라인·CTA
+  'lead',     // 포지셔닝 카피
+  'speakers', // 연사 카드 그리드
+  'agenda',   // 세션 타임테이블
+  'tickets',  // 티켓 종류·가격
+  'pitch',    // 가치 제안 카피
+  'benefits', // 참가 혜택 그리드
+  'zones',    // 존 운영 안내
+  'sponsors', // 스폰서·참여 기업 로고
+  'venue',    // 오시는 길 (주소·약도·길찾기)
+  'faq',      // 자주 묻는 질문
+  'form',     // 신청 폼
+  'footer',   // 사업자 정보·법적 고지
+] as const
+export type LandingSectionType = (typeof LANDING_SECTION_TYPES)[number]
+
+// v2.1: 랜딩 폼 필드 입력 종류 (§4-21). rank = 우선순위 정렬형(샘플의 파이프라인 고민 순위)
+export const LANDING_FIELD_KINDS = ['text', 'email', 'tel', 'select', 'textarea', 'rank'] as const
+export type LandingFieldKind = (typeof LANDING_FIELD_KINDS)[number]
+
+// v2.1: 폼 제출 대상 — registration이면 등록(S4) Attendee로 유입, external이면 외부 URL로 보냄
+export const LANDING_SUBMIT_TARGETS = ['registration', 'external'] as const
+export type LandingSubmitTarget = (typeof LANDING_SUBMIT_TARGETS)[number]

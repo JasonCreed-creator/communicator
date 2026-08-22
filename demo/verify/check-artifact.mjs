@@ -20,7 +20,9 @@ const count = (needle) => html.split(needle).length - 1
 // ── 1. 문서 구조 — 퍼블리셔가 doctype/html/head/body를 씌우므로 우리는 본문 조각만 낸다 ──
 const structure = [
   ['<title>', 1, 'atLeast'],
-  ['<style>', 1, 'exact'],
+  // 2개: ① 앱 스타일시트 ② 랜딩 내보내기 템플릿(buildLandingHtml)이 생성 파일에 넣는 <style> 리터럴.
+  // ②는 다운로드되는 .html 안에만 들어가고 이 페이지의 스타일로는 적용되지 않는다 (v2.1 랜딩보드).
+  ['<style>', 2, 'exact'],
   ['<div id="root"></div>', 1, 'exact'],
   ['<script type="module">', 1, 'exact'],
 ]
@@ -72,6 +74,9 @@ const BENIGN_HOSTS = new Map([
   ['hooks.slack.com', 'S6 비활성 input의 placeholder'],
   ['example.com', '픽스처 더미 링크'],
   ['…', 'S3 지시 참고링크 textarea placeholder ("https://…")'],
+  // v2.1 랜딩보드: 랜딩 내보내기 템플릿의 GA4/GTM 스니펫 문자열. 내려받은 .html에서만 실행되며
+  // 데모 아티팩트 자체는 이 호스트로 요청하지 않는다(브라우저 검증: 외부 요청 0건).
+  ['www.googletagmanager.com', '랜딩 내보내기용 GA/GTM 스니펫 문자열 (이 페이지는 요청하지 않음)'],
 ])
 const urls = [...new Set(html.match(/https?:\/\/[^\s"'`)<>\\]+/g) ?? [])]
 const unknownHosts = new Set()
