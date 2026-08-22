@@ -10,7 +10,7 @@ import { INVITE_STATUS_LABELS, formatDateTime } from '../lib/labels'
 import { getDataProvider } from '../providers'
 import type { RsvpContact } from '../types/entities'
 import type { AttendeeChannel, InviteStatus } from '../types/enums'
-import type { AttendeeWithRsvp, CsvImportRow } from '../types/views'
+import type { AttendeeWithRsvp, CsvImportRow, RegistrationStats } from '../types/views'
 
 const provider = getDataProvider()
 
@@ -34,6 +34,8 @@ export default function RegistrationPage() {
   const isGeneral = project.data?.event_type === 'general'
   const visibleTabs = isGeneral ? TABS.filter((t) => t.id !== 'rsvp') : TABS
   const activeTab: Tab = isGeneral && tab === 'rsvp' ? 'attendees' : tab
+  // 3.9.1 P3 — §6 S4: 상단 통계 3카드 상시 노출. 탭 전환마다 재조회해 체크인 등 변경을 따라간다.
+  const stats = useAsync(() => provider.getRegistrationStats(PROJECT_ID), [activeTab])
 
   return (
     <section className="space-y-6 p-6">
@@ -42,6 +44,19 @@ export default function RegistrationPage() {
       {isGeneral && (
         <div className="rounded-md border border-steel/20 bg-steel-tint px-3 py-2 text-xs text-steel">
           일반형 행사 — 모객(RSVP) 모듈은 숨김 처리됨(데이터는 보존)
+        </div>
+      )}
+
+      {/* 상단 통계 3카드 — 일반형은 응답률 대신 참관객 수(RSVP 숨김 규칙 유지) */}
+      {stats.data && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          {isGeneral ? (
+            <StatTile label="참관객 수" value={stats.data.attendee_total} />
+          ) : (
+            <StatTile label="응답률" value={`${Math.round(stats.data.response_rate * 100)}%`} />
+          )}
+          <StatTile label="등록 수" value={stats.data.attendee_total} />
+          <StatTile label="체크인율" value={`${Math.round(stats.data.checkin_rate * 100)}%`} />
         </div>
       )}
 
@@ -62,7 +77,9 @@ export default function RegistrationPage() {
 
       {activeTab === 'rsvp' && <RsvpTab />}
       {activeTab === 'attendees' && <AttendeesTab />}
-      {activeTab === 'stats' && <StatsTab showRsvp={!isGeneral} />}
+      {activeTab === 'stats' && (
+        <StatsTab showRsvp={!isGeneral} stats={stats.data} loading={stats.loading} error={stats.error} />
+      )}
     </section>
   )
 }
@@ -264,32 +281,35 @@ function AttendeeRow({ attendee, onChanged }: { attendee: AttendeeWithRsvp; onCh
 }
 
 // ── 통계 탭 ───────────────────────────────────────────────────────────
-// showRsvp=false(일반형)면 RSVP 관련 타일(응답률)·보조 수치 카드를 렌더하지 않는다 — 데이터는 그대로 조회만 생략.
-function StatsTab({ showRsvp }: { showRsvp: boolean }) {
-  const stats = useAsync(() => provider.getRegistrationStats(PROJECT_ID), [])
-
+// 3.9.1 P3: 통계 3종(응답률·등록 수·체크인율)은 페이지 상단 카드로 승격 — 탭에는 상세(보조 수치)만 남긴다.
+// showRsvp=false(일반형)면 RSVP 보조 수치를 렌더하지 않는다 — 데이터는 그대로 조회만 생략.
+function StatsTab({
+  showRsvp,
+  stats,
+  loading,
+  error,
+}: {
+  showRsvp: boolean
+  stats: RegistrationStats | null
+  loading: boolean
+  error: string | null
+}) {
   return (
     <div className="space-y-6">
-      <ErrorAlert message={stats.error} />
-      {stats.loading && <p className="text-sm text-ink-cap">불러오는 중…</p>}
-      {stats.data && (
-        <>
-          <div className={`grid grid-cols-1 gap-4 ${showRsvp ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
-            {showRsvp && <StatTile label="응답률" value={`${Math.round(stats.data.response_rate * 100)}%`} />}
-            <StatTile label="등록 수" value={stats.data.attendee_total} />
-            <StatTile label="체크인율" value={`${Math.round(stats.data.checkin_rate * 100)}%`} />
+      <ErrorAlert message={error} />
+      {loading && <p className="text-sm text-ink-cap">불러오는 중…</p>}
+      {stats && !showRsvp && (
+        <p className="text-sm text-ink-cap">일반형 행사 — 상세 통계는 상단 카드로 제공됩니다.</p>
+      )}
+      {stats && showRsvp && (
+        <Card title="RSVP 보조 수치">
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <StatTile label="RSVP 총원" value={stats.rsvp_total} />
+            <StatTile label="발송" value={stats.rsvp_sent} />
+            <StatTile label="참석" value={stats.rsvp_accepted} />
+            <StatTile label="불참" value={stats.rsvp_declined} />
           </div>
-          {showRsvp && (
-            <Card title="RSVP 보조 수치">
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-                <StatTile label="RSVP 총원" value={stats.data.rsvp_total} />
-                <StatTile label="발송" value={stats.data.rsvp_sent} />
-                <StatTile label="참석" value={stats.data.rsvp_accepted} />
-                <StatTile label="불참" value={stats.data.rsvp_declined} />
-              </div>
-            </Card>
-          )}
-        </>
+        </Card>
       )}
     </div>
   )

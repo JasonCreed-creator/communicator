@@ -58,16 +58,17 @@ export default function CuesheetEditor({
       {list.length > 0 && (
         <div className="overflow-x-auto">
           <table className="w-full min-w-[820px] border-collapse text-sm">
+            {/* 3.9.1 P1 — 열 최소폭: 큐번호 56·시간 64·구분 72·내용 minmax(240,1fr)·콘솔 3열 120~160 */}
             <thead>
               <tr>
-                <th className="ui-th">큐번호</th>
-                <th className="ui-th">시간</th>
-                <th className="ui-th">구분</th>
-                <th className="ui-th">내용</th>
-                <th className="ui-th">음향</th>
-                <th className="ui-th">조명</th>
-                <th className="ui-th">스크린</th>
-                <th className="ui-th">액션</th>
+                <th className="ui-th min-w-[56px] whitespace-nowrap">큐번호</th>
+                <th className="ui-th min-w-[64px] whitespace-nowrap">시간</th>
+                <th className="ui-th min-w-[72px] whitespace-nowrap">구분</th>
+                <th className="ui-th min-w-[240px]">내용</th>
+                <th className="ui-th w-[140px] min-w-[120px]">음향</th>
+                <th className="ui-th w-[140px] min-w-[120px]">조명</th>
+                <th className="ui-th w-[140px] min-w-[120px]">스크린</th>
+                <th className="ui-th w-[168px]">액션</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
