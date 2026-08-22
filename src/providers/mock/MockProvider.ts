@@ -10,6 +10,7 @@ import {
 import { isDelayed, isImminent, offsetToDate, toIsoDate } from '../../lib/wbs'
 import { createFixtureState, type MockState } from '../../fixtures/sampleProject'
 import { COMPLIANCE_CARD_TEMPLATES } from '../../fixtures/complianceTemplates'
+import { defaultConsents, defaultFormFields, defaultSections } from '../../lib/landingTemplate'
 import { ROLE_CHARTER_TEMPLATES, wbsTemplateFor } from '../../fixtures/wbsTemplates'
 import { adjustmentDeltas, computeQuoteOutputs, toEngineConfig } from '../../modules/quote/engine/quoteInput'
 import { effectiveAdjust } from '../../modules/quote/engine/quoteMode'
@@ -26,6 +27,8 @@ import type {
   ComplianceCard,
   Cue,
   Deliverable,
+  LandingDailyMetric,
+  LandingPage,
   Milestone,
   ProgramSession,
   Project,
@@ -77,7 +80,7 @@ import type {
   WbsTaskFilter,
   WbsTaskPatch,
 } from '../../types/views'
-import type { DataProvider } from '../DataProvider'
+import type { DataProvider, LandingPageInput, LandingPagePatch } from '../DataProvider'
 
 const UPLOADABLE_STATUSES: readonly DeliverableStatus[] = [
   'requested', // v1.2: 첫 버전 업로드 시 draft 자동 전이
@@ -1785,6 +1788,213 @@ export class MockProvider implements DataProvider {
         { key: 'schedule', done: milestones.filter((m) => m.done).length, total: milestones.length },
       ],
     }
+  }
+
+  // ── S-3 랜딩보드 (v2.1 §4-19~§4-22) ───────────────────────────────
+
+  private mustFindLanding(landingId: UUID): LandingPage {
+    const lp = this.state.landing_pages.find((l) => l.id === landingId)
+    if (!lp) throw new ProviderError('not_found', '랜딩을 찾을 수 없습니다.')
+    return lp
+  }
+
+  /** slug는 행사 안에서 유일해야 한다 — 내보낸 파일명·공개 주소가 겹치지 않도록 */
+  private assertSlugFree(projectId: UUID, slug: string, exceptId?: UUID): void {
+    const taken = this.state.landing_pages.some(
+      (l) => l.project_id === projectId && l.slug === slug && l.id !== exceptId,
+    )
+    if (taken) throw new ProviderError('conflict', '이미 사용 중인 slug입니다.')
+  }
+
+  private assertSlugShape(slug: string): void {
+    if (!/^[a-z0-9][a-z0-9-]*$/.test(slug)) {
+      throw new ProviderError('validation', 'slug는 영소문자·숫자·하이픈만 쓸 수 있습니다.')
+    }
+  }
+
+  async listLandingPages(): Promise<LandingPage[]> {
+    const user = this.currentUser()
+    return this.state.landing_pages
+      .filter((l) => l.project_id === user.project_id)
+      .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+      .map((l) => structuredClone(l))
+  }
+
+  async getLandingPage(landingId: UUID): Promise<LandingPage> {
+    return structuredClone(this.mustFindLanding(landingId))
+  }
+
+  async createLandingPage(input: LandingPageInput): Promise<LandingPage> {
+    const user = this.currentUser()
+    this.assertWritable(user.project_id)
+    const title = input.title?.trim()
+    if (!title) throw new ProviderError('validation', '랜딩 제목은 필수입니다.')
+    const slug = input.slug?.trim()
+    if (!slug) throw new ProviderError('validation', 'slug는 필수입니다.')
+    this.assertSlugShape(slug)
+    this.assertSlugFree(user.project_id, slug)
+
+    const id = this.nextId('lnd')
+    const idFor = (kind: string) => `${id}-${kind}`
+    const now = nowIso()
+    const landing: LandingPage = {
+      id,
+      project_id: user.project_id,
+      title,
+      slug,
+      status: 'draft',
+      public_url: null,
+      sticky_nav: true,
+      cta_label: '참가 신청하기',
+      submit_target: 'registration',
+      external_submit_url: null,
+      analytics: {
+        ga_measurement_id: input.analytics?.ga_measurement_id ?? null,
+        gtm_container_id: input.analytics?.gtm_container_id ?? null,
+        conversion_event: input.analytics?.conversion_event ?? 'generate_lead',
+      },
+      sections: input.sections ?? defaultSections(idFor),
+      form_fields: input.form_fields ?? defaultFormFields(idFor),
+      consents: input.consents ?? defaultConsents(idFor),
+      created_at: now,
+      updated_at: now,
+      published_at: null,
+    }
+    this.state.landing_pages.push(landing)
+    this.state.landing_metrics[id] = []
+    this.log(user.project_id, `user:${user.id}`, 'landing.created', 'landing', id, { title })
+    return structuredClone(landing)
+  }
+
+  async updateLandingPage(landingId: UUID, patch: LandingPagePatch): Promise<LandingPage> {
+    const user = this.currentUser()
+    const landing = this.mustFindLanding(landingId)
+    this.assertWritable(landing.project_id)
+
+    if (patch.title !== undefined) {
+      if (!patch.title.trim()) throw new ProviderError('validation', '랜딩 제목은 필수입니다.')
+      landing.title = patch.title.trim()
+    }
+    if (patch.slug !== undefined) {
+      const slug = patch.slug.trim()
+      this.assertSlugShape(slug)
+      this.assertSlugFree(landing.project_id, slug, landing.id)
+      landing.slug = slug
+    }
+    if (patch.status !== undefined) landing.status = patch.status
+    if (patch.sticky_nav !== undefined) landing.sticky_nav = patch.sticky_nav
+    if (patch.cta_label !== undefined) landing.cta_label = patch.cta_label
+    if (patch.submit_target !== undefined) landing.submit_target = patch.submit_target
+    if (patch.external_submit_url !== undefined) {
+      landing.external_submit_url = patch.external_submit_url
+    }
+    if (patch.analytics !== undefined) landing.analytics = { ...patch.analytics }
+    // 배열은 통째 교체 — 빌더가 항상 전체 순서를 들고 저장한다
+    if (patch.sections !== undefined) {
+      landing.sections = patch.sections.map((sec, i) => ({ ...sec, sort_order: i + 1 }))
+    }
+    if (patch.form_fields !== undefined) {
+      landing.form_fields = patch.form_fields.map((f, i) => ({ ...f, sort_order: i + 1 }))
+    }
+    if (patch.consents !== undefined) {
+      landing.consents = patch.consents.map((c, i) => ({ ...c, sort_order: i + 1 }))
+    }
+    landing.updated_at = nowIso()
+    this.log(landing.project_id, `user:${user.id}`, 'landing.updated', 'landing', landing.id, {})
+    return structuredClone(landing)
+  }
+
+  async publishLandingPage(landingId: UUID, publicUrl: string | null): Promise<LandingPage> {
+    const user = this.currentUser()
+    const landing = this.mustFindLanding(landingId)
+    this.assertWritable(landing.project_id)
+    if (publicUrl === null) {
+      landing.status = 'draft'
+      landing.public_url = null
+      landing.published_at = null
+    } else {
+      const url = publicUrl.trim()
+      if (!/^https?:\/\/.+/.test(url)) {
+        throw new ProviderError('validation', '공개 주소는 http(s) URL이어야 합니다.')
+      }
+      landing.status = 'published'
+      landing.public_url = url
+      landing.published_at = nowIso()
+    }
+    landing.updated_at = nowIso()
+    this.log(landing.project_id, `user:${user.id}`, 'landing.published', 'landing', landing.id, {
+      public_url: landing.public_url,
+    })
+    return structuredClone(landing)
+  }
+
+  async deleteLandingPage(landingId: UUID): Promise<void> {
+    const user = this.currentUser()
+    const landing = this.mustFindLanding(landingId)
+    this.assertWritable(landing.project_id)
+    if (user.role !== 'pm') {
+      throw new ProviderError('forbidden', '랜딩 삭제는 PM만 할 수 있습니다.')
+    }
+    this.state.landing_pages = this.state.landing_pages.filter((l) => l.id !== landingId)
+    delete this.state.landing_metrics[landingId]
+  }
+
+  async listLandingMetrics(landingId: UUID): Promise<LandingDailyMetric[]> {
+    this.mustFindLanding(landingId)
+    return (this.state.landing_metrics[landingId] ?? []).map((m) => ({ ...m }))
+  }
+
+  async submitLandingLead(landingId: UUID, values: Record<string, string>): Promise<Attendee> {
+    const landing = this.mustFindLanding(landingId)
+    this.assertWritable(landing.project_id)
+    if (landing.submit_target !== 'registration') {
+      throw new ProviderError('conflict', '이 랜딩은 외부로 제출되도록 설정돼 있습니다.')
+    }
+    if (landing.status === 'closed') {
+      throw new ProviderError('conflict', '신청이 마감된 랜딩입니다.')
+    }
+    // 폼 필드 라벨로 표준 항목을 찾는다 — 빌더에서 라벨을 바꿔도 동작하도록 부분 일치 허용
+    const pick = (needle: string): string | null => {
+      const field = landing.form_fields.find((f) => f.label.includes(needle))
+      const v = field ? values[`f_${field.id}`] : undefined
+      return v?.trim() ? v.trim() : null
+    }
+    const name = pick('성함') ?? pick('이름')
+    if (!name) throw new ProviderError('validation', '성함은 필수입니다.')
+    for (const consent of landing.consents.filter((c) => c.required)) {
+      if (!values[`c_${consent.id}`]) {
+        throw new ProviderError('validation', `필수 동의가 누락됐습니다 — ${consent.title}`)
+      }
+    }
+    const attendee: Attendee = {
+      id: this.nextId('att'),
+      project_id: landing.project_id,
+      rsvp_contact_id: null,
+      name,
+      org: pick('회사'),
+      email: pick('이메일'),
+      phone: pick('휴대전화') ?? pick('연락처'),
+      channel: 'rsvp',
+      registered_at: nowIso(),
+      checked_in_at: null,
+      badge_no: null,
+    }
+    // 유입 출처(어느 랜딩에서 왔는지)는 Attendee 스키마를 늘리지 않고 활동 로그에 남긴다
+    this.state.attendees.push(attendee)
+    // 제출은 지표에도 반영해 대시보드가 즉시 움직이도록 한다
+    const today = nowIso().slice(0, 10)
+    const series = (this.state.landing_metrics[landingId] ??= [])
+    const row = series.find((m) => m.date === today)
+    if (row) {
+      row.submits += 1
+      row.form_starts = Math.max(row.form_starts, row.submits)
+    } else {
+      series.push({ date: today, views: 1, unique_visitors: 1, form_starts: 1, submits: 1 })
+    }
+    this.log(landing.project_id, 'landing', 'landing.lead', 'attendee', attendee.id, {
+      landing_id: landingId,
+    })
+    return structuredClone(attendee)
   }
 
   // ── 발주처 뷰 (토큰 스코프 — §6.2 화이트리스트 쿼리 재현) ─────────
