@@ -1,4 +1,4 @@
-// 설계서 v1.1 §4 테이블과 1:1 도메인 타입.
+// 설계서 v1.2 §4 테이블과 1:1 도메인 타입.
 // 필드명은 DDL의 snake_case를 그대로 유지한다 — SupabaseProvider 이식 시 매핑 계층 없이 row를 그대로 쓰기 위함.
 import type {
   ApprovalDecision,
@@ -17,6 +17,12 @@ export type IsoDateTime = string
 /** date — YYYY-MM-DD 문자열 */
 export type IsoDate = string
 
+/** v1.2 — projects.overview_items jsonb: 자유 키-값 개요 불릿 (대상·주차 안내 등). 배열로 순서 보존 */
+export interface OverviewItem {
+  label: string
+  value: string
+}
+
 // §4-1 projects
 export interface Project {
   id: UUID
@@ -26,6 +32,11 @@ export interface Project {
   event_date: IsoDate | null
   drive_root_folder_id: string | null
   slack_webhook_url: string | null
+  // v1.2 행사개요 (운영계획서 §행사개요 소스)
+  theme: string | null
+  venue: string | null
+  mc_name: string | null
+  overview_items: OverviewItem[] | null
   created_by: UUID | null
   created_at: IsoDateTime
 }
@@ -71,6 +82,20 @@ export interface Deliverable {
   drive_folder_id: string | null
   /** common 문서는 false — draft ↔ internal_review만 사용 */
   requires_approval: boolean
+  // v1.2 지시서·스펙 (전부 선택적 — 지시 없이 만든 항목은 null)
+  /** 지시 내용 */
+  brief: string | null
+  /** 참고자료 링크 배열 (첨부 테이블은 2차) */
+  brief_refs: string[] | null
+  /** 규격 표기 예: '23000×5000mm' */
+  spec_size: string | null
+  spec_qty: number | null
+  /** 제작·설치 위치 */
+  spec_location: string | null
+  /** 종류 (현수막·합지·PET·이미지 등) */
+  spec_type: string | null
+  /** 항목 본문 (운영사항 등, 마크다운) — 운영계획서 렌더 소스 */
+  content: string | null
   created_at: IsoDateTime
   updated_at: IsoDateTime
 }
@@ -172,6 +197,24 @@ export interface ActivityLogEntry {
   target_id: UUID | null
   meta: Record<string, unknown> | null
   created_at: IsoDateTime
+}
+
+// §4-13 program_sessions (v1.2 — 운영계획서 §프로그램 섹션의 정형 소스)
+export interface ProgramSession {
+  id: UUID
+  project_id: UUID
+  /** 블록 구분 (오전/오후/애프터파티 등) */
+  section: string | null
+  /** time — 'HH:MM' 문자열 */
+  start_time: string | null
+  end_time: string | null
+  title: string
+  speaker_name: string | null
+  speaker_title: string | null
+  speaker_org: string | null
+  /** 비고 태그 (기조·파트너 연사 등) */
+  note: string | null
+  sort_order: number
 }
 
 // §4-12 unregistered_files

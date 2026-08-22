@@ -17,6 +17,7 @@ import type {
   Comment,
   Deliverable,
   Milestone,
+  ProgramSession,
   Project,
   RsvpContact,
   UnregisteredFile,
@@ -41,6 +42,10 @@ import type {
   IssueTokenInput,
   MemberWithProfile,
   MilestoneInput,
+  PlanData,
+  PlanVersionRef,
+  ProgramSessionInput,
+  ProjectOverviewPatch,
   RegistrationStats,
   RequestApprovalInput,
   RsvpContactPatch,
@@ -50,6 +55,7 @@ import type {
 import type { DataProvider } from '../DataProvider'
 
 const UPLOADABLE_STATUSES: readonly DeliverableStatus[] = [
+  'requested', // v1.2: 첫 버전 업로드 시 draft 자동 전이
   'draft',
   'internal_review',
   'changes_requested',
@@ -184,6 +190,7 @@ export class MockProvider implements DataProvider {
 
   // ── 홈 대시보드 ───────────────────────────────────────────────────
   async getDashboard(projectId: UUID): Promise<DashboardData> {
+    const user = this.currentUser()
     const project = this.mustFindProject(projectId)
     const pending = this.state.approvals
       .filter((a) => !a.decided_at)
@@ -205,6 +212,10 @@ export class MockProvider implements DataProvider {
       inbox_count: this.state.unregistered_files.filter((f) => !f.dismissed && !f.linked_deliverable_id).length,
       area_progress: this.areaProgress(),
       recent_activity: await this.listActivity(projectId, 10),
+      // v1.2: 받은 지시 — 내가 담당자인 requested 항목, 마감순
+      my_requested: this.state.deliverables
+        .filter((d) => d.status === 'requested' && d.assignee_id === user.id)
+        .sort((a, b) => (a.due_date ?? '9999').localeCompare(b.due_date ?? '9999')),
     }
   }
 
@@ -247,22 +258,51 @@ export class MockProvider implements DataProvider {
     if (!input.title.trim() || !input.category.trim()) {
       throw new ProviderError('validation', '카테고리와 제목은 필수입니다.')
     }
+    // v1.2 §8: brief·스펙 포함 시 지시 발행 — pm 전용, status='requested', 담당자 필수
+    const isBriefIssue =
+      !!input.brief?.trim() ||
+      input.spec_size !== undefined ||
+      input.spec_qty !== undefined ||
+      input.spec_location !== undefined ||
+      input.spec_type !== undefined
+    if (isBriefIssue) {
+      if (user.role !== 'pm') {
+        throw new ProviderError('forbidden', '지시 발행은 PM만 할 수 있습니다.')
+      }
+      if (!input.assignee_id) {
+        throw new ProviderError('validation', '지시에는 담당자 지정이 필요합니다.')
+      }
+    }
     const deliverable: Deliverable = {
       id: this.nextId('dlv'),
       project_id: input.project_id,
       area: input.area,
       category: input.category,
       title: input.title,
-      status: 'draft',
+      status: isBriefIssue ? 'requested' : 'draft',
       assignee_id: input.assignee_id ?? user.id,
       due_date: input.due_date ?? null,
       drive_folder_id: null, // Drive 폴더 생성은 Phase 5
       requires_approval: input.requires_approval ?? input.area !== 'common',
+      brief: input.brief ?? null,
+      brief_refs: input.brief_refs ?? null,
+      spec_size: input.spec_size ?? null,
+      spec_qty: input.spec_qty ?? null,
+      spec_location: input.spec_location ?? null,
+      spec_type: input.spec_type ?? null,
+      content: input.content ?? null,
       created_at: nowIso(),
       updated_at: nowIso(),
     }
     this.state.deliverables.push(deliverable)
-    this.log(`user:${user.id}`, 'deliverable.created', 'deliverable', deliverable.id)
+    if (isBriefIssue) {
+      // §5 부수 효과: 지시서 작성 + 담당자 알림 (Slack 실연동은 Phase 6)
+      this.log(`user:${user.id}`, 'deliverable.requested', 'deliverable', deliverable.id, {
+        assignee_id: deliverable.assignee_id,
+      })
+    } else {
+      this.log(`user:${user.id}`, 'deliverable.created', 'deliverable', deliverable.id)
+    }
     return deliverable
   }
 
@@ -325,8 +365,8 @@ export class MockProvider implements DataProvider {
       input.file && canBlob ? URL.createObjectURL(input.file) : `mock://files/${version.id}`,
     )
 
-    // §5: changes_requested 상태에서 새 버전 업로드 시 draft 자동 복귀
-    if (d.status === 'changes_requested') {
+    // §5: requested(v1.2 첫 업로드)·changes_requested 상태에서 새 버전 업로드 시 draft 자동 전이
+    if (d.status === 'requested' || d.status === 'changes_requested') {
       assertTransition(d.status, 'draft', 'version_upload')
       d.status = 'draft'
     }
@@ -713,7 +753,8 @@ export class MockProvider implements DataProvider {
     }
     this.state.versions.push(version)
     f.linked_deliverable_id = deliverableId
-    if (d.status === 'changes_requested') {
+    // §5: 인박스 연결도 requested(v1.2)·changes_requested → draft 자동 전이
+    if (d.status === 'requested' || d.status === 'changes_requested') {
       assertTransition(d.status, 'draft', 'version_upload')
       d.status = 'draft'
     }
@@ -730,6 +771,169 @@ export class MockProvider implements DataProvider {
     if (!f) throw new ProviderError('not_found', '인박스 파일을 찾을 수 없습니다.')
     f.dismissed = true
     this.log(`user:${user.id}`, 'inbox.dismissed', 'unregistered_file', f.id)
+  }
+
+  // ── v1.2 프로그램표·행사개요·운영계획서 ───────────────────────────
+  /** §6.1: 행사개요·프로그램표 편집은 pm·ops만 */
+  private assertPmOps(): CurrentUser {
+    const user = this.currentUser()
+    if (user.role !== 'pm' && user.role !== 'ops') {
+      throw new ProviderError('forbidden', '행사개요·프로그램표 편집은 PM·운영 담당만 가능합니다.')
+    }
+    return user
+  }
+
+  async listProgramSessions(projectId: UUID): Promise<ProgramSession[]> {
+    this.mustFindProject(projectId)
+    return [...this.state.program_sessions].sort((a, b) => a.sort_order - b.sort_order)
+  }
+
+  async createProgramSession(projectId: UUID, input: ProgramSessionInput): Promise<ProgramSession> {
+    this.assertPmOps()
+    this.mustFindProject(projectId)
+    if (!input.title.trim()) throw new ProviderError('validation', '세션 제목은 필수입니다.')
+    const maxOrder = this.state.program_sessions.reduce((m, s) => Math.max(m, s.sort_order), 0)
+    const session: ProgramSession = {
+      id: this.nextId('pgs'),
+      project_id: projectId,
+      section: input.section?.trim() || null,
+      start_time: input.start_time || null,
+      end_time: input.end_time || null,
+      title: input.title,
+      speaker_name: input.speaker_name?.trim() || null,
+      speaker_title: input.speaker_title?.trim() || null,
+      speaker_org: input.speaker_org?.trim() || null,
+      note: input.note?.trim() || null,
+      sort_order: input.sort_order ?? maxOrder + 1,
+    }
+    this.state.program_sessions.push(session)
+    return session
+  }
+
+  async updateProgramSession(
+    sessionId: UUID,
+    patch: Partial<ProgramSessionInput>,
+  ): Promise<ProgramSession> {
+    this.assertPmOps()
+    const s = this.state.program_sessions.find((x) => x.id === sessionId)
+    if (!s) throw new ProviderError('not_found', '프로그램 세션을 찾을 수 없습니다.')
+    if (patch.title !== undefined) {
+      if (!patch.title.trim()) throw new ProviderError('validation', '세션 제목은 필수입니다.')
+      s.title = patch.title
+    }
+    if (patch.section !== undefined) s.section = patch.section.trim() || null
+    if (patch.start_time !== undefined) s.start_time = patch.start_time || null
+    if (patch.end_time !== undefined) s.end_time = patch.end_time || null
+    if (patch.speaker_name !== undefined) s.speaker_name = patch.speaker_name.trim() || null
+    if (patch.speaker_title !== undefined) s.speaker_title = patch.speaker_title.trim() || null
+    if (patch.speaker_org !== undefined) s.speaker_org = patch.speaker_org.trim() || null
+    if (patch.note !== undefined) s.note = patch.note.trim() || null
+    if (patch.sort_order !== undefined) s.sort_order = patch.sort_order
+    return s
+  }
+
+  async deleteProgramSession(sessionId: UUID): Promise<void> {
+    this.assertPmOps()
+    const idx = this.state.program_sessions.findIndex((x) => x.id === sessionId)
+    if (idx < 0) throw new ProviderError('not_found', '프로그램 세션을 찾을 수 없습니다.')
+    this.state.program_sessions.splice(idx, 1)
+  }
+
+  async updateProjectOverview(projectId: UUID, patch: ProjectOverviewPatch): Promise<Project> {
+    const user = this.assertPmOps()
+    const project = this.mustFindProject(projectId)
+    if (patch.event_date !== undefined) project.event_date = patch.event_date
+    if (patch.theme !== undefined) project.theme = patch.theme
+    if (patch.venue !== undefined) project.venue = patch.venue
+    if (patch.mc_name !== undefined) project.mc_name = patch.mc_name
+    if (patch.overview_items !== undefined) project.overview_items = patch.overview_items
+    this.log(`user:${user.id}`, 'project.overview_updated', 'project', project.id)
+    return project
+  }
+
+  /** 최신 버전 참조 — 미리보기 포맷일 때만 preview_url 세팅 */
+  private async planVersionRef(deliverableId: UUID): Promise<PlanVersionRef | null> {
+    const latest = this.versionsOf(deliverableId)[0]
+    if (!latest) return null
+    return {
+      id: latest.id,
+      version_no: latest.version_no,
+      file_name: latest.file_name,
+      preview_url: isPreviewFileName(latest.file_name) ? await this.getFileUrl(latest.id) : null,
+    }
+  }
+
+  /**
+   * S9 운영계획서 조립 (§8 GET /projects/{id}/plan).
+   * 섹션별 진행률 산정 기준 (Mock 정본 — SupabaseProvider도 동일 산식 유지):
+   *   overview      개요 슬롯 5개(event_date·theme·venue·mc_name·overview_items≥1) 중 채워진 수
+   *   program       start_time 있는 세션 수 / 전체 세션 수
+   *   zones         content 있는 ops 항목 수 / ops 항목 수
+   *   production    스펙 4필드(size·qty·location·type) 완비 design 항목 수 / design 항목 수
+   *   registration  등록 데이터(RSVP+참관객) 존재 여부 (0/1)
+   *   schedule      완료 마일스톤 수 / 전체 마일스톤 수
+   */
+  async getPlan(projectId: UUID): Promise<PlanData> {
+    this.currentUser()
+    const project = this.mustFindProject(projectId)
+    const sessions = await this.listProgramSessions(projectId)
+    const opsItems = this.state.deliverables.filter((d) => d.area === 'ops')
+    const designItems = this.state.deliverables.filter((d) => d.area === 'design')
+
+    const zones = await Promise.all(
+      opsItems.map(async (d) => ({
+        deliverable_id: d.id,
+        category: d.category,
+        title: d.title,
+        status: d.status,
+        content: d.content,
+        latest_version: await this.planVersionRef(d.id),
+      })),
+    )
+    const production = await Promise.all(
+      designItems.map(async (d) => ({
+        deliverable_id: d.id,
+        category: d.category,
+        title: d.title,
+        status: d.status,
+        spec_size: d.spec_size,
+        spec_qty: d.spec_qty,
+        spec_location: d.spec_location,
+        spec_type: d.spec_type,
+        latest_version: await this.planVersionRef(d.id),
+      })),
+    )
+    const stats = await this.getRegistrationStats(projectId)
+    const milestones = [...this.state.milestones].sort((a, b) =>
+      a.due_date.localeCompare(b.due_date),
+    )
+
+    const overviewSlots = [
+      project.event_date,
+      project.theme,
+      project.venue,
+      project.mc_name,
+      project.overview_items?.length ? 'y' : null,
+    ]
+    const specComplete = (d: Deliverable) =>
+      !!(d.spec_size && d.spec_qty != null && d.spec_location && d.spec_type)
+
+    return {
+      project,
+      program_sessions: sessions,
+      zones,
+      production_items: production,
+      registration_stats: stats,
+      milestones,
+      section_progress: [
+        { key: 'overview', done: overviewSlots.filter(Boolean).length, total: overviewSlots.length },
+        { key: 'program', done: sessions.filter((s) => s.start_time).length, total: sessions.length },
+        { key: 'zones', done: opsItems.filter((d) => d.content?.trim()).length, total: opsItems.length },
+        { key: 'production', done: designItems.filter(specComplete).length, total: designItems.length },
+        { key: 'registration', done: stats.rsvp_total + stats.attendee_total > 0 ? 1 : 0, total: 1 },
+        { key: 'schedule', done: milestones.filter((m) => m.done).length, total: milestones.length },
+      ],
+    }
   }
 
   // ── 발주처 뷰 (토큰 스코프 — §6.2 화이트리스트 쿼리 재현) ─────────

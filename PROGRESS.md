@@ -3,9 +3,10 @@
 > 가변 상태 파일. 매 세션 체크아웃 시 에이전트가 갱신한다 (CLAUDE.md §9 리추얼).
 
 ## 1. 상태 요약
-- 현재 Phase: **Phase 0~3 완료 — 서버 없는 구간(프론트) 종료**. Phase 4(Supabase 이식)는 착수 전 사용자 승인 필요
-- 정본 문서: `docs/mice-communicator-설계서-v1.1.md` (스키마·상태 머신·API SoT)
-- 브랜치: `main` = 정본, 작업은 `claude/extract-zip-to-repo-t6xstr` → main PR 흐름
+- 현재 Phase: **Phase 0~3.5 완료 — 서버 없는 구간(프론트) 종료(v1.2 증분 포함)**. Phase 4(Supabase 이식)는
+  착수 전 사용자 승인 필요, v1.2 스키마 기준
+- 정본 문서: `docs/mice-communicator-설계서-v1.2.md` (스키마·상태 머신·API SoT — v1.1 대체)
+- 브랜치: `main` = 정본, 작업은 `claude/design-v1.2-phase-3.5-t4splp` → main **PR #4(드래프트)** 리뷰 대기
 
 ## 2. 완료
 - 설계서 v1.1 확정 + CLAUDE.md v1.1 (2026-08-19)
@@ -33,18 +34,45 @@
   2026-08-22 375px 스크린샷으로 확보
 - **리멤버 브랜드 로고 상시 노출** (2026-08-22): 내부·발주처 헤더에 `BrandLogo` — `public/brand/
   remember-logo.svg` 자산이 있으면 이미지, 없으면 텍스트 워드마크 폴백
+- **설계서 v1.2 + CLAUDE.md v1.2 채택** (2026-08-22): v1.1 대체 — 지시 파이프라인·program_sessions·
+  행사개요·S9 운영계획서·Phase 3.5·DoD 7~9 추가
+- **Phase 3.5a — 타입 개정·재동결** (2026-08-22, 메인이 G 역할 수행): status 'requested'+전이표 8규칙
+  (requested→draft via version_upload — 업로드·인박스 연결 공통), Deliverable 지시/스펙/content 필드,
+  ProgramSession, Project 행사개요 필드 → **DataProvider v2(41메서드) 재동결**, MockProvider·픽스처 확장
+  (지시 픽스처 dlv-007, 존운영 content, 프로그램 세션 5건, 행사개요)
+- **Phase 3.5b — 지시 흐름 UI** (2026-08-22, 에이전트 H): S2 pm 전용 지시 발행 폼(브리프·참고 링크·
+  스펙 4필드)·'지시됨' 뱃지 / S3 지시 카드(BriefCard: 브리프+스펙 칩)+requested 액션 바 /
+  S1 '받은 지시' 위젯(my_requested)
+- **Phase 3.5c — S9 운영계획서** (2026-08-22, 에이전트 I): `/plan` 6섹션 자동 조립(①개요 ②프로그램
+  ③존운영 ④제작물 리스트 ⑤등록 통계 ⑥일정)+섹션·문서 진행률+개요·프로그램 인라인 편집(pm·ops 게이팅)
+  +A4 인쇄 CSS(@page·print-hidden·break-inside 보호)+인쇄 버튼. content 마크다운은 React 노드 직접 생성
+  초경량 렌더러(innerHTML 미사용)
+- **§7 프론트 DoD 7~9 충족 + 전체 테스트 코드화** (2026-08-22, 메인 통합 검수): DoD-7(지시 발행→지시됨
+  뱃지→담당자 홈→첫 업로드 draft 전환·비pm 미노출), DoD-8(6섹션 렌더·진행률 수치·지시 스펙 기반 제작물
+  표·편집 게이팅·개요 왕복 편집), DoD-9(A4 인쇄 구조 계약 가드). **vitest 72개(11파일) 전부 통과 +
+  tsc 클린 + vite build 성공**
 
 ## 3. 미결
 - GitHub 기본 브랜치가 아직 `claude/extract-zip-to-repo-t6xstr` — Settings → Branches에서 `main`으로 변경 필요
 - **리멤버 로고 실 자산 미수령** — 사용자가 보낸 이미지가 파일로 전달되지 않아 텍스트 워드마크 폴백
   동작 중. `public/brand/remember-logo.svg`(블랙 버전)를 넣으면 자동 교체됨
+- **PR #4 리뷰·머지 대기** (드래프트) — 머지 후 Phase 4 착수 여부 사용자 결정
+- (경미) `@types/node` 미도입 — dod9가 print CSS 파일 검증에 국소 우회(dynamic import 캐스팅) 사용 중.
+  Node API 쓰는 테스트가 늘면 devDependency 추가 검토
+- (경미) plan/StatusPill이 internal/StatusBadge와 렌더 중복 — 병렬 작업 충돌 회피 목적 격리였으므로
+  후속 세션에서 통합 가능
 
 ## 4. 다음 스텝
-- **Phase 4 — Supabase 이식** (★착수 전 사용자 승인 필수): 마이그레이션(§4)+RLS(§6.2)+Auth+seed →
-  SupabaseProvider 구현 → MockProvider 교체(프론트 무수정 목표)
+- **PR #4 머지** → 필요시 GitHub 기본 브랜치 main 전환과 함께 정리
+- **Phase 4 — Supabase 이식** (★착수 전 사용자 승인 필수, v1.2 스키마 기준): 마이그레이션(§4 전체 —
+  program_sessions·행사개요·지시 필드 포함)+RLS(§6.2)+Auth+seed → SupabaseProvider 구현 →
+  MockProvider 교체(프론트 무수정 목표)
 - 이후 Phase 5(Drive) → Phase 6(알림·cron)
 
 ## 5. 결정 로그
+- 2026-08-22 (Phase 3.5a): **DataProvider v1 동결 해제** — 근거: **사용자 v1.2 승인(2026-08-22, 시각안 기반)**,
+  설계서 v1.2 개정 동반(§9 준수). status 'requested'·지시서/스펙/content 필드·ProgramSession·행사개요 반영해
+  **v2(41메서드)로 개정 후 재동결 선언** — 이후 변경은 다시 사용자 승인+설계서 개정 필요
 - 2026-08-19: 아키텍처 하이브리드 / 무로그인 토큰 / 컨펌 발송 PM 단독 / 프론트 우선·서버 후행 / 미리보기 포맷 발송 조건
 - 2026-08-19 (Phase 0): 라우트 확정 / Tailwind v4 · react-router v6
 - 2026-08-19 (Phase 1): **DataProvider v1 동결(35메서드)** — 변경은 사용자 승인+설계서 개정 동반 /
@@ -61,6 +89,15 @@
   코드에는 자산 경로 참조만 두고 로고 파일은 public/brand/ 에서 주입(폴백: 텍스트 워드마크)
 - 2026-08-22: 테스트 측 타입은 동결 타입 조합·캐스팅으로만 해결(동결 파일 무수정 원칙 유지) —
   보고된 AttendeeWithRsvp 타입 에러는 현 HEAD에서 재현 안 됨(tsc 통과)
+- 2026-08-22 (Phase 3.5): 지시 발행 트리거 = brief 또는 스펙 필드 포함(§8 문언 그대로) — pm 전용·담당자
+  필수·status=requested. 담당자 셀프 생성(brief 없음)은 기존대로 draft
+- 2026-08-22 (Phase 3.5): S9 섹션 진행률 산식은 MockProvider.getPlan 주석을 정본으로 고정(개요 슬롯 5·
+  프로그램 start_time·존 content·제작물 스펙 4필드 완비·등록 존재 여부·마일스톤 완료) —
+  SupabaseProvider도 동일 산식 유지 조건
+- 2026-08-22 (Phase 3.5): G는 메인이 직접 수행(3.5a는 후속 H·I의 선행 의존이라 직렬 구간 — 산출·검수
+  기준은 §5와 동일), H·I는 서브에이전트 병렬 — 파일 경계 분리(공유 라우트·index.css는 I 단독 소유)로
+  충돌 0. brief_refs 입력은 줄바꿈 구분 textarea 채택. dod9의 CSS 파일 검증은 @types/node 없이 국소
+  dynamic import 우회(테스트 파일 내 한정)
 
 ## 6. 세션 로그
 - 2026-08-19 세션 #1: ZIP 배치→main 생성→Phase 0(PR #1 머지)→Phase 1(동결·테스트 33, PR #2 머지)
@@ -68,6 +105,10 @@
   스크린샷 11장 사용자 공유) → PR 발행
 - 2026-08-22 세션 #1 계속(2): DoD 1~6을 RTL 컴포넌트 테스트로 코드화(50개 통과) + 리멤버 로고 슬롯
   + PR #3 머지. **다음 세션 = Phase 4(Supabase 이식, 착수 전 사용자 승인·Supabase 프로젝트 정보 필요)**
+- 2026-08-22 세션 #2: 설계서 v1.2·CLAUDE.md v1.2 채택(v1.1 대체) → Phase 3.5 사용자 승인 하에 진행 —
+  3.5a(메인: 동결 해제 기록→타입 개정→v2 재동결) → 3.5b(H)·3.5c(I) 병렬 → 메인 통합 검수
+  (vitest 72·tsc·빌드 전부 통과, DoD 1~9 코드화 완료) → PR #4(드래프트) 발행·구독.
+  **다음 세션 = PR #4 머지 확인 후 Phase 4(착수 전 사용자 승인·Supabase 프로젝트 정보 필요)**
 
 ## 7. 세션 잠금
 - 잠금 없음 (한 폴더 = 동시 1세션)

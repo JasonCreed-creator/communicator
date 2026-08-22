@@ -9,6 +9,7 @@ import type {
   Comment,
   Deliverable,
   Milestone,
+  ProgramSession,
   Project,
   ProjectMember,
   RsvpContact,
@@ -42,6 +43,18 @@ export interface MockState {
   attendees: Attendee[]
   activity_log: ActivityLogEntry[]
   unregistered_files: UnregisteredFile[]
+  program_sessions: ProgramSession[]
+}
+
+/** v1.2 지시서·스펙·본문 필드 기본값 — 지시 없이 만든 항목은 전부 null (§4) */
+const NO_BRIEF = {
+  brief: null,
+  brief_refs: null,
+  spec_size: null,
+  spec_qty: null,
+  spec_location: null,
+  spec_type: null,
+  content: null,
 }
 
 const FIXTURE: MockState = {
@@ -60,6 +73,14 @@ const FIXTURE: MockState = {
     event_date: '2026-10-22',
     drive_root_folder_id: 'drv-root-stc26',
     slack_webhook_url: null,
+    // v1.2 행사개요 — S9 §행사개요 소스 (전부 가상 명칭)
+    theme: '연결, 다음 단계로',
+    venue: '가상컨벤션센터 3F 그랜드볼룸',
+    mc_name: '진행자 조무대',
+    overview_items: [
+      { label: '참가 대상', value: '파트너사·미디어·일반 참관객 300명' },
+      { label: '주차 안내', value: '행사장 지하 주차 3시간 지원 (등록데스크 확인)' },
+    ],
     created_by: 'usr-pm',
     created_at: '2026-08-01T09:00:00.000Z',
   },
@@ -111,7 +132,8 @@ const FIXTURE: MockState = {
     },
   ],
 
-  // 상태 분포: pending_approval / final / draft / internal_review / changes_requested / common(internal_review)
+  // 상태 분포: pending_approval / final / draft / internal_review / changes_requested /
+  //           common(internal_review) / requested(v1.2 지시) / ops 존운영(content)
   deliverables: [
     {
       id: 'dlv-001',
@@ -124,6 +146,7 @@ const FIXTURE: MockState = {
       due_date: '2026-09-04',
       drive_folder_id: 'drv-dlv-001',
       requires_approval: true,
+      ...NO_BRIEF, // 지시 없이 만든 항목 — v1.2 필드 전부 null 허용 사례
       created_at: '2026-08-05T09:00:00.000Z',
       updated_at: '2026-08-17T02:00:00.000Z',
     },
@@ -138,6 +161,12 @@ const FIXTURE: MockState = {
       due_date: '2026-08-28',
       drive_folder_id: 'drv-dlv-002',
       requires_approval: true,
+      ...NO_BRIEF,
+      // 스펙 완비 — S9 제작물 리스트 표의 확정본 행
+      spec_size: '90×120mm',
+      spec_qty: 350,
+      spec_location: '등록데스크 배부',
+      spec_type: 'PET 카드',
       created_at: '2026-08-03T09:00:00.000Z',
       updated_at: '2026-08-14T05:00:00.000Z',
     },
@@ -152,6 +181,7 @@ const FIXTURE: MockState = {
       due_date: '2026-09-18',
       drive_folder_id: 'drv-dlv-003',
       requires_approval: true,
+      ...NO_BRIEF,
       created_at: '2026-08-12T09:00:00.000Z',
       updated_at: '2026-08-12T09:00:00.000Z',
     },
@@ -166,6 +196,10 @@ const FIXTURE: MockState = {
       due_date: '2026-09-25',
       drive_folder_id: 'drv-dlv-004',
       requires_approval: true,
+      ...NO_BRIEF,
+      // S9 ③존별 운영 렌더 소스 (마크다운)
+      content:
+        '### 무대 운영\n- 개막 30분 전 리허설 완료, 큐시트 기준 진행\n- 조명·음향 콜은 무대감독 단일 채널로 통일',
       created_at: '2026-08-08T09:00:00.000Z',
       updated_at: '2026-08-16T07:00:00.000Z',
     },
@@ -180,6 +214,7 @@ const FIXTURE: MockState = {
       due_date: '2026-09-11',
       drive_folder_id: 'drv-dlv-005',
       requires_approval: true,
+      ...NO_BRIEF, // content 미작성 — S9 존운영 섹션 진행률 미충족 사례
       created_at: '2026-08-06T09:00:00.000Z',
       updated_at: '2026-08-15T08:00:00.000Z',
     },
@@ -194,8 +229,49 @@ const FIXTURE: MockState = {
       due_date: null,
       drive_folder_id: 'drv-dlv-006',
       requires_approval: false, // common 문서 — draft ↔ internal_review만 (§5)
+      ...NO_BRIEF,
       created_at: '2026-08-02T09:00:00.000Z',
       updated_at: '2026-08-04T09:00:00.000Z',
+    },
+    // v1.2 지시 발행 상태 — PM 지시서(브리프+스펙 완비), 산출물 없음 (DoD-7 기준점)
+    {
+      id: 'dlv-007',
+      project_id: PROJECT_ID,
+      area: 'design',
+      category: '현수막',
+      title: '메인 게이트 현수막',
+      status: 'requested',
+      assignee_id: 'usr-design',
+      due_date: '2026-09-15',
+      drive_folder_id: 'drv-dlv-007',
+      requires_approval: true,
+      brief: '메인 게이트 외벽용 대형 현수막 시안 요청. 키비주얼 확정안 기반으로 행사명·일자·장소 표기.',
+      brief_refs: ['https://example.com/refs/keyvisual-final'],
+      spec_size: '23000×5000mm',
+      spec_qty: 1,
+      spec_location: '메인 게이트 외벽',
+      spec_type: '현수막',
+      content: null,
+      created_at: '2026-08-18T09:00:00.000Z',
+      updated_at: '2026-08-18T09:00:00.000Z',
+    },
+    // ops 존운영 항목 — content로 S9 ③존별 운영 섹션 구성
+    {
+      id: 'dlv-008',
+      project_id: PROJECT_ID,
+      area: 'ops',
+      category: '존운영',
+      title: '등록존 운영',
+      status: 'draft',
+      assignee_id: 'usr-ops',
+      due_date: '2026-10-01',
+      drive_folder_id: 'drv-dlv-008',
+      requires_approval: true,
+      ...NO_BRIEF,
+      content:
+        '### 등록존\n- 위치: 3F 로비 (등록데스크 4석)\n- 운영 인력: 4명 (오전 피크 2명 증원)\n- VIP는 별도 라인으로 안내 후 배지 즉시 발급',
+      created_at: '2026-08-14T09:00:00.000Z',
+      updated_at: '2026-08-14T09:00:00.000Z',
     },
   ],
 
@@ -369,6 +445,16 @@ const FIXTURE: MockState = {
     { id: 2, project_id: PROJECT_ID, actor: 'user:usr-pm', action: 'approval.requested', target_type: 'approval', target_id: 'apr-001', meta: { deliverable_id: 'dlv-001' }, created_at: '2026-08-17T02:00:00.000Z' },
     { id: 3, project_id: PROJECT_ID, actor: `client:${DEMO_TOKEN}`, action: 'approval.decided', target_type: 'approval', target_id: 'apr-003', meta: { decision: 'changes_requested' }, created_at: '2026-08-15T08:00:00.000Z' },
     { id: 4, project_id: PROJECT_ID, actor: 'system', action: 'deliverable.finalized', target_type: 'deliverable', target_id: 'dlv-002', meta: null, created_at: '2026-08-14T05:00:00.000Z' },
+    { id: 5, project_id: PROJECT_ID, actor: 'user:usr-pm', action: 'deliverable.requested', target_type: 'deliverable', target_id: 'dlv-007', meta: { assignee_id: 'usr-design' }, created_at: '2026-08-18T09:00:00.000Z' },
+  ],
+
+  // v1.2 프로그램표 — S9 §프로그램 정형 소스 (sort_order 순)
+  program_sessions: [
+    { id: 'pgs-001', project_id: PROJECT_ID, section: '오전', start_time: '09:30', end_time: '10:00', title: '등록·리셉션', speaker_name: null, speaker_title: null, speaker_org: null, note: null, sort_order: 1 },
+    { id: 'pgs-002', project_id: PROJECT_ID, section: '오전', start_time: '10:00', end_time: '10:20', title: '개회사', speaker_name: '오대표', speaker_title: '대표', speaker_org: '가상재단', note: null, sort_order: 2 },
+    { id: 'pgs-003', project_id: PROJECT_ID, section: '오전', start_time: '10:20', end_time: '11:10', title: '기조연설 — 연결의 다음 단계', speaker_name: '한석학', speaker_title: '교수', speaker_org: '가상대학교', note: '기조', sort_order: 3 },
+    { id: 'pgs-004', project_id: PROJECT_ID, section: '오후', start_time: '14:00', end_time: '14:50', title: '파트너 세션 — 산업 적용 사례', speaker_name: '문리더', speaker_title: '본부장', speaker_org: '가상소프트', note: '파트너 연사', sort_order: 4 },
+    { id: 'pgs-005', project_id: PROJECT_ID, section: '오후', start_time: '15:00', end_time: '16:00', title: '패널 토론', speaker_name: null, speaker_title: null, speaker_org: null, note: '패널 4인', sort_order: 5 },
   ],
 
   unregistered_files: [

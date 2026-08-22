@@ -1,5 +1,6 @@
 import { useState, type ChangeEvent, type FormEvent } from 'react'
 import { useParams } from 'react-router-dom'
+import BriefCard from '../components/internal/BriefCard'
 import Card from '../components/internal/Card'
 import DdayBadge from '../components/internal/DdayBadge'
 import ErrorAlert from '../components/internal/ErrorAlert'
@@ -84,6 +85,8 @@ function ItemDetail({ itemId }: { itemId: string }) {
           </p>
         </div>
       </div>
+
+      <BriefCard deliverable={d} />
 
       <StatusActionBar
         deliverableId={d.id}
@@ -210,6 +213,15 @@ function StatusActionBar({
       setDueAt('')
       onChanged()
     }
+  }
+
+  if (status === 'requested') {
+    return (
+      <Card title="상태 액션">
+        <p className="text-sm text-gray-700">지시가 발행되었습니다.</p>
+        <p className="mt-1 text-xs text-gray-400">첫 버전을 업로드하면 자동으로 초안(draft) 상태로 전환됩니다.</p>
+      </Card>
+    )
   }
 
   if (status === 'draft' && canWriteArea) {

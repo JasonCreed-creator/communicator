@@ -234,6 +234,150 @@ describe('대시보드 (S1·DoD-5)', () => {
     expect(d.pending_approvals.map((x) => x.approval.id)).toEqual(['apr-001'])
     expect(d.inbox_count).toBe(2)
     const design = d.area_progress.find((a) => a.area === 'design')
-    expect(design).toEqual({ area: 'design', total: 3, done: 1 })
+    expect(design).toEqual({ area: 'design', total: 4, done: 1 })
+  })
+
+  it('받은 지시(my_requested)는 담당자에게만 노출된다 (v1.2)', async () => {
+    const pmView = await p.getDashboard(PROJECT_ID)
+    expect(pmView.my_requested).toHaveLength(0)
+    p.switchUser('usr-design')
+    const designView = await p.getDashboard(PROJECT_ID)
+    expect(designView.my_requested.map((d) => d.id)).toEqual(['dlv-007'])
+  })
+})
+
+describe('v1.2 지시 파이프라인 — requested (§5·§8)', () => {
+  it('brief·스펙 포함 생성은 pm 전용 status=requested, 담당자 필수', async () => {
+    await expectError(
+      () =>
+        p.createDeliverable({
+          project_id: PROJECT_ID,
+          area: 'design',
+          category: '리플렛',
+          title: '행사 리플렛',
+          brief: 'A4 3단 리플렛 시안 요청',
+        }),
+      400, // 담당자 미지정
+    )
+    const d = await p.createDeliverable({
+      project_id: PROJECT_ID,
+      area: 'design',
+      category: '리플렛',
+      title: '행사 리플렛',
+      assignee_id: 'usr-design',
+      brief: 'A4 3단 리플렛 시안 요청',
+      spec_size: '210×297mm',
+      spec_qty: 500,
+      spec_location: '등록데스크 비치',
+      spec_type: '합지',
+    })
+    expect(d.status).toBe('requested')
+    expect(d.spec_qty).toBe(500)
+  })
+
+  it('pm이 아닌 지시 발행은 403', async () => {
+    p.switchUser('usr-design')
+    await expectError(
+      () =>
+        p.createDeliverable({
+          project_id: PROJECT_ID,
+          area: 'design',
+          category: '포스터',
+          title: '포스터',
+          assignee_id: 'usr-design',
+          brief: '셀프 지시 시도',
+        }),
+      403,
+    )
+  })
+
+  it('brief 없는 셀프 생성은 기존대로 draft', async () => {
+    p.switchUser('usr-design')
+    const d = await p.createDeliverable({
+      project_id: PROJECT_ID,
+      area: 'design',
+      category: '사이니지',
+      title: '층별 사이니지',
+    })
+    expect(d.status).toBe('draft')
+  })
+
+  it('requested에서 첫 버전 업로드 시 draft 자동 전이 (assertTransition 경유)', async () => {
+    p.switchUser('usr-design')
+    const v = await p.uploadVersion('dlv-007', { file_name: '시안.png' })
+    expect(v.version_no).toBe(1)
+    const d = await p.getDeliverable('dlv-007')
+    expect(d.status).toBe('draft')
+  })
+
+  it('requested 항목은 인박스 연결로도 draft 전이', async () => {
+    p.switchUser('usr-design')
+    const v = await p.linkInboxFile('inb-001', 'dlv-007')
+    expect(v.file_name).toBe('리플렛 시안 수정본.pdf')
+    const d = await p.getDeliverable('dlv-007')
+    expect(d.status).toBe('draft')
+  })
+
+  it('requested의 status_patch 수동 전이는 409', async () => {
+    await expectError(() => p.transitionStatus('dlv-007', 'draft'), 409)
+  })
+})
+
+describe('v1.2 프로그램표·행사개요 (pm·ops 전용 — §6.1)', () => {
+  it('프로그램 CRUD — reg 역할은 403', async () => {
+    const created = await p.createProgramSession(PROJECT_ID, {
+      section: '오후',
+      start_time: '16:10',
+      title: '폐회사',
+    })
+    expect(created.sort_order).toBe(6)
+    const updated = await p.updateProgramSession(created.id, { end_time: '16:30' })
+    expect(updated.end_time).toBe('16:30')
+    p.switchUser('usr-reg')
+    await expectError(() => p.deleteProgramSession(created.id), 403)
+    p.switchUser('usr-ops')
+    await p.deleteProgramSession(created.id)
+    const sessions = await p.listProgramSessions(PROJECT_ID)
+    expect(sessions.find((s) => s.id === created.id)).toBeUndefined()
+  })
+
+  it('행사개요 편집은 pm·ops만, design은 403', async () => {
+    p.switchUser('usr-ops')
+    const project = await p.updateProjectOverview(PROJECT_ID, { venue: '가상컨벤션센터 5F 오디토리움' })
+    expect(project.venue).toBe('가상컨벤션센터 5F 오디토리움')
+    p.switchUser('usr-design')
+    await expectError(() => p.updateProjectOverview(PROJECT_ID, { theme: 'x' }), 403)
+  })
+})
+
+describe('v1.2 S9 운영계획서 조립 — getPlan (§8·DoD-8)', () => {
+  it('6개 섹션 데이터와 섹션별 진행률을 조립한다', async () => {
+    const plan = await p.getPlan(PROJECT_ID)
+    expect(plan.program_sessions.map((s) => s.id)).toEqual([
+      'pgs-001', 'pgs-002', 'pgs-003', 'pgs-004', 'pgs-005',
+    ])
+    // 제작물 리스트는 design 항목 지시 스펙에서 자동 생성
+    const banner = plan.production_items.find((i) => i.deliverable_id === 'dlv-007')
+    expect(banner?.spec_size).toBe('23000×5000mm')
+    // 존운영은 ops 항목 content 기반
+    expect(plan.zones.find((z) => z.deliverable_id === 'dlv-008')?.content).toContain('등록존')
+    const progress = Object.fromEntries(plan.section_progress.map((s) => [s.key, s]))
+    expect(progress.overview).toMatchObject({ done: 5, total: 5 })
+    expect(progress.program).toMatchObject({ done: 5, total: 5 })
+    expect(progress.zones).toMatchObject({ done: 2, total: 3 })
+    expect(progress.production).toMatchObject({ done: 2, total: 4 })
+    expect(progress.registration).toMatchObject({ done: 1, total: 1 })
+    expect(progress.schedule).toMatchObject({ done: 1, total: 5 })
+  })
+
+  it('미리보기 포맷이 아닌 최신 버전은 preview_url이 null', async () => {
+    const plan = await p.getPlan(PROJECT_ID)
+    const keyVisual = plan.production_items.find((i) => i.deliverable_id === 'dlv-001')
+    expect(keyVisual?.latest_version?.preview_url).not.toBeNull() // v2 .png
+    p.switchUser('usr-design')
+    await p.uploadVersion('dlv-003', { file_name: '원본.ai' })
+    const plan2 = await p.getPlan(PROJECT_ID)
+    const backwall = plan2.production_items.find((i) => i.deliverable_id === 'dlv-003')
+    expect(backwall?.latest_version?.preview_url).toBeNull()
   })
 })

@@ -1,9 +1,12 @@
 // ─────────────────────────────────────────────────────────────────────
-// DataProvider 인터페이스 v1 — 2026-08-19 동결 (CLAUDE.md §4 Phase 1)
+// DataProvider 인터페이스 v2 — 2026-08-22 재동결 (CLAUDE.md §4 Phase 3.5a)
+//   v1: 2026-08-19 동결(35메서드). v1.2 사용자 승인(2026-08-22, 시각안 기반)을
+//   근거로 동결 해제 → 지시 파이프라인·프로그램표·행사개요·운영계획서(S9) 6메서드
+//   추가(41메서드) 후 재동결. 경위는 PROGRESS.md 결정 로그 참조.
 //
-// 프론트(S1~S8)는 이 인터페이스만 호출한다. 구현체:
-//   1단계 MockProvider     — 픽스처+메모리, 업로드=blob URL (Phase 1)
-//   2단계 SupabaseProvider — DB·Auth·RLS 이식 (Phase 4)
+// 프론트(S1~S9)는 이 인터페이스만 호출한다. 구현체:
+//   1단계 MockProvider     — 픽스처+메모리, 업로드=blob URL (Phase 1·3.5)
+//   2단계 SupabaseProvider — DB·Auth·RLS 이식 (Phase 4, v1.2 스키마 기준)
 //   3단계 + DriveFileStore — Drive 업로드·프록시 이식 (Phase 5)
 //
 // 동결 후 변경은 사용자 승인 + 설계서 개정을 동반한다 (CLAUDE.md §9).
@@ -18,6 +21,7 @@ import type {
   Comment,
   Deliverable,
   Milestone,
+  ProgramSession,
   Project,
   RsvpContact,
   UnregisteredFile,
@@ -42,6 +46,9 @@ import type {
   IssueTokenInput,
   MemberWithProfile,
   MilestoneInput,
+  PlanData,
+  ProgramSessionInput,
+  ProjectOverviewPatch,
   RegistrationStats,
   RequestApprovalInput,
   RsvpContactPatch,
@@ -64,6 +71,10 @@ export interface DataProvider {
   // ── 산출물 (S2·S3) ────────────────────────────────────────────────
   listDeliverables(projectId: UUID, filter?: DeliverableFilter): Promise<Deliverable[]>
   getDeliverable(deliverableId: UUID): Promise<DeliverableDetail>
+  /**
+   * 항목 생성 (§8 POST /deliverables). v1.2: brief·스펙 포함 시 지시 발행 —
+   * pm 전용, status='requested', 담당자(assignee_id) 필수. 그 외에는 draft로 시작.
+   */
   createDeliverable(input: CreateDeliverableInput): Promise<Deliverable>
   /**
    * 내부 멤버의 상태 전이 (§5 전이표 status_patch 경로만).
@@ -76,8 +87,8 @@ export interface DataProvider {
   ): Promise<Deliverable>
   /**
    * 새 버전 업로드 (§7.2). version_no 자동 증가, 파일명 규약화.
-   * 상태가 changes_requested면 draft로 자동 전이.
-   * draft·internal_review·changes_requested 외 상태에서는 409.
+   * 상태가 requested(v1.2 첫 업로드)·changes_requested면 draft로 자동 전이(assertTransition 경유).
+   * requested·draft·internal_review·changes_requested 외 상태에서는 409.
    */
   uploadVersion(deliverableId: UUID, input: UploadVersionInput): Promise<Version>
   /**
@@ -128,6 +139,23 @@ export interface DataProvider {
   /** 기존 항목에 새 버전으로 연결 — 파일명 rename은 하지 않는다(§7.3 기본 off) */
   linkInboxFile(inboxId: UUID, deliverableId: UUID): Promise<Version>
   dismissInboxFile(inboxId: UUID): Promise<void>
+
+  // ── v1.2 프로그램표 (S9 §프로그램 소스 — §8 /program-sessions, pm·ops) ──
+  /** sort_order 순 */
+  listProgramSessions(projectId: UUID): Promise<ProgramSession[]>
+  createProgramSession(projectId: UUID, input: ProgramSessionInput): Promise<ProgramSession>
+  updateProgramSession(
+    sessionId: UUID,
+    patch: Partial<ProgramSessionInput>,
+  ): Promise<ProgramSession>
+  deleteProgramSession(sessionId: UUID): Promise<void>
+
+  // ── v1.2 행사개요 (§8 PATCH /projects/{id}/overview, pm·ops) ──────
+  updateProjectOverview(projectId: UUID, patch: ProjectOverviewPatch): Promise<Project>
+
+  // ── v1.2 S9 운영계획서 (§8 GET /projects/{id}/plan, 멤버) ─────────
+  /** 전 섹션 조립 데이터 + 섹션별 진행률 */
+  getPlan(projectId: UUID): Promise<PlanData>
 
   // ── 발주처 뷰 (S7·S8) — 토큰 스코프, 만료·회수 시 410 ─────────────
   /** 컨펌 대기 큐 + 처리 이력. 코멘트는 shared만 포함(§6.2) */

@@ -7,6 +7,7 @@ const NAV_ITEMS = [
   { to: '/board/ops', label: '운영 보드' },
   { to: '/registration', label: '등록' },
   { to: '/schedule', label: '일정' },
+  { to: '/plan', label: '운영계획서' },
   { to: '/settings', label: '설정' },
 ]
 

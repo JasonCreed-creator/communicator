@@ -46,6 +46,28 @@ export default function HomeDashboardPage() {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <div className="space-y-6">
+          {dashboard.data && dashboard.data.my_requested.length > 0 && (
+            <Card title="받은 지시">
+              <ul className="divide-y divide-gray-100">
+                {dashboard.data.my_requested.map((d) => (
+                  <li key={d.id} className="py-2.5 first:pt-0 last:pb-0">
+                    <Link to={`/items/${d.id}`} className="flex items-center justify-between gap-3 hover:opacity-70">
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-medium text-gray-900">{d.title}</span>
+                        <span className="text-xs text-gray-500">{d.category}</span>
+                      </span>
+                      {d.due_date ? (
+                        <DdayBadge isoDate={d.due_date} />
+                      ) : (
+                        <span className="text-xs text-gray-400">마감 미정</span>
+                      )}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
+
           <Card title="미결 컨펌 (기한순)">
             {dashboard.loading && <p className="text-sm text-gray-400">불러오는 중…</p>}
             {dashboard.data && dashboard.data.pending_approvals.length === 0 && (

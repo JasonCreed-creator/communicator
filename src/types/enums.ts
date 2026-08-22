@@ -1,4 +1,4 @@
-// 설계서 v1.1 §4 열거형과 1:1 (create type ... as enum)
+// 설계서 v1.2 §4 열거형과 1:1 (create type ... as enum)
 
 export const MEMBER_ROLES = ['pm', 'design', 'ops', 'reg'] as const
 export type MemberRole = (typeof MEMBER_ROLES)[number]
@@ -7,6 +7,8 @@ export const DELIVERABLE_AREAS = ['design', 'ops', 'common'] as const
 export type DeliverableArea = (typeof DELIVERABLE_AREAS)[number]
 
 export const DELIVERABLE_STATUSES = [
+  // v1.2: requested = PM 지시 발행 상태 (산출물 없음)
+  'requested',
   'draft',
   'internal_review',
   'pending_approval',
