@@ -1,9 +1,19 @@
-/** KPI 스탯 타일 — 큰 숫자 + 작은 회색 라벨, 장식 없음 */
-export default function StatTile({ label, value }: { label: string; value: string | number }) {
+/** KPI 스탯 타일 — §6 S1: 숫자 31/650(tabular) + 캡션 라벨. tone으로 지연(negative)·임박(accent) 강조 */
+export default function StatTile({
+  label,
+  value,
+  tone = 'default',
+}: {
+  label: string
+  value: string | number
+  tone?: 'default' | 'accent' | 'negative'
+}) {
+  const valueClass =
+    tone === 'negative' ? 'kpi-num text-negative' : tone === 'accent' ? 'kpi-num text-accent-deep' : 'kpi-num'
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-4">
-      <div className="text-2xl font-bold text-gray-900">{value}</div>
-      <div className="mt-1 text-xs text-gray-500">{label}</div>
+    <div className="ui-card p-5">
+      <div className={valueClass}>{value}</div>
+      <div className="t-caption mt-1.5">{label}</div>
     </div>
   )
 }

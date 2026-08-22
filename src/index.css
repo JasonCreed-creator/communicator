@@ -1,6 +1,172 @@
 @import 'tailwindcss';
+@import './styles/tokens.css';
 
-/* ── S9 운영계획서 인쇄 CSS (A4) — CLAUDE.md §4 Phase 3.5c / 설계서 v1.2 §10 S9 / DoD-9 ──
+/* 데모 아티팩트 빌드용 demo/ 디렉터리는 Tailwind 스캔에서 제외한다.
+   (스캔에 들면 demo/ 안의 문자열이 앱 CSS에 유틸리티로 새어 들어 앱 번들이 커진다.)
+   따라서 demo/ 컴포넌트는 Tailwind 클래스 대신 tokens.css 변수를 인라인 스타일로 쓴다. */
+@source not '../demo';
+
+/* ── 전역 베이스 — 디자인지시서 v1 §1·§2 ── */
+@layer base {
+  html {
+    /* §2 숫자는 tabular-nums — 숫자 글리프에만 영향하므로 전역 적용 */
+    font-variant-numeric: tabular-nums;
+  }
+
+  body {
+    background: var(--canvas);
+    color: var(--ink);
+  }
+}
+
+/* ── 타이포 스케일 — §2 (페이지 25/600 · 섹션 20/600 · 카드 16/600 · 본문 14/400 · 캡션 12/500) ── */
+@layer components {
+  .t-page-title {
+    font-size: 25px;
+    font-weight: 600;
+    line-height: 1.3;
+    letter-spacing: -0.01em;
+    color: var(--ink);
+  }
+
+  .t-section-title {
+    font-size: 20px;
+    font-weight: 600;
+    line-height: 1.35;
+    color: var(--ink);
+  }
+
+  .t-card-title {
+    font-size: 16px;
+    font-weight: 600;
+    line-height: 1.4;
+    color: var(--ink);
+  }
+
+  .t-caption {
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    color: var(--ink-cap);
+  }
+
+  .kpi-num {
+    font-size: 31px;
+    font-weight: 650;
+    line-height: 1.15;
+    color: var(--ink);
+  }
+
+  /* ── 카드 — §5: --card + 1px --border + r12 + 그림자 1단계. 카드 안 카드 금지(면 분리는 --canvas 인셋) ── */
+  .ui-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: var(--shadow-1);
+  }
+
+  /* ── 버튼 — §5: 높이 36 · r6. accent는 핵심 CTA 전용(화면당 1개 원칙) ── */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    height: 36px;
+    padding-inline: 14px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    white-space: nowrap;
+    transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+  }
+
+  .btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  /* 밀도 높은 행 내부 액션용 축소 변형(§5 표준 높이 36의 인라인 예외) */
+  .btn-sm {
+    height: 28px;
+    padding-inline: 10px;
+    border-radius: 6px;
+    font-size: 12px;
+  }
+
+  .btn-primary {
+    background: var(--ink);
+    color: #ffffff;
+  }
+
+  .btn-primary:not(:disabled):hover {
+    background: var(--brown);
+  }
+
+  .btn-accent {
+    background: var(--accent);
+    color: #ffffff;
+  }
+
+  .btn-accent:not(:disabled):hover {
+    background: var(--accent-deep);
+  }
+
+  .btn-ghost {
+    background: var(--card);
+    border: 1px solid var(--border);
+    color: var(--ink);
+  }
+
+  .btn-ghost:not(:disabled):hover {
+    background: var(--track);
+  }
+
+  /* §6 S6 위험 동작(토큰 회수 등) 전용 */
+  .btn-ghost-negative {
+    background: var(--card);
+    border: 1px solid var(--border);
+    color: var(--negative);
+  }
+
+  .btn-ghost-negative:not(:disabled):hover {
+    background: var(--negative-tint);
+    border-color: var(--negative);
+  }
+
+  /* ── 입력 — §5: --card bg + --border, focus 시 --accent 1.5px 링. 라벨은 캡션 스타일 ── */
+  .ui-input {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    min-height: 36px;
+    padding: 7px 10px;
+    font-size: 14px;
+    color: var(--ink);
+  }
+
+  .ui-input::placeholder {
+    color: var(--ink-cap);
+  }
+
+  .ui-input:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1.5px var(--accent);
+  }
+
+  /* ── 테이블 헤더 셀 — §5: 캡션 스타일 + 하단 1px --border-strong (행 높이 44·hover는 유틸리티로) ── */
+  .ui-th {
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    color: var(--ink-cap);
+    border-bottom: 1px solid var(--border-strong);
+    text-align: left;
+    padding: 8px 12px;
+  }
+}
+
+/* ── S9 운영계획서 인쇄 CSS (A4) — CLAUDE.md §4 Phase 3.5c / 설계서 v1.4 §10 S9 / DoD-9 ──
    .plan-print-hidden : 편집 버튼·인쇄 버튼 등 문서 아닌 UI를 인쇄 시 숨김
    .plan-section       : 섹션 컨테이너 — 인쇄 시 섹션 중간에서 페이지가 끊기지 않도록 보호 */
 @page {
@@ -22,6 +188,8 @@
     max-width: none;
     width: 100%;
     padding: 0;
+    border: none;
+    box-shadow: none;
   }
 
   body {

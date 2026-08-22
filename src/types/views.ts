@@ -18,14 +18,17 @@ import type {
   WbsTask,
 } from './entities'
 import type {
+  AppRole,
   ApprovalDecision,
   CommentVisibility,
   DeliverableArea,
   DeliverableStatus,
   EventType,
   MemberRole,
+  ProjectStatus,
   WbsStatus,
 } from './enums'
+import type { ComplianceItem, Targeting } from './entities'
 
 // ── 사용자 (auth.users의 앱 레벨 투영) ─────────────────────────────
 export interface UserRef {
@@ -37,6 +40,8 @@ export interface UserRef {
 export interface CurrentUser extends UserRef {
   role: MemberRole
   project_id: UUID
+  /** v2.0 — 전역 역할 (profiles.app_role): 견적 메뉴·API 게이트 (admin·sales) */
+  app_role: AppRole
 }
 
 export interface MemberWithProfile {
@@ -279,13 +284,100 @@ export interface ProjectOverviewPatch {
 // ── v1.3 프로젝트 기본정보·온보딩 (§8 PATCH /projects/{id}, S0) ────
 export interface ProjectPatch {
   name?: string
+  /** v1.5 — 행사 코드 (전역 유일, 파일명 규약) */
+  code?: string
   event_date?: IsoDate | null
+  event_type?: EventType
+  // v1.5 — 행사 설정 ① 개요 전 필드 (§8 PATCH /projects/{id})
+  event_end_date?: IsoDate | null
+  start_time?: string | null
+  end_time?: string | null
+  venue?: string | null
+  expected_headcount?: number | null
+  seating?: string | null
+  theme?: string | null
+  organizer?: string | null
+  mc_name?: string | null
+  target_audience?: string | null
+  overview_items?: OverviewItem[] | null
+  // v2.0 — 행사 설정 ① 모객형 전용 그룹 (일반형이면 숨김·데이터 보존)
+  guarantee_pax?: number | null
+  kpi_show_rate?: number | null
+  targeting?: Targeting | null
+  /** v2.0 — "견적 연결" 액션 (app_role admin·sales 전용, null = 해제) */
+  quote_id?: UUID | null
+}
+
+/** v1.5 — POST /projects 입력(§8): S0 ① 저장 시 개요 필드 일괄 수신, onboarded_at은 null.
+ *  "새 행사 만들기"는 빈 입력으로 호출해 자리표시 행사를 만든 뒤 S0에서 채운다. */
+export interface ProjectCreateInput {
+  name?: string
+  code?: string
+  event_date?: IsoDate | null
+  event_end_date?: IsoDate | null
+  start_time?: string | null
+  end_time?: string | null
+  venue?: string | null
+  expected_headcount?: number | null
+  seating?: string | null
+  theme?: string | null
+  organizer?: string | null
+  mc_name?: string | null
+  target_audience?: string | null
+  overview_items?: OverviewItem[] | null
   event_type?: EventType
 }
 
-/** 온보딩 완료 여부 — mock은 앱 상태, Phase 4에서 projects 컬럼 확정(PROGRESS 결정 로그) */
+/** v1.5 — 행사 설정 ② 담당자 입력(§8 POST /projects/{id}/members).
+ *  mock은 추가 즉시 멤버로 취급, Phase 4부터 project_invites 경유 승격 */
+export interface MemberInput {
+  display_name: string
+  email: string
+  role: MemberRole
+}
+
+/** v1.5 — GET /projects 요약(§8): 프로젝트 셀렉터·S-1 행사 목록 공용 */
+export interface ProjectSummary {
+  id: UUID
+  name: string
+  code: string
+  event_type: EventType
+  event_date: IsoDate | null
+  venue: string | null
+  expected_headcount: number | null
+  status: ProjectStatus
+  /** onboarded_at !== null 파생값 */
+  onboarded: boolean
+  /** 온보딩 진행 단계(0~3): ①개요 필수 4(행사명·코드·시작일·장소) ②PM 지정 ③완료 처리 */
+  onboarding_steps_done: number
+  pm_name: string | null
+  /** 미결 컨펌(pending_approval 항목 수) */
+  pending_approvals: number
+  /** 지연 WBS 태스크 수 (lib/wbs 산식) */
+  delayed_tasks: number
+  /** 확정(final) 항목 수 / 전체 항목 수 — 전체 진행률 소스 */
+  finals: number
+  deliverable_total: number
+}
+
+/** 온보딩 완료 상태 — 설계서 v1.4.1 §8 GET /projects/{id}/onboarding.
+ *  정본은 projects.onboarded_at 컬럼: completed = onboarded_at !== null (파생값) */
 export interface OnboardingStatus {
   completed: boolean
+  onboarded_at: IsoDateTime | null
+}
+
+// ── v2.0 견적 (§8 /quotes, app_role admin·sales) ───────────────────
+/** GET /quotes/{id}/export.xlsx — 자동 외부 업로드 없음. 저장 트리거는 modules/quote(saveQuoteFile) */
+export interface QuoteExportResult {
+  file_name: string
+  blob: Blob
+}
+
+/** PATCH /compliance-cards — items 체크는 멤버, title 편집은 pm (§6.1·§8) */
+export interface ComplianceCardPatch {
+  items?: ComplianceItem[]
+  title?: string
 }
 
 // ── v1.3 큐시트 (§8 /cues, pm·ops) ─────────────────────────────────

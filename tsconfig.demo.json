@@ -1,0 +1,8 @@
+// 데모 빌드 산출물 타입 체크 — `npm run demo:typecheck`
+// tsconfig.json의 include는 ["src"]라 demo/·vite.demo.config.ts가 빠진다. 그렇다고
+// 루트 tsconfig에 demo를 넣으면 `npm run build`(tsc --noEmit)의 대상이 넓어져 앱 빌드가
+// 데모 코드에 묶이므로, 같은 컴파일러 옵션을 상속한 별도 프로젝트로 분리한다.
+{
+  "extends": "./tsconfig.json",
+  "include": ["demo", "src", "vite.demo.config.ts"]
+}

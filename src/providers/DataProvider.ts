@@ -1,13 +1,23 @@
 // ─────────────────────────────────────────────────────────────────────
-// DataProvider 인터페이스 v3 — 2026-08-22 재동결 (CLAUDE.md §4 Phase 3.6a·3.7a)
+// DataProvider 인터페이스 v5 — 2026-08-22 재동결 (CLAUDE.md §4 Phase 3.11a)
 //   v1: 2026-08-19 동결(35메서드). v2: v1.2 승인 근거로 41메서드 재동결.
 //   v3: 사용자 v1.4 승인(2026-08-22, v1.3 포함)을 근거로 동결 해제 →
 //   온보딩·프로젝트 패치·큐시트 CRUD/스냅숏·WBS 전개/조회/패치·R&R 조회
-//   12메서드 추가(53메서드) 후 재동결. 경위는 PROGRESS.md 결정 로그 참조.
+//   12메서드 추가(53메서드) 후 재동결.
+//   v3.1: 사용자 v1.4.1 승인(2026-08-22) — 메서드 수 53 불변, onboarded_at 필드 추가만.
+//   v4: 사용자 v1.5 승인(2026-08-22, 시각안 3화면)을 근거로 동결 해제 → 다중 행사:
+//   listProjects·createProject·closeProject·addMember·removeMember 5메서드 추가(58메서드).
+//   v5: 사용자 v2.0 승인(2026-08-22, 시각안 3화면)을 근거로 동결 해제 → 견적 모듈:
+//   listQuotes·getQuote·createQuote·saveQuoteVersion·finalizeQuote·createProjectFromQuote·
+//   exportQuoteXlsx·listComplianceCards 8메서드(설계서 §2.1 열거) + updateComplianceCard
+//   (§8 PATCH /compliance-cards·DoD 25 체크 왕복 대응 — §2.1 열거와의 충돌은 §8 우선 해석,
+//   PROGRESS 열린 질문 기록) 추가 = 67메서드. Project 모객 필드 4종·WbsTask.target·
+//   CurrentUser.app_role·ProjectPatch 확장(필드 추가만). **기존 58메서드 시그니처 불변** 후 재동결.
+//   경위는 PROGRESS.md 결정 로그 참조.
 //
-// 프론트(S0~S9)는 이 인터페이스만 호출한다. 구현체:
-//   1단계 MockProvider     — 픽스처+메모리, 업로드=blob URL (Phase 1·3.5~3.7)
-//   2단계 SupabaseProvider — DB·Auth·RLS 이식 (Phase 4, v1.4 스키마 기준)
+// 프론트(S-2·S0~S9)는 이 인터페이스만 호출한다. 구현체:
+//   1단계 MockProvider     — 픽스처+메모리, 업로드=blob URL (Phase 1·3.5~3.11)
+//   2단계 SupabaseProvider — DB·Auth·RLS 이식 (Phase 4, v2.0 스키마 기준 — 견적 저장은 서버 재계산)
 //   3단계 + DriveFileStore — Drive 업로드·프록시 이식 (Phase 5)
 //
 // 동결 후 변경은 사용자 승인 + 설계서 개정을 동반한다 (CLAUDE.md §9).
@@ -20,11 +30,14 @@ import type {
   ClientContact,
   ClientToken,
   Comment,
+  ComplianceCard,
   Cue,
   Deliverable,
   Milestone,
   ProgramSession,
   Project,
+  Quote,
+  QuoteInput,
   RoleCharter,
   RsvpContact,
   UnregisteredFile,
@@ -40,6 +53,8 @@ import type {
   ClientDecisionInput,
   ClientQueue,
   ClientStatusData,
+  ComplianceCardPatch,
+  QuoteExportResult,
   CreateDeliverableInput,
   CsvImportResult,
   CsvImportRow,
@@ -49,13 +64,16 @@ import type {
   DeliverableDetail,
   DeliverableFilter,
   IssueTokenInput,
+  MemberInput,
   MemberWithProfile,
   MilestoneInput,
   OnboardingStatus,
   PlanData,
   ProgramSessionInput,
+  ProjectCreateInput,
   ProjectOverviewPatch,
   ProjectPatch,
+  ProjectSummary,
   RegistrationStats,
   RequestApprovalInput,
   RsvpContactPatch,
@@ -69,18 +87,30 @@ export interface DataProvider {
   /** 현재 로그인 사용자 + 프로젝트 내 역할 (역할·영역 검증의 기준) */
   getCurrentUser(): Promise<CurrentUser>
 
-  // ── 프로젝트·멤버 (S6) ────────────────────────────────────────────
+  // ── 프로젝트·멤버 (S-1·S6) ────────────────────────────────────────
+  /** v1.5 §8 GET /projects — 행사 목록+요약. 프로젝트 셀렉터·S-1 공용 */
+  listProjects(): Promise<ProjectSummary[]>
+  /** v1.5 §8 POST /projects — 행사 생성(생성자=pm 자동, onboarded_at=null). 빈 입력이면 자리표시 행사 */
+  createProject(input: ProjectCreateInput): Promise<Project>
+  /** v1.5 §8 POST /projects/{id}/close·reopen — status 토글 (pm). closed면 쓰기 전부 409 */
+  closeProject(projectId: UUID, closed: boolean): Promise<Project>
   getProject(projectId: UUID): Promise<Project>
   listMembers(projectId: UUID): Promise<MemberWithProfile[]>
-  /** v1.3 §8 PATCH /projects/{id} — 행사 유형·기본정보 수정 (pm) */
+  /** v1.5 §8 POST /projects/{id}/members — 담당자 추가(mock은 즉시 멤버, Phase 4부터 초대 승격) */
+  addMember(projectId: UUID, input: MemberInput): Promise<MemberWithProfile>
+  /** v1.5 §8 DELETE /projects/{id}/members/{id} — 제거. 마지막 PM이면 409 */
+  removeMember(projectId: UUID, memberId: UUID): Promise<void>
+  /** v1.3 §8 PATCH /projects/{id} — 행사 유형·기본정보 수정 (pm). v1.5: 개요 전 필드 */
   updateProject(projectId: UUID, patch: ProjectPatch): Promise<Project>
 
   // ── v1.3 S0 온보딩 ────────────────────────────────────────────────
-  /** 완료 전 본체 라우트는 위저드로 차단 — 라우트 가드가 이 값을 본다 */
+  /** 완료 전 본체 라우트는 위저드로 차단 — 라우트 가드가 이 값을 본다.
+   *  v1.4.1: 정본은 projects.onboarded_at — completed는 onboarded_at !== null 파생값 */
   getOnboardingStatus(projectId: UUID): Promise<OnboardingStatus>
   /**
-   * 온보딩 완료 처리 (pm). v1.4 부수 효과: 유형별 WBS 템플릿을 event_date 기준으로
-   * 자동 전개(expandWbs)하고 R&R 카드를 유형별로 시드한다.
+   * 온보딩 완료 처리 (pm) — v1.4.1: onboarded_at=now 기록, 이미 완료면 409 CONFLICT.
+   * v1.4 부수 효과: 유형별 WBS 템플릿을 event_date 기준으로 자동 전개(expandWbs)하고
+   * R&R 카드를 유형별로 시드한다.
    */
   completeOnboarding(projectId: UUID): Promise<void>
 
@@ -202,6 +232,28 @@ export interface DataProvider {
   // ── v1.2 S9 운영계획서 (§8 GET /projects/{id}/plan, 멤버) ─────────
   /** 전 섹션 조립 데이터 + 섹션별 진행률 */
   getPlan(projectId: UUID): Promise<PlanData>
+
+  // ── v2.0 견적 S-2 (§8 /quotes — app_role admin·sales, 금액은 이 경로에만) ──
+  /** 견적 목록(버전 체인·상태·총액) — 행사 연결·미연결 전부. created_at 오름차순 */
+  listQuotes(): Promise<Quote[]>
+  /** 상세 — admin·sales, 또는 연결 행사의 pm(요약 열람 §6.1) */
+  getQuote(quoteId: UUID): Promise<Quote>
+  /** 새 견적(version 1, draft). breakdown·total_amount는 provider가 엔진으로 재계산해 저장 */
+  createQuote(input: QuoteInput): Promise<Quote>
+  /** 새 버전 — 이전 버전은 superseded 체인으로 보존(§4-18). 확정본 수정도 새 버전 경로 */
+  saveQuoteVersion(quoteId: UUID, input: QuoteInput): Promise<Quote>
+  /** 확정: is_final·locked_at 기록, 같은 행사의 다른 final은 archived (§8) */
+  finalizeQuote(quoteId: UUID): Promise<Quote>
+  /** §16 핸드오프: 확정 견적 → 행사 생성(프리필, onboarded_at null) + 상호 링크. 미확정이면 409 */
+  createProjectFromQuote(quoteId: UUID): Promise<Project>
+  /** §8 GET /quotes/{id}/export.xlsx — 자동 외부 업로드 없음. 저장은 modules/quote saveQuoteFile */
+  exportQuoteXlsx(quoteId: UUID, lang?: 'ko' | 'en'): Promise<QuoteExportResult>
+
+  // ── v2.0 컴플라이언스 카드 (§8 /compliance-cards — 체크 멤버·편집 pm) ──
+  /** sort_order 순 */
+  listComplianceCards(projectId: UUID): Promise<ComplianceCard[]>
+  /** items 체크 = 멤버 / title 편집 = pm (§6.1) */
+  updateComplianceCard(cardId: UUID, patch: ComplianceCardPatch): Promise<ComplianceCard>
 
   // ── 발주처 뷰 (S7·S8) — 토큰 스코프, 만료·회수 시 410 ─────────────
   /** 컨펌 대기 큐 + 처리 이력. 코멘트는 shared만 포함(§6.2) */

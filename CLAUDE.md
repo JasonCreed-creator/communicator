@@ -1,18 +1,22 @@
-# CLAUDE.md — MICE 커뮤니케이터 구현 지침 v1.4 (Claude Code용)
+# CLAUDE.md — MICE 커뮤니케이터 구현 지침 v2.0 (Claude Code용)
 
-> 레포 루트에 이 파일을 두고, `docs/mice-communicator-설계서-v1.4.md`를 함께 배치할 것(구버전은 대체).
-> **스키마·상태 머신·API 계약·권한 규칙·WBS 템플릿(부록 §15)의 정본은 설계서 v1.4다.** 본 파일은 작업 순서와 규약만 정의한다. 충돌 시 설계서 우선.
+> 레포 루트에 이 파일을 두고, `docs/mice-communicator-설계서-v2.0.md`를 함께 배치할 것(v1.5는 대체). `docs/mice-communicator-디자인지시서-v1.md`도 함께 배치(Phase 3.9 정본).
+> **스키마·상태 머신·API 계약·권한 규칙·WBS 템플릿(§15)·핸드오프 계약(§16)·이식 인벤토리(§17)·인프라 전환(§18)의 정본은 설계서 v2.0이다.** 디자인 토큰·레이아웃·컴포넌트 규격의 정본은 디자인지시서 v1이다. 본 파일은 작업 순서와 규약만 정의한다. 충돌 시 설계서 우선.
 > v1.1 변경 핵심: **프론트 우선·서버 후행** — Phase 0~3은 서버 0, Supabase·Drive는 Phase 4~5 이식.
 > v1.2 변경 핵심: **지시(requested)→제작→컨펌→운영계획서(S9) 조립 파이프라인** — Phase 3.5 프론트 증분.
 > v1.3 변경 핵심: **S0 온보딩 → 유형 토글 → 큐시트 에디터** — Phase 3.6 프론트 증분.
-> v1.4 변경 핵심: **유형별 WBS 템플릿 자동 전개 + 역할별 R&R** — Phase 3.7 프론트 증분(여전히 서버 0). Phase 4 이식은 v1.4 스키마 기준.
+> v1.4 변경 핵심: **유형별 WBS 템플릿 자동 전개 + 역할별 R&R** — Phase 3.7 프론트 증분(여전히 서버 0).
+> v1.4.1 변경 핵심: **구현 해석 정본화(onboarded_at 등 5건) → Phase 3.8** + **디자인 스프린트(웜 페이퍼 룩 전환, 기능 무변경) → Phase 3.9**.
+> v1.5 변경 핵심: **다중 행사(프로젝트 셀렉터·S-1 행사 목록) + 행사 설정 메뉴(개요·담당자 입력) + S0 동일 폼 → Phase 3.10**.
+> v2.0 변경 핵심: **견적 Configurator(jsx-easy-shift) 흡수 — Phase 3.11 견적 모듈(mock, 프론트 우선) → Phase 4 새 Supabase 이식(Auth·RLS 포함) → Phase 4.6 인프라 전환(Vercel·도메인·1회 임포트·아카이브)**. 이후 Phase 5 Drive · 6 알림.
 
 ## 1. 프로젝트 정의
-MICE 프로젝트 협업 허브 — 역할별(디자인·운영·등록) 산출물을 Google Drive 단일 저장소에 버전 관리하고, 발주처가 무로그인 토큰 링크로 컨펌하는 웹앱. 파일=Drive, 상태=Supabase의 하이브리드.
+MICE 프로젝트 협업 허브 — 역할별(디자인·운영·등록) 산출물을 Google Drive 단일 저장소에 버전 관리하고, 발주처가 무로그인 토큰 링크로 컨펌하는 웹앱. 파일=Drive, 상태=Supabase의 하이브리드. v2.0부터 **견적(단일 플랫폼의 첫 단계)**을 포함한다 — 견적→설정→운영→결과. 금액은 내부 로그인 화면·Excel에만(#RULE-NO-PRICE-TO-CLIENT).
 
 ## 2. 스택 (고정 — 임의 변경 금지)
 - React 18 + Vite + TypeScript + Tailwind (프론트, Vercel 배포)
-- Supabase: Postgres + RLS + Auth + Edge Functions(Deno) — **Phase 4부터**
+- Supabase: Postgres + RLS + Auth(이메일 매직링크) + Edge Functions(Deno) — **Phase 4부터, 새 프로젝트**(옛 Configurator 프로젝트 사용 금지)
+- 견적 모듈 전용 허용 의존: exceljs · file-saver (src/modules/quote 밖에서 import 금지). shadcn/Radix·Tailwind 3 도입 금지
 - Google Drive API v3 (전용 운영 계정 OAuth, Production 게시 — 설계서 §2) — **Phase 5부터**
 - 알림: Slack Incoming Webhook + Resend(이메일) — **Phase 6부터**
 
@@ -21,14 +25,18 @@ MICE 프로젝트 협업 허브 — 역할별(디자인·운영·등록) 산출�
 /                      # Vite 앱 (레포는 사용자가 GitHub에 생성)
 ├ CLAUDE.md            # 본 파일
 ├ PROGRESS.md          # 세션 상태 (체크아웃 시 갱신 — §9)
-├ docs/                # 설계서 v1.1 + 감수 리포트
+├ docs/                # 설계서 v1.4.1 + 감수 리포트 + 디자인지시서 v1
 ├ src/
-│  ├ pages/            # S1~S8 (설계서 §10)
+│  ├ pages/            # S-1·S0~S9 (설계서 §10)
+│  ├ context/          # ProjectContext — 현재 행사 (v1.5, PROJECT_ID 상수 대체) / AuthContext (Phase 4)
+│  ├ modules/quote/    # ★ v2.0 견적 모듈 — engine/(calcEstimate·kpiRules·venueOptions·quoteMode) data/(venuedb·leadTargeting·eventTypes) export/(exportEstimate) __tests__/(골든 벡터)
 │  ├ components/
 │  ├ providers/        # ★ DataProvider 인터페이스 + mock/ + supabase/(후행)
 │  ├ fixtures/         # Mock 픽스처 (샘플 행사 1건: 항목·버전·RSVP·마일스톤·코멘트)
-│  ├ lib/              # api client, utils
+│  ├ lib/              # api client, utils, wbs 산식 정본
+│  ├ styles/           # tokens.css — 디자인 토큰 단일 정의처 (Phase 3.9)
 │  └ types/            # 도메인 타입 — 설계서 §4 스키마와 1:1
+├ scripts/             # import-configurator.ts (Phase 4.6, 1회 실행·dry-run)
 └ supabase/            # Phase 4에서 생성 (migrations/, functions/)
 ```
 
@@ -56,8 +64,34 @@ MICE 프로젝트 협업 허브 — 역할별(디자인·운영·등록) 산출�
   - 3.7b 템플릿 시드: 설계서 부록 §15의 37태스크를 그대로 픽스처화(모객형) + 일반형 28건 파생. 온보딩 완료 시 event_date 기준 자동 전개(wbs-expand), R&R 카드 유형별 시드
   - 3.7c S5 승격: 단계 필터·체크리스트/간트 토글(간트=CSS 바, D-42~D+30 축)·지연/임박 계산·R&R 카드 그리드·산출물 연결 뱃지(final이면 자동 done)·홈 대시보드 지연/임박 집계
 
-### 서버 이식 구간 (추후 — 착수 전 사용자 승인)
-- **Phase 4 — Supabase 이식**: 마이그레이션(설계서 §4 전체)+RLS(§6.2)+Auth+seed → SupabaseProvider 구현 → MockProvider와 교체(프론트 무수정이 목표)
+- **Phase 3.8 — v1.4.1 정본 정합 (서버 0, 소규모)**
+  - 3.8a 타입 개정+재동결 v3.1: `Project.onboarded_at: IsoDateTime | null` 추가, `OnboardingStatus`를 `{completed, onboarded_at}`로 확장(completed = onboarded_at !== null). MockProvider의 앱 상태 플래그(`state.onboarding_completed`)를 제거하고 프로젝트 필드에서 파생 — `completeOnboarding`은 onboarded_at=now 기록(이미 완료면 409 CONFLICT), `resetOnboarding`(mock 전용)은 null로 되돌림. 픽스처 샘플 행사는 onboarded_at 세팅(기존 테스트 흐름 유지). **동결 해제 근거 = 사용자 v1.4.1 승인(2026-08-22)** — 결정 로그 기록 후 재동결. 메서드 수 53 불변
+  - 3.8b 열린 질문 종결: PROGRESS.md 열린 질문 ①~⑤를 "설계서 v1.4.1 §4-1·§4-15·§8·§15 반영으로 종결"로 갱신. `src/lib/wbs.ts`·`src/fixtures/wbsTemplates.ts` 상단 주석의 근거를 "PROGRESS 결정 로그"에서 "설계서 v1.4.1"로 교체(로직 무변경)
+
+- **Phase 3.9 — 디자인 스프린트 (서버 0, 스타일·레이아웃만 — 데이터·로직·테스트 의미 무변경)**
+  - 정본 = `docs/mice-communicator-디자인지시서-v1.md` 전문. 순서: 토큰 파일(`src/styles/tokens.css`) 1곳 정의 → 로고 자산 `public/brand/` 배치(ZIP 구조 그대로, BrandLogo는 png 2종 사용·텍스트 폴백은 로드 실패 시만) → 레이아웃 전환(내부=좌측 다크 사이드바 232px, 발주처=슬림 다크 상단 바) → 컴포넌트 규격 치환 → 화면별 depth(S0~S9·발주처) → 완료 기준 검증
+  - 작업 분할: 3.9a 토큰·로고·레이아웃 셸(사이드바·상단 바·페이지 헤더 패턴) → 3.9b 내부 화면 S0~S6·S9 → 3.9c 발주처 S7·S8(375px) — 3.9b·3.9c는 3.9a 머지 후 병렬
+  - 금지: gray-*/slate-* 잔존, #000, 임의 그라디언트, 기능 코드 수정(테스트 파일은 클래스 계약 가드 갱신만 허용 — 예: max-w-2xl·h-11 같은 구조 계약은 새 규격으로 치환하되 의미 유지)
+
+- **Phase 3.10 — v1.5 증분: 다중 행사·행사 설정 (서버 0, Phase 3.9.1 폴리시 머지 후 착수)**
+  - 3.10a 타입 개정+재동결 v4 (에이전트 T): `Project` 개요 필드 7종·`status`·`closed_at`, `ProjectPatch` 확장, `ProjectSummary`(D-day·유형·status·미결 컨펌·지연·확정 비율·온보딩 단계 1~3), `ProjectInvite`, DataProvider에 `listProjects()`·`createProject(input)`·`closeProject(id, closed)`·`addMember(projectId, {display_name,email,role})`·`removeMember(projectId, memberId)` 5메서드 추가(기존 시그니처 불변). **동결 해제 근거 = 사용자 v1.5 승인(2026-08-22, 시각안 3화면)** — 결정 로그 기록 후 재동결. 픽스처: 행사 4건 — ①기존 샘플(모객형·온보딩 완료) ②일반형 진행 중(지연 2·미결 3) ③세팅 미완료(onboarded_at null, 개요만 입력) ④종료(closed). 모든 기존 테스트는 ①을 기본 선택으로 통과해야 함
+  - 3.10b 컨텍스트·셀렉터·S-1 (에이전트 U): `src/context/ProjectContext.tsx`(localStorage `communicator.currentProjectId`, 없으면 첫 active) → **`PROJECT_ID` import 전수 제거(grep 0건, 픽스처 내부 정의만 허용)** → 사이드바 최상단 셀렉터(드롭다운: 진행 중/종료 그룹·요약·새 행사·전체 목록) → `/projects` S-1 카드 그리드(종료 접힘·세팅 미완료 표시·종료/재개 pm). 사이드바 메뉴 순서 = 설계서 §10 진입점 원칙
+  - 3.10c 행사 설정·S0 재구성 (에이전트 V): 공용 폼 컴포넌트 `ProjectOverviewForm`·`MembersEditor`·`ClientContactsEditor` 작성 → `/settings`를 **행사 설정 3탭**(①개요 ②담당자 ③유형·연동)으로 재구성(메뉴 2번째, 상단 세팅 완료/미완료 뱃지, 필수 4 검증) → S0 위저드는 같은 컴포넌트를 3단계로 배치(①개요→②담당자→③유형·확인), `OnboardingGuard`는 **차단 대신 유도**(세팅 미완료 행사 진입 시 /settings로 리다이렉트 + 배너, /c/* 제외) → S9 ① 개요 섹션을 읽기 조립로 전환(인라인 편집 제거, "행사 설정에서 편집" 링크) → event_date 변경 시 S5에 "WBS 재전개 필요" 배너
+  - 금지: 라우트 prefix 변경
+
+- **Phase 3.11 — v2.0 견적 모듈 (서버 0 — 프론트 우선 원칙 유지, Phase 3.10.1 머지 후 착수)**
+  - 3.11a 엔진·데이터 이식+재동결 v5 (에이전트 W): jsx-easy-shift(main 6047834)에서 설계서 §17.1 표의 파일을 `src/modules/quote/`로 이식(TS 타입 부여, 로직·상수 불변, **venuedb.reference_cases 제거**, exportEstimate의 driveUpload·backup 제거). 골든 벡터 픽스처 이식 → **전 벡터 0원 일치 테스트**(DoD 21) + Excel 등가 테스트(DoD 22). 타입: `Quote`·`QuoteInput`·`QuoteBreakdown`·`ComplianceCard`·`Profile(app_role)`, `Project` 모객 필드 4종, `WbsTask.target`. DataProvider v5(8메서드 추가, 기존 불변) — **동결 해제 근거 = 사용자 v2.0 승인(2026-08-22, 시각안 3화면)**. Mock: 견적 픽스처 3버전(샘플 행사 연결 v3 확정), 현재 사용자 app_role='sales'(mock 토글로 staff 전환 가능)
+  - 3.11b S-2 견적 UI (에이전트 X): 사이드바 준비/운영 그룹 + 견적 메뉴(app_role 게이트·셀렉터 '견적만 있음' 상태) → `/quotes` 목록(버전 표+요약) → 에디터 5스텝(RememberQuoteConfigurator 로직 분해 이식, 스타일은 tokens.css 전면 교체, 한/영 유지·다크 토글 제거) → 확정 잠금 → Excel 내려받기
+  - 3.11c 핸드오프·흡수 기능 (에이전트 Y): ⑤'이 견적으로 행사 만들기' → `createProjectFromQuote`(§16 매핑) → S0 ① 프리필(주황 틴트·수정 가능) → 상호 링크 · 행사 설정 ① 모객형 그룹(보장 인원·쇼업 KPI·타겟팅 5축 칩·연결 견적 링크, 일반형 숨김) · S5 컴플라이언스 카드 2종(온보딩 시드·체크) · WBS target 열(템플릿 시드 포함) · §10 옛 라우트 리다이렉트 · 비노출 테스트(DoD 23)
+  - 금지: 단가·베뉴·옵션 값 변경(엔진 등가 깨짐), 금액 필드를 Project·PlanDoc·ActivityLog·발주처 뷰 타입에 추가, shadcn 도입
+
+### 서버 이식 구간 (Phase 3.11 머지 후 — 착수 전 사용자 승인 + 새 Supabase 3키 수령)
+- **Phase 4 — 새 Supabase 프로젝트 이식** (설계서 §4 v2.0 전체 기준)
+  - 4a 마이그레이션+RLS+seed (에이전트 D): §4 순서대로, RLS §6.2(quotes·profiles·compliance_cards 포함), seed = 픽스처 4행사+견적 3버전. **Supabase 3키는 env·Vault만 — 코드·문서·PR 본문 기재 금지**
+  - 4b SupabaseProvider v5 (에이전트 D): 인터페이스 무수정으로 전 메서드 구현, `VITE_DATA_PROVIDER=supabase|mock` 스위치. 견적 저장 시 서버(Edge Function)가 엔진으로 재계산해 저장(클라이언트 값 불신)
+  - 4c 로그인·프로필 (에이전트 D2): 이메일 매직링크 로그인 화면(웜 페이퍼 토큰), AuthContext, profiles 자동 생성 트리거, 허용 도메인 env, app_role 게이트(견적 메뉴·API), 발주처 `/c/*`는 비로그인 유지
+  - 4d 교체 검증: Provider를 supabase로 두고 **DoD 1~25 전부 실DB에서 재현**(DoD 26) + RLS 거부 테스트(staff의 quotes 조회 거부·비멤버 프로젝트 거부·토큰 경로 quotes 불가)
+- **Phase 4.6 — 인프라 전환** (에이전트 Z, 설계서 §18 — ■ 게이트마다 사용자 확인 후 진행): 새 Vercel 프로젝트·env → 프리뷰 확인 → 옛 Configurator DB 1회 임포트(선택, dry-run 출력 후 실행) → 도메인 rmb-mice.com 이전 → 옛 라우트 301 확인 → jsx-easy-shift 아카이브 커밋·옛 Vercel/Supabase 정리
 - **Phase 5 — Drive 이식**: OAuth(운영 계정·Production)·표준 트리(§7.1)·업로드+파일명 규약(§7.2)·프록시 ReadableStream 패스스루+100MB 캡(§7.4)·Changes API 인박스(§7.3)·final 스냅숏 원자성(§7.5) — `supabase/functions/_shared/drive.ts` 모듈화
 - **Phase 6 — 알림·cron**: Slack·이메일 유틸 + 이벤트 훅(§9) + reminders cron
 
@@ -67,7 +101,7 @@ MICE 프로젝트 협업 허브 — 역할별(디자인·운영·등록) 산출�
 | A: types-mock | 타입·DataProvider·MockProvider·픽스처 | 1 | Sonnet |
 | B: internal-ui | S1~S6 | 2 | Sonnet |
 | C: client-view | S7·S8·/c/demo | 3 | Sonnet |
-| D: supabase-port | 마이그레이션·RLS·SupabaseProvider | 4 | Sonnet |
+| D: supabase-port | 4a 마이그레이션·RLS·seed / 4b SupabaseProvider v5 | 4 | Fable 5 엑스트라 (RLS·서버 재계산) |
 | E: drive-core | Drive 서비스 모듈 전체 | 5 | Opus 계열 (인증·스트리밍 난도) |
 | F: notify | 알림·cron | 6 | Haiku |
 | G: types-v12 | 3.5a 타입 개정·재동결·픽스처 | 3.5 | Sonnet |
@@ -79,8 +113,22 @@ MICE 프로젝트 협업 허브 — 역할별(디자인·운영·등록) 산출�
 | M: types-v14 | 3.7a 타입 개정·재동결 | 3.7 | Sonnet |
 | N: wbs-seed | 3.7b 템플릿 시드·전개 로직 | 3.7 | Sonnet |
 | O: wbs-ui | 3.7c S5 승격·간트·R&R | 3.7 | Sonnet |
+| P: types-v141 | 3.8a 타입 개정·재동결 v3.1 + 3.8b 주석·PROGRESS 정합 | 3.8 | Sonnet |
+| Q: design-shell | 3.9a 토큰·로고·레이아웃 셸 | 3.9 | Opus 계열 (전 화면 일관성 판단) |
+| R: design-internal | 3.9b 내부 화면 S0~S6·S9 | 3.9 | Sonnet |
+| S: design-client | 3.9c 발주처 S7·S8 모바일 | 3.9 | Sonnet |
+| T: types-v15 | 3.10a 타입 v4·픽스처 4행사·재동결 | 3.10 | Sonnet |
+| U: multi-project | 3.10b ProjectContext·셀렉터·S-1 | 3.10 | Sonnet |
+| V: project-setup | 3.10c 행사 설정 3탭·S0 동일 폼·S9 ① 조립 | 3.10 | Sonnet |
+| W: quote-engine | 3.11a 엔진·데이터 이식·골든 벡터·타입 v5 재동결 | 3.11 | Sonnet |
+| X: quote-ui | 3.11b S-2 견적 UI·사이드바 그룹 | 3.11 | Sonnet |
+| Y: handoff | 3.11c 핸드오프·모객형 필드·컴플라이언스·리다이렉트 | 3.11 | Sonnet |
+| D2: auth | 4c 로그인·프로필·app_role 게이트 | 4 | Fable 5 (보안) |
+| Z: infra | 4.6 Vercel·도메인·임포트·아카이브 | 4.6 | Opus 계열 (사용자 게이트 대화) |
 
-실행 순서: Phase 0(메인 단독) → A → **B·C 병렬** → **G → H·I 병렬** → **J → K·L 병렬** → **M → N·O 병렬**(각 타입 에이전트의 재동결 인터페이스 의존) → [사용자 승인] → D → E → F.
+실행 순서: Phase 0(메인 단독) → A → **B·C 병렬** → **G → H·I 병렬** → **J → K·L 병렬** → **M → N·O 병렬**(각 타입 에이전트의 재동결 인터페이스 의존) → **P → Q → R·S 병렬** → (3.9.1 폴리시) → **T → U·V 병렬** → (3.10.1) → **W → X·Y 병렬** → [사용자 승인 + 3키] → **D(4a→4b) → D2 → 4d 검증** → [■ 게이트] → Z → E → F.
+Phase 3.11·4·4.6은 각각 별도 PR. Phase 4는 main에 머지돼도 `VITE_DATA_PROVIDER=mock`이 기본이라 데모가 깨지지 않는다 — 실DB 전환은 4.6에서 env로.
+Phase 3.8과 3.9는 **별도 커밋·별도 PR**로 분리한다(3.8 = 타입·로직, 3.9 = 스타일만 — 리뷰 diff 분리 목적). 3.9 착수 전 3.8 머지 시점의 테스트 수를 PROGRESS.md에 기준치로 기록한다.
 각 에이전트는 담당 디렉터리 밖 파일 수정 금지. 공유 타입은 A 산출물만 참조. 통합·검수는 메인이 수행.
 
 ## 6. 코딩 규약
@@ -109,8 +157,20 @@ MICE 프로젝트 협업 허브 — 역할별(디자인·운영·등록) 산출�
 13. (v1.4) 온보딩 완료 시 유형별 WBS가 event_date 기준 실제 날짜로 전개(모객형 37·일반형 28건), origin_role 태그 보존
 14. (v1.4) 지연·임박 계산이 정확(경계값 테스트)하고 홈 대시보드에 집계, 체크리스트/간트 토글 동작
 15. (v1.4) 태스크-산출물 연결 시 상태 뱃지 표시, 연결 산출물 final 전환 시 태스크 자동 done (테스트로 증명)
+16. (v1.4.1) 온보딩 완료 판정이 `Project.onboarded_at`에서만 파생: 완료 시 타임스탬프 기록, 재완료 시도 409, null이면 가드 리다이렉트 (테스트로 증명) + `grep -rn "onboarding_completed" src` 0건
+17. (v1.4.1 디자인) 디자인지시서 §8 전부: `grep -rn "gray-\|slate-" src` 0건 / 3.8 기준 테스트 수 전부 통과 + tsc 클린 / 스크린샷 11장(S0·S1·S2·S3 일반·S3 큐시트·S4·S5 체크리스트·S5 간트·S9·발주처 큐 375px·발주처 현황 375px) / 데모 아티팩트 재발행 — 체크아웃 보고에 11장 첨부
+18. (v1.5) 셀렉터·S-1에서 행사 전환 시 홈·보드·일정·설정이 해당 행사 데이터로 바뀌고 새로고침 후 유지(localStorage), `grep -rn "PROJECT_ID" src --include=*.tsx` 0건 (테스트로 증명)
+19. (v1.5) 행사 설정 ①에서 필수 4 미입력 저장 거부·세팅 미완료 뱃지, ②에서 담당자 추가/삭제·마지막 PM 삭제 409, 저장 값이 S9 ① 개요에 반영 (테스트로 증명)
+20. (v1.5) 새 행사 만들기 → S0 3단계 → 완료 시 onboarded_at 기록·WBS 전개·R&R 시드·목록에 등장; 세팅 미완료 행사 진입 시 차단이 아닌 /settings 유도 (테스트로 증명). 기존 dod10 가드 테스트는 '유도' 의미로 갱신
+21. (v2.0) 엔진 등가: pricing-dataset 전 벡터(14+1) 산출이 원본과 0원 차이 (테스트로 증명)
+22. (v2.0) Excel 등가: 동일 입력의 .xlsx 셀 값·수식이 원본 테스트 26케이스 통과, 외부 업로드 호출 0건
+23. (v2.0) 비노출: quotes·breakdown·total_amount 키가 `/c/*` 응답·운영계획서 조립 데이터·activity_log·알림 페이로드 타입과 런타임 객체 어디에도 없음 (테스트로 증명) + `grep -rn "total_amount\|breakdown" src/pages/Client* src/components/plan src/components/client` 0건
+24. (v2.0) 핸드오프: 확정 견적 → 행사 만들기 → S0 ① 프리필(§16 매핑 전 필드) → 완료 시 quote.project_id·project.quote_id 상호 링크; 견적 없는 S-1 → S0 경로 그대로 동작; 미확정 견적은 버튼 비활성 (테스트로 증명)
+25. (v2.0) 권한: app_role staff는 견적 메뉴 미표시·/quotes 접근 시 403 화면, sales·admin은 접근; 행사 설정 ① 모객형 그룹은 일반형에서 숨김·데이터 보존; 컴플라이언스 카드 체크 왕복 (테스트로 증명)
+26. (Phase 4) `VITE_DATA_PROVIDER=supabase`에서 DoD 1~25 전부 재현 + RLS 거부 3종(staff→quotes, 비멤버→project, 토큰 경로→quotes) + 로그인 매직링크 왕복 + 서버 재계산(클라이언트가 보낸 total과 다르면 서버 값 저장) (테스트로 증명)
 
 ## 8. 서버 이식 완료 기준 (Phase 4~6 DoD)
+0. (v2.0) Phase 4 = §7 DoD 26 / Phase 4.6 = 설계서 §18 1~6 전 게이트 통과 + 옛 라우트 301 + 임포트 dry-run 로그 첨부
 1. Provider 교체 후 프론트 무수정으로 §7의 1~6 전부 실DB에서 재현
 2. 토큰: 만료·회수 시 410 / pending·final·shared 코멘트 외 데이터 접근 불가(테스트로 증명)
 3. RLS: reg 역할의 design 항목 쓰기 거부 / 비멤버 프로젝트 조회 거부
@@ -123,3 +183,6 @@ MICE 프로젝트 협업 허브 — 역할별(디자인·운영·등록) 산출�
 - 체크아웃: PROGRESS.md 갱신(상태 요약·완료·미결·다음 스텝·결정 로그·세션 로그·잠금 해제)
 - 설계서와 다르게 구현해야 할 사정이 생기면 임의 진행 금지 — PROGRESS.md '열린 질문'에 기록하고 사용자 확인
 - **DataProvider 인터페이스 동결 후 변경이 필요하면 반드시 사용자 승인 + 설계서 개정을 동반**
+- 디자인 변경(Phase 3.9 이후 포함)은 디자인지시서 개정 없이 토큰 값·레이아웃 구조를 임의로 바꾸지 않는다. 신규 화면도 tokens.css 변수만 사용
+- (v2.0) Supabase service role key·anon key·URL은 env·Vault에만. 코드·PROGRESS.md·PR 본문·체크아웃 보고에 값 기재 금지. 옛 Configurator 레포의 하드코딩 키는 이식 대상에서 제외
+- (v2.0) 견적 엔진 상수·산식은 "원본과 0원 일치"가 깨지면 어떤 사유로도 머지 금지 — 변경은 설계서 개정+사용자 승인 후 골든 벡터 갱신과 함께

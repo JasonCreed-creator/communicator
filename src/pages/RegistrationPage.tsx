@@ -1,15 +1,16 @@
 import { useState, type ChangeEvent } from 'react'
 import Card from '../components/internal/Card'
 import ErrorAlert from '../components/internal/ErrorAlert'
+import PageHeader from '../components/internal/PageHeader'
 import StatTile from '../components/internal/StatTile'
 import { downloadCsv, parseCsv, toCsv } from '../components/internal/csvUtils'
-import { PROJECT_ID } from '../fixtures/sampleProject'
+import { useProject } from '../context/ProjectContext'
 import { useAsync, useMutation } from '../hooks/useAsync'
 import { INVITE_STATUS_LABELS, formatDateTime } from '../lib/labels'
 import { getDataProvider } from '../providers'
 import type { RsvpContact } from '../types/entities'
 import type { AttendeeChannel, InviteStatus } from '../types/enums'
-import type { AttendeeWithRsvp, CsvImportRow } from '../types/views'
+import type { AttendeeWithRsvp, CsvImportRow, RegistrationStats } from '../types/views'
 
 const provider = getDataProvider()
 
@@ -27,34 +28,47 @@ const TABS: { id: Tab; label: string }[] = [
 ]
 
 export default function RegistrationPage() {
+  const { projectId } = useProject()
   const [tab, setTab] = useState<Tab>('rsvp')
-  const project = useAsync(() => provider.getProject(PROJECT_ID), [])
+  const project = useAsync(() => provider.getProject(projectId), [projectId])
   // v1.3 유형 토글(§3): general(일반형)이면 RSVP 파이프라인은 표시 계층에서만 숨긴다 — 데이터는 보존.
   const isGeneral = project.data?.event_type === 'general'
   const visibleTabs = isGeneral ? TABS.filter((t) => t.id !== 'rsvp') : TABS
   const activeTab: Tab = isGeneral && tab === 'rsvp' ? 'attendees' : tab
+  // 3.9.1 P3 — §6 S4: 상단 통계 3카드 상시 노출. 탭 전환마다 재조회해 체크인 등 변경을 따라간다.
+  const stats = useAsync(() => provider.getRegistrationStats(projectId), [projectId, activeTab])
 
   return (
     <section className="space-y-6 p-6">
-      <div>
-        <p className="font-mono text-xs text-gray-400">S4</p>
-        <h1 className="mt-1 text-2xl font-bold text-gray-900">등록</h1>
-      </div>
+      <PageHeader caption="S4 · 등록" title="등록" />
 
       {isGeneral && (
-        <div className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600">
+        <div className="rounded-md border border-steel/20 bg-steel-tint px-3 py-2 text-xs text-steel">
           일반형 행사 — 모객(RSVP) 모듈은 숨김 처리됨(데이터는 보존)
         </div>
       )}
 
-      <div className="flex gap-1 border-b border-gray-200">
+      {/* 상단 통계 3카드 — 일반형은 응답률 대신 참관객 수(RSVP 숨김 규칙 유지) */}
+      {stats.data && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          {isGeneral ? (
+            <StatTile label="참관객 수" value={stats.data.attendee_total} />
+          ) : (
+            <StatTile label="응답률" value={`${Math.round(stats.data.response_rate * 100)}%`} />
+          )}
+          <StatTile label="등록 수" value={stats.data.attendee_total} />
+          <StatTile label="체크인율" value={`${Math.round(stats.data.checkin_rate * 100)}%`} />
+        </div>
+      )}
+
+      <div className="flex gap-1 border-b border-border">
         {visibleTabs.map((t) => (
           <button
             key={t.id}
             type="button"
             onClick={() => setTab(t.id)}
-            className={`rounded-t-md px-4 py-2 text-sm font-medium ${
-              activeTab === t.id ? 'border-b-2 border-gray-900 text-gray-900' : 'text-gray-500 hover:text-gray-700'
+            className={`border-b-2 px-4 py-2 text-sm font-medium ${
+              activeTab === t.id ? 'border-accent text-ink' : 'border-transparent text-ink-sub hover:text-ink'
             }`}
           >
             {t.label}
@@ -64,14 +78,17 @@ export default function RegistrationPage() {
 
       {activeTab === 'rsvp' && <RsvpTab />}
       {activeTab === 'attendees' && <AttendeesTab />}
-      {activeTab === 'stats' && <StatsTab showRsvp={!isGeneral} />}
+      {activeTab === 'stats' && (
+        <StatsTab showRsvp={!isGeneral} stats={stats.data} loading={stats.loading} error={stats.error} />
+      )}
     </section>
   )
 }
 
 // ── RSVP 탭 ───────────────────────────────────────────────────────────
 function RsvpTab() {
-  const rsvps = useAsync(() => provider.listRsvpContacts(PROJECT_ID), [])
+  const { projectId } = useProject()
+  const rsvps = useAsync(() => provider.listRsvpContacts(projectId), [projectId])
 
   const handleExport = () => {
     const headers = ['이름', '소속', '직함', '이메일', '전화', '그룹', '상태', '메모']
@@ -93,34 +110,30 @@ function RsvpTab() {
       <ErrorAlert message={rsvps.error} />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <CsvImportPanel target="rsvp" onImported={rsvps.reload} />
-        <button
-          type="button"
-          onClick={handleExport}
-          className="shrink-0 rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
-        >
+        <button type="button" onClick={handleExport} className="btn btn-ghost shrink-0">
           내보내기
         </button>
       </div>
 
       <Card title="RSVP 리스트">
-        {rsvps.loading && <p className="text-sm text-gray-400">불러오는 중…</p>}
-        {rsvps.data && rsvps.data.length === 0 && <p className="text-sm text-gray-400">등록된 대상이 없습니다.</p>}
+        {rsvps.loading && <p className="text-sm text-ink-cap">불러오는 중…</p>}
+        {rsvps.data && rsvps.data.length === 0 && <p className="text-sm text-ink-cap">등록된 대상이 없습니다.</p>}
         {rsvps.data && rsvps.data.length > 0 && (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead>
-                <tr className="text-xs text-gray-400">
-                  <th className="pb-2 pr-4 font-medium">이름</th>
-                  <th className="pb-2 pr-4 font-medium">소속</th>
-                  <th className="pb-2 pr-4 font-medium">직함</th>
-                  <th className="pb-2 pr-4 font-medium">이메일</th>
-                  <th className="pb-2 pr-4 font-medium">그룹</th>
-                  <th className="pb-2 pr-4 font-medium">상태</th>
-                  <th className="pb-2 pr-4 font-medium">메모</th>
-                  <th className="pb-2 font-medium">액션</th>
+                <tr>
+                  <th className="ui-th">이름</th>
+                  <th className="ui-th">소속</th>
+                  <th className="ui-th">직함</th>
+                  <th className="ui-th">이메일</th>
+                  <th className="ui-th">그룹</th>
+                  <th className="ui-th">상태</th>
+                  <th className="ui-th">메모</th>
+                  <th className="ui-th">액션</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-border">
                 {rsvps.data.map((r) => (
                   <RsvpRow key={r.id} rsvp={r} onChanged={rsvps.reload} />
                 ))}
@@ -149,18 +162,18 @@ function RsvpRow({ rsvp, onChanged }: { rsvp: RsvpContact; onChanged: () => void
   }
 
   return (
-    <tr>
-      <td className="py-2 pr-4 text-gray-900">{rsvp.name}</td>
-      <td className="py-2 pr-4 text-gray-700">{rsvp.org ?? '-'}</td>
-      <td className="py-2 pr-4 text-gray-700">{rsvp.title ?? '-'}</td>
-      <td className="py-2 pr-4 text-gray-700">{rsvp.email ?? '-'}</td>
-      <td className="py-2 pr-4 text-gray-700">{rsvp.group_tag ?? '-'}</td>
+    <tr className="h-11 hover:bg-accent-tint/30">
+      <td className="py-2 pr-4 text-ink">{rsvp.name}</td>
+      <td className="py-2 pr-4 text-ink-sub">{rsvp.org ?? '-'}</td>
+      <td className="py-2 pr-4 text-ink-sub">{rsvp.title ?? '-'}</td>
+      <td className="py-2 pr-4 text-ink-sub">{rsvp.email ?? '-'}</td>
+      <td className="py-2 pr-4 text-ink-sub">{rsvp.group_tag ?? '-'}</td>
       <td className="py-2 pr-4">
         <select
           value={rsvp.invite_status}
           onChange={handleStatusChange}
           disabled={updateStatus.pending}
-          className="rounded-md border border-gray-300 px-2 py-1 text-xs text-gray-700"
+          className="ui-input text-xs"
         >
           {(Object.keys(INVITE_STATUS_LABELS) as InviteStatus[]).map((s) => (
             <option key={s} value={s}>
@@ -170,14 +183,9 @@ function RsvpRow({ rsvp, onChanged }: { rsvp: RsvpContact; onChanged: () => void
         </select>
         <ErrorAlert message={updateStatus.error} />
       </td>
-      <td className="py-2 pr-4 max-w-40 truncate text-gray-500">{rsvp.memo ?? '-'}</td>
+      <td className="py-2 pr-4 max-w-40 truncate text-ink-cap">{rsvp.memo ?? '-'}</td>
       <td className="py-2">
-        <button
-          type="button"
-          onClick={handleConvert}
-          disabled={convert.pending}
-          className="rounded-md border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-        >
+        <button type="button" onClick={handleConvert} disabled={convert.pending} className="btn btn-ghost btn-sm">
           참관객 전환
         </button>
         <ErrorAlert message={convert.error} />
@@ -188,7 +196,8 @@ function RsvpRow({ rsvp, onChanged }: { rsvp: RsvpContact; onChanged: () => void
 
 // ── 참관객 탭 ─────────────────────────────────────────────────────────
 function AttendeesTab() {
-  const attendees = useAsync(() => provider.listAttendees(PROJECT_ID), [])
+  const { projectId } = useProject()
+  const attendees = useAsync(() => provider.listAttendees(projectId), [projectId])
 
   const handleExport = () => {
     const headers = ['이름', '소속', '채널', '등록일', '뱃지번호', '체크인']
@@ -208,34 +217,30 @@ function AttendeesTab() {
       <ErrorAlert message={attendees.error} />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <CsvImportPanel target="attendees" onImported={attendees.reload} />
-        <button
-          type="button"
-          onClick={handleExport}
-          className="shrink-0 rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
-        >
+        <button type="button" onClick={handleExport} className="btn btn-ghost shrink-0">
           내보내기
         </button>
       </div>
 
       <Card title="참관객">
-        {attendees.loading && <p className="text-sm text-gray-400">불러오는 중…</p>}
+        {attendees.loading && <p className="text-sm text-ink-cap">불러오는 중…</p>}
         {attendees.data && attendees.data.length === 0 && (
-          <p className="text-sm text-gray-400">등록된 참관객이 없습니다.</p>
+          <p className="text-sm text-ink-cap">등록된 참관객이 없습니다.</p>
         )}
         {attendees.data && attendees.data.length > 0 && (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead>
-                <tr className="text-xs text-gray-400">
-                  <th className="pb-2 pr-4 font-medium">이름</th>
-                  <th className="pb-2 pr-4 font-medium">소속</th>
-                  <th className="pb-2 pr-4 font-medium">채널</th>
-                  <th className="pb-2 pr-4 font-medium">등록일</th>
-                  <th className="pb-2 pr-4 font-medium">뱃지번호</th>
-                  <th className="pb-2 font-medium">체크인</th>
+                <tr>
+                  <th className="ui-th">이름</th>
+                  <th className="ui-th">소속</th>
+                  <th className="ui-th">채널</th>
+                  <th className="ui-th">등록일</th>
+                  <th className="ui-th">뱃지번호</th>
+                  <th className="ui-th">체크인</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-border">
                 {attendees.data.map((a) => (
                   <AttendeeRow key={a.id} attendee={a} onChanged={attendees.reload} />
                 ))}
@@ -257,22 +262,18 @@ function AttendeeRow({ attendee, onChanged }: { attendee: AttendeeWithRsvp; onCh
   }
 
   return (
-    <tr>
-      <td className="py-2 pr-4 text-gray-900">{attendee.name}</td>
-      <td className="py-2 pr-4 text-gray-700">{attendee.org ?? '-'}</td>
-      <td className="py-2 pr-4 text-gray-700">{CHANNEL_LABELS[attendee.channel]}</td>
-      <td className="py-2 pr-4 text-gray-700">{formatDateTime(attendee.registered_at)}</td>
-      <td className="py-2 pr-4 text-gray-700">{attendee.badge_no ?? '-'}</td>
+    <tr className="h-11 hover:bg-accent-tint/30">
+      <td className="py-2 pr-4 text-ink">{attendee.name}</td>
+      <td className="py-2 pr-4 text-ink-sub">{attendee.org ?? '-'}</td>
+      <td className="py-2 pr-4 text-ink-sub">{CHANNEL_LABELS[attendee.channel]}</td>
+      <td className="py-2 pr-4 text-ink-sub">{formatDateTime(attendee.registered_at)}</td>
+      <td className="py-2 pr-4 text-ink-sub">{attendee.badge_no ?? '-'}</td>
       <td className="py-2">
         <button
           type="button"
           onClick={handleToggle}
           disabled={toggle.pending}
-          className={`rounded-md px-2.5 py-1 text-xs font-medium disabled:opacity-50 ${
-            attendee.checked_in_at
-              ? 'bg-gray-900 text-white'
-              : 'border border-gray-300 text-gray-700 hover:bg-gray-50'
-          }`}
+          className={`btn btn-sm ${attendee.checked_in_at ? 'btn-primary' : 'btn-ghost'}`}
         >
           {attendee.checked_in_at ? `체크인 완료 (${formatDateTime(attendee.checked_in_at)})` : '체크인'}
         </button>
@@ -283,32 +284,35 @@ function AttendeeRow({ attendee, onChanged }: { attendee: AttendeeWithRsvp; onCh
 }
 
 // ── 통계 탭 ───────────────────────────────────────────────────────────
-// showRsvp=false(일반형)면 RSVP 관련 타일(응답률)·보조 수치 카드를 렌더하지 않는다 — 데이터는 그대로 조회만 생략.
-function StatsTab({ showRsvp }: { showRsvp: boolean }) {
-  const stats = useAsync(() => provider.getRegistrationStats(PROJECT_ID), [])
-
+// 3.9.1 P3: 통계 3종(응답률·등록 수·체크인율)은 페이지 상단 카드로 승격 — 탭에는 상세(보조 수치)만 남긴다.
+// showRsvp=false(일반형)면 RSVP 보조 수치를 렌더하지 않는다 — 데이터는 그대로 조회만 생략.
+function StatsTab({
+  showRsvp,
+  stats,
+  loading,
+  error,
+}: {
+  showRsvp: boolean
+  stats: RegistrationStats | null
+  loading: boolean
+  error: string | null
+}) {
   return (
     <div className="space-y-6">
-      <ErrorAlert message={stats.error} />
-      {stats.loading && <p className="text-sm text-gray-400">불러오는 중…</p>}
-      {stats.data && (
-        <>
-          <div className={`grid grid-cols-1 gap-4 ${showRsvp ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
-            {showRsvp && <StatTile label="응답률" value={`${Math.round(stats.data.response_rate * 100)}%`} />}
-            <StatTile label="등록 수" value={stats.data.attendee_total} />
-            <StatTile label="체크인율" value={`${Math.round(stats.data.checkin_rate * 100)}%`} />
+      <ErrorAlert message={error} />
+      {loading && <p className="text-sm text-ink-cap">불러오는 중…</p>}
+      {stats && !showRsvp && (
+        <p className="text-sm text-ink-cap">일반형 행사 — 상세 통계는 상단 카드로 제공됩니다.</p>
+      )}
+      {stats && showRsvp && (
+        <Card title="RSVP 보조 수치">
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <StatTile label="RSVP 총원" value={stats.rsvp_total} />
+            <StatTile label="발송" value={stats.rsvp_sent} />
+            <StatTile label="참석" value={stats.rsvp_accepted} />
+            <StatTile label="불참" value={stats.rsvp_declined} />
           </div>
-          {showRsvp && (
-            <Card title="RSVP 보조 수치">
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-                <StatTile label="RSVP 총원" value={stats.data.rsvp_total} />
-                <StatTile label="발송" value={stats.data.rsvp_sent} />
-                <StatTile label="참석" value={stats.data.rsvp_accepted} />
-                <StatTile label="불참" value={stats.data.rsvp_declined} />
-              </div>
-            </Card>
-          )}
-        </>
+        </Card>
       )}
     </div>
   )
@@ -361,12 +365,13 @@ function guessField(header: string): keyof CsvImportRow | 'ignore' {
 }
 
 function CsvImportPanel({ target, onImported }: { target: 'rsvp' | 'attendees'; onImported: () => void }) {
+  const { projectId } = useProject()
   const [parsed, setParsed] = useState<{ headers: string[]; rows: string[][] } | null>(null)
   const [mapping, setMapping] = useState<Record<number, keyof CsvImportRow | 'ignore'>>({})
   const [validationError, setValidationError] = useState<string | null>(null)
   const [result, setResult] = useState<{ inserted: number; updated: number } | null>(null)
   const importMutation = useMutation((rows: CsvImportRow[]) =>
-    provider.importRegistrationCsv(PROJECT_ID, target, rows),
+    provider.importRegistrationCsv(projectId, target, rows),
   )
 
   const handleFile = (e: ChangeEvent<HTMLInputElement>) => {
@@ -422,12 +427,12 @@ function CsvImportPanel({ target, onImported }: { target: 'rsvp' | 'attendees'; 
 
   return (
     <div className="min-w-0">
-      <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50">
+      <label className="btn btn-ghost inline-flex cursor-pointer">
         CSV 임포트 ({targetLabel})
         <input type="file" accept=".csv,text/csv" onChange={handleFile} className="hidden" />
       </label>
       {result && (
-        <p className="mt-2 text-sm text-gray-700">
+        <p className="mt-2 text-sm text-ink-sub">
           신규 {result.inserted}건 · 갱신 {result.updated}건 반영되었습니다.
         </p>
       )}
@@ -435,29 +440,29 @@ function CsvImportPanel({ target, onImported }: { target: 'rsvp' | 'attendees'; 
       <ErrorAlert message={importMutation.error} />
 
       {parsed && (
-        <div className="mt-3 w-full max-w-2xl rounded-lg border border-gray-200 bg-white p-4">
-          <p className="text-xs font-medium text-gray-500">
+        <div className="mt-3 w-full max-w-2xl ui-card p-4">
+          <p className="text-xs font-medium text-ink-cap">
             헤더 매핑 — {parsed.rows.length}행 감지됨. name(이름)은 필수 매핑입니다.
           </p>
           <div className="mt-2 overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead>
-                <tr className="text-xs text-gray-400">
-                  <th className="pb-1 pr-4 font-medium">CSV 헤더</th>
-                  <th className="pb-1 font-medium">매핑 필드</th>
+                <tr>
+                  <th className="ui-th">CSV 헤더</th>
+                  <th className="ui-th">매핑 필드</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-border">
                 {parsed.headers.map((h, i) => (
                   <tr key={i}>
-                    <td className="py-1 pr-4 text-gray-700">{h || `(열 ${i + 1})`}</td>
-                    <td className="py-1">
+                    <td className="py-2 pr-4 text-ink-sub">{h || `(열 ${i + 1})`}</td>
+                    <td className="py-2">
                       <select
                         value={mapping[i] ?? 'ignore'}
                         onChange={(e) =>
                           setMapping((m) => ({ ...m, [i]: e.target.value as keyof CsvImportRow | 'ignore' }))
                         }
-                        className="rounded-md border border-gray-300 px-2 py-1 text-xs text-gray-700"
+                        className="ui-input text-xs"
                       >
                         {FIELD_OPTIONS.map((opt) => (
                           <option key={opt.value} value={opt.value}>
@@ -472,12 +477,7 @@ function CsvImportPanel({ target, onImported }: { target: 'rsvp' | 'attendees'; 
             </table>
           </div>
           <div className="mt-3 flex gap-2">
-            <button
-              type="button"
-              onClick={handleImport}
-              disabled={importMutation.pending}
-              className="rounded-md bg-gray-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
-            >
+            <button type="button" onClick={handleImport} disabled={importMutation.pending} className="btn btn-primary">
               가져오기 실행
             </button>
             <button
@@ -487,7 +487,7 @@ function CsvImportPanel({ target, onImported }: { target: 'rsvp' | 'attendees'; 
                 setMapping({})
                 setValidationError(null)
               }}
-              className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+              className="btn btn-ghost"
             >
               취소
             </button>

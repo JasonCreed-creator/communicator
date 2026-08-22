@@ -6,6 +6,7 @@ import HistoryRow from '../components/client/HistoryRow'
 import QueueItemCard from '../components/client/QueueItemCard'
 import SuccessBanner from '../components/client/SuccessBanner'
 import { useClientData } from '../components/client/useClientData'
+import EmptyState from '../components/internal/EmptyState'
 import { getDataProvider } from '../providers'
 
 export default function ClientConfirmQueuePage() {
@@ -54,15 +55,15 @@ export default function ClientConfirmQueuePage() {
   }
 
   if (loading && !data) {
-    return <p className="px-4 py-12 text-center text-sm text-gray-400">불러오는 중입니다...</p>
+    return <p className="px-4 py-12 text-center text-sm text-ink-cap">불러오는 중입니다...</p>
   }
   if (!data) return null
 
   return (
     <div className="pb-10">
-      <div className="border-b border-gray-200 bg-white px-4 py-4">
-        <p className="text-xs font-medium text-gray-400">{data.project_name}</p>
-        <h1 className="mt-0.5 text-lg font-bold text-gray-900">
+      <div className="border-b border-border bg-card px-4 py-4">
+        <p className="t-caption">{data.project_name}</p>
+        <h1 className="mt-0.5 t-section-title">
           {data.contact_name ?? '담당자'}님, 확인 부탁드립니다
         </h1>
       </div>
@@ -71,8 +72,8 @@ export default function ClientConfirmQueuePage() {
         {successMessage && <SuccessBanner message={successMessage} />}
 
         {data.queue.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-gray-300 bg-white p-8 text-center text-sm text-gray-400">
-            검토할 항목이 없습니다
+          <div className="ui-card px-4">
+            <EmptyState message="검토할 항목이 없습니다" />
           </div>
         ) : (
           <ul className="space-y-4">
@@ -86,8 +87,8 @@ export default function ClientConfirmQueuePage() {
 
         {data.history.length > 0 && (
           <section>
-            <h2 className="mb-2 text-sm font-semibold text-gray-700">처리 완료 이력</h2>
-            <ul className="space-y-2">
+            <h2 className="mb-2 text-sm font-semibold text-ink-sub">처리 완료 이력</h2>
+            <ul className="ui-card overflow-hidden">
               {data.history.map((h) => (
                 <HistoryRow key={h.approval_id} item={h} />
               ))}

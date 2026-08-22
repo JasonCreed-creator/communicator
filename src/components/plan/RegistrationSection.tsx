@@ -31,10 +31,10 @@ export default function RegistrationSection({
 
 function StatTile({ label, value, sub }: { label: string; value: string | number; sub: string }) {
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-4">
-      <div className="text-2xl font-bold text-gray-900">{value}</div>
-      <div className="mt-1 text-xs text-gray-500">{label}</div>
-      <div className="mt-1 text-[11px] text-gray-400">{sub}</div>
+    <div className="rounded-lg bg-canvas p-4">
+      <div className="kpi-num">{value}</div>
+      <div className="t-caption mt-1.5">{label}</div>
+      <div className="mt-1 text-[11px] text-ink-cap">{sub}</div>
     </div>
   )
 }

@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import ErrorAlert from '../internal/ErrorAlert'
-import { PROJECT_ID } from '../../fixtures/sampleProject'
+import { useProject } from '../../context/ProjectContext'
 import { useMutation } from '../../hooks/useAsync'
 import { getDataProvider } from '../../providers'
 import type { ProgramSession } from '../../types/entities'
@@ -44,23 +44,23 @@ export default function ProgramSection({ sessions, progress, canEdit, onChanged 
 
   return (
     <PlanSection number={PLAN_SECTION_META.program.number} title={PLAN_SECTION_META.program.title} progress={progress}>
-      {sessions.length === 0 && <p className="text-xs text-gray-400">등록된 세션이 없습니다.</p>}
+      {sessions.length === 0 && <p className="text-xs text-ink-cap">등록된 세션이 없습니다.</p>}
       <div className="space-y-5">
         {grouped.map(([section, rows]) => (
           <div key={section}>
-            <h3 className="mb-2 text-xs font-semibold text-gray-500">{section}</h3>
+            <h3 className="mb-2 t-caption">{section}</h3>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[560px] border-collapse text-sm">
                 <thead>
-                  <tr className="border-b border-gray-200 text-left text-xs text-gray-500">
-                    <th className="py-1.5 pr-3 font-medium">시간</th>
-                    <th className="py-1.5 pr-3 font-medium">제목</th>
-                    <th className="py-1.5 pr-3 font-medium">연사</th>
-                    <th className="py-1.5 pr-3 font-medium">비고</th>
-                    {canEdit && <th className="plan-print-hidden py-1.5 pr-3 font-medium">관리</th>}
+                  <tr>
+                    <th className="ui-th">시간</th>
+                    <th className="ui-th">제목</th>
+                    <th className="ui-th">연사</th>
+                    <th className="ui-th">비고</th>
+                    {canEdit && <th className="ui-th plan-print-hidden">관리</th>}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-border">
                   {rows.map((s) => (
                     <ProgramRow key={s.id} session={s} canEdit={canEdit} onChanged={onChanged} />
                   ))}
@@ -131,87 +131,79 @@ function ProgramFieldsForm({
 }) {
   return (
     <form onSubmit={onSubmit} className="flex flex-wrap items-end gap-2">
-      <label className="flex flex-col gap-1 text-xs text-gray-500">
+      <label className="flex flex-col gap-1 t-caption">
         섹션
         <input
           value={values.section}
           onChange={(e) => onChange({ section: e.target.value })}
           placeholder="오전"
-          className="w-20 rounded-md border border-gray-300 px-2 py-1 text-xs text-gray-900"
+          className="ui-input w-20 text-xs"
         />
       </label>
-      <label className="flex flex-col gap-1 text-xs text-gray-500">
+      <label className="flex flex-col gap-1 t-caption">
         시작
         <input
           type="time"
           value={values.start_time}
           onChange={(e) => onChange({ start_time: e.target.value })}
-          className="rounded-md border border-gray-300 px-2 py-1 text-xs text-gray-900"
+          className="ui-input text-xs"
         />
       </label>
-      <label className="flex flex-col gap-1 text-xs text-gray-500">
+      <label className="flex flex-col gap-1 t-caption">
         종료
         <input
           type="time"
           value={values.end_time}
           onChange={(e) => onChange({ end_time: e.target.value })}
-          className="rounded-md border border-gray-300 px-2 py-1 text-xs text-gray-900"
+          className="ui-input text-xs"
         />
       </label>
-      <label className="flex min-w-[160px] flex-1 flex-col gap-1 text-xs text-gray-500">
+      <label className="flex min-w-[160px] flex-1 flex-col gap-1 t-caption">
         제목
         <input
           value={values.title}
           onChange={(e) => onChange({ title: e.target.value })}
           required
-          className="rounded-md border border-gray-300 px-2 py-1 text-xs text-gray-900"
+          className="ui-input text-xs"
         />
       </label>
-      <label className="flex flex-col gap-1 text-xs text-gray-500">
+      <label className="flex flex-col gap-1 t-caption">
         연사명
         <input
           value={values.speaker_name}
           onChange={(e) => onChange({ speaker_name: e.target.value })}
-          className="w-24 rounded-md border border-gray-300 px-2 py-1 text-xs text-gray-900"
+          className="ui-input w-24 text-xs"
         />
       </label>
-      <label className="flex flex-col gap-1 text-xs text-gray-500">
+      <label className="flex flex-col gap-1 t-caption">
         직함
         <input
           value={values.speaker_title}
           onChange={(e) => onChange({ speaker_title: e.target.value })}
-          className="w-20 rounded-md border border-gray-300 px-2 py-1 text-xs text-gray-900"
+          className="ui-input w-20 text-xs"
         />
       </label>
-      <label className="flex flex-col gap-1 text-xs text-gray-500">
+      <label className="flex flex-col gap-1 t-caption">
         소속
         <input
           value={values.speaker_org}
           onChange={(e) => onChange({ speaker_org: e.target.value })}
-          className="w-24 rounded-md border border-gray-300 px-2 py-1 text-xs text-gray-900"
+          className="ui-input w-24 text-xs"
         />
       </label>
-      <label className="flex flex-col gap-1 text-xs text-gray-500">
+      <label className="flex flex-col gap-1 t-caption">
         비고
         <input
           value={values.note}
           onChange={(e) => onChange({ note: e.target.value })}
-          className="w-24 rounded-md border border-gray-300 px-2 py-1 text-xs text-gray-900"
+          className="ui-input w-24 text-xs"
         />
       </label>
-      <button
-        type="submit"
-        disabled={pending}
-        className="rounded-md bg-gray-900 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
-      >
+      <button type="submit" disabled={pending} className="btn btn-primary btn-sm">
         {submitLabel}
       </button>
       {onCancel && (
-        <button
-          type="button"
-          onClick={onCancel}
-          className="rounded-md border border-gray-300 px-3 py-1.5 text-xs text-gray-600"
-        >
+        <button type="button" onClick={onCancel} className="btn btn-ghost btn-sm">
           취소
         </button>
       )}
@@ -274,25 +266,23 @@ function ProgramRow({
 
   return (
     <tr>
-      <td className="py-2 pr-3 align-top text-gray-700">{timeRangeLabel(session)}</td>
-      <td className="py-2 pr-3 align-top font-medium text-gray-900">{session.title}</td>
-      <td className="py-2 pr-3 align-top text-gray-700">{speakerLabel(session)}</td>
-      <td className="py-2 pr-3 align-top text-gray-500">
-        {session.note && (
-          <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">{session.note}</span>
-        )}
+      <td className="py-2 pr-3 align-top text-ink-sub">{timeRangeLabel(session)}</td>
+      <td className="py-2 pr-3 align-top font-medium text-ink">{session.title}</td>
+      <td className="py-2 pr-3 align-top text-ink-sub">{speakerLabel(session)}</td>
+      <td className="py-2 pr-3 align-top text-ink-cap">
+        {session.note && <span className="rounded-full bg-track px-2 py-0.5 text-xs text-ink-sub">{session.note}</span>}
       </td>
       {canEdit && (
         <td className="plan-print-hidden py-2 pr-3 align-top">
           <div className="flex gap-2">
-            <button type="button" onClick={handleEdit} className="text-xs text-gray-600 underline">
+            <button type="button" onClick={handleEdit} className="text-xs text-ink-sub underline">
               수정
             </button>
             <button
               type="button"
               onClick={handleDelete}
               disabled={remove.pending}
-              className="text-xs text-red-600 underline disabled:opacity-50"
+              className="text-xs text-negative underline disabled:opacity-50"
             >
               삭제
             </button>
@@ -305,8 +295,9 @@ function ProgramRow({
 }
 
 function ProgramAddForm({ onCreated }: { onCreated: () => void }) {
+  const { projectId } = useProject()
   const [values, setValues] = useState<ProgramFormValues>(() => toFormValues(null))
-  const create = useMutation((input: ProgramSessionInput) => provider.createProgramSession(PROJECT_ID, input))
+  const create = useMutation((input: ProgramSessionInput) => provider.createProgramSession(projectId, input))
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -319,8 +310,8 @@ function ProgramAddForm({ onCreated }: { onCreated: () => void }) {
   }
 
   return (
-    <div className="plan-print-hidden mt-4 border-t border-gray-100 pt-4">
-      <p className="mb-2 text-xs font-semibold text-gray-500">세션 추가</p>
+    <div className="plan-print-hidden mt-4 border-t border-border pt-4">
+      <p className="mb-2 t-caption">세션 추가</p>
       <ProgramFieldsForm
         values={values}
         onChange={(p) => setValues((v) => ({ ...v, ...p }))}

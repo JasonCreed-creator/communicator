@@ -9,7 +9,7 @@
 // 그 섹션들의 헤더 어서션은 (기존과 동일하게) 번호 없는 regex로 유지해 그 파일들의 실제 갱신
 // 시점과 무관하게 안정적으로 통과하도록 하고, 본 에이전트가 소유한 ③큐시트만 정확한 번호로
 // 단언한다.
-import { cleanup, screen, within } from '@testing-library/react'
+import { cleanup, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it } from 'vitest'
 import { mockProvider, renderRoute } from './testUtils'
@@ -108,26 +108,34 @@ describe('DoD-8 S9 운영계획서', () => {
     expect(screen.queryByText('관리')).toBeNull()
   })
 
-  it('(c) ops 역할에는 편집 버튼이 노출되고, 행사개요 인라인 편집이 저장→반영까지 왕복된다', async () => {
+  it('(c) v1.5: 개요는 읽기 조립 — 행사 설정 ①에서 수정한 값이 S9 ①에 반영된다(단일 원천)', async () => {
+    // ops: 개요 인라인 편집은 제거(설계서 v1.5 §10 S9), 프로그램 편집(pm·ops)은 유지
     mockProvider().switchUser('usr-ops')
     renderRoute('/plan')
-
     await screen.findByRole('heading', { name: /행사개요/ })
-    expect(screen.getByRole('button', { name: '편집' })).toBeTruthy()
-    // 프로그램표 관리 UI도 ops에 노출된다
+    expect(screen.queryByRole('button', { name: '편집' })).toBeNull()
     expect(screen.getByText('세션 추가')).toBeTruthy()
+    expect(screen.getByRole('link', { name: '행사 설정에서 편집' })).toBeTruthy()
+    cleanup()
 
-    await userEvent.click(screen.getByRole('button', { name: '편집' }))
-    const venueInput = screen.getByLabelText('장소') as HTMLInputElement
+    // pm이 행사 설정 ①(단일 원천)에서 장소를 수정하면 —
+    mockProvider().switchUser('usr-pm')
+    renderRoute('/settings')
+    const venueInput = (await screen.findByLabelText('장소')) as HTMLInputElement
     expect(venueInput.value).toBe('가상컨벤션센터 3F 그랜드볼룸')
     await userEvent.clear(venueInput)
     await userEvent.type(venueInput, '가상컨벤션센터 5F 다이아몬드홀')
     await userEvent.click(screen.getByRole('button', { name: '저장' }))
+    await waitFor(async () => {
+      const project = await mockProvider().getProject('prj-stc26')
+      expect(project.venue).toBe('가상컨벤션센터 5F 다이아몬드홀')
+    })
+    cleanup()
 
+    // — S9 ① 행사개요에 그대로 조립된다
+    renderRoute('/plan')
+    await screen.findByRole('heading', { name: /행사개요/ })
     expect(await screen.findByText('가상컨벤션센터 5F 다이아몬드홀')).toBeTruthy()
     expect(screen.queryByText('가상컨벤션센터 3F 그랜드볼룸')).toBeNull()
-
-    const project = await mockProvider().getProject('prj-stc26')
-    expect(project.venue).toBe('가상컨벤션센터 5F 다이아몬드홀')
   })
 })

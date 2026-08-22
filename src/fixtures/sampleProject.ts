@@ -7,21 +7,33 @@ import type {
   ClientContact,
   ClientToken,
   Comment,
+  ComplianceCard,
   Cue,
   Deliverable,
   Milestone,
+  Profile,
   ProgramSession,
   Project,
   ProjectMember,
+  Quote,
   RoleCharter,
   RsvpContact,
   UnregisteredFile,
   Version,
   WbsTask,
 } from '../types/entities'
+import type { DeliverableArea, DeliverableStatus } from '../types/enums'
 import type { UserRef } from '../types/views'
-import { offsetToDate } from '../lib/wbs'
-import { RECRUITING_WBS_TEMPLATE, ROLE_CHARTER_TEMPLATES } from './wbsTemplates'
+import { addDays, offsetToDate, toIsoDate } from '../lib/wbs'
+import { COMPLIANCE_CARD_TEMPLATES } from './complianceTemplates'
+import { createFixtureQuotes, FINAL_QUOTE_ID } from './quoteFixtures'
+import { RECRUITING_WBS_TEMPLATE, ROLE_CHARTER_TEMPLATES, wbsTemplateFor } from './wbsTemplates'
+import {
+  appendRebuildFixtures,
+  PROJECT_ID_REBUILD26,
+  PROJECT_ID_REBUILD27,
+  REBUILD27_TOKEN,
+} from './rebuildFixtures'
 
 /** `/c/demo` 데모 라우트용 토큰 값 (CLAUDE.md §4 Phase 3) */
 export const DEMO_TOKEN = 'demo'
@@ -31,11 +43,21 @@ export const REVOKED_TOKEN = 'tok-revoked'
 export const EXPIRED_TOKEN = 'tok-expired'
 
 export const PROJECT_ID = 'prj-stc26'
+/** v1.5 다중 행사 픽스처 — ② 일반형 진행 중(지연 2·미결 3) */
+export const PROJECT_ID_PARTNER = 'prj-partner-day'
+/** v1.5 — ③ 세팅 미완료(onboarded_at null, 개요만 입력) */
+export const PROJECT_ID_DRAFT = 'prj-forum-h2'
+/** v1.5 — ④ 종료(closed, 읽기 전용) */
+export const PROJECT_ID_CLOSED = 'prj-ai-summit'
+// v2.0 Phase 3.12 — 실제 운영 행사 2건(⑤ 종료 · ⑥ 진행 중·데모 기본). 정의는 rebuildFixtures.ts
+export { PROJECT_ID_REBUILD26, PROJECT_ID_REBUILD27, REBUILD27_TOKEN }
 
 export interface MockState {
   users: UserRef[]
   current_user_id: string
-  project: Project
+  /** v2.0 §4-1b — 전역 역할. 행 없는 사용자는 app_role='staff'로 간주(가입 기본값) */
+  profiles: Profile[]
+  projects: Project[]
   members: ProjectMember[]
   client_contacts: ClientContact[]
   client_tokens: ClientToken[]
@@ -52,8 +74,10 @@ export interface MockState {
   cues: Cue[]
   wbs_tasks: WbsTask[]
   role_charters: RoleCharter[]
-  /** v1.3 S0 — §4 스키마에 컬럼 없음: mock은 앱 상태로 관리(Phase 4에서 확정, PROGRESS 결정 로그) */
-  onboarding_completed: boolean
+  /** v2.0 §4-18 — 견적 (금액은 admin·sales 게이트 뒤에만 노출) */
+  quotes: Quote[]
+  /** v2.0 §4-17 — 컴플라이언스 카드 (온보딩 시 시드) */
+  compliance_cards: ComplianceCard[]
 }
 
 /** v1.2 가이드 문서·스펙·본문 필드 기본값 — 가이드 없이 만든 항목은 전부 null (§4) */
@@ -75,12 +99,41 @@ const FIXTURE: MockState = {
     { id: 'usr-reg', name: '최등록', email: 'reg@example.com' },
   ],
   current_user_id: 'usr-pm',
+  // v2.0 — 현재 사용자(김기획)는 sales: 견적 메뉴·API 접근 가능 (mock 토글 setAppRole로 전환)
+  profiles: [
+    { id: 'usr-pm', display_name: '김기획', email: 'pm@example.com', app_role: 'sales', created_at: '2026-08-01T09:00:00.000Z' },
+    { id: 'usr-design', display_name: '이디자', email: 'design@example.com', app_role: 'staff', created_at: '2026-08-01T09:00:00.000Z' },
+    { id: 'usr-ops', display_name: '박운영', email: 'ops@example.com', app_role: 'staff', created_at: '2026-08-01T09:00:00.000Z' },
+    { id: 'usr-reg', display_name: '최등록', email: 'reg@example.com', app_role: 'staff', created_at: '2026-08-01T09:00:00.000Z' },
+  ],
 
-  project: {
+  projects: [
+    {
     id: PROJECT_ID,
     name: '샘플 테크 컨퍼런스 2026',
     code: 'STC26',
     event_date: '2026-10-22',
+    // v1.5 개요 확장 필드
+    event_end_date: '2026-10-22',
+    start_time: '09:30',
+    end_time: '17:00',
+    expected_headcount: 300,
+    seating: '극장식',
+    organizer: '가상재단 / 리멤버 MICE',
+    target_audience: '파트너사·미디어·일반 참관객',
+    status: 'active',
+    closed_at: null,
+    // v2.0 모객형 전용 필드 — 확정 견적(quo-003)과 정합 (§16 매핑 결과와 동일 축)
+    guarantee_pax: 80,
+    kpi_show_rate: 90,
+    targeting: {
+      company_size: ['대기업', '중견기업'],
+      title: ['임원', '부장'],
+      industry: ['IT/통신'],
+      job: ['경영/전략/기획'],
+      region: ['서울특별시'],
+    },
+    quote_id: FINAL_QUOTE_ID,
     drive_root_folder_id: 'drv-root-stc26',
     slack_webhook_url: null,
     event_type: 'recruiting', // v1.3 — 픽스처는 RSVP 파이프라인을 쓰는 모객형
@@ -88,19 +141,32 @@ const FIXTURE: MockState = {
     theme: '연결, 다음 단계로',
     venue: '가상컨벤션센터 3F 그랜드볼룸',
     mc_name: '진행자 조무대',
+    // v1.5: 참가 대상은 target_audience 필드로 승격 — overview_items는 잔여 자유 항목만
     overview_items: [
-      { label: '참가 대상', value: '파트너사·미디어·일반 참관객 300명' },
       { label: '주차 안내', value: '행사장 지하 주차 3시간 지원 (등록데스크 확인)' },
     ],
+    // v1.4.1 — 픽스처 행사는 온보딩 완료 상태에서 시작 (S0 테스트는 mock 헬퍼로 null 리셋)
+    onboarded_at: '2026-08-01T10:00:00.000Z',
     created_by: 'usr-pm',
     created_at: '2026-08-01T09:00:00.000Z',
-  },
+    },
+  ],
+  // ②③④ 다중 행사 픽스처는 createFixtureState()에서 오늘 기준 상대 날짜로 생성해 추가한다
+  // (지연·미결·D-day 수치가 실행 시점과 무관하게 안정적이도록).
 
   members: [
     { project_id: PROJECT_ID, user_id: 'usr-pm', role: 'pm' },
     { project_id: PROJECT_ID, user_id: 'usr-design', role: 'design' },
     { project_id: PROJECT_ID, user_id: 'usr-ops', role: 'ops' },
     { project_id: PROJECT_ID, user_id: 'usr-reg', role: 'reg' },
+    // ② 파트너 데이 — 같은 팀이 행사별 역할로 참여 (§4-2: 역할은 행사 단위)
+    { project_id: PROJECT_ID_PARTNER, user_id: 'usr-pm', role: 'pm' },
+    { project_id: PROJECT_ID_PARTNER, user_id: 'usr-design', role: 'design' },
+    { project_id: PROJECT_ID_PARTNER, user_id: 'usr-ops', role: 'ops' },
+    { project_id: PROJECT_ID_PARTNER, user_id: 'usr-reg', role: 'reg' },
+    // ③ 세팅 미완료 — PM 미지정(멤버 없음)
+    // ④ 종료 행사 — PM만 유지
+    { project_id: PROJECT_ID_CLOSED, user_id: 'usr-pm', role: 'pm' },
   ],
 
   client_contacts: [
@@ -482,7 +548,9 @@ const FIXTURE: MockState = {
   // v1.4 R&R — createFixtureState()에서 모객형 템플릿으로 시드
   role_charters: [],
 
-  onboarding_completed: true, // 픽스처 행사는 온보딩 완료 상태에서 시작 (S0 테스트는 mock 헬퍼로 리셋)
+  // v2.0 견적·컴플라이언스 — createFixtureState()에서 엔진 산출·템플릿 시드로 채움
+  quotes: [],
+  compliance_cards: [],
 
   unregistered_files: [
     {
@@ -521,13 +589,14 @@ export function createFixtureState(): MockState {
     title: tpl.title,
     offset_start: tpl.offset_start,
     offset_end: tpl.offset_end,
-    start_date: offsetToDate(FIXTURE.project.event_date!, tpl.offset_start),
-    end_date: offsetToDate(FIXTURE.project.event_date!, tpl.offset_end),
+    start_date: offsetToDate(FIXTURE.projects[0].event_date!, tpl.offset_start),
+    end_date: offsetToDate(FIXTURE.projects[0].event_date!, tpl.offset_end),
     role: tpl.role,
     origin_role: tpl.origin_role,
     status: 'todo',
     done_at: null,
     linked_deliverable_id: null,
+    target: tpl.target,
     note: null,
     sort_order: i + 1,
   }))
@@ -547,5 +616,216 @@ export function createFixtureState(): MockState {
     title: tpl.title,
     items: [...tpl.items],
   }))
+
+  // ── v1.5 다중 행사 ②③④ — 오늘 기준 상대 날짜로 생성해 지연·미결·D-day 수치를 고정한다 ──
+  const today = toIsoDate(new Date())
+  const partnerDate = addDays(today, 18) // ② D-18
+  state.projects.push(
+    {
+      id: PROJECT_ID_PARTNER,
+      name: '파트너 데이 2026',
+      code: 'PTD26',
+      event_date: partnerDate,
+      event_end_date: partnerDate,
+      start_time: '13:00',
+      end_time: '18:00',
+      expected_headcount: 120,
+      seating: '라운드',
+      organizer: '리멤버 MICE',
+      target_audience: '파트너사 실무진',
+      status: 'active',
+      closed_at: null,
+      guarantee_pax: null,
+      kpi_show_rate: null,
+      targeting: null,
+      quote_id: null,
+      drive_root_folder_id: null,
+      slack_webhook_url: null,
+      event_type: 'general',
+      theme: '함께 여는 다음 분기',
+      venue: '본사 대강당',
+      mc_name: null,
+      overview_items: null,
+      // ①(2026-08-01 등록)보다 뒤 등록 — 목록·기본 선택이 ① 우선이 되도록 오늘 기준 상대값 사용
+      onboarded_at: `${addDays(today, -8)}T09:00:00.000Z`,
+      created_by: 'usr-pm',
+      created_at: `${addDays(today, -9)}T09:00:00.000Z`,
+    },
+    {
+      id: PROJECT_ID_DRAFT,
+      name: '리더십 포럼 하반기',
+      code: 'LSF26',
+      event_date: addDays(today, 95),
+      event_end_date: null,
+      start_time: null,
+      end_time: null,
+      expected_headcount: null,
+      seating: null,
+      organizer: null,
+      target_audience: null,
+      status: 'active',
+      closed_at: null,
+      guarantee_pax: null,
+      kpi_show_rate: null,
+      targeting: null,
+      quote_id: null,
+      drive_root_folder_id: null,
+      slack_webhook_url: null,
+      event_type: 'general',
+      theme: null,
+      venue: '가상트레이닝센터 오디토리움(가안)', // ③=개요만 입력(온보딩 1/3): PM 미지정·완료 전
+      mc_name: null,
+      overview_items: null,
+      onboarded_at: null,
+      created_by: 'usr-pm',
+      created_at: `${addDays(today, -2)}T09:00:00.000Z`,
+    },
+    {
+      id: PROJECT_ID_CLOSED,
+      name: 'AI 서밋 2026',
+      code: 'AIS26',
+      event_date: addDays(today, -38),
+      event_end_date: addDays(today, -38),
+      start_time: '09:00',
+      end_time: '18:00',
+      expected_headcount: 500,
+      seating: '극장식',
+      organizer: '가상협회',
+      target_audience: '업계 전문가·미디어',
+      status: 'closed',
+      closed_at: `${addDays(today, -20)}T09:00:00.000Z`,
+      guarantee_pax: null,
+      kpi_show_rate: null,
+      targeting: null,
+      quote_id: null,
+      drive_root_folder_id: null,
+      slack_webhook_url: null,
+      event_type: 'recruiting',
+      theme: 'AI, 실전으로',
+      venue: '가상컨벤션센터 5F 오디토리움',
+      mc_name: null,
+      overview_items: null,
+      onboarded_at: `${addDays(today, -80)}T09:00:00.000Z`,
+      created_by: 'usr-pm',
+      created_at: `${addDays(today, -85)}T09:00:00.000Z`,
+    },
+  )
+
+  // ② 산출물 9건 — 확정 5 · 컨펌대기 3(미결정 approvals) · 작성중 1 (S-1 KPI 소스)
+  const partnerItems: { title: string; area: DeliverableArea; category: string; status: DeliverableStatus }[] = [
+    { title: '행사 키비주얼', area: 'design', category: '키비주얼', status: 'final' },
+    { title: '초청장', area: 'design', category: '초청장', status: 'final' },
+    { title: '참가자 명찰', area: 'design', category: '명찰', status: 'final' },
+    { title: '현장 배너', area: 'design', category: '배너', status: 'final' },
+    { title: '운영 시나리오', area: 'ops', category: '시나리오', status: 'final' },
+    { title: '무대 백월', area: 'design', category: '백월', status: 'pending_approval' },
+    { title: '행사 리플렛', area: 'design', category: '리플렛', status: 'pending_approval' },
+    { title: '케이터링 운영안', area: 'ops', category: '운영안', status: 'pending_approval' },
+    { title: '주차 안내문', area: 'ops', category: '안내문', status: 'draft' },
+  ]
+  partnerItems.forEach((item, i) => {
+    const id = `dlv-ptd-${String(i + 1).padStart(3, '0')}`
+    state.deliverables.push({
+      id,
+      project_id: PROJECT_ID_PARTNER,
+      area: item.area,
+      category: item.category,
+      title: item.title,
+      status: item.status,
+      assignee_id: item.area === 'design' ? 'usr-design' : 'usr-ops',
+      due_date: addDays(today, 5 + i),
+      drive_folder_id: null,
+      requires_approval: true,
+      ...NO_BRIEF,
+      created_at: `${addDays(today, -20)}T09:00:00.000Z`,
+      updated_at: `${addDays(today, -2)}T09:00:00.000Z`,
+    })
+    if (item.status === 'final' || item.status === 'pending_approval') {
+      const vid = `ver-ptd-${String(i + 1).padStart(3, '0')}`
+      state.versions.push({
+        id: vid,
+        deliverable_id: id,
+        version_no: 1,
+        drive_file_id: `drv-f-ptd-${String(i + 1).padStart(3, '0')}`,
+        file_name: `260801_PTD26_${item.category}_${item.title}_v1.png`,
+        note: null,
+        uploaded_by: item.area === 'design' ? 'usr-design' : 'usr-ops',
+        created_at: `${addDays(today, -6)}T09:00:00.000Z`,
+      })
+      if (item.status === 'pending_approval') {
+        state.approvals.push({
+          id: `apr-ptd-${String(i + 1).padStart(3, '0')}`,
+          deliverable_id: id,
+          version_id: vid,
+          requested_by: 'usr-pm',
+          requested_at: `${addDays(today, -3)}T09:00:00.000Z`,
+          due_at: `${addDays(today, 2)}T09:00:00.000Z`,
+          decided_at: null,
+          decision: null,
+          client_comment: null,
+          decided_via_token: null,
+        })
+      }
+    }
+  })
+
+  // ② WBS — 일반형 28건 전개(D-18 기준). 오늘 이전 마감분은 완료 처리하되 2건만 남겨 '지연 2' 고정
+  const partnerTasks: WbsTask[] = wbsTemplateFor('general').map((tpl, i) => ({
+    id: `wbs-ptd-${String(i + 1).padStart(3, '0')}`,
+    project_id: PROJECT_ID_PARTNER,
+    phase_no: tpl.phase_no,
+    phase_name: tpl.phase_name,
+    code: tpl.code,
+    title: tpl.title,
+    offset_start: tpl.offset_start,
+    offset_end: tpl.offset_end,
+    start_date: offsetToDate(partnerDate, tpl.offset_start),
+    end_date: offsetToDate(partnerDate, tpl.offset_end),
+    role: tpl.role,
+    origin_role: tpl.origin_role,
+    status: 'todo',
+    done_at: null,
+    linked_deliverable_id: null,
+    target: tpl.target,
+    note: null,
+    sort_order: i + 1,
+  }))
+  const pastTasks = partnerTasks.filter((t) => t.end_date! < today)
+  pastTasks.forEach((t, idx) => {
+    if (idx < pastTasks.length - 2) {
+      t.status = 'done'
+      t.done_at = `${t.end_date}T09:00:00.000Z`
+    }
+  })
+  state.wbs_tasks.push(...partnerTasks)
+  state.role_charters.push(
+    ...ROLE_CHARTER_TEMPLATES.general.map((tpl, i) => ({
+      id: `rrc-ptd-${String(i + 1).padStart(3, '0')}`,
+      project_id: PROJECT_ID_PARTNER,
+      role: tpl.role,
+      origin_role: tpl.origin_role,
+      title: tpl.title,
+      items: [...tpl.items],
+    })),
+  )
+
+  // ── v2.0 견적 4건(①연결 3버전 + 미연결 1) — 금액은 엔진 산출 ──
+  state.quotes = createFixtureQuotes(PROJECT_ID)
+
+  // ── v2.0 컴플라이언스 카드 — 온보딩 완료 행사(①②)에 2종 시드 (§4-17) ──
+  const seedCompliance = (projectId: string, prefix: string): ComplianceCard[] =>
+    COMPLIANCE_CARD_TEMPLATES.map((tpl, i) => ({
+      id: `cmp-${prefix}-${String(i + 1).padStart(2, '0')}`,
+      project_id: projectId,
+      kind: tpl.kind,
+      title: tpl.title,
+      items: tpl.items.map((text) => ({ text, checked: false, checked_at: null })),
+      sort_order: tpl.sort_order,
+    }))
+  state.compliance_cards = [...seedCompliance(PROJECT_ID, 'stc'), ...seedCompliance(PROJECT_ID_PARTNER, 'ptd')]
+
+  // ── Phase 3.12 — 실제 운영 행사 2건 추가 (기존 ①~④는 위에서 조립된 그대로 유지) ──
+  appendRebuildFixtures(state)
+
   return state
 }
