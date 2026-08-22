@@ -42,7 +42,7 @@ function ItemDetail({ itemId }: { itemId: string }) {
   if (!detail.data) {
     return (
       <section className="p-6">
-        <p className="text-sm text-gray-400">불러오는 중…</p>
+        <p className="text-sm text-ink-cap">불러오는 중…</p>
       </section>
     )
   }
@@ -60,103 +60,127 @@ function ItemDetail({ itemId }: { itemId: string }) {
   return (
     <section className="space-y-6 p-6">
       <div>
-        <p className="font-mono text-xs text-gray-400">S3</p>
-        <div className="mt-1 flex flex-wrap items-center gap-3">
-          <h1 className="text-2xl font-bold text-gray-900">{d.title}</h1>
-          <StatusBadge status={d.status} />
-        </div>
-        <p className="mt-1 text-sm text-gray-500">
+        <p className="t-caption">S3</p>
+        <h1 className="t-page-title mt-1">{d.title}</h1>
+        <p className="mt-1 text-sm text-ink-sub">
           {AREA_LABELS[d.area]} · {d.category}
         </p>
       </div>
 
-      <div className="flex flex-wrap gap-6 rounded-lg border border-gray-200 bg-white p-4 text-sm">
-        <div>
-          <p className="text-xs text-gray-400">담당</p>
-          <p className="mt-0.5 text-gray-900">{memberName(d.assignee_id)}</p>
-        </div>
-        <div>
-          <p className="text-xs text-gray-400">마감</p>
-          <p className="mt-0.5 flex items-center gap-2 text-gray-900">
-            {d.due_date ? (
-              <>
-                {formatDate(d.due_date)}
-                <DdayBadge isoDate={d.due_date} />
-              </>
-            ) : (
-              '미정'
+      {/* §6 S3: 2단 분할 — 좌(주 콘텐츠) 지시 카드·상태 액션·미리보기·코멘트 / 우(300 고정) 메타 사이드
+          (상태·담당·마감·버전 타임라인). 큐시트 항목은 에디터가 좌측 전폭, 메타 사이드는 유지. */}
+      <div
+        className={`grid grid-cols-1 gap-6 ${
+          isCuesheet ? 'lg:grid-cols-[minmax(0,1fr)_300px]' : 'lg:grid-cols-[minmax(0,660px)_300px]'
+        }`}
+      >
+        <div className="min-w-0 space-y-6">
+          <BriefCard deliverable={d} />
+
+          <StatusActionBar
+            deliverableId={d.id}
+            status={d.status}
+            category={d.category}
+            requiresApproval={d.requires_approval}
+            versions={d.versions}
+            isPm={isPm}
+            canWriteArea={canWriteArea}
+            lastChangesRequestedComment={
+              d.approvals
+                .slice()
+                .reverse()
+                .find((a) => a.decision === 'changes_requested')?.client_comment ?? null
+            }
+            onChanged={detail.reload}
+          />
+
+          {isCuesheet ? (
+            <CuesheetEditor deliverableId={d.id} canEdit={canEditCue} />
+          ) : (
+            <VersionUploadForm deliverableId={d.id} canWrite={canWriteArea} onUploaded={detail.reload} />
+          )}
+
+          <CommentThread deliverableId={d.id} comments={d.comments} memberName={memberName} onAdded={detail.reload} />
+
+          <Card title="컨펌 이력">
+            {d.approvals.length === 0 && <p className="text-sm text-ink-cap">컨펌 이력이 없습니다.</p>}
+            {d.approvals.length > 0 && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr>
+                      <th className="ui-th">요청일</th>
+                      <th className="ui-th">기한</th>
+                      <th className="ui-th">결정</th>
+                      <th className="ui-th">결정일</th>
+                      <th className="ui-th">발주처 코멘트</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {d.approvals.map((a) => (
+                      <tr key={a.id} className="h-11 hover:bg-accent-tint/30">
+                        <td className="py-2 pr-4 text-ink-sub">{formatDateTime(a.requested_at)}</td>
+                        <td className="py-2 pr-4 text-ink-sub">{a.due_at ? formatDateTime(a.due_at) : '-'}</td>
+                        <td className="py-2 pr-4 text-ink-sub">
+                          {a.decision ? DECISION_LABELS[a.decision] : '대기중'}
+                        </td>
+                        <td className="py-2 pr-4 text-ink-sub">{a.decided_at ? formatDateTime(a.decided_at) : '-'}</td>
+                        <td className="py-2 text-ink-sub">{a.client_comment ?? '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
-          </p>
+          </Card>
         </div>
-      </div>
 
-      <BriefCard deliverable={d} />
-
-      <StatusActionBar
-        deliverableId={d.id}
-        status={d.status}
-        category={d.category}
-        requiresApproval={d.requires_approval}
-        versions={d.versions}
-        isPm={isPm}
-        canWriteArea={canWriteArea}
-        lastChangesRequestedComment={
-          d.approvals
-            .slice()
-            .reverse()
-            .find((a) => a.decision === 'changes_requested')?.client_comment ?? null
-        }
-        onChanged={detail.reload}
-      />
-
-      {isCuesheet ? (
-        <CuesheetEditor deliverableId={d.id} canEdit={canEditCue} />
-      ) : (
-        <VersionUploadForm deliverableId={d.id} canWrite={canWriteArea} onUploaded={detail.reload} />
-      )}
-
-      <Card title="버전 이력">
-        {d.versions.length === 0 && <p className="text-sm text-gray-400">업로드된 버전이 없습니다.</p>}
-        <ul className="space-y-4">
-          {d.versions.map((v, idx) => (
-            <VersionItem key={v.id} version={v} isLatest={idx === 0} uploaderName={memberName(v.uploaded_by)} />
-          ))}
-        </ul>
-      </Card>
-
-      <CommentThread deliverableId={d.id} comments={d.comments} memberName={memberName} onAdded={detail.reload} />
-
-      <Card title="컨펌 이력">
-        {d.approvals.length === 0 && <p className="text-sm text-gray-400">컨펌 이력이 없습니다.</p>}
-        {d.approvals.length > 0 && (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="text-xs text-gray-400">
-                  <th className="pb-2 pr-4 font-medium">요청일</th>
-                  <th className="pb-2 pr-4 font-medium">기한</th>
-                  <th className="pb-2 pr-4 font-medium">결정</th>
-                  <th className="pb-2 pr-4 font-medium">결정일</th>
-                  <th className="pb-2 font-medium">발주처 코멘트</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {d.approvals.map((a) => (
-                  <tr key={a.id}>
-                    <td className="py-2 pr-4 text-gray-700">{formatDateTime(a.requested_at)}</td>
-                    <td className="py-2 pr-4 text-gray-700">{a.due_at ? formatDateTime(a.due_at) : '-'}</td>
-                    <td className="py-2 pr-4 text-gray-700">
-                      {a.decision ? DECISION_LABELS[a.decision] : '대기중'}
-                    </td>
-                    <td className="py-2 pr-4 text-gray-700">{a.decided_at ? formatDateTime(a.decided_at) : '-'}</td>
-                    <td className="py-2 text-gray-700">{a.client_comment ?? '-'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        <aside className="space-y-6">
+          <div className="ui-card space-y-4 p-5">
+            <div>
+              <p className="t-caption">상태</p>
+              <div className="mt-1.5">
+                <StatusBadge status={d.status} />
+              </div>
+            </div>
+            <div>
+              <p className="t-caption">담당</p>
+              <p className="mt-1 text-sm text-ink">{memberName(d.assignee_id)}</p>
+            </div>
+            <div>
+              <p className="t-caption">마감</p>
+              <div className="mt-1 flex items-center gap-2 text-sm text-ink">
+                {d.due_date ? (
+                  <>
+                    {formatDate(d.due_date)}
+                    <DdayBadge isoDate={d.due_date} />
+                  </>
+                ) : (
+                  '미정'
+                )}
+              </div>
+            </div>
           </div>
-        )}
-      </Card>
+
+          <Card title="버전 이력">
+            {d.versions.length === 0 && <p className="text-sm text-ink-cap">업로드된 버전이 없습니다.</p>}
+            {d.versions.length > 0 && (
+              // §6 S3: 버전 타임라인 — 세로선 + 항목별 도트로 이력 표현
+              <ul className="space-y-5 border-l border-border pl-5">
+                {d.versions.map((v, idx) => (
+                  <VersionItem
+                    key={v.id}
+                    version={v}
+                    isLatest={idx === 0}
+                    isFinal={d.status === 'final'}
+                    uploaderName={memberName(v.uploaded_by)}
+                  />
+                ))}
+              </ul>
+            )}
+          </Card>
+        </aside>
+      </div>
     </section>
   )
 }
@@ -235,8 +259,8 @@ function StatusActionBar({
   if (status === 'requested') {
     return (
       <Card title="상태 액션">
-        <p className="text-sm text-gray-700">지시가 발행되었습니다.</p>
-        <p className="mt-1 text-xs text-gray-400">첫 버전을 업로드하면 자동으로 초안(draft) 상태로 전환됩니다.</p>
+        <p className="text-sm text-ink-sub">지시가 발행되었습니다.</p>
+        <p className="mt-1 text-xs text-ink-cap">첫 버전을 업로드하면 자동으로 초안(draft) 상태로 전환됩니다.</p>
       </Card>
     )
   }
@@ -244,12 +268,7 @@ function StatusActionBar({
   if (status === 'draft' && canWriteArea) {
     return (
       <Card title="상태 액션">
-        <button
-          type="button"
-          onClick={handleToReview}
-          disabled={toReview.pending}
-          className="rounded-md bg-gray-900 px-4 py-1.5 text-sm font-medium text-white disabled:opacity-50"
-        >
+        <button type="button" onClick={handleToReview} disabled={toReview.pending} className="btn btn-primary">
           내부검토 요청
         </button>
         <ErrorAlert message={toReview.error} />
@@ -261,7 +280,7 @@ function StatusActionBar({
     if (!isPm) {
       return (
         <Card title="상태 액션">
-          <p className="text-sm text-gray-400">내부검토 중입니다. PM의 반려 또는 컨펌 발송을 기다리세요.</p>
+          <p className="text-sm text-ink-cap">내부검토 중입니다. PM의 반려 또는 컨펌 발송을 기다리세요.</p>
         </Card>
       )
     }
@@ -269,19 +288,15 @@ function StatusActionBar({
       <Card title="상태 액션 (PM)">
         <div className="space-y-5">
           <form onSubmit={handleReject} className="space-y-2">
-            <p className="text-xs font-medium text-gray-500">반려 (사유 필수)</p>
+            <p className="t-caption">반려 (사유 필수)</p>
             <div className="flex flex-wrap gap-2">
               <input
                 value={rejectComment}
                 onChange={(e) => setRejectComment(e.target.value)}
                 placeholder="반려 사유"
-                className="min-w-64 flex-1 rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900"
+                className="ui-input min-w-64 flex-1"
               />
-              <button
-                type="submit"
-                disabled={reject.pending}
-                className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-              >
+              <button type="submit" disabled={reject.pending} className="btn btn-ghost">
                 반려
               </button>
             </div>
@@ -289,20 +304,20 @@ function StatusActionBar({
           </form>
 
           {requiresApproval ? (
-            <form onSubmit={handleRequestApproval} className="space-y-2 border-t border-gray-100 pt-4">
-              <p className="text-xs font-medium text-gray-500">컨펌 발송</p>
+            <form onSubmit={handleRequestApproval} className="space-y-2 border-t border-border pt-4">
+              <p className="t-caption">컨펌 발송</p>
               <div className="flex flex-wrap items-end gap-2">
                 {isCuesheet ? (
-                  <p className="max-w-xs text-xs text-gray-500">
+                  <p className="max-w-xs text-xs text-ink-sub">
                     발송 시 표의 스냅숏(.pdf)이 자동 버전으로 등록됩니다.
                   </p>
                 ) : (
-                  <label className="flex flex-col gap-1 text-xs text-gray-500">
+                  <label className="flex flex-col gap-1 t-caption">
                     버전
                     <select
                       value={versionId}
                       onChange={(e) => setVersionId(e.target.value)}
-                      className="w-64 rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900"
+                      className="ui-input w-64"
                     >
                       <option value="">버전 선택…</option>
                       {versions.map((v) => (
@@ -313,27 +328,23 @@ function StatusActionBar({
                     </select>
                   </label>
                 )}
-                <label className="flex flex-col gap-1 text-xs text-gray-500">
+                <label className="flex flex-col gap-1 t-caption">
                   컨펌 기한
                   <input
                     type="datetime-local"
                     value={dueAt}
                     onChange={(e) => setDueAt(e.target.value)}
-                    className="rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900"
+                    className="ui-input"
                   />
                 </label>
-                <button
-                  type="submit"
-                  disabled={requestApproval.pending}
-                  className="rounded-md bg-gray-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
-                >
+                <button type="submit" disabled={requestApproval.pending} className="btn btn-accent">
                   컨펌 발송
                 </button>
               </div>
               <ErrorAlert message={requestApproval.error} />
             </form>
           ) : (
-            <p className="border-t border-gray-100 pt-4 text-sm text-gray-400">
+            <p className="border-t border-border pt-4 text-sm text-ink-cap">
               이 항목은 컨펌 루프를 사용하지 않습니다(공통 문서).
             </p>
           )}
@@ -345,7 +356,7 @@ function StatusActionBar({
   if (status === 'pending_approval') {
     return (
       <Card title="상태 액션">
-        <p className="text-sm text-gray-400">발주처 컨펌 대기 중입니다.</p>
+        <p className="text-sm text-ink-cap">발주처 컨펌 대기 중입니다.</p>
       </Card>
     )
   }
@@ -353,10 +364,10 @@ function StatusActionBar({
   if (status === 'changes_requested') {
     return (
       <Card title="상태 액션">
-        <p className="text-sm text-gray-700">
+        <p className="text-sm text-ink-sub">
           발주처가 수정을 요청했습니다{lastChangesRequestedComment ? `: ${lastChangesRequestedComment}` : ''}.
         </p>
-        <p className="mt-1 text-xs text-gray-400">새 버전을 업로드하면 자동으로 초안(draft) 상태로 돌아갑니다.</p>
+        <p className="mt-1 text-xs text-ink-cap">새 버전을 업로드하면 자동으로 초안(draft) 상태로 돌아갑니다.</p>
       </Card>
     )
   }
@@ -364,14 +375,14 @@ function StatusActionBar({
   if (status === 'approved') {
     return (
       <Card title="상태 액션">
-        <p className="text-sm text-gray-400">발주처가 승인했습니다 — 확정본으로 전환 중입니다.</p>
+        <p className="text-sm text-ink-cap">발주처가 승인했습니다 — 확정본으로 전환 중입니다.</p>
       </Card>
     )
   }
 
   return (
     <Card title="상태 액션">
-      <p className="text-sm text-gray-400">확정된 항목입니다.</p>
+      <p className="text-sm text-ink-cap">확정된 항목입니다.</p>
     </Card>
   )
 }
@@ -416,28 +427,20 @@ function VersionUploadForm({
   return (
     <Card title="버전 업로드">
       <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-3">
-        <label className="flex flex-col gap-1 text-xs text-gray-500">
+        <label className="flex flex-col gap-1 t-caption">
           파일
-          <input
-            type="file"
-            onChange={handleFileChange}
-            className="rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900"
-          />
+          <input type="file" onChange={handleFileChange} className="ui-input" />
         </label>
-        <label className="flex flex-col gap-1 text-xs text-gray-500">
+        <label className="flex flex-col gap-1 t-caption">
           노트
           <input
             value={note}
             onChange={(e) => setNote(e.target.value)}
             placeholder="버전 노트(선택)"
-            className="w-64 rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900"
+            className="ui-input w-64"
           />
         </label>
-        <button
-          type="submit"
-          disabled={upload.pending}
-          className="rounded-md bg-gray-900 px-4 py-1.5 text-sm font-medium text-white disabled:opacity-50"
-        >
+        <button type="submit" disabled={upload.pending} className="btn btn-primary">
           업로드
         </button>
       </form>
@@ -446,41 +449,60 @@ function VersionUploadForm({
   )
 }
 
-// ── 버전 항목 (미리보기 포함) ─────────────────────────────────────────
-function VersionItem({ version, isLatest, uploaderName }: { version: Version; isLatest: boolean; uploaderName: string }) {
+// ── 버전 항목 (미리보기 포함, 우측 메타 사이드의 버전 타임라인 1행) ────
+function VersionItem({
+  version,
+  isLatest,
+  isFinal,
+  uploaderName,
+}: {
+  version: Version
+  isLatest: boolean
+  /** 상위 항목(deliverable) 상태가 final인지 — 타임라인 도트·최신 뱃지 색 분기(§6 S3) */
+  isFinal: boolean
+  uploaderName: string
+}) {
   const preview = useAsync(() => provider.getFileUrl(version.id), [version.id])
   const [previewFailed, setPreviewFailed] = useState(false)
+  const dotClass = isLatest ? (isFinal ? 'bg-positive' : 'bg-accent') : 'bg-border-strong'
 
   return (
-    <li className="flex flex-wrap items-start gap-4 rounded-md border border-gray-100 p-3">
-      <div className="h-20 w-28 shrink-0 overflow-hidden rounded-md bg-gray-100">
-        {preview.data && !previewFailed ? (
-          <img
-            src={preview.data}
-            alt={version.file_name}
-            className="h-full w-full object-cover"
-            onError={() => setPreviewFailed(true)}
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center px-1 text-center text-[10px] text-gray-400">
-            {version.file_name}
-          </div>
-        )}
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm font-medium text-gray-900">v{version.version_no}</span>
-          {isLatest && (
-            <span className="inline-flex items-center rounded-full bg-gray-900 px-2 py-0.5 text-xs font-medium text-white">
-              최신
-            </span>
+    <li className="relative">
+      <span aria-hidden className={`absolute -left-6 top-1.5 size-2 rounded-full ${dotClass}`} />
+      <div className="flex flex-wrap items-start gap-3">
+        <div className="h-14 w-20 shrink-0 overflow-hidden rounded-md bg-track">
+          {preview.data && !previewFailed ? (
+            <img
+              src={preview.data}
+              alt={version.file_name}
+              className="h-full w-full object-cover"
+              onError={() => setPreviewFailed(true)}
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center px-1 text-center text-[10px] text-ink-cap">
+              {version.file_name}
+            </div>
           )}
         </div>
-        <p className="mt-0.5 truncate text-sm text-gray-700">{version.file_name}</p>
-        {version.note && <p className="mt-0.5 text-xs text-gray-500">{version.note}</p>}
-        <p className="mt-1 text-xs text-gray-400">
-          {uploaderName} · {formatDateTime(version.created_at)}
-        </p>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-sm font-medium text-ink">v{version.version_no}</span>
+            {isLatest && (
+              <span
+                className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium text-card ${
+                  isFinal ? 'bg-positive' : 'bg-accent'
+                }`}
+              >
+                최신
+              </span>
+            )}
+          </div>
+          <p className="mt-0.5 truncate text-sm text-ink-sub">{version.file_name}</p>
+          {version.note && <p className="mt-0.5 text-xs text-ink-cap">{version.note}</p>}
+          <p className="mt-1 text-xs text-ink-cap">
+            {uploaderName} · {formatDateTime(version.created_at)}
+          </p>
+        </div>
       </div>
     </li>
   )
@@ -517,46 +539,42 @@ function CommentThread({
 
   return (
     <Card title="코멘트">
-      {comments.length === 0 && <p className="text-sm text-gray-400">코멘트가 없습니다.</p>}
+      {comments.length === 0 && <p className="text-sm text-ink-cap">코멘트가 없습니다.</p>}
       <ul className="space-y-3">
         {comments.map((c) => (
-          <li key={c.id} className="rounded-md border border-gray-100 p-3">
+          <li key={c.id} className="rounded-md border border-border p-3">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-sm font-medium text-gray-900">
+              <span className="text-sm font-medium text-ink">
                 {c.author_token ? '발주처' : memberName(c.author_user_id)}
               </span>
               <span
                 className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                  c.visibility === 'shared' ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-600'
+                  c.visibility === 'shared' ? 'bg-steel-tint text-steel' : 'bg-track text-ink-sub'
                 }`}
               >
                 {c.visibility === 'shared' ? '공유' : '내부'}
               </span>
-              <span className="text-xs text-gray-400">{formatDateTime(c.created_at)}</span>
+              <span className="text-xs text-ink-cap">{formatDateTime(c.created_at)}</span>
             </div>
-            <p className="mt-1 whitespace-pre-wrap text-sm text-gray-700">{c.body}</p>
+            <p className="mt-1 whitespace-pre-wrap text-sm text-ink-sub">{c.body}</p>
           </li>
         ))}
       </ul>
 
-      <form onSubmit={handleSubmit} className="mt-4 space-y-2 border-t border-gray-100 pt-4">
+      <form onSubmit={handleSubmit} className="mt-4 space-y-2 border-t border-border pt-4">
         <textarea
           value={body}
           onChange={(e) => setBody(e.target.value)}
           rows={2}
           placeholder="코멘트를 입력하세요"
-          className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900"
+          className="ui-input w-full"
         />
         <div className="flex items-center justify-between">
-          <label className="flex items-center gap-2 text-xs text-gray-500">
+          <label className="flex items-center gap-2 text-xs text-ink-sub">
             <input type="checkbox" checked={shared} onChange={(e) => setShared(e.target.checked)} />
             발주처에 공유(shared) — 기본은 내부(internal)
           </label>
-          <button
-            type="submit"
-            disabled={add.pending}
-            className="rounded-md bg-gray-900 px-4 py-1.5 text-sm font-medium text-white disabled:opacity-50"
-          >
+          <button type="submit" disabled={add.pending} className="btn btn-primary">
             등록
           </button>
         </div>

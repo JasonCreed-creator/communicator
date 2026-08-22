@@ -3,14 +3,16 @@
 > 가변 상태 파일. 매 세션 체크아웃 시 에이전트가 갱신한다 (CLAUDE.md §9 리추얼).
 
 ## 1. 상태 요약
-- 현재 Phase: **Phase 0~3.8 완료 — v1.4.1 정본 정합(onboarded_at·DataProvider v3.1) 종료**.
-  다음 = Phase 3.9 디자인 스프린트(별도 PR, 진행 중) → Phase 4(Supabase 이식, 착수 전 사용자 승인·**v1.4.1 스키마 기준**)
+- 현재 Phase: **Phase 0~3.9 완료 — 디자인 스프린트(리멤버 웜 페이퍼 룩·사이드바 레이아웃) 종료**.
+  다음 = Phase 4(Supabase 이식, 착수 전 사용자 승인·**v1.4.1 스키마 기준**)
 - 정본 문서: `docs/mice-communicator-설계서-v1.4.1.md` (스키마·상태 머신·API·WBS 템플릿 SoT — v1.4 대체)
   + `docs/mice-communicator-디자인지시서-v1.md` (디자인 토큰·레이아웃·컴포넌트 규격 정본, Phase 3.9)
 - 브랜치: `main` = 정본 — Phase 3.5는 PR #4·#5, Phase 3.6+3.7은 PR #7로 머지. **Phase 3.8 =
   `claude/phase-3.8-v141-alignment`(본 브랜치), Phase 3.9 = `claude/design-sprint-sections-1-8-ixau6i`
   (3.8 위에 스택) — 별도 PR·리뷰 diff 분리(CLAUDE.md §5), 머지는 사용자 검수 후**
 - **Phase 3.9 기준치: vitest 117개(19파일) — 3.8 시점 전부 통과 + tsc 클린 + vite build 성공**
+- **Phase 3.9 결과: 기준치 117개 전부 통과 유지 + tsc 클린 + vite build 성공 +
+  `grep -rn "gray-\|slate-" src` 0건 + 스크린샷 11장 + 데모 아티팩트 재발행 (DoD-17 전부 충족)**
 
 ## 2. 완료
 - 설계서 v1.1 확정 + CLAUDE.md v1.1 (2026-08-19)
@@ -89,6 +91,26 @@
 - **DoD-16 테스트 코드화** (2026-08-22): `src/test/dod16-onboarded-at.test.tsx` 3건 — 완료 시 타임스탬프
   기록·재완료 409·null 시 가드 리다이렉트 + `grep -rn "onboarding_completed" src` 0건 확인.
   **vitest 117개(19파일)·tsc·vite build 전부 통과**
+- **Phase 3.9a — 토큰·로고·레이아웃 셸** (2026-08-22, 메인이 Q 역할 수행): `src/styles/tokens.css`
+  단일 정의(§1 표 그대로 + @theme 유틸리티 노출) / Pretendard CDN dynamic-subset + tabular-nums(§2) /
+  타이포 스케일·카드·버튼(.btn 3종+위험 변형)·입력·테이블 헤더·진행바·빈 상태 규격(§5, index.css) /
+  상태·역할 컬러 정본화(§3 — labels.ts STATUS_BADGE_CLASSES·STATUS_STRIP_CLASSES·ROLE_*_CLASSES,
+  pending_approval 좌측 도트) / BrandLogo png 2종 variant 전환(§7) / **내부 레이아웃 = 좌측 다크
+  사이드바 232px(오렌지 활성 마커·하단 행사명/유형 뱃지/설정, 모바일 햄버거 드로어), 발주처 =
+  슬림 다크 상단 바 + 오렌지 언더라인 탭(§4)** / PageHeader·EmptyState 공용 컴포넌트 신설
+- **Phase 3.9b — 내부 화면 S0~S6·S9 depth** (2026-08-22, 에이전트 R 역할 4분할 병렬): S1 KPI 4카드
+  (31/650 tabular·지연 negative·임박 accent)+2열 재배치 / S2 브라운 카테고리 캡션+상태 스트립 3px /
+  S3 2단 분할(660+300 메타 사이드·버전 세로 타임라인, 큐시트는 좌측 전폭) / S4 통계 3카드+오렌지
+  언더라인 탭+§5 테이블 규격 / S5 단계 필터 pill(다크 활성)·간트 역할 컬러 바(완료 40% 투명·지연
+  negative·임박 accent·오늘 오렌지선)·R&R 좌보더 역할 컬러 / S6 섹션 카드 분리+위험 동작
+  ghost-negative / S9 종이 메타포(중앙 시트 880·오렌지 헤어라인·브라운 대형 섹션 번호) /
+  S0 중앙 카드 720·세로 스텝 레일·유형 카드 오렌지 선택
+- **Phase 3.9c — 발주처 S7·S8 모바일** (2026-08-22, 에이전트 S 역할): 1열 카드, [승인]=accent
+  대형(h-11)·[수정요청]=ghost(h-11), 확정본 positive 뱃지, 진행바 수치 라벨 바 아래 줄, 375px 검증
+- **§7 DoD-17 충족** (2026-08-22, 메인 통합 검수): gray/slate grep 0건 / 기준치 117개 전부 통과
+  (dod13·14의 스타일 클래스 계약 가드만 새 토큰으로 치환 — 의미 무변경, CLAUDE.md §4 Phase 3.9 허용
+  조항) / tsc·vite build 통과 / 스크린샷 11장(S0·S1·S2·S3 일반·S3 큐시트·S4·S5 체크리스트·S5 간트·
+  S9·발주처 큐 375px·발주처 현황 375px) / 데모 아티팩트 재발행
 
 ## 3. 미결
 - GitHub 기본 브랜치가 아직 `claude/extract-zip-to-repo-t6xstr` — Settings → Branches에서 `main`으로
@@ -105,15 +127,22 @@
   (설계서 v1.4.1 §4-15·§8·§15 정본화 — 열린 질문 ①~⑤ 전부 종결)
 
 ## 4. 다음 스텝
-- **Phase 3.9 — 디자인 스프린트** (진행 중, 별도 브랜치·별도 PR): 디자인지시서 v1 §1~8 전문 이행 —
-  토큰·Pretendard·사이드바 레이아웃·화면별 depth·스크린샷 11장·데모 아티팩트 재발행.
-  기준치 = 본 시점 vitest 117개 전부 통과 유지 + `grep -rn "gray-\|slate-" src` 0건 (DoD-17)
+- 3.8 PR → 3.9 PR 순서로 사용자 검수·머지 (3.8 머지 시 3.9 PR base가 main으로 자동 전환)
 - **Phase 4 — Supabase 이식** (★착수 전 사용자 승인 필수, **v1.4.1 스키마 기준**): 마이그레이션(§4 전체 —
   cues·wbs_tasks·role_charters·event_type·onboarded_at 포함)+RLS(§6.2)+Auth+seed → SupabaseProvider
   구현 → MockProvider 교체(프론트 무수정 목표)
 - 이후 Phase 5(Drive) → Phase 6(알림·cron)
 
 ## 5. 결정 로그
+- 2026-08-22 (Phase 3.9 디자인 해석 — 지시서 개정 없이 값 미변경 원칙 하의 구현 판단):
+  ① `--border-strong`(#C9C2B2)은 §5 테이블 규격이 참조하나 §1 표에 미정의 — --border 1단계 진한
+  값으로 파생해 tokens.css에 등록 ② 간트 바는 역할 컬러가 기본이되 지연=--negative·임박=--accent가
+  역할색을 대체(§3 상태 우선), 완료는 역할색+40% 투명 ③ S1 KPI는 §6 명시 4종(미결 컨펌·지연·임박·
+  D-day)으로 확정 — 기존 인박스 수 타일은 우측 '미등록 인박스' 카드와 중복이라 제거 ④ dod13·14의
+  색 클래스 어서션은 새 토큰 계약(bg-brown/opacity-40/bg-negative(-tint)/bg-accent(-tint))으로
+  치환 — 테스트 의미(DoD) 무변경, CLAUDE.md §4 Phase 3.9 허용 조항 준거 ⑤ 발주처 410/404 안내
+  (ClientMessage)는 톤 박스 대신 중립 ui-card(§5 빈 상태 문법) ⑥ 큐시트 콘솔 3채널 값은 캡션 칩으로
+  표기(정보 위계 §2 캡션 규격) ⑦ 아티팩트 데모는 CSP상 CDN 폰트 차단 → Pretendard 폴백 스택으로 렌더
 - 2026-08-22 (Phase 3.8a): **DataProvider v3 동결 해제** — 근거: **사용자 v1.4.1 승인(2026-08-22,
   설계서 v1.4.1 개정 동반 — §9 준수)**. `Project.onboarded_at`·`OnboardingStatus.onboarded_at` 필드
   추가만(메서드 수 53 불변) → **v3.1로 개정 후 재동결 선언** — 이후 변경은 다시 사용자 승인+설계서
@@ -178,6 +207,11 @@
 - 2026-08-22 세션 #3: 문서 채택 커밋(설계서 v1.4.1·CLAUDE.md v1.4.1·디자인지시서 v1·로고 자산) →
   Phase 3.8(메인 단독: v3.1 재동결·onboarded_at 정합·DoD-16 3건·열린 질문 ①~⑤ 종결, vitest 117·
   tsc·빌드 통과) → 3.8 PR 발행(드래프트, 머지는 사용자 검수 후). **Phase 3.9 기준치 = 117개 기록**
+- 2026-08-22 세션 #3 계속: Phase 3.9 디자인 스프린트 — 3.9a(메인: 토큰·타이포·컬러 정본·레이아웃 셸·
+  로고) → 3.9b·3.9c(서브에이전트 5분할 병렬: 내부 4화면 / S3·큐시트 / S9 / S5·S0 / 발주처 —
+  파일 경계 분리로 충돌 0) → 메인 통합 검수(DoD-17: 117개 통과·tsc·빌드·grep 0건·스크린샷 11장·
+  데모 재발행) → 3.9 PR 발행(3.8 위 스택, 드래프트). **머지는 사용자 검수 후, 다음 세션 = Phase 4
+  (착수 전 사용자 승인·Supabase 프로젝트 정보 필요)**
 
 ## 7. 세션 잠금
 - 잠금 없음 (한 폴더 = 동시 1세션)

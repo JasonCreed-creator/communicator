@@ -2,7 +2,7 @@ import type { PhaseOption } from './wbsFormat'
 
 function chipClass(active: boolean): string {
   return `rounded-md px-3 py-1.5 text-sm ${
-    active ? 'bg-gray-900 text-white' : 'border border-gray-300 text-gray-600 hover:bg-gray-50'
+    active ? 'bg-dark text-white' : 'border border-border bg-card text-ink-sub hover:bg-track'
   }`
 }
 

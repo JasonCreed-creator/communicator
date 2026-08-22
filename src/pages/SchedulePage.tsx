@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import Card from '../components/internal/Card'
 import DdayBadge from '../components/internal/DdayBadge'
 import ErrorAlert from '../components/internal/ErrorAlert'
+import PageHeader from '../components/internal/PageHeader'
 import WbsBoard from '../components/wbs/WbsBoard'
 import { PROJECT_ID } from '../fixtures/sampleProject'
 import { useAsync, useMutation } from '../hooks/useAsync'
@@ -64,15 +65,12 @@ export default function SchedulePage() {
 
   return (
     <section className="space-y-6 p-6">
-      <div>
-        <p className="font-mono text-xs text-gray-400">S5</p>
-        <h1 className="mt-1 text-2xl font-bold text-gray-900">일정·WBS·R&R</h1>
-      </div>
+      <PageHeader caption="S5" title="일정·WBS·R&R" />
 
       <WbsBoard />
 
       <div>
-        <h2 className="mb-3 text-lg font-semibold text-gray-900">마일스톤·컨펌 기한</h2>
+        <h2 className="t-section-title mb-3">마일스톤·컨펌 기한</h2>
 
         <ErrorAlert message={milestones.error} />
         <ErrorAlert message={dashboard.error} />
@@ -85,8 +83,8 @@ export default function SchedulePage() {
               onClick={() => setFilter(opt.value)}
               className={`rounded-md px-3 py-1.5 text-sm ${
                 filter === opt.value
-                  ? 'bg-gray-900 text-white'
-                  : 'border border-gray-300 text-gray-600 hover:bg-gray-50'
+                  ? 'bg-dark text-white'
+                  : 'border border-border text-ink-sub hover:bg-track'
               }`}
             >
               {opt.label}
@@ -96,11 +94,11 @@ export default function SchedulePage() {
 
         <div className="space-y-6">
           <Card title="타임라인">
-            {milestones.loading && <p className="text-sm text-gray-400">불러오는 중…</p>}
+            {milestones.loading && <p className="text-sm text-ink-cap">불러오는 중…</p>}
             {!milestones.loading && entries.length === 0 && (
-              <p className="text-sm text-gray-400">표시할 일정이 없습니다.</p>
+              <p className="text-sm text-ink-cap">표시할 일정이 없습니다.</p>
             )}
-            <ul className="divide-y divide-gray-100">
+            <ul className="divide-y divide-border">
               {entries.map((entry) =>
                 entry.kind === 'milestone' ? (
                   <MilestoneRow key={`m-${entry.milestone.id}`} milestone={entry.milestone} onChanged={reloadAll} />
@@ -137,22 +135,17 @@ function MilestoneRow({ milestone, onChanged }: { milestone: Milestone; onChange
     <li className="py-2.5 first:pt-0 last:pb-0">
       <div className="flex flex-wrap items-center gap-3">
         <input type="checkbox" checked={milestone.done} onChange={handleToggle} disabled={toggleDone.pending} />
-        <span className="shrink-0 text-xs text-gray-500">{formatDate(milestone.due_date)}</span>
+        <span className="shrink-0 text-xs text-ink-cap">{formatDate(milestone.due_date)}</span>
         <DdayBadge isoDate={milestone.due_date} />
         <span
           className={`min-w-0 flex-1 truncate text-sm ${
-            milestone.done ? 'text-gray-400 line-through' : 'text-gray-900'
+            milestone.done ? 'text-ink-cap line-through' : 'text-ink'
           }`}
         >
           {milestone.title}
         </span>
-        <span className="shrink-0 text-xs text-gray-500">{milestoneAreaLabel(milestone.area)}</span>
-        <button
-          type="button"
-          onClick={handleDelete}
-          disabled={remove.pending}
-          className="shrink-0 rounded-md border border-gray-300 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50 disabled:opacity-50"
-        >
+        <span className="shrink-0 text-xs text-ink-cap">{milestoneAreaLabel(milestone.area)}</span>
+        <button type="button" onClick={handleDelete} disabled={remove.pending} className="btn btn-ghost-negative btn-sm shrink-0">
           삭제
         </button>
       </div>
@@ -166,17 +159,17 @@ function ApprovalOverlayRow({ item }: { item: PendingApprovalItem }) {
   return (
     <li className="py-2.5 first:pt-0 last:pb-0">
       <Link to={`/items/${item.deliverable.id}`} className="flex flex-wrap items-center gap-3 hover:opacity-70">
-        <span className="inline-flex shrink-0 items-center rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800">
+        <span className="inline-flex shrink-0 items-center rounded-full bg-accent-tint px-2 py-0.5 text-xs font-medium text-accent-deep">
           컨펌 기한
         </span>
         {item.approval.due_at && (
           <>
-            <span className="shrink-0 text-xs text-gray-500">{formatDateTime(item.approval.due_at)}</span>
+            <span className="shrink-0 text-xs text-ink-cap">{formatDateTime(item.approval.due_at)}</span>
             <DdayBadge isoDate={item.approval.due_at} />
           </>
         )}
-        <span className="min-w-0 flex-1 truncate text-sm text-gray-900">{item.deliverable.title}</span>
-        <span className="shrink-0 text-xs text-gray-500">{AREA_LABELS[item.deliverable.area]}</span>
+        <span className="min-w-0 flex-1 truncate text-sm text-ink">{item.deliverable.title}</span>
+        <span className="shrink-0 text-xs text-ink-cap">{AREA_LABELS[item.deliverable.area]}</span>
       </Link>
     </li>
   )
@@ -209,23 +202,19 @@ function MilestoneForm({ onCreated }: { onCreated: () => void }) {
   return (
     <Card title="마일스톤 추가">
       <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-3">
-        <label className="flex flex-col gap-1 text-xs text-gray-500">
+        <label className="flex flex-col gap-1 t-caption">
           제목
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             required
             placeholder="마일스톤 제목"
-            className="w-48 rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900"
+            className="ui-input w-48"
           />
         </label>
-        <label className="flex flex-col gap-1 text-xs text-gray-500">
+        <label className="flex flex-col gap-1 t-caption">
           영역
-          <select
-            value={area}
-            onChange={(e) => setArea(e.target.value as AreaFilter)}
-            className="w-32 rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900"
-          >
+          <select value={area} onChange={(e) => setArea(e.target.value as AreaFilter)} className="ui-input w-32">
             {FILTER_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>
                 {opt.label}
@@ -233,21 +222,17 @@ function MilestoneForm({ onCreated }: { onCreated: () => void }) {
             ))}
           </select>
         </label>
-        <label className="flex flex-col gap-1 text-xs text-gray-500">
+        <label className="flex flex-col gap-1 t-caption">
           날짜
           <input
             type="date"
             value={dueDate}
             onChange={(e) => setDueDate(e.target.value)}
             required
-            className="rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900"
+            className="ui-input"
           />
         </label>
-        <button
-          type="submit"
-          disabled={create.pending}
-          className="rounded-md bg-gray-900 px-4 py-1.5 text-sm font-medium text-white disabled:opacity-50"
-        >
+        <button type="submit" disabled={create.pending} className="btn btn-primary">
           추가
         </button>
       </form>

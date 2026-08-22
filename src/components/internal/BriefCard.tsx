@@ -23,13 +23,15 @@ export default function BriefCard({ deliverable }: { deliverable: BriefFields })
   if (!hasBrief && refs.length === 0 && specs.length === 0) return null
 
   return (
-    <Card title="지시 카드">
+    // §6 S3: 지시 카드는 accent-tint 배경 카드(Card의 className 확장 — 흰 배경 오버라이드는
+    // utilities 레이어가 components 레이어(.ui-card)보다 우선하는 Tailwind v4 레이어 순서로 성립).
+    <Card title="지시 카드" className="bg-accent-tint">
       <div className="space-y-4">
-        {hasBrief && <p className="whitespace-pre-wrap text-sm text-gray-700">{deliverable.brief}</p>}
+        {hasBrief && <p className="whitespace-pre-wrap text-sm text-ink-sub">{deliverable.brief}</p>}
 
         {refs.length > 0 && (
           <div>
-            <p className="text-xs font-medium text-gray-500">참고 링크</p>
+            <p className="t-caption">참고 링크</p>
             <ul className="mt-1.5 space-y-1">
               {refs.map((url, i) => (
                 <li key={i}>
@@ -37,7 +39,7 @@ export default function BriefCard({ deliverable }: { deliverable: BriefFields })
                     href={url}
                     target="_blank"
                     rel="noreferrer"
-                    className="break-all text-sm text-blue-600 hover:underline"
+                    className="break-all text-sm text-steel hover:underline"
                   >
                     {url}
                   </a>
@@ -49,14 +51,14 @@ export default function BriefCard({ deliverable }: { deliverable: BriefFields })
 
         {specs.length > 0 && (
           <div>
-            <p className="text-xs font-medium text-gray-500">스펙</p>
+            <p className="t-caption">스펙</p>
             <div className="mt-1.5 flex flex-wrap gap-2">
               {specs.map((s) => (
                 <span
                   key={s.label}
-                  className="inline-flex items-center gap-1.5 rounded-full bg-violet-50 px-2.5 py-1 text-xs font-medium text-violet-800"
+                  className="inline-flex items-center gap-1.5 rounded-full bg-card px-2.5 py-1 text-xs font-medium text-accent-deep"
                 >
-                  <span className="text-violet-500">{s.label}</span>
+                  <span className="text-ink-sub">{s.label}</span>
                   {s.value}
                 </span>
               ))}

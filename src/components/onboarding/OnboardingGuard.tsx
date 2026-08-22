@@ -15,8 +15,8 @@ export default function OnboardingGuard() {
 
   if (status.loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50">
-        <p className="text-sm text-gray-400">불러오는 중…</p>
+      <div className="flex min-h-screen items-center justify-center bg-canvas">
+        <p className="text-sm text-ink-cap">불러오는 중…</p>
       </div>
     )
   }

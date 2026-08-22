@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import Card from '../components/internal/Card'
 import ErrorAlert from '../components/internal/ErrorAlert'
+import PageHeader from '../components/internal/PageHeader'
 import { PROJECT_ID } from '../fixtures/sampleProject'
 import { useAsync, useMutation } from '../hooks/useAsync'
 import { ROLE_LABELS, formatDateTime } from '../lib/labels'
@@ -17,9 +18,9 @@ function tokenStatus(t: ClientToken): '활성' | '회수됨' | '만료됨' {
 }
 
 const TOKEN_STATUS_CLASSES: Record<ReturnType<typeof tokenStatus>, string> = {
-  활성: 'bg-emerald-50 text-emerald-800',
-  회수됨: 'bg-gray-100 text-gray-600',
-  만료됨: 'bg-red-50 text-red-700',
+  활성: 'bg-positive-tint text-positive',
+  회수됨: 'bg-track text-ink-sub',
+  만료됨: 'bg-negative-tint text-negative',
 }
 
 export default function SettingsPage() {
@@ -28,7 +29,7 @@ export default function SettingsPage() {
   if (currentUser.loading) {
     return (
       <section className="p-6">
-        <p className="text-sm text-gray-400">불러오는 중…</p>
+        <p className="text-sm text-ink-cap">불러오는 중…</p>
       </section>
     )
   }
@@ -44,9 +45,8 @@ export default function SettingsPage() {
   if (currentUser.data?.role !== 'pm') {
     return (
       <section className="space-y-2 p-6">
-        <p className="font-mono text-xs text-gray-400">S6</p>
-        <h1 className="text-2xl font-bold text-gray-900">프로젝트 설정</h1>
-        <p className="mt-4 text-sm text-gray-500">이 화면은 PM 전용입니다.</p>
+        <PageHeader caption="S6 · 설정" title="프로젝트 설정" />
+        <p className="mt-4 text-sm text-ink-sub">이 화면은 PM 전용입니다.</p>
       </section>
     )
   }
@@ -62,10 +62,7 @@ function SettingsBody() {
 
   return (
     <section className="space-y-6 p-6">
-      <div>
-        <p className="font-mono text-xs text-gray-400">S6</p>
-        <h1 className="mt-1 text-2xl font-bold text-gray-900">프로젝트 설정</h1>
-      </div>
+      <PageHeader caption="S6 · 설정" title="프로젝트 설정" />
 
       {project.data && <EventBasicsCard project={project.data} onReload={project.reload} />}
 
@@ -74,19 +71,19 @@ function SettingsBody() {
         {members.data && (
           <table className="w-full text-left text-sm">
             <thead>
-              <tr className="text-xs text-gray-400">
-                <th className="pb-2 pr-4 font-medium">이름</th>
-                <th className="pb-2 pr-4 font-medium">이메일</th>
-                <th className="pb-2 font-medium">역할</th>
+              <tr>
+                <th className="ui-th">이름</th>
+                <th className="ui-th">이메일</th>
+                <th className="ui-th">역할</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-border">
               {members.data.map((m) => (
                 <tr key={m.user_id}>
-                  <td className="py-2 pr-4 text-gray-900">{m.profile.name}</td>
-                  <td className="py-2 pr-4 text-gray-700">{m.profile.email ?? '-'}</td>
+                  <td className="py-2 pr-4 text-ink">{m.profile.name}</td>
+                  <td className="py-2 pr-4 text-ink-sub">{m.profile.email ?? '-'}</td>
                   <td className="py-2">
-                    <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700">
+                    <span className="inline-flex items-center rounded-full bg-track px-2 py-0.5 text-xs font-medium text-ink-sub">
                       {ROLE_LABELS[m.role]}
                     </span>
                   </td>
@@ -102,18 +99,18 @@ function SettingsBody() {
         {contacts.data && (
           <table className="mb-4 w-full text-left text-sm">
             <thead>
-              <tr className="text-xs text-gray-400">
-                <th className="pb-2 pr-4 font-medium">이름</th>
-                <th className="pb-2 pr-4 font-medium">소속</th>
-                <th className="pb-2 font-medium">이메일</th>
+              <tr>
+                <th className="ui-th">이름</th>
+                <th className="ui-th">소속</th>
+                <th className="ui-th">이메일</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-border">
               {contacts.data.map((c) => (
                 <tr key={c.id}>
-                  <td className="py-2 pr-4 text-gray-900">{c.name}</td>
-                  <td className="py-2 pr-4 text-gray-700">{c.org ?? '-'}</td>
-                  <td className="py-2 text-gray-700">{c.email ?? '-'}</td>
+                  <td className="py-2 pr-4 text-ink">{c.name}</td>
+                  <td className="py-2 pr-4 text-ink-sub">{c.org ?? '-'}</td>
+                  <td className="py-2 text-ink-sub">{c.email ?? '-'}</td>
                 </tr>
               ))}
             </tbody>
@@ -128,15 +125,15 @@ function SettingsBody() {
           <div className="mb-4 overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead>
-                <tr className="text-xs text-gray-400">
-                  <th className="pb-2 pr-4 font-medium">연락처</th>
-                  <th className="pb-2 pr-4 font-medium">상태</th>
-                  <th className="pb-2 pr-4 font-medium">만료일</th>
-                  <th className="pb-2 pr-4 font-medium">최근 접속</th>
-                  <th className="pb-2 font-medium">액션</th>
+                <tr>
+                  <th className="ui-th">연락처</th>
+                  <th className="ui-th">상태</th>
+                  <th className="ui-th">만료일</th>
+                  <th className="ui-th">최근 접속</th>
+                  <th className="ui-th">액션</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-border">
                 {tokens.data.map((t) => (
                   <TokenRow
                     key={t.token}
@@ -153,21 +150,21 @@ function SettingsBody() {
       </Card>
 
       <Card title="Drive 연결">
-        <div className="rounded-md border border-dashed border-gray-300 p-6 text-center text-sm text-gray-400">
+        <div className="rounded-md border border-dashed border-border p-6 text-center text-sm text-ink-cap">
           미연결 — Phase 5에서 이식 예정
         </div>
       </Card>
 
       <Card title="Slack Webhook">
         <ErrorAlert message={project.error} />
-        <p className="mb-2 text-sm text-gray-700">{project.data?.slack_webhook_url ?? '미등록'}</p>
+        <p className="mb-2 text-sm text-ink-sub">{project.data?.slack_webhook_url ?? '미등록'}</p>
         <input
           value=""
           placeholder="https://hooks.slack.com/services/..."
           disabled
-          className="w-full max-w-lg rounded-md border border-gray-200 bg-gray-50 px-2 py-1.5 text-sm text-gray-400"
+          className="ui-input w-full max-w-lg disabled:opacity-60"
         />
-        <p className="mt-1 text-xs text-gray-400">Phase 6에서 이식 예정</p>
+        <p className="mt-1 text-xs text-ink-cap">Phase 6에서 이식 예정</p>
       </Card>
     </section>
   )
@@ -200,44 +197,36 @@ function EventBasicsCard({ project, onReload }: { project: Project; onReload: ()
   return (
     <Card title="행사 기본정보">
       <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-3">
-        <label className="flex flex-col gap-1 text-xs text-gray-500">
+        <label className="flex flex-col gap-1 t-caption">
           행사명
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="w-56 rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900"
-          />
+          <input value={name} onChange={(e) => setName(e.target.value)} className="ui-input w-56" />
         </label>
-        <label className="flex flex-col gap-1 text-xs text-gray-500">
+        <label className="flex flex-col gap-1 t-caption">
           행사일
           <input
             type="date"
             value={eventDate}
             onChange={(e) => setEventDate(e.target.value)}
-            className="rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900"
+            className="ui-input"
           />
         </label>
-        <label className="flex flex-col gap-1 text-xs text-gray-500">
+        <label className="flex flex-col gap-1 t-caption">
           행사 유형
           <select
             value={eventType}
             onChange={(e) => setEventType(e.target.value as EventType)}
-            className="rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900"
+            className="ui-input"
           >
             <option value="general">일반형</option>
             <option value="recruiting">모객형</option>
           </select>
         </label>
-        <button
-          type="submit"
-          disabled={save.pending}
-          className="rounded-md bg-gray-900 px-4 py-1.5 text-sm font-medium text-white disabled:opacity-50"
-        >
+        <button type="submit" disabled={save.pending} className="btn btn-primary">
           저장
         </button>
       </form>
       <ErrorAlert message={save.error} />
-      <p className="mt-2 text-xs text-gray-400">
+      <p className="mt-2 text-xs text-ink-cap">
         행사 유형을 바꿔도 등록 데이터는 삭제되지 않습니다(표시 계층만 전환). WBS 재전개는 일정 화면에서
         실행하세요.
       </p>
@@ -266,38 +255,20 @@ function ClientContactForm({ onCreated }: { onCreated: () => void }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-3 border-t border-gray-100 pt-4">
-      <label className="flex flex-col gap-1 text-xs text-gray-500">
+    <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-3 border-t border-border pt-4">
+      <label className="flex flex-col gap-1 t-caption">
         이름
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          required
-          className="w-36 rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900"
-        />
+        <input value={name} onChange={(e) => setName(e.target.value)} required className="ui-input w-36" />
       </label>
-      <label className="flex flex-col gap-1 text-xs text-gray-500">
+      <label className="flex flex-col gap-1 t-caption">
         소속
-        <input
-          value={org}
-          onChange={(e) => setOrg(e.target.value)}
-          className="w-40 rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900"
-        />
+        <input value={org} onChange={(e) => setOrg(e.target.value)} className="ui-input w-40" />
       </label>
-      <label className="flex flex-col gap-1 text-xs text-gray-500">
+      <label className="flex flex-col gap-1 t-caption">
         이메일
-        <input
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="w-48 rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900"
-        />
+        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="ui-input w-48" />
       </label>
-      <button
-        type="submit"
-        disabled={create.pending}
-        className="rounded-md bg-gray-900 px-4 py-1.5 text-sm font-medium text-white disabled:opacity-50"
-      >
+      <button type="submit" disabled={create.pending} className="btn btn-primary">
         연락처 추가
       </button>
       <ErrorAlert message={create.error} />
@@ -337,7 +308,7 @@ function TokenRow({
 
   return (
     <tr>
-      <td className="py-2 pr-4 text-gray-900">{contactName}</td>
+      <td className="py-2 pr-4 text-ink">{contactName}</td>
       <td className="py-2 pr-4">
         <span
           className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${TOKEN_STATUS_CLASSES[status]}`}
@@ -345,24 +316,15 @@ function TokenRow({
           {status}
         </span>
       </td>
-      <td className="py-2 pr-4 text-gray-700">{token.expires_at ? formatDateTime(token.expires_at) : '-'}</td>
-      <td className="py-2 pr-4 text-gray-700">{token.last_seen_at ? formatDateTime(token.last_seen_at) : '-'}</td>
+      <td className="py-2 pr-4 text-ink-sub">{token.expires_at ? formatDateTime(token.expires_at) : '-'}</td>
+      <td className="py-2 pr-4 text-ink-sub">{token.last_seen_at ? formatDateTime(token.last_seen_at) : '-'}</td>
       <td className="py-2">
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={handleCopy}
-            className="rounded-md border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
-          >
+          <button type="button" onClick={handleCopy} className="btn btn-ghost btn-sm">
             {copied ? '복사됨' : '링크 복사'}
           </button>
           {status !== '회수됨' && (
-            <button
-              type="button"
-              onClick={handleRevoke}
-              disabled={revoke.pending}
-              className="rounded-md border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-            >
+            <button type="button" onClick={handleRevoke} disabled={revoke.pending} className="btn btn-ghost-negative btn-sm">
               회수
             </button>
           )}
@@ -393,14 +355,10 @@ function IssueTokenForm({ contacts, onCreated }: { contacts: ClientContact[]; on
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-3 border-t border-gray-100 pt-4">
-      <label className="flex flex-col gap-1 text-xs text-gray-500">
+    <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-3 border-t border-border pt-4">
+      <label className="flex flex-col gap-1 t-caption">
         연락처
-        <select
-          value={contactId}
-          onChange={(e) => setContactId(e.target.value)}
-          className="w-48 rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900"
-        >
+        <select value={contactId} onChange={(e) => setContactId(e.target.value)} className="ui-input w-48">
           <option value="">연락처 선택…</option>
           {contacts.map((c) => (
             <option key={c.id} value={c.id}>
@@ -409,11 +367,7 @@ function IssueTokenForm({ contacts, onCreated }: { contacts: ClientContact[]; on
           ))}
         </select>
       </label>
-      <button
-        type="submit"
-        disabled={issue.pending}
-        className="rounded-md bg-gray-900 px-4 py-1.5 text-sm font-medium text-white disabled:opacity-50"
-      >
+      <button type="submit" disabled={issue.pending} className="btn btn-primary">
         토큰 발급
       </button>
       <ErrorAlert message={issue.error} />

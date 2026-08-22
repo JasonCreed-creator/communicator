@@ -46,12 +46,7 @@ export default function WbsBoard() {
         title="WBS"
         action={
           isPm ? (
-            <button
-              type="button"
-              onClick={handleReexpand}
-              disabled={reexpand.pending}
-              className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-            >
+            <button type="button" onClick={handleReexpand} disabled={reexpand.pending} className="btn btn-ghost btn-sm">
               템플릿 재전개
             </button>
           ) : undefined
@@ -63,12 +58,12 @@ export default function WbsBoard() {
 
           <div className="flex flex-wrap items-center justify-between gap-3">
             <PhaseFilterBar phases={phases} value={phase} onChange={setPhase} />
-            <div className="flex shrink-0 items-center gap-1 rounded-md border border-gray-300 p-0.5 text-xs">
+            <div className="flex shrink-0 items-center gap-1 rounded-md border border-border p-0.5 text-xs">
               <button
                 type="button"
                 onClick={() => setView('checklist')}
                 className={`rounded px-2.5 py-1 font-medium ${
-                  view === 'checklist' ? 'bg-gray-900 text-white' : 'text-gray-600'
+                  view === 'checklist' ? 'bg-dark text-white' : 'text-ink-sub'
                 }`}
               >
                 체크리스트
@@ -77,7 +72,7 @@ export default function WbsBoard() {
                 type="button"
                 onClick={() => setView('gantt')}
                 className={`rounded px-2.5 py-1 font-medium ${
-                  view === 'gantt' ? 'bg-gray-900 text-white' : 'text-gray-600'
+                  view === 'gantt' ? 'bg-dark text-white' : 'text-ink-sub'
                 }`}
               >
                 간트
@@ -85,7 +80,7 @@ export default function WbsBoard() {
             </div>
           </div>
 
-          {wbsTasks.loading && <p className="text-sm text-gray-400">불러오는 중…</p>}
+          {wbsTasks.loading && <p className="text-sm text-ink-cap">불러오는 중…</p>}
 
           {view === 'checklist' ? (
             <WbsChecklist

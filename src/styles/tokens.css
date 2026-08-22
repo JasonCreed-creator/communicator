@@ -1,0 +1,61 @@
+/* ── 디자인 토큰 정본 — docs/mice-communicator-디자인지시서-v1.md §1 ──
+   전 화면은 이 변수(또는 아래 @theme이 노출하는 Tailwind 유틸리티)만 사용한다.
+   Tailwind 기본 쿨 그레이 팔레트, #000, steel 외 보라·파랑 계열 임의 사용 금지. */
+:root {
+  --canvas: #fbfaf6; /* 앱 배경 (웜 아이보리) */
+  --card: #ffffff; /* 카드·시트 */
+  --border: #dcd6c8; /* 1px 웜 보더 (기본 구분선) */
+  --border-strong: #c9c2b2; /* §5 테이블 헤더 하단 — §1 표 미정의라 --border 1단계 진한 값으로 파생 */
+  --track: #efebe0; /* 진행바 트랙·비활성 면 */
+  --ink: #1a1a1a; /* 본문 (퓨어 블랙 #000 금지) */
+  --ink-sub: #6e6e6e; /* 보조 텍스트 */
+  --ink-cap: #8c867a; /* 캡션·라벨 */
+  --brown: #4a463f; /* 서브 잉크·섹션 번호 — 역할 컬러 pm 겸용 */
+  --accent: #eb6f2a; /* 리멤버 오렌지 — CTA·활성·강조 — 역할 컬러 design 겸용 */
+  --accent-deep: #b8431a; /* 액센트 텍스트·호버 */
+  --accent-tint: #fff1e6; /* 액센트 배경 틴트 */
+  --steel: #476580; /* 보조 컬러 (정보성) — 역할 컬러 ops 겸용 */
+  --steel-tint: #eaf0f5; /* §3 internal_review 뱃지 배경 */
+  --dark: #211e1a; /* 사이드바·다크 바 */
+  --dark-ink: #f4f0e9; /* 다크 위 텍스트 */
+  --positive: #196b24; /* 승인·완료 */
+  --positive-tint: #e8f2e9;
+  --negative: #d93636; /* 수정요청·지연 */
+  --negative-tint: #fbeaea;
+  --role-reg: #f3b48a; /* §3 역할 컬러 reg */
+  --shadow-1: 0 1px 3px rgba(74, 70, 63, 0.08); /* 그림자 한 단계만 */
+}
+
+/* Tailwind v4 유틸리티 노출 — bg-canvas·text-ink·border-border·shadow-card 등 */
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-card: var(--card);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-track: var(--track);
+  --color-ink: var(--ink);
+  --color-ink-sub: var(--ink-sub);
+  --color-ink-cap: var(--ink-cap);
+  --color-brown: var(--brown);
+  --color-accent: var(--accent);
+  --color-accent-deep: var(--accent-deep);
+  --color-accent-tint: var(--accent-tint);
+  --color-steel: var(--steel);
+  --color-steel-tint: var(--steel-tint);
+  --color-dark: var(--dark);
+  --color-dark-ink: var(--dark-ink);
+  --color-positive: var(--positive);
+  --color-positive-tint: var(--positive-tint);
+  --color-negative: var(--negative);
+  --color-negative-tint: var(--negative-tint);
+  --color-role-reg: var(--role-reg);
+  --shadow-card: var(--shadow-1);
+}
+
+@theme {
+  /* §2 Pretendard 전역 — CDN dynamic-subset은 index.html에서 로드 */
+  --font-sans:
+    'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto,
+    'Helvetica Neue', 'Segoe UI', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic',
+    sans-serif;
+}

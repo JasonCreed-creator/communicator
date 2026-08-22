@@ -1,7 +1,6 @@
 // S0 ①단계 — 행사 기본개요: 행사명·행사일·주제·장소·사회자.
 // updateProject(name·event_date, pm 전용) + updateProjectOverview(주제·장소·사회자, pm·ops)로 저장.
 import { useState, type FormEvent } from 'react'
-import Card from '../internal/Card'
 import ErrorAlert from '../internal/ErrorAlert'
 import { PROJECT_ID } from '../../fixtures/sampleProject'
 import { useMutation } from '../../hooks/useAsync'
@@ -38,65 +37,40 @@ export default function OverviewStep({ project, onSaved }: { project: Project; o
   }
 
   return (
-    <Card title="① 행사 기본개요">
+    <section>
+      <h2 className="t-section-title mb-4">① 행사 기본개요</h2>
       <form onSubmit={handleSubmit} className="space-y-4 text-sm">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <label className="flex flex-col gap-1 text-xs text-gray-500">
+          <label className="flex flex-col gap-1 t-caption">
             행사명
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-              className="rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900"
-            />
+            <input value={name} onChange={(e) => setName(e.target.value)} required className="ui-input" />
           </label>
-          <label className="flex flex-col gap-1 text-xs text-gray-500">
+          <label className="flex flex-col gap-1 t-caption">
             행사일
-            <input
-              type="date"
-              value={eventDate}
-              onChange={(e) => setEventDate(e.target.value)}
-              className="rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900"
-            />
+            <input type="date" value={eventDate} onChange={(e) => setEventDate(e.target.value)} className="ui-input" />
           </label>
-          <label className="flex flex-col gap-1 text-xs text-gray-500">
+          <label className="flex flex-col gap-1 t-caption">
             주제
-            <input
-              value={theme}
-              onChange={(e) => setTheme(e.target.value)}
-              className="rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900"
-            />
+            <input value={theme} onChange={(e) => setTheme(e.target.value)} className="ui-input" />
           </label>
-          <label className="flex flex-col gap-1 text-xs text-gray-500">
+          <label className="flex flex-col gap-1 t-caption">
             장소
-            <input
-              value={venue}
-              onChange={(e) => setVenue(e.target.value)}
-              className="rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900"
-            />
+            <input value={venue} onChange={(e) => setVenue(e.target.value)} className="ui-input" />
           </label>
-          <label className="flex flex-col gap-1 text-xs text-gray-500 sm:col-span-2">
+          <label className="flex flex-col gap-1 t-caption sm:col-span-2">
             사회자
-            <input
-              value={mcName}
-              onChange={(e) => setMcName(e.target.value)}
-              className="rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900"
-            />
+            <input value={mcName} onChange={(e) => setMcName(e.target.value)} className="ui-input" />
           </label>
         </div>
 
         <ErrorAlert message={save.error} />
 
         <div className="flex justify-end">
-          <button
-            type="submit"
-            disabled={save.pending}
-            className="rounded-md bg-gray-900 px-4 py-1.5 text-sm font-medium text-white disabled:opacity-50"
-          >
+          <button type="submit" disabled={save.pending} className="btn btn-primary">
             다음
           </button>
         </div>
       </form>
-    </Card>
+    </section>
   )
 }

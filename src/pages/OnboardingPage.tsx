@@ -2,6 +2,7 @@
 // 완료 전 본체 라우트는 OnboardingGuard가 이 라우트로 리다이렉트한다(App.tsx·testUtils.tsx).
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import BrandLogo from '../components/BrandLogo'
 import ErrorAlert from '../components/internal/ErrorAlert'
 import AssigneesStep from '../components/onboarding/AssigneesStep'
 import EventTypeStep from '../components/onboarding/EventTypeStep'
@@ -25,48 +26,54 @@ export default function OnboardingPage() {
   const navigate = useNavigate()
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="border-b border-gray-200 bg-white">
-        <div className="mx-auto max-w-2xl px-4 py-5">
-          <p className="font-mono text-xs text-gray-400">S0</p>
-          <h1 className="mt-1 text-xl font-bold text-gray-900">온보딩 위저드</h1>
-          <p className="mt-1 text-sm text-gray-500">행사 정보를 입력하면 본체 화면을 사용할 수 있습니다.</p>
+    <div className="min-h-screen bg-canvas px-4 py-10">
+      <div className="ui-card mx-auto max-w-[720px] p-6 sm:p-8">
+        <div className="mb-6 flex items-center justify-between">
+          <BrandLogo variant="black" className="h-5 w-auto" />
+          <p className="t-caption">S0</p>
         </div>
-      </header>
 
-      <main className="mx-auto max-w-2xl space-y-6 p-4">
-        <StepIndicator steps={STEPS} current={step} />
+        <h1 className="t-page-title">온보딩 위저드</h1>
+        <p className="mt-1 text-sm text-ink-sub">행사 정보를 입력하면 본체 화면을 사용할 수 있습니다.</p>
 
-        {project.loading && <p className="text-sm text-gray-400">불러오는 중…</p>}
-        <ErrorAlert message={project.error} />
+        <div className="mt-6 flex flex-col gap-6 sm:flex-row sm:gap-8">
+          <div className="sm:w-36 sm:shrink-0">
+            <StepIndicator steps={STEPS} current={step} />
+          </div>
 
-        {project.data && (
-          <>
-            {step === 1 && (
-              <OverviewStep
-                project={project.data}
-                onSaved={() => {
-                  project.reload()
-                  setStep(2)
-                }}
-              />
+          <div className="min-w-0 flex-1 space-y-6">
+            {project.loading && <p className="text-sm text-ink-cap">불러오는 중…</p>}
+            <ErrorAlert message={project.error} />
+
+            {project.data && (
+              <>
+                {step === 1 && (
+                  <OverviewStep
+                    project={project.data}
+                    onSaved={() => {
+                      project.reload()
+                      setStep(2)
+                    }}
+                  />
+                )}
+                {step === 2 && (
+                  <EventTypeStep
+                    project={project.data}
+                    onPrev={() => setStep(1)}
+                    onSaved={() => {
+                      project.reload()
+                      setStep(3)
+                    }}
+                  />
+                )}
+                {step === 3 && (
+                  <AssigneesStep onPrev={() => setStep(2)} onComplete={() => navigate('/', { replace: true })} />
+                )}
+              </>
             )}
-            {step === 2 && (
-              <EventTypeStep
-                project={project.data}
-                onPrev={() => setStep(1)}
-                onSaved={() => {
-                  project.reload()
-                  setStep(3)
-                }}
-              />
-            )}
-            {step === 3 && (
-              <AssigneesStep onPrev={() => setStep(2)} onComplete={() => navigate('/', { replace: true })} />
-            )}
-          </>
-        )}
-      </main>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

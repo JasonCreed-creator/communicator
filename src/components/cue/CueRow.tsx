@@ -23,6 +23,12 @@ interface CueRowProps {
   onChanged: () => void
 }
 
+/** 콘솔 채널 값 — 값이 있으면 t-caption 톤의 칩, 없으면 대시 (§6 S3: 콘솔 3채널 칩은 t-caption 톤) */
+function ConsoleChip({ value }: { value: string | null }) {
+  if (!value) return <span className="text-ink-cap">—</span>
+  return <span className="t-caption inline-flex items-center rounded-full bg-canvas px-2 py-0.5">{value}</span>
+}
+
 /** S3 큐시트 에디터 — 큐 1행. 보기/인라인 편집/대본 전문 패널 3모드를 오간다 */
 export default function CueRow({ cue, canEdit, isFirst, isLast, onMoveUp, onMoveDown, onChanged }: CueRowProps) {
   const [editing, setEditing] = useState(false)
@@ -71,21 +77,27 @@ export default function CueRow({ cue, canEdit, isFirst, isLast, onMoveUp, onMove
 
   return (
     <>
-      <tr>
-        <td className="py-2 pr-3 align-top font-medium text-gray-900">{cue.cue_no ?? '—'}</td>
-        <td className="py-2 pr-3 align-top text-gray-700">{cue.time_at ?? '—'}</td>
-        <td className="py-2 pr-3 align-top text-gray-700">{cue.segment ?? '—'}</td>
-        <td className="py-2 pr-3 align-top text-gray-700">{summaryLine(cue.body)}</td>
-        <td className="py-2 pr-3 align-top text-gray-500">{cue.console_audio ?? '—'}</td>
-        <td className="py-2 pr-3 align-top text-gray-500">{cue.console_light ?? '—'}</td>
-        <td className="py-2 pr-3 align-top text-gray-500">{cue.console_screen ?? '—'}</td>
+      <tr className="h-11 hover:bg-accent-tint/30">
+        <td className="py-2 pr-3 align-top font-medium text-ink">{cue.cue_no ?? '—'}</td>
+        <td className="py-2 pr-3 align-top text-ink-sub">{cue.time_at ?? '—'}</td>
+        <td className="py-2 pr-3 align-top text-ink-sub">{cue.segment ?? '—'}</td>
+        <td className="py-2 pr-3 align-top text-ink-sub">{summaryLine(cue.body)}</td>
+        <td className="py-2 pr-3 align-top">
+          <ConsoleChip value={cue.console_audio} />
+        </td>
+        <td className="py-2 pr-3 align-top">
+          <ConsoleChip value={cue.console_light} />
+        </td>
+        <td className="py-2 pr-3 align-top">
+          <ConsoleChip value={cue.console_screen} />
+        </td>
         <td className="py-2 align-top">
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-1.5">
             <button
               type="button"
               onClick={() => setScriptOpen((v) => !v)}
               aria-expanded={scriptOpen}
-              className="text-xs text-blue-700 underline"
+              className="text-xs font-medium text-steel underline underline-offset-2"
             >
               대본
             </button>
@@ -97,7 +109,7 @@ export default function CueRow({ cue, canEdit, isFirst, isLast, onMoveUp, onMove
                   disabled={isFirst}
                   aria-label="위로"
                   title="위로"
-                  className="text-xs text-gray-600 disabled:opacity-30"
+                  className="btn btn-sm btn-ghost"
                 >
                   ↑
                 </button>
@@ -107,18 +119,18 @@ export default function CueRow({ cue, canEdit, isFirst, isLast, onMoveUp, onMove
                   disabled={isLast}
                   aria-label="아래로"
                   title="아래로"
-                  className="text-xs text-gray-600 disabled:opacity-30"
+                  className="btn btn-sm btn-ghost"
                 >
                   ↓
                 </button>
-                <button type="button" onClick={handleEdit} className="text-xs text-gray-600 underline">
+                <button type="button" onClick={handleEdit} className="btn btn-sm btn-ghost">
                   편집
                 </button>
                 <button
                   type="button"
                   onClick={handleDelete}
                   disabled={remove.pending}
-                  className="text-xs text-red-600 underline disabled:opacity-50"
+                  className="btn btn-sm btn-ghost-negative"
                 >
                   삭제
                 </button>
@@ -130,11 +142,14 @@ export default function CueRow({ cue, canEdit, isFirst, isLast, onMoveUp, onMove
       </tr>
       {scriptOpen && (
         <tr>
-          <td colSpan={COLS} className="bg-gray-50 px-3 py-3">
-            <p className="mb-1 text-xs font-semibold text-gray-500">
-              대본 전문 — {cue.cue_no ?? cue.segment ?? ''}
-            </p>
-            {cue.body ? renderLiteMarkdown(cue.body) : <p className="text-xs text-gray-400">작성된 대본이 없습니다.</p>}
+          <td colSpan={COLS} className="px-3 py-3">
+            {/* 카드 안 카드 금지 — 면 분리는 canvas 인셋으로 (§ absolute rule 5) */}
+            <div className="rounded-lg bg-canvas p-3">
+              <p className="mb-1 text-xs font-semibold text-ink-sub">
+                대본 전문 — {cue.cue_no ?? cue.segment ?? ''}
+              </p>
+              {cue.body ? renderLiteMarkdown(cue.body) : <p className="text-xs text-ink-cap">작성된 대본이 없습니다.</p>}
+            </div>
           </td>
         </tr>
       )}
