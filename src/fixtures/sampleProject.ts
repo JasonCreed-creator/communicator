@@ -7,12 +7,15 @@ import type {
   ClientContact,
   ClientToken,
   Comment,
+  ComplianceCard,
   Cue,
   Deliverable,
   Milestone,
+  Profile,
   ProgramSession,
   Project,
   ProjectMember,
+  Quote,
   RoleCharter,
   RsvpContact,
   UnregisteredFile,
@@ -22,6 +25,8 @@ import type {
 import type { DeliverableArea, DeliverableStatus } from '../types/enums'
 import type { UserRef } from '../types/views'
 import { addDays, offsetToDate, toIsoDate } from '../lib/wbs'
+import { COMPLIANCE_CARD_TEMPLATES } from './complianceTemplates'
+import { createFixtureQuotes, FINAL_QUOTE_ID } from './quoteFixtures'
 import { RECRUITING_WBS_TEMPLATE, ROLE_CHARTER_TEMPLATES, wbsTemplateFor } from './wbsTemplates'
 
 /** `/c/demo` 데모 라우트용 토큰 값 (CLAUDE.md §4 Phase 3) */
@@ -42,6 +47,8 @@ export const PROJECT_ID_CLOSED = 'prj-ai-summit'
 export interface MockState {
   users: UserRef[]
   current_user_id: string
+  /** v2.0 §4-1b — 전역 역할. 행 없는 사용자는 app_role='staff'로 간주(가입 기본값) */
+  profiles: Profile[]
   projects: Project[]
   members: ProjectMember[]
   client_contacts: ClientContact[]
@@ -59,6 +66,10 @@ export interface MockState {
   cues: Cue[]
   wbs_tasks: WbsTask[]
   role_charters: RoleCharter[]
+  /** v2.0 §4-18 — 견적 (금액은 admin·sales 게이트 뒤에만 노출) */
+  quotes: Quote[]
+  /** v2.0 §4-17 — 컴플라이언스 카드 (온보딩 시 시드) */
+  compliance_cards: ComplianceCard[]
 }
 
 /** v1.2 지시서·스펙·본문 필드 기본값 — 지시 없이 만든 항목은 전부 null (§4) */
@@ -80,6 +91,13 @@ const FIXTURE: MockState = {
     { id: 'usr-reg', name: '최등록', email: 'reg@example.com' },
   ],
   current_user_id: 'usr-pm',
+  // v2.0 — 현재 사용자(김기획)는 sales: 견적 메뉴·API 접근 가능 (mock 토글 setAppRole로 전환)
+  profiles: [
+    { id: 'usr-pm', display_name: '김기획', email: 'pm@example.com', app_role: 'sales', created_at: '2026-08-01T09:00:00.000Z' },
+    { id: 'usr-design', display_name: '이디자', email: 'design@example.com', app_role: 'staff', created_at: '2026-08-01T09:00:00.000Z' },
+    { id: 'usr-ops', display_name: '박운영', email: 'ops@example.com', app_role: 'staff', created_at: '2026-08-01T09:00:00.000Z' },
+    { id: 'usr-reg', display_name: '최등록', email: 'reg@example.com', app_role: 'staff', created_at: '2026-08-01T09:00:00.000Z' },
+  ],
 
   projects: [
     {
@@ -97,6 +115,17 @@ const FIXTURE: MockState = {
     target_audience: '파트너사·미디어·일반 참관객',
     status: 'active',
     closed_at: null,
+    // v2.0 모객형 전용 필드 — 확정 견적(quo-003)과 정합 (§16 매핑 결과와 동일 축)
+    guarantee_pax: 80,
+    kpi_show_rate: 90,
+    targeting: {
+      company_size: ['대기업', '중견기업'],
+      title: ['임원', '부장'],
+      industry: ['IT/통신'],
+      job: ['경영/전략/기획'],
+      region: ['서울특별시'],
+    },
+    quote_id: FINAL_QUOTE_ID,
     drive_root_folder_id: 'drv-root-stc26',
     slack_webhook_url: null,
     event_type: 'recruiting', // v1.3 — 픽스처는 RSVP 파이프라인을 쓰는 모객형
@@ -511,6 +540,10 @@ const FIXTURE: MockState = {
   // v1.4 R&R — createFixtureState()에서 모객형 템플릿으로 시드
   role_charters: [],
 
+  // v2.0 견적·컴플라이언스 — createFixtureState()에서 엔진 산출·템플릿 시드로 채움
+  quotes: [],
+  compliance_cards: [],
+
   unregistered_files: [
     {
       id: 'inb-001',
@@ -555,6 +588,7 @@ export function createFixtureState(): MockState {
     status: 'todo',
     done_at: null,
     linked_deliverable_id: null,
+    target: tpl.target,
     note: null,
     sort_order: i + 1,
   }))
@@ -593,6 +627,10 @@ export function createFixtureState(): MockState {
       target_audience: '파트너사 실무진',
       status: 'active',
       closed_at: null,
+      guarantee_pax: null,
+      kpi_show_rate: null,
+      targeting: null,
+      quote_id: null,
       drive_root_folder_id: null,
       slack_webhook_url: null,
       event_type: 'general',
@@ -619,6 +657,10 @@ export function createFixtureState(): MockState {
       target_audience: null,
       status: 'active',
       closed_at: null,
+      guarantee_pax: null,
+      kpi_show_rate: null,
+      targeting: null,
+      quote_id: null,
       drive_root_folder_id: null,
       slack_webhook_url: null,
       event_type: 'general',
@@ -644,6 +686,10 @@ export function createFixtureState(): MockState {
       target_audience: '업계 전문가·미디어',
       status: 'closed',
       closed_at: `${addDays(today, -20)}T09:00:00.000Z`,
+      guarantee_pax: null,
+      kpi_show_rate: null,
+      targeting: null,
+      quote_id: null,
       drive_root_folder_id: null,
       slack_webhook_url: null,
       event_type: 'recruiting',
@@ -732,6 +778,7 @@ export function createFixtureState(): MockState {
     status: 'todo',
     done_at: null,
     linked_deliverable_id: null,
+    target: tpl.target,
     note: null,
     sort_order: i + 1,
   }))
@@ -753,6 +800,21 @@ export function createFixtureState(): MockState {
       items: [...tpl.items],
     })),
   )
+
+  // ── v2.0 견적 4건(①연결 3버전 + 미연결 1) — 금액은 엔진 산출 ──
+  state.quotes = createFixtureQuotes(PROJECT_ID)
+
+  // ── v2.0 컴플라이언스 카드 — 온보딩 완료 행사(①②)에 2종 시드 (§4-17) ──
+  const seedCompliance = (projectId: string, prefix: string): ComplianceCard[] =>
+    COMPLIANCE_CARD_TEMPLATES.map((tpl, i) => ({
+      id: `cmp-${prefix}-${String(i + 1).padStart(2, '0')}`,
+      project_id: projectId,
+      kind: tpl.kind,
+      title: tpl.title,
+      items: tpl.items.map((text) => ({ text, checked: false, checked_at: null })),
+      sort_order: tpl.sort_order,
+    }))
+  state.compliance_cards = [...seedCompliance(PROJECT_ID, 'stc'), ...seedCompliance(PROJECT_ID_PARTNER, 'ptd')]
 
   return state
 }

@@ -1,0 +1,2207 @@
+{
+  "dataset": "remember-mice-pricing",
+  "version": "1.0.0",
+  "generated_at": "2026-08-20",
+  "source": {
+    "repo": "JasonCreed-creator/jsx-easy-shift",
+    "commit": "b210ce3",
+    "engine": "src/lib/calcEstimate.js",
+    "kpi": "src/lib/kpiRules.ts"
+  },
+  "currency": "KRW",
+  "vat": {
+    "rate": 0.1,
+    "rule": "전 금액 VAT 별도 표기 · VAT포함 = round(pk × 1.1)"
+  },
+  "bounds": {
+    "target_min": 40,
+    "target_max": 500,
+    "oversize_rule": "target > target_max → isCustom: 자동견적 불가(전 항목 0), 별도 협의",
+    "guarantee_engine": "엔진은 게런티 하한을 강제하지 않음 (g × 단가 그대로)",
+    "guarantee_ui": {
+      "quote_page_min": 1,
+      "internal_page_min": 40,
+      "max": "target"
+    }
+  },
+  "constants": {
+    "VENUE_PER_PAX_5STAR": 180000,
+    "SOUVENIR_UNIT_PRICE": 50000,
+    "BOOTH_UNIT_PRICE": 1000000,
+    "BOOTH_PREMIUM_UNIT_PRICE": 2000000,
+    "GEN_ATTENDEE_UNIT_PRICE": 20000,
+    "RSVP_LIST_PRICE": 50000,
+    "RSVP_PKG_PRICE": 40000,
+    "SHOWUP_LIST_PRICE": 450000,
+    "SHOWUP_PKG_PRICE": 350000,
+    "LEAD_LIST_PER_PAX": 450000,
+    "PCO_RATE": 0.25
+  },
+  "input_guards": {
+    "override_rule": "단가·수량 오버라이드(souvenirPrice/souvenirQty/boothUnitPrice/boothPremiumUnitPrice)는 '유한수 & 0 이상'만 인정, 그 외(NaN·음수·공백·null)는 기본값 폴백",
+    "gen_attendees": "round 후 0 미만은 0으로 클램프"
+  },
+  "formulas": {
+    "s1_venue": {
+      "rule": "venueRental 입력이 있으면 그 값, 없으면 target × 180,000 (5성급 간편 산정)",
+      "multi_venue": "후보 베뉴 N개 중 택1 — 선택된 1곳의 대관료만 s1에 반영 (합산 금지)",
+      "fb_note": "F&B는 대관료의 80%까지 포함 (표기용 — 금액 가산 없음)"
+    },
+    "s2_system": {
+      "video": "2,000,000 (정액)",
+      "scaler4k": "target ≥ 100 AND displayType ≠ 'projector' ? 2,500,000 : 0  — LED 운용 시에만 기본 포함",
+      "audio": "1,500,000 + ceil(max(0, target−50)/100) × 500,000",
+      "engineer": "1,000,000 (정액)",
+      "presentation": "1,200,000 (정액)",
+      "registration": "target > 200 ? 1,000,000 + floor(target/100)×1,000,000 (키오스크 100명당 1대) : 1,000,000 + max(0, target−100)×5,000",
+      "misc": "500,000 + ceil(max(0, target−50)/100) × 500,000"
+    },
+    "s3_design": {
+      "env": "target≤50: 2,000,000 · ≤100: 2,500,000 · ≤150: 3,000,000 · >150: 3,500,000",
+      "web": "1,000,000 (정액)",
+      "kv": "1,000,000 (정액)"
+    },
+    "s4_ops": {
+      "desk": "ceil(target/50) × 250,000",
+      "ops": "900,000 + ceil(max(0, target−100)/100) × 300,000",
+      "insurance": "400,000 + ceil(max(0, target−100)/100) × 100,000"
+    },
+    "options_ot": {
+      "souvenir": "qty(기본 target) × unit(기본 50,000)",
+      "emcee": 1500000,
+      "photo": 800000,
+      "video_sketch": 2000000,
+      "aving": 2500000,
+      "scaler4k_option": "target < 100 일 때만 옵션 과금 2,500,000 (100명 이상은 시스템 포함이라 중복 금지)",
+      "screenRelay": "displayType === 'led' 일 때만 2,500,000 (프로젝터는 옵션이 남아 있어도 미과금)",
+      "fullRecording": 3500000,
+      "survey": 1000000,
+      "photowall_basic": 500000,
+      "photowall_premium": 2000000,
+      "photowall_rule": "일반형·고급형 택1",
+      "media_rule": "photo/video/aving 택1",
+      "rsvpHandling": "target × 20,000 (순수 응대 대행 — 모객 제외 모드 전용 UI, 게런티 아님)",
+      "booth_standard": "count × unit(기본 1,000,000)",
+      "booth_premium": "count × unit(기본 2,000,000)"
+    },
+    "leads": {
+      "rsvpPkg": "guarantee × 40,000 (정가 50,000 → 1만원 할인)",
+      "showup": "guarantee × 350,000 (정가 450,000 → 10만원 할인)",
+      "leadPkg": "rsvpPkg + showup",
+      "leadOrig": "guarantee × 450,000 (취소선 표기용)",
+      "exclude_mode": "모객 제외 = guarantee를 0으로 두고 동일 산식 (별도 공식 없음)"
+    },
+    "gen_attendee": {
+      "genManage": "genAttendees × 20,000 — 쇼업 게런티 아님 · 게런티와 독립 · 모객 제외 모드에서도 유지",
+      "rationale": "쇼업 1명 확보에 평균 3배수 컨택(초청·리마인드·확정) — 인당 단가에 컨택 3회분 응대 원가 반영"
+    },
+    "pco_s5": "opCost × 0.25 를 만원 미만 절사(floor(x/10000)×10000). opCost = s1+s2+s3+s4+ot+rsvpPkg+genManage (showup·leadPkg조정 미포함)",
+    "total_pk": "s1+s2+s3+s4+s5+ot+rsvpPkg+showup+genManage",
+    "pk_excluding_options": "pk − ot − (s5 − floor((opCost−ot)×0.25/10000)×10000) — 옵션 제외 시 PCO도 재계산. genManage는 옵션이 아니므로 유지",
+    "adjustments": "델타 {s1,s2,s3,s4,ot,leadPkg}를 소계에 가산 후 opCost·s5·pk 재계산. leadPkg 델타는 opCost(→PCO)에 미포함"
+  },
+  "kpi_rules": {
+    "scope": "모객 게런티의 KPI 인정선 (kpiRules.ts 복제 — 산출 금액에는 영향 없음)",
+    "floor": 40,
+    "down_ratio": "g≤50: 0% · g≤100: 15% · g>100: 20%",
+    "min_ack": "max(40, ceil(g × (1 − down_ratio)))",
+    "tier": "g≤50: 1단계 · g≤100: 2단계 · g>100: 3단계",
+    "under_floor_ui": "게런티 40명 미만 구간은 KPI 게이지 미적용 표기"
+  },
+  "headcount_grid": [
+    {
+      "target": 40,
+      "venue_auto": 7200000,
+      "sys": {
+        "video": 2000000,
+        "scaler4k": 0,
+        "audio": 1500000,
+        "engineer": 1000000,
+        "presentation": 1200000,
+        "registration": 1000000,
+        "misc": 500000
+      },
+      "des": {
+        "env": 2000000,
+        "web": 1000000,
+        "kv": 1000000
+      },
+      "ops": {
+        "desk": 250000,
+        "ops": 900000,
+        "insurance": 400000
+      },
+      "s2": 7200000,
+      "s3": 4000000,
+      "s4": 1550000,
+      "s5": 4980000,
+      "pk": 24930000
+    },
+    {
+      "target": 50,
+      "venue_auto": 9000000,
+      "sys": {
+        "video": 2000000,
+        "scaler4k": 0,
+        "audio": 1500000,
+        "engineer": 1000000,
+        "presentation": 1200000,
+        "registration": 1000000,
+        "misc": 500000
+      },
+      "des": {
+        "env": 2000000,
+        "web": 1000000,
+        "kv": 1000000
+      },
+      "ops": {
+        "desk": 250000,
+        "ops": 900000,
+        "insurance": 400000
+      },
+      "s2": 7200000,
+      "s3": 4000000,
+      "s4": 1550000,
+      "s5": 5430000,
+      "pk": 27180000
+    },
+    {
+      "target": 60,
+      "venue_auto": 10800000,
+      "sys": {
+        "video": 2000000,
+        "scaler4k": 0,
+        "audio": 2000000,
+        "engineer": 1000000,
+        "presentation": 1200000,
+        "registration": 1000000,
+        "misc": 1000000
+      },
+      "des": {
+        "env": 2500000,
+        "web": 1000000,
+        "kv": 1000000
+      },
+      "ops": {
+        "desk": 500000,
+        "ops": 900000,
+        "insurance": 400000
+      },
+      "s2": 8200000,
+      "s3": 4500000,
+      "s4": 1800000,
+      "s5": 6320000,
+      "pk": 31620000
+    },
+    {
+      "target": 70,
+      "venue_auto": 12600000,
+      "sys": {
+        "video": 2000000,
+        "scaler4k": 0,
+        "audio": 2000000,
+        "engineer": 1000000,
+        "presentation": 1200000,
+        "registration": 1000000,
+        "misc": 1000000
+      },
+      "des": {
+        "env": 2500000,
+        "web": 1000000,
+        "kv": 1000000
+      },
+      "ops": {
+        "desk": 500000,
+        "ops": 900000,
+        "insurance": 400000
+      },
+      "s2": 8200000,
+      "s3": 4500000,
+      "s4": 1800000,
+      "s5": 6770000,
+      "pk": 33870000
+    },
+    {
+      "target": 80,
+      "venue_auto": 14400000,
+      "sys": {
+        "video": 2000000,
+        "scaler4k": 0,
+        "audio": 2000000,
+        "engineer": 1000000,
+        "presentation": 1200000,
+        "registration": 1000000,
+        "misc": 1000000
+      },
+      "des": {
+        "env": 2500000,
+        "web": 1000000,
+        "kv": 1000000
+      },
+      "ops": {
+        "desk": 500000,
+        "ops": 900000,
+        "insurance": 400000
+      },
+      "s2": 8200000,
+      "s3": 4500000,
+      "s4": 1800000,
+      "s5": 7220000,
+      "pk": 36120000
+    },
+    {
+      "target": 90,
+      "venue_auto": 16200000,
+      "sys": {
+        "video": 2000000,
+        "scaler4k": 0,
+        "audio": 2000000,
+        "engineer": 1000000,
+        "presentation": 1200000,
+        "registration": 1000000,
+        "misc": 1000000
+      },
+      "des": {
+        "env": 2500000,
+        "web": 1000000,
+        "kv": 1000000
+      },
+      "ops": {
+        "desk": 500000,
+        "ops": 900000,
+        "insurance": 400000
+      },
+      "s2": 8200000,
+      "s3": 4500000,
+      "s4": 1800000,
+      "s5": 7670000,
+      "pk": 38370000
+    },
+    {
+      "target": 100,
+      "venue_auto": 18000000,
+      "sys": {
+        "video": 2000000,
+        "scaler4k": 2500000,
+        "audio": 2000000,
+        "engineer": 1000000,
+        "presentation": 1200000,
+        "registration": 1000000,
+        "misc": 1000000
+      },
+      "des": {
+        "env": 2500000,
+        "web": 1000000,
+        "kv": 1000000
+      },
+      "ops": {
+        "desk": 500000,
+        "ops": 900000,
+        "insurance": 400000
+      },
+      "s2": 10700000,
+      "s3": 4500000,
+      "s4": 1800000,
+      "s5": 8750000,
+      "pk": 43750000
+    },
+    {
+      "target": 110,
+      "venue_auto": 19800000,
+      "sys": {
+        "video": 2000000,
+        "scaler4k": 2500000,
+        "audio": 2000000,
+        "engineer": 1000000,
+        "presentation": 1200000,
+        "registration": 1050000,
+        "misc": 1000000
+      },
+      "des": {
+        "env": 3000000,
+        "web": 1000000,
+        "kv": 1000000
+      },
+      "ops": {
+        "desk": 750000,
+        "ops": 1200000,
+        "insurance": 500000
+      },
+      "s2": 10750000,
+      "s3": 5000000,
+      "s4": 2450000,
+      "s5": 9500000,
+      "pk": 47500000
+    },
+    {
+      "target": 120,
+      "venue_auto": 21600000,
+      "sys": {
+        "video": 2000000,
+        "scaler4k": 2500000,
+        "audio": 2000000,
+        "engineer": 1000000,
+        "presentation": 1200000,
+        "registration": 1100000,
+        "misc": 1000000
+      },
+      "des": {
+        "env": 3000000,
+        "web": 1000000,
+        "kv": 1000000
+      },
+      "ops": {
+        "desk": 750000,
+        "ops": 1200000,
+        "insurance": 500000
+      },
+      "s2": 10800000,
+      "s3": 5000000,
+      "s4": 2450000,
+      "s5": 9960000,
+      "pk": 49810000
+    },
+    {
+      "target": 130,
+      "venue_auto": 23400000,
+      "sys": {
+        "video": 2000000,
+        "scaler4k": 2500000,
+        "audio": 2000000,
+        "engineer": 1000000,
+        "presentation": 1200000,
+        "registration": 1150000,
+        "misc": 1000000
+      },
+      "des": {
+        "env": 3000000,
+        "web": 1000000,
+        "kv": 1000000
+      },
+      "ops": {
+        "desk": 750000,
+        "ops": 1200000,
+        "insurance": 500000
+      },
+      "s2": 10850000,
+      "s3": 5000000,
+      "s4": 2450000,
+      "s5": 10420000,
+      "pk": 52120000
+    },
+    {
+      "target": 140,
+      "venue_auto": 25200000,
+      "sys": {
+        "video": 2000000,
+        "scaler4k": 2500000,
+        "audio": 2000000,
+        "engineer": 1000000,
+        "presentation": 1200000,
+        "registration": 1200000,
+        "misc": 1000000
+      },
+      "des": {
+        "env": 3000000,
+        "web": 1000000,
+        "kv": 1000000
+      },
+      "ops": {
+        "desk": 750000,
+        "ops": 1200000,
+        "insurance": 500000
+      },
+      "s2": 10900000,
+      "s3": 5000000,
+      "s4": 2450000,
+      "s5": 10880000,
+      "pk": 54430000
+    },
+    {
+      "target": 150,
+      "venue_auto": 27000000,
+      "sys": {
+        "video": 2000000,
+        "scaler4k": 2500000,
+        "audio": 2000000,
+        "engineer": 1000000,
+        "presentation": 1200000,
+        "registration": 1250000,
+        "misc": 1000000
+      },
+      "des": {
+        "env": 3000000,
+        "web": 1000000,
+        "kv": 1000000
+      },
+      "ops": {
+        "desk": 750000,
+        "ops": 1200000,
+        "insurance": 500000
+      },
+      "s2": 10950000,
+      "s3": 5000000,
+      "s4": 2450000,
+      "s5": 11350000,
+      "pk": 56750000
+    },
+    {
+      "target": 160,
+      "venue_auto": 28800000,
+      "sys": {
+        "video": 2000000,
+        "scaler4k": 2500000,
+        "audio": 2500000,
+        "engineer": 1000000,
+        "presentation": 1200000,
+        "registration": 1300000,
+        "misc": 1500000
+      },
+      "des": {
+        "env": 3500000,
+        "web": 1000000,
+        "kv": 1000000
+      },
+      "ops": {
+        "desk": 1000000,
+        "ops": 1200000,
+        "insurance": 500000
+      },
+      "s2": 12000000,
+      "s3": 5500000,
+      "s4": 2700000,
+      "s5": 12250000,
+      "pk": 61250000
+    },
+    {
+      "target": 170,
+      "venue_auto": 30600000,
+      "sys": {
+        "video": 2000000,
+        "scaler4k": 2500000,
+        "audio": 2500000,
+        "engineer": 1000000,
+        "presentation": 1200000,
+        "registration": 1350000,
+        "misc": 1500000
+      },
+      "des": {
+        "env": 3500000,
+        "web": 1000000,
+        "kv": 1000000
+      },
+      "ops": {
+        "desk": 1000000,
+        "ops": 1200000,
+        "insurance": 500000
+      },
+      "s2": 12050000,
+      "s3": 5500000,
+      "s4": 2700000,
+      "s5": 12710000,
+      "pk": 63560000
+    },
+    {
+      "target": 180,
+      "venue_auto": 32400000,
+      "sys": {
+        "video": 2000000,
+        "scaler4k": 2500000,
+        "audio": 2500000,
+        "engineer": 1000000,
+        "presentation": 1200000,
+        "registration": 1400000,
+        "misc": 1500000
+      },
+      "des": {
+        "env": 3500000,
+        "web": 1000000,
+        "kv": 1000000
+      },
+      "ops": {
+        "desk": 1000000,
+        "ops": 1200000,
+        "insurance": 500000
+      },
+      "s2": 12100000,
+      "s3": 5500000,
+      "s4": 2700000,
+      "s5": 13170000,
+      "pk": 65870000
+    },
+    {
+      "target": 190,
+      "venue_auto": 34200000,
+      "sys": {
+        "video": 2000000,
+        "scaler4k": 2500000,
+        "audio": 2500000,
+        "engineer": 1000000,
+        "presentation": 1200000,
+        "registration": 1450000,
+        "misc": 1500000
+      },
+      "des": {
+        "env": 3500000,
+        "web": 1000000,
+        "kv": 1000000
+      },
+      "ops": {
+        "desk": 1000000,
+        "ops": 1200000,
+        "insurance": 500000
+      },
+      "s2": 12150000,
+      "s3": 5500000,
+      "s4": 2700000,
+      "s5": 13630000,
+      "pk": 68180000
+    },
+    {
+      "target": 200,
+      "venue_auto": 36000000,
+      "sys": {
+        "video": 2000000,
+        "scaler4k": 2500000,
+        "audio": 2500000,
+        "engineer": 1000000,
+        "presentation": 1200000,
+        "registration": 1500000,
+        "misc": 1500000
+      },
+      "des": {
+        "env": 3500000,
+        "web": 1000000,
+        "kv": 1000000
+      },
+      "ops": {
+        "desk": 1000000,
+        "ops": 1200000,
+        "insurance": 500000
+      },
+      "s2": 12200000,
+      "s3": 5500000,
+      "s4": 2700000,
+      "s5": 14100000,
+      "pk": 70500000
+    },
+    {
+      "target": 210,
+      "venue_auto": 37800000,
+      "sys": {
+        "video": 2000000,
+        "scaler4k": 2500000,
+        "audio": 2500000,
+        "engineer": 1000000,
+        "presentation": 1200000,
+        "registration": 3000000,
+        "misc": 1500000
+      },
+      "des": {
+        "env": 3500000,
+        "web": 1000000,
+        "kv": 1000000
+      },
+      "ops": {
+        "desk": 1250000,
+        "ops": 1500000,
+        "insurance": 600000
+      },
+      "s2": 13700000,
+      "s3": 5500000,
+      "s4": 3350000,
+      "s5": 15080000,
+      "pk": 75430000
+    },
+    {
+      "target": 220,
+      "venue_auto": 39600000,
+      "sys": {
+        "video": 2000000,
+        "scaler4k": 2500000,
+        "audio": 2500000,
+        "engineer": 1000000,
+        "presentation": 1200000,
+        "registration": 3000000,
+        "misc": 1500000
+      },
+      "des": {
+        "env": 3500000,
+        "web": 1000000,
+        "kv": 1000000
+      },
+      "ops": {
+        "desk": 1250000,
+        "ops": 1500000,
+        "insurance": 600000
+      },
+      "s2": 13700000,
+      "s3": 5500000,
+      "s4": 3350000,
+      "s5": 15530000,
+      "pk": 77680000
+    },
+    {
+      "target": 230,
+      "venue_auto": 41400000,
+      "sys": {
+        "video": 2000000,
+        "scaler4k": 2500000,
+        "audio": 2500000,
+        "engineer": 1000000,
+        "presentation": 1200000,
+        "registration": 3000000,
+        "misc": 1500000
+      },
+      "des": {
+        "env": 3500000,
+        "web": 1000000,
+        "kv": 1000000
+      },
+      "ops": {
+        "desk": 1250000,
+        "ops": 1500000,
+        "insurance": 600000
+      },
+      "s2": 13700000,
+      "s3": 5500000,
+      "s4": 3350000,
+      "s5": 15980000,
+      "pk": 79930000
+    },
+    {
+      "target": 240,
+      "venue_auto": 43200000,
+      "sys": {
+        "video": 2000000,
+        "scaler4k": 2500000,
+        "audio": 2500000,
+        "engineer": 1000000,
+        "presentation": 1200000,
+        "registration": 3000000,
+        "misc": 1500000
+      },
+      "des": {
+        "env": 3500000,
+        "web": 1000000,
+        "kv": 1000000
+      },
+      "ops": {
+        "desk": 1250000,
+        "ops": 1500000,
+        "insurance": 600000
+      },
+      "s2": 13700000,
+      "s3": 5500000,
+      "s4": 3350000,
+      "s5": 16430000,
+      "pk": 82180000
+    },
+    {
+      "target": 250,
+      "venue_auto": 45000000,
+      "sys": {
+        "video": 2000000,
+        "scaler4k": 2500000,
+        "audio": 2500000,
+        "engineer": 1000000,
+        "presentation": 1200000,
+        "registration": 3000000,
+        "misc": 1500000
+      },
+      "des": {
+        "env": 3500000,
+        "web": 1000000,
+        "kv": 1000000
+      },
+      "ops": {
+        "desk": 1250000,
+        "ops": 1500000,
+        "insurance": 600000
+      },
+      "s2": 13700000,
+      "s3": 5500000,
+      "s4": 3350000,
+      "s5": 16880000,
+      "pk": 84430000
+    },
+    {
+      "target": 260,
+      "venue_auto": 46800000,
+      "sys": {
+        "video": 2000000,
+        "scaler4k": 2500000,
+        "audio": 3000000,
+        "engineer": 1000000,
+        "presentation": 1200000,
+        "registration": 3000000,
+        "misc": 2000000
+      },
+      "des": {
+        "env": 3500000,
+        "web": 1000000,
+        "kv": 1000000
+      },
+      "ops": {
+        "desk": 1500000,
+        "ops": 1500000,
+        "insurance": 600000
+      },
+      "s2": 14700000,
+      "s3": 5500000,
+      "s4": 3600000,
+      "s5": 17650000,
+      "pk": 88250000
+    },
+    {
+      "target": 270,
+      "venue_auto": 48600000,
+      "sys": {
+        "video": 2000000,
+        "scaler4k": 2500000,
+        "audio": 3000000,
+        "engineer": 1000000,
+        "presentation": 1200000,
+        "registration": 3000000,
+        "misc": 2000000
+      },
+      "des": {
+        "env": 3500000,
+        "web": 1000000,
+        "kv": 1000000
+      },
+      "ops": {
+        "desk": 1500000,
+        "ops": 1500000,
+        "insurance": 600000
+      },
+      "s2": 14700000,
+      "s3": 5500000,
+      "s4": 3600000,
+      "s5": 18100000,
+      "pk": 90500000
+    },
+    {
+      "target": 280,
+      "venue_auto": 50400000,
+      "sys": {
+        "video": 2000000,
+        "scaler4k": 2500000,
+        "audio": 3000000,
+        "engineer": 1000000,
+        "presentation": 1200000,
+        "registration": 3000000,
+        "misc": 2000000
+      },
+      "des": {
+        "env": 3500000,
+        "web": 1000000,
+        "kv": 1000000
+      },
+      "ops": {
+        "desk": 1500000,
+        "ops": 1500000,
+        "insurance": 600000
+      },
+      "s2": 14700000,
+      "s3": 5500000,
+      "s4": 3600000,
+      "s5": 18550000,
+      "pk": 92750000
+    },
+    {
+      "target": 290,
+      "venue_auto": 52200000,
+      "sys": {
+        "video": 2000000,
+        "scaler4k": 2500000,
+        "audio": 3000000,
+        "engineer": 1000000,
+        "presentation": 1200000,
+        "registration": 3000000,
+        "misc": 2000000
+      },
+      "des": {
+        "env": 3500000,
+        "web": 1000000,
+        "kv": 1000000
+      },
+      "ops": {
+        "desk": 1500000,
+        "ops": 1500000,
+        "insurance": 600000
+      },
+      "s2": 14700000,
+      "s3": 5500000,
+      "s4": 3600000,
+      "s5": 19000000,
+      "pk": 95000000
+    },
+    {
+      "target": 300,
+      "venue_auto": 54000000,
+      "sys": {
+        "video": 2000000,
+        "scaler4k": 2500000,
+        "audio": 3000000,
+        "engineer": 1000000,
+        "presentation": 1200000,
+        "registration": 4000000,
+        "misc": 2000000
+      },
+      "des": {
+        "env": 3500000,
+        "web": 1000000,
+        "kv": 1000000
+      },
+      "ops": {
+        "desk": 1500000,
+        "ops": 1500000,
+        "insurance": 600000
+      },
+      "s2": 15700000,
+      "s3": 5500000,
+      "s4": 3600000,
+      "s5": 19700000,
+      "pk": 98500000
+    },
+    {
+      "target": 310,
+      "venue_auto": 55800000,
+      "sys": {
+        "video": 2000000,
+        "scaler4k": 2500000,
+        "audio": 3000000,
+        "engineer": 1000000,
+        "presentation": 1200000,
+        "registration": 4000000,
+        "misc": 2000000
+      },
+      "des": {
+        "env": 3500000,
+        "web": 1000000,
+        "kv": 1000000
+      },
+      "ops": {
+        "desk": 1750000,
+        "ops": 1800000,
+        "insurance": 700000
+      },
+      "s2": 15700000,
+      "s3": 5500000,
+      "s4": 4250000,
+      "s5": 20310000,
+      "pk": 101560000
+    },
+    {
+      "target": 320,
+      "venue_auto": 57600000,
+      "sys": {
+        "video": 2000000,
+        "scaler4k": 2500000,
+        "audio": 3000000,
+        "engineer": 1000000,
+        "presentation": 1200000,
+        "registration": 4000000,
+        "misc": 2000000
+      },
+      "des": {
+        "env": 3500000,
+        "web": 1000000,
+        "kv": 1000000
+      },
+      "ops": {
+        "desk": 1750000,
+        "ops": 1800000,
+        "insurance": 700000
+      },
+      "s2": 15700000,
+      "s3": 5500000,
+      "s4": 4250000,
+      "s5": 20760000,
+      "pk": 103810000
+    },
+    {
+      "target": 330,
+      "venue_auto": 59400000,
+      "sys": {
+        "video": 2000000,
+        "scaler4k": 2500000,
+        "audio": 3000000,
+        "engineer": 1000000,
+        "presentation": 1200000,
+        "registration": 4000000,
+        "misc": 2000000
+      },
+      "des": {
+        "env": 3500000,
+        "web": 1000000,
+        "kv": 1000000
+      },
+      "ops": {
+        "desk": 1750000,
+        "ops": 1800000,
+        "insurance": 700000
+      },
+      "s2": 15700000,
+      "s3": 5500000,
+      "s4": 4250000,
+      "s5": 21210000,
+      "pk": 106060000
+    },
+    {
+      "target": 340,
+      "venue_auto": 61200000,
+      "sys": {
+        "video": 2000000,
+        "scaler4k": 2500000,
+        "audio": 3000000,
+        "engineer": 1000000,
+        "presentation": 1200000,
+        "registration": 4000000,
+        "misc": 2000000
+      },
+      "des": {
+        "env": 3500000,
+        "web": 1000000,
+        "kv": 1000000
+      },
+      "ops": {
+        "desk": 1750000,
+        "ops": 1800000,
+        "insurance": 700000
+      },
+      "s2": 15700000,
+      "s3": 5500000,
+      "s4": 4250000,
+      "s5": 21660000,
+      "pk": 108310000
+    },
+    {
+      "target": 350,
+      "venue_auto": 63000000,
+      "sys": {
+        "video": 2000000,
+        "scaler4k": 2500000,
+        "audio": 3000000,
+        "engineer": 1000000,
+        "presentation": 1200000,
+        "registration": 4000000,
+        "misc": 2000000
+      },
+      "des": {
+        "env": 3500000,
+        "web": 1000000,
+        "kv": 1000000
+      },
+      "ops": {
+        "desk": 1750000,
+        "ops": 1800000,
+        "insurance": 700000
+      },
+      "s2": 15700000,
+      "s3": 5500000,
+      "s4": 4250000,
+      "s5": 22110000,
+      "pk": 110560000
+    },
+    {
+      "target": 360,
+      "venue_auto": 64800000,
+      "sys": {
+        "video": 2000000,
+        "scaler4k": 2500000,
+        "audio": 3500000,
+        "engineer": 1000000,
+        "presentation": 1200000,
+        "registration": 4000000,
+        "misc": 2500000
+      },
+      "des": {
+        "env": 3500000,
+        "web": 1000000,
+        "kv": 1000000
+      },
+      "ops": {
+        "desk": 2000000,
+        "ops": 1800000,
+        "insurance": 700000
+      },
+      "s2": 16700000,
+      "s3": 5500000,
+      "s4": 4500000,
+      "s5": 22870000,
+      "pk": 114370000
+    },
+    {
+      "target": 370,
+      "venue_auto": 66600000,
+      "sys": {
+        "video": 2000000,
+        "scaler4k": 2500000,
+        "audio": 3500000,
+        "engineer": 1000000,
+        "presentation": 1200000,
+        "registration": 4000000,
+        "misc": 2500000
+      },
+      "des": {
+        "env": 3500000,
+        "web": 1000000,
+        "kv": 1000000
+      },
+      "ops": {
+        "desk": 2000000,
+        "ops": 1800000,
+        "insurance": 700000
+      },
+      "s2": 16700000,
+      "s3": 5500000,
+      "s4": 4500000,
+      "s5": 23320000,
+      "pk": 116620000
+    },
+    {
+      "target": 380,
+      "venue_auto": 68400000,
+      "sys": {
+        "video": 2000000,
+        "scaler4k": 2500000,
+        "audio": 3500000,
+        "engineer": 1000000,
+        "presentation": 1200000,
+        "registration": 4000000,
+        "misc": 2500000
+      },
+      "des": {
+        "env": 3500000,
+        "web": 1000000,
+        "kv": 1000000
+      },
+      "ops": {
+        "desk": 2000000,
+        "ops": 1800000,
+        "insurance": 700000
+      },
+      "s2": 16700000,
+      "s3": 5500000,
+      "s4": 4500000,
+      "s5": 23770000,
+      "pk": 118870000
+    },
+    {
+      "target": 390,
+      "venue_auto": 70200000,
+      "sys": {
+        "video": 2000000,
+        "scaler4k": 2500000,
+        "audio": 3500000,
+        "engineer": 1000000,
+        "presentation": 1200000,
+        "registration": 4000000,
+        "misc": 2500000
+      },
+      "des": {
+        "env": 3500000,
+        "web": 1000000,
+        "kv": 1000000
+      },
+      "ops": {
+        "desk": 2000000,
+        "ops": 1800000,
+        "insurance": 700000
+      },
+      "s2": 16700000,
+      "s3": 5500000,
+      "s4": 4500000,
+      "s5": 24220000,
+      "pk": 121120000
+    },
+    {
+      "target": 400,
+      "venue_auto": 72000000,
+      "sys": {
+        "video": 2000000,
+        "scaler4k": 2500000,
+        "audio": 3500000,
+        "engineer": 1000000,
+        "presentation": 1200000,
+        "registration": 5000000,
+        "misc": 2500000
+      },
+      "des": {
+        "env": 3500000,
+        "web": 1000000,
+        "kv": 1000000
+      },
+      "ops": {
+        "desk": 2000000,
+        "ops": 1800000,
+        "insurance": 700000
+      },
+      "s2": 17700000,
+      "s3": 5500000,
+      "s4": 4500000,
+      "s5": 24920000,
+      "pk": 124620000
+    },
+    {
+      "target": 410,
+      "venue_auto": 73800000,
+      "sys": {
+        "video": 2000000,
+        "scaler4k": 2500000,
+        "audio": 3500000,
+        "engineer": 1000000,
+        "presentation": 1200000,
+        "registration": 5000000,
+        "misc": 2500000
+      },
+      "des": {
+        "env": 3500000,
+        "web": 1000000,
+        "kv": 1000000
+      },
+      "ops": {
+        "desk": 2250000,
+        "ops": 2100000,
+        "insurance": 800000
+      },
+      "s2": 17700000,
+      "s3": 5500000,
+      "s4": 5150000,
+      "s5": 25530000,
+      "pk": 127680000
+    },
+    {
+      "target": 420,
+      "venue_auto": 75600000,
+      "sys": {
+        "video": 2000000,
+        "scaler4k": 2500000,
+        "audio": 3500000,
+        "engineer": 1000000,
+        "presentation": 1200000,
+        "registration": 5000000,
+        "misc": 2500000
+      },
+      "des": {
+        "env": 3500000,
+        "web": 1000000,
+        "kv": 1000000
+      },
+      "ops": {
+        "desk": 2250000,
+        "ops": 2100000,
+        "insurance": 800000
+      },
+      "s2": 17700000,
+      "s3": 5500000,
+      "s4": 5150000,
+      "s5": 25980000,
+      "pk": 129930000
+    },
+    {
+      "target": 430,
+      "venue_auto": 77400000,
+      "sys": {
+        "video": 2000000,
+        "scaler4k": 2500000,
+        "audio": 3500000,
+        "engineer": 1000000,
+        "presentation": 1200000,
+        "registration": 5000000,
+        "misc": 2500000
+      },
+      "des": {
+        "env": 3500000,
+        "web": 1000000,
+        "kv": 1000000
+      },
+      "ops": {
+        "desk": 2250000,
+        "ops": 2100000,
+        "insurance": 800000
+      },
+      "s2": 17700000,
+      "s3": 5500000,
+      "s4": 5150000,
+      "s5": 26430000,
+      "pk": 132180000
+    },
+    {
+      "target": 440,
+      "venue_auto": 79200000,
+      "sys": {
+        "video": 2000000,
+        "scaler4k": 2500000,
+        "audio": 3500000,
+        "engineer": 1000000,
+        "presentation": 1200000,
+        "registration": 5000000,
+        "misc": 2500000
+      },
+      "des": {
+        "env": 3500000,
+        "web": 1000000,
+        "kv": 1000000
+      },
+      "ops": {
+        "desk": 2250000,
+        "ops": 2100000,
+        "insurance": 800000
+      },
+      "s2": 17700000,
+      "s3": 5500000,
+      "s4": 5150000,
+      "s5": 26880000,
+      "pk": 134430000
+    },
+    {
+      "target": 450,
+      "venue_auto": 81000000,
+      "sys": {
+        "video": 2000000,
+        "scaler4k": 2500000,
+        "audio": 3500000,
+        "engineer": 1000000,
+        "presentation": 1200000,
+        "registration": 5000000,
+        "misc": 2500000
+      },
+      "des": {
+        "env": 3500000,
+        "web": 1000000,
+        "kv": 1000000
+      },
+      "ops": {
+        "desk": 2250000,
+        "ops": 2100000,
+        "insurance": 800000
+      },
+      "s2": 17700000,
+      "s3": 5500000,
+      "s4": 5150000,
+      "s5": 27330000,
+      "pk": 136680000
+    },
+    {
+      "target": 460,
+      "venue_auto": 82800000,
+      "sys": {
+        "video": 2000000,
+        "scaler4k": 2500000,
+        "audio": 4000000,
+        "engineer": 1000000,
+        "presentation": 1200000,
+        "registration": 5000000,
+        "misc": 3000000
+      },
+      "des": {
+        "env": 3500000,
+        "web": 1000000,
+        "kv": 1000000
+      },
+      "ops": {
+        "desk": 2500000,
+        "ops": 2100000,
+        "insurance": 800000
+      },
+      "s2": 18700000,
+      "s3": 5500000,
+      "s4": 5400000,
+      "s5": 28100000,
+      "pk": 140500000
+    },
+    {
+      "target": 470,
+      "venue_auto": 84600000,
+      "sys": {
+        "video": 2000000,
+        "scaler4k": 2500000,
+        "audio": 4000000,
+        "engineer": 1000000,
+        "presentation": 1200000,
+        "registration": 5000000,
+        "misc": 3000000
+      },
+      "des": {
+        "env": 3500000,
+        "web": 1000000,
+        "kv": 1000000
+      },
+      "ops": {
+        "desk": 2500000,
+        "ops": 2100000,
+        "insurance": 800000
+      },
+      "s2": 18700000,
+      "s3": 5500000,
+      "s4": 5400000,
+      "s5": 28550000,
+      "pk": 142750000
+    },
+    {
+      "target": 480,
+      "venue_auto": 86400000,
+      "sys": {
+        "video": 2000000,
+        "scaler4k": 2500000,
+        "audio": 4000000,
+        "engineer": 1000000,
+        "presentation": 1200000,
+        "registration": 5000000,
+        "misc": 3000000
+      },
+      "des": {
+        "env": 3500000,
+        "web": 1000000,
+        "kv": 1000000
+      },
+      "ops": {
+        "desk": 2500000,
+        "ops": 2100000,
+        "insurance": 800000
+      },
+      "s2": 18700000,
+      "s3": 5500000,
+      "s4": 5400000,
+      "s5": 29000000,
+      "pk": 145000000
+    },
+    {
+      "target": 490,
+      "venue_auto": 88200000,
+      "sys": {
+        "video": 2000000,
+        "scaler4k": 2500000,
+        "audio": 4000000,
+        "engineer": 1000000,
+        "presentation": 1200000,
+        "registration": 5000000,
+        "misc": 3000000
+      },
+      "des": {
+        "env": 3500000,
+        "web": 1000000,
+        "kv": 1000000
+      },
+      "ops": {
+        "desk": 2500000,
+        "ops": 2100000,
+        "insurance": 800000
+      },
+      "s2": 18700000,
+      "s3": 5500000,
+      "s4": 5400000,
+      "s5": 29450000,
+      "pk": 147250000
+    },
+    {
+      "target": 500,
+      "venue_auto": 90000000,
+      "sys": {
+        "video": 2000000,
+        "scaler4k": 2500000,
+        "audio": 4000000,
+        "engineer": 1000000,
+        "presentation": 1200000,
+        "registration": 6000000,
+        "misc": 3000000
+      },
+      "des": {
+        "env": 3500000,
+        "web": 1000000,
+        "kv": 1000000
+      },
+      "ops": {
+        "desk": 2500000,
+        "ops": 2100000,
+        "insurance": 800000
+      },
+      "s2": 19700000,
+      "s3": 5500000,
+      "s4": 5400000,
+      "s5": 30150000,
+      "pk": 150750000
+    }
+  ],
+  "golden_vectors": [
+    {
+      "id": "base-50",
+      "desc": "기본 50명 · 게런티 45 · 무옵션 · 베뉴 자동",
+      "mode": "full",
+      "input": {
+        "target": 50,
+        "guarantee": 45
+      },
+      "expected": {
+        "isCustom": false,
+        "t": 50,
+        "g": 45,
+        "u": 50,
+        "s1": 9000000,
+        "s2": 7200000,
+        "s3": 4000000,
+        "s4": 1550000,
+        "s5": 5880000,
+        "ot": 0,
+        "rsvpOrig": 2250000,
+        "rsvpPkg": 1800000,
+        "leadOrig": 20250000,
+        "leadPkg": 17550000,
+        "showup": 15750000,
+        "genManage": 0,
+        "genCount": 0,
+        "opCost": 23550000,
+        "pk": 45180000,
+        "sysBreakdown": {
+          "video": 2000000,
+          "scaler4k": 0,
+          "audio": 1500000,
+          "engineer": 1000000,
+          "presentation": 1200000,
+          "registration": 1000000,
+          "misc": 500000
+        },
+        "desBreakdown": {
+          "env": 2000000,
+          "web": 1000000,
+          "kv": 1000000
+        },
+        "opsBreakdown": {
+          "desk": 250000,
+          "ops": 900000,
+          "insurance": 400000
+        }
+      },
+      "expected_pk_excluding_options": 45180000
+    },
+    {
+      "id": "base-100",
+      "desc": "100명 · 게런티 60 · 베뉴 수동 2,000만",
+      "mode": "full",
+      "input": {
+        "target": 100,
+        "guarantee": 60,
+        "venueRental": 20000000
+      },
+      "expected": {
+        "isCustom": false,
+        "t": 100,
+        "g": 60,
+        "u": 100,
+        "s1": 20000000,
+        "s2": 10700000,
+        "s3": 4500000,
+        "s4": 1800000,
+        "s5": 9850000,
+        "ot": 0,
+        "rsvpOrig": 3000000,
+        "rsvpPkg": 2400000,
+        "leadOrig": 27000000,
+        "leadPkg": 23400000,
+        "showup": 21000000,
+        "genManage": 0,
+        "genCount": 0,
+        "opCost": 39400000,
+        "pk": 70250000,
+        "sysBreakdown": {
+          "video": 2000000,
+          "scaler4k": 2500000,
+          "audio": 2000000,
+          "engineer": 1000000,
+          "presentation": 1200000,
+          "registration": 1000000,
+          "misc": 1000000
+        },
+        "desBreakdown": {
+          "env": 2500000,
+          "web": 1000000,
+          "kv": 1000000
+        },
+        "opsBreakdown": {
+          "desk": 500000,
+          "ops": 900000,
+          "insurance": 400000
+        }
+      },
+      "expected_pk_excluding_options": 70250000
+    },
+    {
+      "id": "pure-100",
+      "desc": "모객 제외(순수 패키지) — base-100과 동일 입력",
+      "mode": "excludeLeads",
+      "input": {
+        "target": 100,
+        "guarantee": 60,
+        "venueRental": 20000000
+      },
+      "expected": {
+        "isCustom": false,
+        "t": 100,
+        "g": 0,
+        "u": 100,
+        "s1": 20000000,
+        "s2": 10700000,
+        "s3": 4500000,
+        "s4": 1800000,
+        "s5": 9250000,
+        "ot": 0,
+        "rsvpOrig": 0,
+        "rsvpPkg": 0,
+        "leadOrig": 0,
+        "leadPkg": 0,
+        "showup": 0,
+        "genManage": 0,
+        "genCount": 0,
+        "opCost": 37000000,
+        "pk": 46250000,
+        "sysBreakdown": {
+          "video": 2000000,
+          "scaler4k": 2500000,
+          "audio": 2000000,
+          "engineer": 1000000,
+          "presentation": 1200000,
+          "registration": 1000000,
+          "misc": 1000000
+        },
+        "desBreakdown": {
+          "env": 2500000,
+          "web": 1000000,
+          "kv": 1000000
+        },
+        "opsBreakdown": {
+          "desk": 500000,
+          "ops": 900000,
+          "insurance": 400000
+        }
+      },
+      "expected_pk_excluding_options": 46250000
+    },
+    {
+      "id": "options-full",
+      "desc": "300명 · 옵션 다수 + 부스 2타입 + 참관객 200 (실사용 MDS 케이스 계열)",
+      "mode": "full",
+      "input": {
+        "target": 300,
+        "guarantee": 100,
+        "venueRental": 54000000,
+        "displayType": "led",
+        "genAttendees": 200,
+        "boothCount": 2,
+        "boothPremiumCount": 3,
+        "options": {
+          "souvenir": true,
+          "emcee": true,
+          "aving": true,
+          "screenRelay": true,
+          "fullRecording": true,
+          "photowall_premium": true
+        }
+      },
+      "expected": {
+        "isCustom": false,
+        "t": 300,
+        "g": 100,
+        "u": 300,
+        "s1": 54000000,
+        "s2": 15700000,
+        "s3": 5500000,
+        "s4": 3600000,
+        "s5": 30450000,
+        "ot": 35000000,
+        "rsvpOrig": 5000000,
+        "rsvpPkg": 4000000,
+        "leadOrig": 45000000,
+        "leadPkg": 39000000,
+        "showup": 35000000,
+        "genManage": 4000000,
+        "genCount": 200,
+        "opCost": 121800000,
+        "pk": 187250000,
+        "sysBreakdown": {
+          "video": 2000000,
+          "scaler4k": 2500000,
+          "audio": 3000000,
+          "engineer": 1000000,
+          "presentation": 1200000,
+          "registration": 4000000,
+          "misc": 2000000
+        },
+        "desBreakdown": {
+          "env": 3500000,
+          "web": 1000000,
+          "kv": 1000000
+        },
+        "opsBreakdown": {
+          "desk": 1500000,
+          "ops": 1500000,
+          "insurance": 600000
+        }
+      },
+      "expected_pk_excluding_options": 143500000
+    },
+    {
+      "id": "souvenir-override",
+      "desc": "기념품 단가 3만·수량 40 오버라이드",
+      "mode": "full",
+      "input": {
+        "target": 100,
+        "guarantee": 60,
+        "options": {
+          "souvenir": true
+        },
+        "souvenirPrice": 30000,
+        "souvenirQty": 40
+      },
+      "expected": {
+        "isCustom": false,
+        "t": 100,
+        "g": 60,
+        "u": 100,
+        "s1": 18000000,
+        "s2": 10700000,
+        "s3": 4500000,
+        "s4": 1800000,
+        "s5": 9650000,
+        "ot": 1200000,
+        "rsvpOrig": 3000000,
+        "rsvpPkg": 2400000,
+        "leadOrig": 27000000,
+        "leadPkg": 23400000,
+        "showup": 21000000,
+        "genManage": 0,
+        "genCount": 0,
+        "opCost": 38600000,
+        "pk": 69250000,
+        "sysBreakdown": {
+          "video": 2000000,
+          "scaler4k": 2500000,
+          "audio": 2000000,
+          "engineer": 1000000,
+          "presentation": 1200000,
+          "registration": 1000000,
+          "misc": 1000000
+        },
+        "desBreakdown": {
+          "env": 2500000,
+          "web": 1000000,
+          "kv": 1000000
+        },
+        "opsBreakdown": {
+          "desk": 500000,
+          "ops": 900000,
+          "insurance": 400000
+        }
+      },
+      "expected_pk_excluding_options": 67750000
+    },
+    {
+      "id": "souvenir-zero",
+      "desc": "기념품 명시적 0원 (기본값 대체 아님)",
+      "mode": "full",
+      "input": {
+        "target": 100,
+        "guarantee": 60,
+        "options": {
+          "souvenir": true
+        },
+        "souvenirPrice": 0
+      },
+      "expected": {
+        "isCustom": false,
+        "t": 100,
+        "g": 60,
+        "u": 100,
+        "s1": 18000000,
+        "s2": 10700000,
+        "s3": 4500000,
+        "s4": 1800000,
+        "s5": 9350000,
+        "ot": 0,
+        "rsvpOrig": 3000000,
+        "rsvpPkg": 2400000,
+        "leadOrig": 27000000,
+        "leadPkg": 23400000,
+        "showup": 21000000,
+        "genManage": 0,
+        "genCount": 0,
+        "opCost": 37400000,
+        "pk": 67750000,
+        "sysBreakdown": {
+          "video": 2000000,
+          "scaler4k": 2500000,
+          "audio": 2000000,
+          "engineer": 1000000,
+          "presentation": 1200000,
+          "registration": 1000000,
+          "misc": 1000000
+        },
+        "desBreakdown": {
+          "env": 2500000,
+          "web": 1000000,
+          "kv": 1000000
+        },
+        "opsBreakdown": {
+          "desk": 500000,
+          "ops": 900000,
+          "insurance": 400000
+        }
+      },
+      "expected_pk_excluding_options": 67750000
+    },
+    {
+      "id": "booth-unit-override",
+      "desc": "부스 단가 오버라이드 (일반 80만 × 2 · 고급 250만 × 1)",
+      "mode": "full",
+      "input": {
+        "target": 100,
+        "guarantee": 60,
+        "boothCount": 2,
+        "boothUnitPrice": 800000,
+        "boothPremiumCount": 1,
+        "boothPremiumUnitPrice": 2500000
+      },
+      "expected": {
+        "isCustom": false,
+        "t": 100,
+        "g": 60,
+        "u": 100,
+        "s1": 18000000,
+        "s2": 10700000,
+        "s3": 4500000,
+        "s4": 1800000,
+        "s5": 10370000,
+        "ot": 4100000,
+        "rsvpOrig": 3000000,
+        "rsvpPkg": 2400000,
+        "leadOrig": 27000000,
+        "leadPkg": 23400000,
+        "showup": 21000000,
+        "genManage": 0,
+        "genCount": 0,
+        "opCost": 41500000,
+        "pk": 72870000,
+        "sysBreakdown": {
+          "video": 2000000,
+          "scaler4k": 2500000,
+          "audio": 2000000,
+          "engineer": 1000000,
+          "presentation": 1200000,
+          "registration": 1000000,
+          "misc": 1000000
+        },
+        "desBreakdown": {
+          "env": 2500000,
+          "web": 1000000,
+          "kv": 1000000
+        },
+        "opsBreakdown": {
+          "desk": 500000,
+          "ops": 900000,
+          "insurance": 400000
+        }
+      },
+      "expected_pk_excluding_options": 67750000
+    },
+    {
+      "id": "scaler-led-150",
+      "desc": "150명 LED — 4K 스케일러 시스템 포함",
+      "mode": "full",
+      "input": {
+        "target": 150,
+        "guarantee": 60,
+        "displayType": "led"
+      },
+      "expected": {
+        "isCustom": false,
+        "t": 150,
+        "g": 60,
+        "u": 150,
+        "s1": 27000000,
+        "s2": 10950000,
+        "s3": 5000000,
+        "s4": 2450000,
+        "s5": 11950000,
+        "ot": 0,
+        "rsvpOrig": 3000000,
+        "rsvpPkg": 2400000,
+        "leadOrig": 27000000,
+        "leadPkg": 23400000,
+        "showup": 21000000,
+        "genManage": 0,
+        "genCount": 0,
+        "opCost": 47800000,
+        "pk": 80750000,
+        "sysBreakdown": {
+          "video": 2000000,
+          "scaler4k": 2500000,
+          "audio": 2000000,
+          "engineer": 1000000,
+          "presentation": 1200000,
+          "registration": 1250000,
+          "misc": 1000000
+        },
+        "desBreakdown": {
+          "env": 3000000,
+          "web": 1000000,
+          "kv": 1000000
+        },
+        "opsBreakdown": {
+          "desk": 750000,
+          "ops": 1200000,
+          "insurance": 500000
+        }
+      },
+      "expected_pk_excluding_options": 80750000
+    },
+    {
+      "id": "scaler-projector-150",
+      "desc": "150명 빔프로젝터 — 스케일러 미포함(−250만)",
+      "mode": "full",
+      "input": {
+        "target": 150,
+        "guarantee": 60,
+        "displayType": "projector"
+      },
+      "expected": {
+        "isCustom": false,
+        "t": 150,
+        "g": 60,
+        "u": 150,
+        "s1": 27000000,
+        "s2": 8450000,
+        "s3": 5000000,
+        "s4": 2450000,
+        "s5": 11320000,
+        "ot": 0,
+        "rsvpOrig": 3000000,
+        "rsvpPkg": 2400000,
+        "leadOrig": 27000000,
+        "leadPkg": 23400000,
+        "showup": 21000000,
+        "genManage": 0,
+        "genCount": 0,
+        "opCost": 45300000,
+        "pk": 77620000,
+        "sysBreakdown": {
+          "video": 2000000,
+          "scaler4k": 0,
+          "audio": 2000000,
+          "engineer": 1000000,
+          "presentation": 1200000,
+          "registration": 1250000,
+          "misc": 1000000
+        },
+        "desBreakdown": {
+          "env": 3000000,
+          "web": 1000000,
+          "kv": 1000000
+        },
+        "opsBreakdown": {
+          "desk": 750000,
+          "ops": 1200000,
+          "insurance": 500000
+        }
+      },
+      "expected_pk_excluding_options": 77620000
+    },
+    {
+      "id": "relay-projector",
+      "desc": "화면중계 옵션 잔존 + 프로젝터 — 미과금",
+      "mode": "full",
+      "input": {
+        "target": 150,
+        "guarantee": 60,
+        "displayType": "projector",
+        "options": {
+          "screenRelay": true
+        }
+      },
+      "expected": {
+        "isCustom": false,
+        "t": 150,
+        "g": 60,
+        "u": 150,
+        "s1": 27000000,
+        "s2": 8450000,
+        "s3": 5000000,
+        "s4": 2450000,
+        "s5": 11320000,
+        "ot": 0,
+        "rsvpOrig": 3000000,
+        "rsvpPkg": 2400000,
+        "leadOrig": 27000000,
+        "leadPkg": 23400000,
+        "showup": 21000000,
+        "genManage": 0,
+        "genCount": 0,
+        "opCost": 45300000,
+        "pk": 77620000,
+        "sysBreakdown": {
+          "video": 2000000,
+          "scaler4k": 0,
+          "audio": 2000000,
+          "engineer": 1000000,
+          "presentation": 1200000,
+          "registration": 1250000,
+          "misc": 1000000
+        },
+        "desBreakdown": {
+          "env": 3000000,
+          "web": 1000000,
+          "kv": 1000000
+        },
+        "opsBreakdown": {
+          "desk": 750000,
+          "ops": 1200000,
+          "insurance": 500000
+        }
+      },
+      "expected_pk_excluding_options": 77620000
+    },
+    {
+      "id": "gen-only-pure",
+      "desc": "모객 제외 + 참관객 20명만 (참가인원 관리 단독)",
+      "mode": "excludeLeads",
+      "input": {
+        "target": 100,
+        "guarantee": 60,
+        "genAttendees": 20
+      },
+      "expected": {
+        "isCustom": false,
+        "t": 100,
+        "g": 0,
+        "u": 100,
+        "s1": 18000000,
+        "s2": 10700000,
+        "s3": 4500000,
+        "s4": 1800000,
+        "s5": 8850000,
+        "ot": 0,
+        "rsvpOrig": 0,
+        "rsvpPkg": 0,
+        "leadOrig": 0,
+        "leadPkg": 0,
+        "showup": 0,
+        "genManage": 400000,
+        "genCount": 20,
+        "opCost": 35400000,
+        "pk": 44250000,
+        "sysBreakdown": {
+          "video": 2000000,
+          "scaler4k": 2500000,
+          "audio": 2000000,
+          "engineer": 1000000,
+          "presentation": 1200000,
+          "registration": 1000000,
+          "misc": 1000000
+        },
+        "desBreakdown": {
+          "env": 2500000,
+          "web": 1000000,
+          "kv": 1000000
+        },
+        "opsBreakdown": {
+          "desk": 500000,
+          "ops": 900000,
+          "insurance": 400000
+        }
+      },
+      "expected_pk_excluding_options": 44250000
+    },
+    {
+      "id": "guarantee-under-floor",
+      "desc": "게런티 10명 (KPI 40명 하한 미만 구간 — 산식은 동일 적용)",
+      "mode": "full",
+      "input": {
+        "target": 100,
+        "guarantee": 10
+      },
+      "expected": {
+        "isCustom": false,
+        "t": 100,
+        "g": 10,
+        "u": 100,
+        "s1": 18000000,
+        "s2": 10700000,
+        "s3": 4500000,
+        "s4": 1800000,
+        "s5": 8850000,
+        "ot": 0,
+        "rsvpOrig": 500000,
+        "rsvpPkg": 400000,
+        "leadOrig": 4500000,
+        "leadPkg": 3900000,
+        "showup": 3500000,
+        "genManage": 0,
+        "genCount": 0,
+        "opCost": 35400000,
+        "pk": 47750000,
+        "sysBreakdown": {
+          "video": 2000000,
+          "scaler4k": 2500000,
+          "audio": 2000000,
+          "engineer": 1000000,
+          "presentation": 1200000,
+          "registration": 1000000,
+          "misc": 1000000
+        },
+        "desBreakdown": {
+          "env": 2500000,
+          "web": 1000000,
+          "kv": 1000000
+        },
+        "opsBreakdown": {
+          "desk": 500000,
+          "ops": 900000,
+          "insurance": 400000
+        }
+      },
+      "expected_pk_excluding_options": 47750000
+    },
+    {
+      "id": "kiosk-tier-250",
+      "desc": "250명 — 등록 키오스크 구간(100명당 1대)",
+      "mode": "full",
+      "input": {
+        "target": 250,
+        "guarantee": 80
+      },
+      "expected": {
+        "isCustom": false,
+        "t": 250,
+        "g": 80,
+        "u": 250,
+        "s1": 45000000,
+        "s2": 13700000,
+        "s3": 5500000,
+        "s4": 3350000,
+        "s5": 17680000,
+        "ot": 0,
+        "rsvpOrig": 4000000,
+        "rsvpPkg": 3200000,
+        "leadOrig": 36000000,
+        "leadPkg": 31200000,
+        "showup": 28000000,
+        "genManage": 0,
+        "genCount": 0,
+        "opCost": 70750000,
+        "pk": 116430000,
+        "sysBreakdown": {
+          "video": 2000000,
+          "scaler4k": 2500000,
+          "audio": 2500000,
+          "engineer": 1000000,
+          "presentation": 1200000,
+          "registration": 3000000,
+          "misc": 1500000
+        },
+        "desBreakdown": {
+          "env": 3500000,
+          "web": 1000000,
+          "kv": 1000000
+        },
+        "opsBreakdown": {
+          "desk": 1250000,
+          "ops": 1500000,
+          "insurance": 600000
+        }
+      },
+      "expected_pk_excluding_options": 116430000
+    },
+    {
+      "id": "oversize-501",
+      "desc": "501명 — isCustom (자동견적 불가)",
+      "mode": "full",
+      "input": {
+        "target": 501,
+        "guarantee": 100
+      },
+      "expected": {
+        "isCustom": true,
+        "t": 501,
+        "g": 100,
+        "u": 501,
+        "s1": 0,
+        "s2": 0,
+        "s3": 0,
+        "s4": 0,
+        "s5": 0,
+        "ot": 0,
+        "rsvpOrig": 0,
+        "rsvpPkg": 0,
+        "leadOrig": 0,
+        "leadPkg": 0,
+        "showup": 0,
+        "genManage": 0,
+        "genCount": 0,
+        "opCost": 0,
+        "pk": 0,
+        "sysBreakdown": {},
+        "desBreakdown": {},
+        "opsBreakdown": {}
+      },
+      "expected_pk_excluding_options": 0
+    }
+  ],
+  "adjustment_vector": {
+    "desc": "조정 적용: s1 −100만 · ot +50만 · leadPkg −40만 → opCost·s5(PCO)·pk 재계산 (leadPkg 조정은 opCost 미포함)",
+    "base_input": {
+      "target": 100,
+      "guarantee": 60,
+      "venueRental": 20000000,
+      "options": {
+        "emcee": true
+      }
+    },
+    "adjust": {
+      "s1": -1000000,
+      "ot": 500000,
+      "leadPkg": -400000
+    },
+    "expected": {
+      "isCustom": false,
+      "t": 100,
+      "g": 60,
+      "u": 100,
+      "s1": 19000000,
+      "s2": 10700000,
+      "s3": 4500000,
+      "s4": 1800000,
+      "s5": 10100000,
+      "ot": 2000000,
+      "rsvpOrig": 3000000,
+      "rsvpPkg": 2400000,
+      "leadOrig": 27000000,
+      "leadPkg": 23000000,
+      "showup": 21000000,
+      "genManage": 0,
+      "genCount": 0,
+      "opCost": 40400000,
+      "pk": 71100000,
+      "sysBreakdown": {
+        "video": 2000000,
+        "scaler4k": 2500000,
+        "audio": 2000000,
+        "engineer": 1000000,
+        "presentation": 1200000,
+        "registration": 1000000,
+        "misc": 1000000
+      },
+      "desBreakdown": {
+        "env": 2500000,
+        "web": 1000000,
+        "kv": 1000000
+      },
+      "opsBreakdown": {
+        "desk": 500000,
+        "ops": 900000,
+        "insurance": 400000
+      },
+      "adjusted": true
+    }
+  }
+}
