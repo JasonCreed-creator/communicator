@@ -6,7 +6,7 @@
 - 현재 Phase: **Phase 0~3.5 완료 — 서버 없는 구간(프론트) 종료(v1.2 증분 포함)**. Phase 4(Supabase 이식)는
   착수 전 사용자 승인 필요, v1.2 스키마 기준
 - 정본 문서: `docs/mice-communicator-설계서-v1.2.md` (스키마·상태 머신·API SoT — v1.1 대체)
-- 브랜치: `main` = 정본, 작업은 `claude/design-v1.2-phase-3.5-t4splp` → main **PR #4(드래프트)** 리뷰 대기
+- 브랜치: `main` = 정본 — **PR #4 머지 완료(2026-08-22, 머지 커밋 2d40342)**로 Phase 3.5가 main에 반영됨
 
 ## 2. 완료
 - 설계서 v1.1 확정 + CLAUDE.md v1.1 (2026-08-19)
@@ -56,14 +56,12 @@
 - GitHub 기본 브랜치가 아직 `claude/extract-zip-to-repo-t6xstr` — Settings → Branches에서 `main`으로 변경 필요
 - **리멤버 로고 실 자산 미수령** — 사용자가 보낸 이미지가 파일로 전달되지 않아 텍스트 워드마크 폴백
   동작 중. `public/brand/remember-logo.svg`(블랙 버전)를 넣으면 자동 교체됨
-- **PR #4 리뷰·머지 대기** (드래프트) — 머지 후 Phase 4 착수 여부 사용자 결정
 - (경미) `@types/node` 미도입 — dod9가 print CSS 파일 검증에 국소 우회(dynamic import 캐스팅) 사용 중.
   Node API 쓰는 테스트가 늘면 devDependency 추가 검토
 - (경미) plan/StatusPill이 internal/StatusBadge와 렌더 중복 — 병렬 작업 충돌 회피 목적 격리였으므로
   후속 세션에서 통합 가능
 
 ## 4. 다음 스텝
-- **PR #4 머지** → 필요시 GitHub 기본 브랜치 main 전환과 함께 정리
 - **Phase 4 — Supabase 이식** (★착수 전 사용자 승인 필수, v1.2 스키마 기준): 마이그레이션(§4 전체 —
   program_sessions·행사개요·지시 필드 포함)+RLS(§6.2)+Auth+seed → SupabaseProvider 구현 →
   MockProvider 교체(프론트 무수정 목표)
@@ -107,8 +105,8 @@
   + PR #3 머지. **다음 세션 = Phase 4(Supabase 이식, 착수 전 사용자 승인·Supabase 프로젝트 정보 필요)**
 - 2026-08-22 세션 #2: 설계서 v1.2·CLAUDE.md v1.2 채택(v1.1 대체) → Phase 3.5 사용자 승인 하에 진행 —
   3.5a(메인: 동결 해제 기록→타입 개정→v2 재동결) → 3.5b(H)·3.5c(I) 병렬 → 메인 통합 검수
-  (vitest 72·tsc·빌드 전부 통과, DoD 1~9 코드화 완료) → PR #4(드래프트) 발행·구독.
-  **다음 세션 = PR #4 머지 확인 후 Phase 4(착수 전 사용자 승인·Supabase 프로젝트 정보 필요)**
+  (vitest 72·tsc·빌드 전부 통과, DoD 1~9 코드화 완료) → PR #4 발행 → 사용자 지시로 머지(2d40342).
+  **다음 세션 = Phase 4(착수 전 사용자 승인·Supabase 프로젝트 정보 필요)**
 
 ## 7. 세션 잠금
 - 잠금 없음 (한 폴더 = 동시 1세션)
