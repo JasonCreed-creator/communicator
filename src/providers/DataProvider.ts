@@ -1,12 +1,13 @@
 // ─────────────────────────────────────────────────────────────────────
-// DataProvider 인터페이스 v2 — 2026-08-22 재동결 (CLAUDE.md §4 Phase 3.5a)
-//   v1: 2026-08-19 동결(35메서드). v1.2 사용자 승인(2026-08-22, 시각안 기반)을
-//   근거로 동결 해제 → 지시 파이프라인·프로그램표·행사개요·운영계획서(S9) 6메서드
-//   추가(41메서드) 후 재동결. 경위는 PROGRESS.md 결정 로그 참조.
+// DataProvider 인터페이스 v3 — 2026-08-22 재동결 (CLAUDE.md §4 Phase 3.6a·3.7a)
+//   v1: 2026-08-19 동결(35메서드). v2: v1.2 승인 근거로 41메서드 재동결.
+//   v3: 사용자 v1.4 승인(2026-08-22, v1.3 포함)을 근거로 동결 해제 →
+//   온보딩·프로젝트 패치·큐시트 CRUD/스냅숏·WBS 전개/조회/패치·R&R 조회
+//   12메서드 추가(53메서드) 후 재동결. 경위는 PROGRESS.md 결정 로그 참조.
 //
-// 프론트(S1~S9)는 이 인터페이스만 호출한다. 구현체:
-//   1단계 MockProvider     — 픽스처+메모리, 업로드=blob URL (Phase 1·3.5)
-//   2단계 SupabaseProvider — DB·Auth·RLS 이식 (Phase 4, v1.2 스키마 기준)
+// 프론트(S0~S9)는 이 인터페이스만 호출한다. 구현체:
+//   1단계 MockProvider     — 픽스처+메모리, 업로드=blob URL (Phase 1·3.5~3.7)
+//   2단계 SupabaseProvider — DB·Auth·RLS 이식 (Phase 4, v1.4 스키마 기준)
 //   3단계 + DriveFileStore — Drive 업로드·프록시 이식 (Phase 5)
 //
 // 동결 후 변경은 사용자 승인 + 설계서 개정을 동반한다 (CLAUDE.md §9).
@@ -19,14 +20,17 @@ import type {
   ClientContact,
   ClientToken,
   Comment,
+  Cue,
   Deliverable,
   Milestone,
   ProgramSession,
   Project,
+  RoleCharter,
   RsvpContact,
   UnregisteredFile,
   UUID,
   Version,
+  WbsTask,
 } from '../types/entities'
 import type { DeliverableStatus } from '../types/enums'
 import type {
@@ -39,6 +43,7 @@ import type {
   CreateDeliverableInput,
   CsvImportResult,
   CsvImportRow,
+  CueInput,
   CurrentUser,
   DashboardData,
   DeliverableDetail,
@@ -46,13 +51,17 @@ import type {
   IssueTokenInput,
   MemberWithProfile,
   MilestoneInput,
+  OnboardingStatus,
   PlanData,
   ProgramSessionInput,
   ProjectOverviewPatch,
+  ProjectPatch,
   RegistrationStats,
   RequestApprovalInput,
   RsvpContactPatch,
   UploadVersionInput,
+  WbsTaskFilter,
+  WbsTaskPatch,
 } from '../types/views'
 
 export interface DataProvider {
@@ -63,6 +72,17 @@ export interface DataProvider {
   // ── 프로젝트·멤버 (S6) ────────────────────────────────────────────
   getProject(projectId: UUID): Promise<Project>
   listMembers(projectId: UUID): Promise<MemberWithProfile[]>
+  /** v1.3 §8 PATCH /projects/{id} — 행사 유형·기본정보 수정 (pm) */
+  updateProject(projectId: UUID, patch: ProjectPatch): Promise<Project>
+
+  // ── v1.3 S0 온보딩 ────────────────────────────────────────────────
+  /** 완료 전 본체 라우트는 위저드로 차단 — 라우트 가드가 이 값을 본다 */
+  getOnboardingStatus(projectId: UUID): Promise<OnboardingStatus>
+  /**
+   * 온보딩 완료 처리 (pm). v1.4 부수 효과: 유형별 WBS 템플릿을 event_date 기준으로
+   * 자동 전개(expandWbs)하고 R&R 카드를 유형별로 시드한다.
+   */
+  completeOnboarding(projectId: UUID): Promise<void>
 
   // ── 홈 대시보드 (S1) ──────────────────────────────────────────────
   getDashboard(projectId: UUID): Promise<DashboardData>
@@ -149,6 +169,32 @@ export interface DataProvider {
     patch: Partial<ProgramSessionInput>,
   ): Promise<ProgramSession>
   deleteProgramSession(sessionId: UUID): Promise<void>
+
+  // ── v1.3 큐시트 (§8 /cues, pm·ops — category='큐시트' 항목 귀속) ──
+  /** sort_order 순 */
+  listCues(deliverableId: UUID): Promise<Cue[]>
+  createCue(deliverableId: UUID, input: CueInput): Promise<Cue>
+  updateCue(cueId: UUID, patch: Partial<CueInput>): Promise<Cue>
+  deleteCue(cueId: UUID): Promise<void>
+  /**
+   * 큐시트 스냅숏 버전 생성 (pm — §8 cue-snapshot). 컨펌 발송 전처리로 requestApproval이
+   * 큐시트 항목에서 자동 호출한다. mock 단계는 파일명 .pdf 규약+인쇄용 HTML blob(Phase 5에서 PDF).
+   */
+  createCueSnapshot(deliverableId: UUID): Promise<Version>
+
+  // ── v1.4 WBS (§8 /wbs-expand·/wbs-tasks) ──────────────────────────
+  /**
+   * 유형별 템플릿을 event_date 기준 실제 날짜로 전개 (pm). 재전개 시 code 매칭으로
+   * 기존 status·done_at·linked_deliverable_id·note를 보존한다.
+   */
+  expandWbs(projectId: UUID): Promise<WbsTask[]>
+  /** sort_order 순 */
+  listWbsTasks(projectId: UUID, filter?: WbsTaskFilter): Promise<WbsTask[]>
+  /** status 변경 = 담당 역할+pm / 그 외 필드 편집 = pm 전용 */
+  updateWbsTask(taskId: UUID, patch: WbsTaskPatch): Promise<WbsTask>
+
+  // ── v1.4 R&R (§8 GET /role-charters, 멤버) ────────────────────────
+  listRoleCharters(projectId: UUID): Promise<RoleCharter[]>
 
   // ── v1.2 행사개요 (§8 PATCH /projects/{id}/overview, pm·ops) ──────
   updateProjectOverview(projectId: UUID, patch: ProjectOverviewPatch): Promise<Project>

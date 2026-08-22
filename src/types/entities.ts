@@ -1,4 +1,4 @@
-// 설계서 v1.2 §4 테이블과 1:1 도메인 타입.
+// 설계서 v1.4 §4 테이블과 1:1 도메인 타입.
 // 필드명은 DDL의 snake_case를 그대로 유지한다 — SupabaseProvider 이식 시 매핑 계층 없이 row를 그대로 쓰기 위함.
 import type {
   ApprovalDecision,
@@ -6,8 +6,10 @@ import type {
   CommentVisibility,
   DeliverableArea,
   DeliverableStatus,
+  EventType,
   InviteStatus,
   MemberRole,
+  WbsStatus,
 } from './enums'
 
 /** uuid */
@@ -32,6 +34,8 @@ export interface Project {
   event_date: IsoDate | null
   drive_root_folder_id: string | null
   slack_webhook_url: string | null
+  /** v1.3 — S0 온보딩에서 선택. general이면 등록 모듈 경량 모드(표시 계층 토글) */
+  event_type: EventType
   // v1.2 행사개요 (운영계획서 §행사개요 소스)
   theme: string | null
   venue: string | null
@@ -215,6 +219,66 @@ export interface ProgramSession {
   /** 비고 태그 (기조·파트너 연사 등) */
   note: string | null
   sort_order: number
+}
+
+// §4-14 cues (v1.3 — category='큐시트' 운영 항목에 귀속, 정형 에디터 소스)
+export interface Cue {
+  id: UUID
+  deliverable_id: UUID
+  /** 'C01' 등 표시 번호 */
+  cue_no: string | null
+  /** time — 'HH:MM' 문자열 */
+  time_at: string | null
+  /** 구분 (사전·오프닝·MC·세션·전환 등) */
+  segment: string | null
+  /** 내용·대본 (마크다운, 전문 포함) */
+  body: string | null
+  // 콘솔 3채널
+  console_audio: string | null
+  console_light: string | null
+  console_screen: string | null
+  sort_order: number
+}
+
+// §4-15 wbs_tasks (v1.4 — 유형별 템플릿을 온보딩 완료 시 행사일 기준으로 전개)
+export interface WbsTask {
+  id: UUID
+  project_id: UUID
+  /** 1 사전착수 ~ 6 사후관리 */
+  phase_no: number
+  phase_name: string
+  /** '2.5' 등 — Configurator 코드 체계 호환 */
+  code: string
+  title: string
+  /** D 기준(음수=D-), 원본 보존 */
+  offset_start: number
+  offset_end: number
+  /** 전개 시 event_date로 계산 저장 */
+  start_date: IsoDate | null
+  end_date: IsoDate | null
+  /** 커뮤니케이터 역할 매핑 */
+  role: MemberRole
+  /** 원본 역할 태그(RS·RO·MC-PM·MC-AT·공동) — Configurator 연동 대비 */
+  origin_role: string | null
+  status: WbsStatus
+  done_at: IsoDateTime | null
+  /** 연결 시 상태 뱃지 표시, final이면 자동 done */
+  linked_deliverable_id: UUID | null
+  note: string | null
+  sort_order: number
+}
+// 지연 = (미완료 and end_date < today), 임박은 lib/wbs.ts 정본 참조 (지연과 배타)
+
+// §4-16 role_charters (v1.4 — 유형별 템플릿, 온보딩 완료 시 부여)
+export interface RoleCharter {
+  id: UUID
+  project_id: UUID
+  role: MemberRole
+  origin_role: string | null
+  /** '총괄 PM' 등 */
+  title: string
+  /** 책임 불릿 배열 */
+  items: string[]
 }
 
 // §4-12 unregistered_files

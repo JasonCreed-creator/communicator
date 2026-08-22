@@ -7,12 +7,14 @@ import { render } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import ClientLayout from '../components/layout/ClientLayout'
 import InternalLayout from '../components/layout/InternalLayout'
+import OnboardingGuard from '../components/onboarding/OnboardingGuard'
 import AreaBoardPage from '../pages/AreaBoardPage'
 import ClientConfirmQueuePage from '../pages/ClientConfirmQueuePage'
 import ClientStatusPage from '../pages/ClientStatusPage'
 import HomeDashboardPage from '../pages/HomeDashboardPage'
 import ItemDetailPage from '../pages/ItemDetailPage'
 import NotFoundPage from '../pages/NotFoundPage'
+import OnboardingPage from '../pages/OnboardingPage'
 import PlanDocPage from '../pages/PlanDocPage'
 import RegistrationPage from '../pages/RegistrationPage'
 import SchedulePage from '../pages/SchedulePage'
@@ -29,15 +31,21 @@ export function renderRoute(path: string) {
   return render(
     <MemoryRouter initialEntries={[path]}>
       <Routes>
-        <Route element={<InternalLayout />}>
-          <Route path="/" element={<HomeDashboardPage />} />
-          <Route path="/board/:area" element={<AreaBoardPage />} />
-          <Route path="/items/:itemId" element={<ItemDetailPage />} />
-          <Route path="/registration" element={<RegistrationPage />} />
-          <Route path="/schedule" element={<SchedulePage />} />
-          <Route path="/plan" element={<PlanDocPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
+        {/* S0 온보딩 위저드 — 가드 대상 제외 (App.tsx와 동일 구성) */}
+        <Route path="/onboarding" element={<OnboardingPage />} />
+
+        <Route element={<OnboardingGuard />}>
+          <Route element={<InternalLayout />}>
+            <Route path="/" element={<HomeDashboardPage />} />
+            <Route path="/board/:area" element={<AreaBoardPage />} />
+            <Route path="/items/:itemId" element={<ItemDetailPage />} />
+            <Route path="/registration" element={<RegistrationPage />} />
+            <Route path="/schedule" element={<SchedulePage />} />
+            <Route path="/plan" element={<PlanDocPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+          </Route>
         </Route>
+
         <Route path="/c/:token" element={<ClientLayout />}>
           <Route index element={<ClientConfirmQueuePage />} />
           <Route path="status" element={<ClientStatusPage />} />

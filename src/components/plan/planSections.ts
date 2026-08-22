@@ -6,19 +6,22 @@ export interface PlanSectionMeta {
   title: string
 }
 
+// v1.3: 큐시트 섹션은 프로그램 다음 배치(설계서 §10 S9) — 이하 섹션 번호가 한 칸씩 밀린다
 export const PLAN_SECTION_META: Record<PlanSectionKey, PlanSectionMeta> = {
   overview: { number: '①', title: '행사개요' },
   program: { number: '②', title: '프로그램' },
-  zones: { number: '③', title: '존별 운영' },
-  production: { number: '④', title: '제작물 리스트' },
-  registration: { number: '⑤', title: '등록 통계' },
-  schedule: { number: '⑥', title: '일정' },
+  cuesheet: { number: '③', title: '큐시트' },
+  zones: { number: '④', title: '존별 운영' },
+  production: { number: '⑤', title: '제작물 리스트' },
+  registration: { number: '⑥', title: '등록 통계' },
+  schedule: { number: '⑦', title: '일정' },
 }
 
 /** getPlan()의 section_progress 배열 순서는 provider 구현에 따라 달라질 수 있어 항상 여기서 재정렬한다 */
 export const PLAN_SECTION_ORDER: PlanSectionKey[] = [
   'overview',
   'program',
+  'cuesheet',
   'zones',
   'production',
   'registration',

@@ -5,6 +5,7 @@ import type {
   Approval,
   Attendee,
   Comment,
+  Cue,
   Deliverable,
   IsoDate,
   IsoDateTime,
@@ -14,13 +15,16 @@ import type {
   Project,
   UUID,
   Version,
+  WbsTask,
 } from './entities'
 import type {
   ApprovalDecision,
   CommentVisibility,
   DeliverableArea,
   DeliverableStatus,
+  EventType,
   MemberRole,
+  WbsStatus,
 } from './enums'
 
 // ── 사용자 (auth.users의 앱 레벨 투영) ─────────────────────────────
@@ -67,6 +71,10 @@ export interface DashboardData {
   recent_activity: ActivityLogEntry[]
   /** v1.2 — 현재 사용자가 담당자인 requested 항목(받은 지시), 마감순 */
   my_requested: Deliverable[]
+  /** v1.4 — 지연 WBS 태스크(미완료·end_date<오늘), 마감 오래된 순 */
+  wbs_delayed: WbsTask[]
+  /** v1.4 — 임박 WBS 태스크(미완료·오늘≤end_date≤오늘+2, 지연과 배타), 마감순 */
+  wbs_imminent: WbsTask[]
 }
 
 // ── S3 항목 상세 ───────────────────────────────────────────────────
@@ -268,10 +276,57 @@ export interface ProjectOverviewPatch {
   overview_items?: OverviewItem[] | null
 }
 
+// ── v1.3 프로젝트 기본정보·온보딩 (§8 PATCH /projects/{id}, S0) ────
+export interface ProjectPatch {
+  name?: string
+  event_date?: IsoDate | null
+  event_type?: EventType
+}
+
+/** 온보딩 완료 여부 — mock은 앱 상태, Phase 4에서 projects 컬럼 확정(PROGRESS 결정 로그) */
+export interface OnboardingStatus {
+  completed: boolean
+}
+
+// ── v1.3 큐시트 (§8 /cues, pm·ops) ─────────────────────────────────
+export interface CueInput {
+  cue_no?: string
+  /** 'HH:MM' */
+  time_at?: string
+  segment?: string
+  body?: string
+  console_audio?: string
+  console_light?: string
+  console_screen?: string
+  sort_order?: number
+}
+
+// ── v1.4 WBS (§8 /wbs-tasks·wbs-expand) ────────────────────────────
+export interface WbsTaskFilter {
+  phase_no?: number
+  role?: MemberRole
+  status?: WbsStatus
+}
+
+/**
+ * status 변경 = 담당 역할+pm / 그 외 필드 편집 = pm 전용 (§6.1·S5).
+ * linked_deliverable_id는 null로 연결 해제 가능.
+ */
+export interface WbsTaskPatch {
+  status?: WbsStatus
+  title?: string
+  start_date?: IsoDate
+  end_date?: IsoDate
+  role?: MemberRole
+  note?: string | null
+  linked_deliverable_id?: UUID | null
+}
+
 // ── v1.2 S9 운영계획서 (§8 GET /projects/{id}/plan) ────────────────
 export type PlanSectionKey =
   | 'overview'
   | 'program'
+  | 'cuesheet'
   | 'zones'
   | 'production'
   | 'registration'
@@ -315,10 +370,21 @@ export interface PlanProductionItem {
   latest_version: PlanVersionRef | null
 }
 
+/** v1.3 — S9 ⑦큐시트 표 (프로그램 다음 배치): 첫 큐시트 항목의 큐 목록 */
+export interface PlanCuesheet {
+  deliverable_id: UUID
+  title: string
+  status: DeliverableStatus
+  /** sort_order 순 */
+  cues: Cue[]
+}
+
 export interface PlanData {
   project: Project
   /** sort_order 순 */
   program_sessions: ProgramSession[]
+  /** 큐시트 항목이 없으면 null */
+  cuesheet: PlanCuesheet | null
   zones: PlanZoneItem[]
   production_items: PlanProductionItem[]
   registration_stats: RegistrationStats

@@ -46,6 +46,34 @@ export default function HomeDashboardPage() {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <div className="space-y-6">
+          {dashboard.data &&
+            (dashboard.data.wbs_delayed.length > 0 || dashboard.data.wbs_imminent.length > 0) && (
+              <Card title="지연/임박 태스크">
+                <div className="mb-3 flex flex-wrap items-center gap-4">
+                  <span className="text-sm font-medium text-red-700">
+                    지연 {dashboard.data.wbs_delayed.length}건
+                  </span>
+                  <span className="text-sm font-medium text-amber-700">
+                    임박 {dashboard.data.wbs_imminent.length}건
+                  </span>
+                  <Link to="/schedule" className="ml-auto text-xs text-blue-600 hover:underline">
+                    일정에서 보기
+                  </Link>
+                </div>
+                <ul className="divide-y divide-gray-100">
+                  {[...dashboard.data.wbs_delayed, ...dashboard.data.wbs_imminent].slice(0, 5).map((t) => (
+                    <li key={t.id} className="flex items-center justify-between gap-3 py-2 first:pt-0 last:pb-0">
+                      <span className="min-w-0 truncate text-sm text-gray-900">
+                        <span className="mr-1.5 font-mono text-xs text-gray-400">{t.code}</span>
+                        {t.title}
+                      </span>
+                      {t.end_date && <DdayBadge isoDate={t.end_date} />}
+                    </li>
+                  ))}
+                </ul>
+              </Card>
+            )}
+
           {dashboard.data && dashboard.data.my_requested.length > 0 && (
             <Card title="받은 지시">
               <ul className="divide-y divide-gray-100">

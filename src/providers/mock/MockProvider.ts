@@ -7,7 +7,9 @@ import {
   buildVersionFileName,
   isPreviewFileName,
 } from '../../lib/statusMachine'
+import { isDelayed, isImminent, offsetToDate, toIsoDate } from '../../lib/wbs'
 import { createFixtureState, type MockState } from '../../fixtures/sampleProject'
+import { ROLE_CHARTER_TEMPLATES, wbsTemplateFor } from '../../fixtures/wbsTemplates'
 import type {
   ActivityLogEntry,
   Approval,
@@ -15,14 +17,17 @@ import type {
   ClientContact,
   ClientToken,
   Comment,
+  Cue,
   Deliverable,
   Milestone,
   ProgramSession,
   Project,
+  RoleCharter,
   RsvpContact,
   UnregisteredFile,
   UUID,
   Version,
+  WbsTask,
 } from '../../types/entities'
 import type { DeliverableArea, DeliverableStatus, MemberRole } from '../../types/enums'
 import type {
@@ -35,6 +40,7 @@ import type {
   CreateDeliverableInput,
   CsvImportResult,
   CsvImportRow,
+  CueInput,
   CurrentUser,
   DashboardData,
   DeliverableDetail,
@@ -42,15 +48,19 @@ import type {
   IssueTokenInput,
   MemberWithProfile,
   MilestoneInput,
+  OnboardingStatus,
   PlanData,
   PlanVersionRef,
   ProgramSessionInput,
   ProjectOverviewPatch,
+  ProjectPatch,
   RegistrationStats,
   RequestApprovalInput,
   RsvpContactPatch,
   UploadVersionInput,
   UserRef,
+  WbsTaskFilter,
+  WbsTaskPatch,
 } from '../../types/views'
 import type { DataProvider } from '../DataProvider'
 
@@ -63,6 +73,33 @@ const UPLOADABLE_STATUSES: readonly DeliverableStatus[] = [
 
 function nowIso(): string {
   return new Date().toISOString()
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
+/** 큐시트 스냅숏 본문 — mock은 인쇄용 HTML로 갈음(실제 PDF 생성은 Phase 5) */
+function renderCueSnapshotHtml(deliverable: Deliverable, cues: Cue[]): string {
+  const rows = cues
+    .map(
+      (c) =>
+        `<tr><td>${escapeHtml(c.cue_no ?? '')}</td><td>${escapeHtml(c.time_at ?? '')}</td>` +
+        `<td>${escapeHtml(c.segment ?? '')}</td><td>${escapeHtml(c.body ?? '')}</td>` +
+        `<td>${escapeHtml(c.console_audio ?? '')}</td><td>${escapeHtml(c.console_light ?? '')}</td>` +
+        `<td>${escapeHtml(c.console_screen ?? '')}</td></tr>`,
+    )
+    .join('')
+  return (
+    `<!doctype html><meta charset="utf-8"><title>${escapeHtml(deliverable.title)}</title>` +
+    `<table border="1" cellspacing="0" cellpadding="6">` +
+    `<tr><th>큐</th><th>시간</th><th>구분</th><th>내용·대본</th><th>음향</th><th>조명</th><th>스크린</th></tr>` +
+    `${rows}</table>`
+  )
 }
 
 /** 미리보기 자리표시 이미지 — 픽스처 버전 파일용 (실파일은 Phase 5 Drive 이식에서) */
@@ -216,7 +253,18 @@ export class MockProvider implements DataProvider {
       my_requested: this.state.deliverables
         .filter((d) => d.status === 'requested' && d.assignee_id === user.id)
         .sort((a, b) => (a.due_date ?? '9999').localeCompare(b.due_date ?? '9999')),
+      // v1.4: 지연/임박 WBS 집계 (lib/wbs 정본 산식, 지연·임박 배타)
+      wbs_delayed: this.wbsByUrgency('delayed'),
+      wbs_imminent: this.wbsByUrgency('imminent'),
     }
+  }
+
+  private wbsByUrgency(kind: 'delayed' | 'imminent'): WbsTask[] {
+    const today = toIsoDate(new Date())
+    const pick = kind === 'delayed' ? isDelayed : isImminent
+    return this.state.wbs_tasks
+      .filter((task) => pick(task, today))
+      .sort((a, b) => (a.end_date ?? '9999').localeCompare(b.end_date ?? '9999'))
   }
 
   async listActivity(projectId: UUID, limit = 20): Promise<ActivityLogEntry[]> {
@@ -388,9 +436,13 @@ export class MockProvider implements DataProvider {
       throw new ProviderError('conflict', '컨펌 루프를 사용하지 않는 항목입니다.')
     }
     assertTransition(d.status, 'pending_approval', 'approval_request')
-    const version = this.state.versions.find(
-      (v) => v.id === input.version_id && v.deliverable_id === deliverableId,
-    )
+    // v1.3: 큐시트 항목은 발송 시 표의 스냅숏 버전이 자동 등록되어 발송 조건 충족 (§5)
+    const version =
+      d.category === '큐시트'
+        ? await this.createCueSnapshot(deliverableId)
+        : this.state.versions.find(
+            (v) => v.id === input.version_id && v.deliverable_id === deliverableId,
+          )
     if (!version) throw new ProviderError('not_found', '해당 항목의 버전이 아닙니다.')
     // §5 발송 조건: 미리보기 포맷(PDF·PNG·JPG) 버전만
     if (!isPreviewFileName(version.file_name)) {
@@ -774,11 +826,11 @@ export class MockProvider implements DataProvider {
   }
 
   // ── v1.2 프로그램표·행사개요·운영계획서 ───────────────────────────
-  /** §6.1: 행사개요·프로그램표 편집은 pm·ops만 */
+  /** §6.1: 행사개요·프로그램표·큐시트 편집은 pm·ops만 */
   private assertPmOps(): CurrentUser {
     const user = this.currentUser()
     if (user.role !== 'pm' && user.role !== 'ops') {
-      throw new ProviderError('forbidden', '행사개요·프로그램표 편집은 PM·운영 담당만 가능합니다.')
+      throw new ProviderError('forbidden', '이 편집은 PM·운영 담당만 가능합니다.')
     }
     return user
   }
@@ -851,6 +903,239 @@ export class MockProvider implements DataProvider {
     return project
   }
 
+  // ── v1.3 프로젝트 기본정보·온보딩 ─────────────────────────────────
+  async updateProject(projectId: UUID, patch: ProjectPatch): Promise<Project> {
+    const user = this.assertPm()
+    const project = this.mustFindProject(projectId)
+    if (patch.name !== undefined) {
+      if (!patch.name.trim()) throw new ProviderError('validation', '행사명은 비울 수 없습니다.')
+      project.name = patch.name
+    }
+    if (patch.event_date !== undefined) project.event_date = patch.event_date
+    if (patch.event_type !== undefined) project.event_type = patch.event_type
+    // 행사일·유형 변경 후 WBS 날짜/구성 갱신은 명시적 재전개(expandWbs)로 수행 — S5 pm 버튼
+    this.log(`user:${user.id}`, 'project.updated', 'project', project.id)
+    return project
+  }
+
+  async getOnboardingStatus(projectId: UUID): Promise<OnboardingStatus> {
+    this.mustFindProject(projectId)
+    return { completed: this.state.onboarding_completed }
+  }
+
+  async completeOnboarding(projectId: UUID): Promise<void> {
+    const user = this.assertPm()
+    this.mustFindProject(projectId)
+    this.state.onboarding_completed = true
+    // v1.4 부수 효과: 유형별 WBS 자동 전개 + R&R 카드 시드
+    await this.expandWbs(projectId)
+    this.seedRoleCharters(projectId)
+    this.log(`user:${user.id}`, 'onboarding.completed', 'project', projectId)
+  }
+
+  /** Mock 전용 (인터페이스 외) — S0 라우트 가드 테스트용 온보딩 리셋 */
+  resetOnboarding(): void {
+    this.state.onboarding_completed = false
+  }
+
+  // ── v1.3 큐시트 (pm·ops — §8 /cues) ───────────────────────────────
+  async listCues(deliverableId: UUID): Promise<Cue[]> {
+    this.mustFindDeliverable(deliverableId)
+    return this.state.cues
+      .filter((c) => c.deliverable_id === deliverableId)
+      .sort((a, b) => a.sort_order - b.sort_order)
+  }
+
+  async createCue(deliverableId: UUID, input: CueInput): Promise<Cue> {
+    this.assertPmOps()
+    this.mustFindDeliverable(deliverableId)
+    const siblings = await this.listCues(deliverableId)
+    const maxOrder = siblings.reduce((m, c) => Math.max(m, c.sort_order), 0)
+    const cue: Cue = {
+      id: this.nextId('cue'),
+      deliverable_id: deliverableId,
+      cue_no: input.cue_no?.trim() || null,
+      time_at: input.time_at || null,
+      segment: input.segment?.trim() || null,
+      body: input.body ?? null,
+      console_audio: input.console_audio?.trim() || null,
+      console_light: input.console_light?.trim() || null,
+      console_screen: input.console_screen?.trim() || null,
+      sort_order: input.sort_order ?? maxOrder + 1,
+    }
+    this.state.cues.push(cue)
+    return cue
+  }
+
+  async updateCue(cueId: UUID, patch: Partial<CueInput>): Promise<Cue> {
+    this.assertPmOps()
+    const cue = this.state.cues.find((c) => c.id === cueId)
+    if (!cue) throw new ProviderError('not_found', '큐를 찾을 수 없습니다.')
+    if (patch.cue_no !== undefined) cue.cue_no = patch.cue_no.trim() || null
+    if (patch.time_at !== undefined) cue.time_at = patch.time_at || null
+    if (patch.segment !== undefined) cue.segment = patch.segment.trim() || null
+    if (patch.body !== undefined) cue.body = patch.body || null
+    if (patch.console_audio !== undefined) cue.console_audio = patch.console_audio.trim() || null
+    if (patch.console_light !== undefined) cue.console_light = patch.console_light.trim() || null
+    if (patch.console_screen !== undefined) cue.console_screen = patch.console_screen.trim() || null
+    if (patch.sort_order !== undefined) cue.sort_order = patch.sort_order
+    return cue
+  }
+
+  async deleteCue(cueId: UUID): Promise<void> {
+    this.assertPmOps()
+    const idx = this.state.cues.findIndex((c) => c.id === cueId)
+    if (idx < 0) throw new ProviderError('not_found', '큐를 찾을 수 없습니다.')
+    this.state.cues.splice(idx, 1)
+  }
+
+  async createCueSnapshot(deliverableId: UUID): Promise<Version> {
+    const user = this.assertPm()
+    const d = this.mustFindDeliverable(deliverableId)
+    if (d.category !== '큐시트') {
+      throw new ProviderError('conflict', '큐시트 항목이 아닙니다.')
+    }
+    const cues = await this.listCues(deliverableId)
+    if (cues.length === 0) {
+      throw new ProviderError('validation', '스냅숏을 만들 큐가 없습니다.')
+    }
+    const versionNo = (this.versionsOf(deliverableId)[0]?.version_no ?? 0) + 1
+    const version: Version = {
+      id: this.nextId('ver'),
+      deliverable_id: deliverableId,
+      version_no: versionNo,
+      drive_file_id: this.nextId('drv-f'),
+      // 파일명은 .pdf 규약(§5 발송 조건) — mock 내용물은 인쇄용 HTML, 실제 PDF는 Phase 5
+      file_name: buildVersionFileName({
+        date: new Date(),
+        project_code: this.state.project.code,
+        category: d.category,
+        title: d.title,
+        version_no: versionNo,
+        original_file_name: '스냅숏.pdf',
+      }),
+      note: '큐시트 스냅숏 — 컨펌 발송용 자동 생성',
+      uploaded_by: user.id,
+      created_at: nowIso(),
+    }
+    this.state.versions.push(version)
+    const canBlob =
+      typeof URL !== 'undefined' &&
+      typeof URL.createObjectURL === 'function' &&
+      typeof Blob !== 'undefined'
+    this.uploadedFileUrls.set(
+      version.id,
+      canBlob
+        ? URL.createObjectURL(new Blob([renderCueSnapshotHtml(d, cues)], { type: 'text/html' }))
+        : `mock://files/${version.id}`,
+    )
+    this.log(`user:${user.id}`, 'cue.snapshot', 'version', version.id, {
+      deliverable_id: deliverableId,
+    })
+    return version
+  }
+
+  // ── v1.4 WBS·R&R ──────────────────────────────────────────────────
+  async expandWbs(projectId: UUID): Promise<WbsTask[]> {
+    const user = this.assertPm()
+    const project = this.mustFindProject(projectId)
+    if (!project.event_date) {
+      throw new ProviderError('validation', '행사일이 있어야 WBS를 전개할 수 있습니다.')
+    }
+    const template = wbsTemplateFor(project.event_type)
+    // 재전개: code 매칭으로 기존 진행 상태·연결·메모 보존 (PROGRESS 결정 로그)
+    const prev = new Map(this.state.wbs_tasks.map((task) => [task.code, task]))
+    this.state.wbs_tasks = template.map((tpl, i) => {
+      const old = prev.get(tpl.code)
+      return {
+        id: old?.id ?? this.nextId('wbs'),
+        project_id: projectId,
+        phase_no: tpl.phase_no,
+        phase_name: tpl.phase_name,
+        code: tpl.code,
+        title: tpl.title,
+        offset_start: tpl.offset_start,
+        offset_end: tpl.offset_end,
+        start_date: offsetToDate(project.event_date!, tpl.offset_start),
+        end_date: offsetToDate(project.event_date!, tpl.offset_end),
+        role: tpl.role,
+        origin_role: tpl.origin_role,
+        status: old?.status ?? 'todo',
+        done_at: old?.done_at ?? null,
+        linked_deliverable_id: old?.linked_deliverable_id ?? null,
+        note: old?.note ?? null,
+        sort_order: i + 1,
+      }
+    })
+    this.log(`user:${user.id}`, 'wbs.expanded', 'project', projectId, {
+      event_type: project.event_type,
+      count: this.state.wbs_tasks.length,
+    })
+    return [...this.state.wbs_tasks]
+  }
+
+  private seedRoleCharters(projectId: UUID): void {
+    this.state.role_charters = ROLE_CHARTER_TEMPLATES[this.state.project.event_type].map((tpl) => ({
+      id: this.nextId('rrc'),
+      project_id: projectId,
+      role: tpl.role,
+      origin_role: tpl.origin_role,
+      title: tpl.title,
+      items: [...tpl.items],
+    }))
+  }
+
+  async listWbsTasks(projectId: UUID, filter?: WbsTaskFilter): Promise<WbsTask[]> {
+    this.mustFindProject(projectId)
+    return this.state.wbs_tasks
+      .filter(
+        (task) =>
+          (filter?.phase_no === undefined || task.phase_no === filter.phase_no) &&
+          (filter?.role === undefined || task.role === filter.role) &&
+          (filter?.status === undefined || task.status === filter.status),
+      )
+      .sort((a, b) => a.sort_order - b.sort_order)
+  }
+
+  async updateWbsTask(taskId: UUID, patch: WbsTaskPatch): Promise<WbsTask> {
+    const user = this.currentUser()
+    const task = this.state.wbs_tasks.find((t) => t.id === taskId)
+    if (!task) throw new ProviderError('not_found', 'WBS 태스크를 찾을 수 없습니다.')
+    // §6.1·S5: status 체크 = 담당 역할+pm / 그 외 필드 편집 = pm 전용
+    const editKeys = Object.keys(patch).filter((k) => k !== 'status')
+    if (editKeys.length > 0 && user.role !== 'pm') {
+      throw new ProviderError('forbidden', '태스크 편집은 PM만 할 수 있습니다.')
+    }
+    if (patch.status !== undefined && user.role !== 'pm' && user.role !== task.role) {
+      throw new ProviderError('forbidden', '태스크 체크는 담당 역할과 PM만 할 수 있습니다.')
+    }
+    if (patch.status !== undefined && patch.status !== task.status) {
+      task.status = patch.status
+      task.done_at = patch.status === 'done' ? nowIso() : null
+      this.log(`user:${user.id}`, 'wbs.status_changed', 'wbs_task', task.id, {
+        status: patch.status,
+      })
+    }
+    if (patch.title !== undefined) {
+      if (!patch.title.trim()) throw new ProviderError('validation', '태스크 제목은 필수입니다.')
+      task.title = patch.title
+    }
+    if (patch.start_date !== undefined) task.start_date = patch.start_date
+    if (patch.end_date !== undefined) task.end_date = patch.end_date
+    if (patch.role !== undefined) task.role = patch.role
+    if (patch.note !== undefined) task.note = patch.note
+    if (patch.linked_deliverable_id !== undefined) {
+      if (patch.linked_deliverable_id) this.mustFindDeliverable(patch.linked_deliverable_id)
+      task.linked_deliverable_id = patch.linked_deliverable_id
+    }
+    return task
+  }
+
+  async listRoleCharters(projectId: UUID): Promise<RoleCharter[]> {
+    this.mustFindProject(projectId)
+    return [...this.state.role_charters]
+  }
+
   /** 최신 버전 참조 — 미리보기 포맷일 때만 preview_url 세팅 */
   private async planVersionRef(deliverableId: UUID): Promise<PlanVersionRef | null> {
     const latest = this.versionsOf(deliverableId)[0]
@@ -868,6 +1153,7 @@ export class MockProvider implements DataProvider {
    * 섹션별 진행률 산정 기준 (Mock 정본 — SupabaseProvider도 동일 산식 유지):
    *   overview      개요 슬롯 5개(event_date·theme·venue·mc_name·overview_items≥1) 중 채워진 수
    *   program       start_time 있는 세션 수 / 전체 세션 수
+   *   cuesheet      구분·본문 채워진 큐 수 / 전체 큐 수 (v1.3)
    *   zones         content 있는 ops 항목 수 / ops 항목 수
    *   production    스펙 4필드(size·qty·location·type) 완비 design 항목 수 / design 항목 수
    *   registration  등록 데이터(RSVP+참관객) 존재 여부 (0/1)
@@ -877,6 +1163,17 @@ export class MockProvider implements DataProvider {
     this.currentUser()
     const project = this.mustFindProject(projectId)
     const sessions = await this.listProgramSessions(projectId)
+    // v1.3 ⑦큐시트 — 첫 큐시트 항목의 큐 표 (프로그램 다음 배치)
+    const cueDeliverable = this.state.deliverables.find((d) => d.category === '큐시트')
+    const cues = cueDeliverable ? await this.listCues(cueDeliverable.id) : []
+    const cuesheet = cueDeliverable
+      ? {
+          deliverable_id: cueDeliverable.id,
+          title: cueDeliverable.title,
+          status: cueDeliverable.status,
+          cues,
+        }
+      : null
     const opsItems = this.state.deliverables.filter((d) => d.area === 'ops')
     const designItems = this.state.deliverables.filter((d) => d.area === 'design')
 
@@ -921,6 +1218,7 @@ export class MockProvider implements DataProvider {
     return {
       project,
       program_sessions: sessions,
+      cuesheet,
       zones,
       production_items: production,
       registration_stats: stats,
@@ -928,6 +1226,8 @@ export class MockProvider implements DataProvider {
       section_progress: [
         { key: 'overview', done: overviewSlots.filter(Boolean).length, total: overviewSlots.length },
         { key: 'program', done: sessions.filter((s) => s.start_time).length, total: sessions.length },
+        // cuesheet: 구분·본문이 채워진 큐 수 / 전체 큐 수
+        { key: 'cuesheet', done: cues.filter((c) => c.segment && c.body).length, total: cues.length },
         { key: 'zones', done: opsItems.filter((d) => d.content?.trim()).length, total: opsItems.length },
         { key: 'production', done: designItems.filter(specComplete).length, total: designItems.length },
         { key: 'registration', done: stats.rsvp_total + stats.attendee_total > 0 ? 1 : 0, total: 1 },
@@ -1021,6 +1321,14 @@ export class MockProvider implements DataProvider {
       assertTransition(d.status, 'final', 'system')
       d.status = 'final'
       this.log('system', 'deliverable.finalized', 'deliverable', d.id)
+      // v1.4: 이 산출물에 연결된 WBS 태스크는 자동 done (§4-15)
+      for (const task of this.state.wbs_tasks) {
+        if (task.linked_deliverable_id === d.id && task.status !== 'done') {
+          task.status = 'done'
+          task.done_at = nowIso()
+          this.log('system', 'wbs.auto_done', 'wbs_task', task.id, { deliverable_id: d.id })
+        }
+      }
     } else {
       approval.client_comment = input.comment ?? null
       d.status = 'changes_requested'

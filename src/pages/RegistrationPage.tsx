@@ -28,6 +28,11 @@ const TABS: { id: Tab; label: string }[] = [
 
 export default function RegistrationPage() {
   const [tab, setTab] = useState<Tab>('rsvp')
+  const project = useAsync(() => provider.getProject(PROJECT_ID), [])
+  // v1.3 유형 토글(§3): general(일반형)이면 RSVP 파이프라인은 표시 계층에서만 숨긴다 — 데이터는 보존.
+  const isGeneral = project.data?.event_type === 'general'
+  const visibleTabs = isGeneral ? TABS.filter((t) => t.id !== 'rsvp') : TABS
+  const activeTab: Tab = isGeneral && tab === 'rsvp' ? 'attendees' : tab
 
   return (
     <section className="space-y-6 p-6">
@@ -36,14 +41,20 @@ export default function RegistrationPage() {
         <h1 className="mt-1 text-2xl font-bold text-gray-900">등록</h1>
       </div>
 
+      {isGeneral && (
+        <div className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600">
+          일반형 행사 — 모객(RSVP) 모듈은 숨김 처리됨(데이터는 보존)
+        </div>
+      )}
+
       <div className="flex gap-1 border-b border-gray-200">
-        {TABS.map((t) => (
+        {visibleTabs.map((t) => (
           <button
             key={t.id}
             type="button"
             onClick={() => setTab(t.id)}
             className={`rounded-t-md px-4 py-2 text-sm font-medium ${
-              tab === t.id ? 'border-b-2 border-gray-900 text-gray-900' : 'text-gray-500 hover:text-gray-700'
+              activeTab === t.id ? 'border-b-2 border-gray-900 text-gray-900' : 'text-gray-500 hover:text-gray-700'
             }`}
           >
             {t.label}
@@ -51,9 +62,9 @@ export default function RegistrationPage() {
         ))}
       </div>
 
-      {tab === 'rsvp' && <RsvpTab />}
-      {tab === 'attendees' && <AttendeesTab />}
-      {tab === 'stats' && <StatsTab />}
+      {activeTab === 'rsvp' && <RsvpTab />}
+      {activeTab === 'attendees' && <AttendeesTab />}
+      {activeTab === 'stats' && <StatsTab showRsvp={!isGeneral} />}
     </section>
   )
 }
@@ -272,7 +283,8 @@ function AttendeeRow({ attendee, onChanged }: { attendee: AttendeeWithRsvp; onCh
 }
 
 // ── 통계 탭 ───────────────────────────────────────────────────────────
-function StatsTab() {
+// showRsvp=false(일반형)면 RSVP 관련 타일(응답률)·보조 수치 카드를 렌더하지 않는다 — 데이터는 그대로 조회만 생략.
+function StatsTab({ showRsvp }: { showRsvp: boolean }) {
   const stats = useAsync(() => provider.getRegistrationStats(PROJECT_ID), [])
 
   return (
@@ -281,19 +293,21 @@ function StatsTab() {
       {stats.loading && <p className="text-sm text-gray-400">불러오는 중…</p>}
       {stats.data && (
         <>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <StatTile label="응답률" value={`${Math.round(stats.data.response_rate * 100)}%`} />
+          <div className={`grid grid-cols-1 gap-4 ${showRsvp ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
+            {showRsvp && <StatTile label="응답률" value={`${Math.round(stats.data.response_rate * 100)}%`} />}
             <StatTile label="등록 수" value={stats.data.attendee_total} />
             <StatTile label="체크인율" value={`${Math.round(stats.data.checkin_rate * 100)}%`} />
           </div>
-          <Card title="RSVP 보조 수치">
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-              <StatTile label="RSVP 총원" value={stats.data.rsvp_total} />
-              <StatTile label="발송" value={stats.data.rsvp_sent} />
-              <StatTile label="참석" value={stats.data.rsvp_accepted} />
-              <StatTile label="불참" value={stats.data.rsvp_declined} />
-            </div>
-          </Card>
+          {showRsvp && (
+            <Card title="RSVP 보조 수치">
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                <StatTile label="RSVP 총원" value={stats.data.rsvp_total} />
+                <StatTile label="발송" value={stats.data.rsvp_sent} />
+                <StatTile label="참석" value={stats.data.rsvp_accepted} />
+                <StatTile label="불참" value={stats.data.rsvp_declined} />
+              </div>
+            </Card>
+          )}
         </>
       )}
     </div>

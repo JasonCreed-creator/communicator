@@ -1,11 +1,11 @@
-# MICE 커뮤니케이터 — 시스템 설계서 v1.2
+# MICE 커뮤니케이터 — 시스템 설계서 v1.4
 
 | 항목 | 내용 |
 |---|---|
-| 문서 상태 | v1.2 확정 — 지시·문서 조립 확장 (2026-08-22, 시각안 승인 기반) |
+| 문서 상태 | v1.4 확정 — 유형별 WBS·담당자 R&R 확장 (2026-08-22, 시각안 승인 · Configurator 37태스크 이식) |
 | 목적 | Claude Code가 본 문서만으로 추가 질문 없이 구현 착수 |
 | 정본 관계 | 스키마·상태 머신·API 계약은 본 문서가 SoT. 구현 지침·작업 순서는 동봉 CLAUDE.md |
-| 확정 결정 | 아키텍처=하이브리드(파일=Drive, 상태=Supabase) / 발주처=무로그인 토큰 링크 / 컨펌 발송=PM 단독 / 업로드=웹앱 경유 원칙+Drive 감지 인박스 / 등록 1차=CSV 임포트 / **구현 순서=프론트 우선·서버 후행 이식(DataProvider 어댑터 계층)** / **v1.2: 지시(requested)→제작→컨펌→운영계획서(S9) 조립 파이프라인 — 웹 문서 우선, PPTX·발주처 뷰는 2차** |
+| 확정 결정 | 아키텍처=하이브리드(파일=Drive, 상태=Supabase) / 발주처=무로그인 토큰 링크 / 컨펌 발송=PM 단독 / 업로드=웹앱 경유 원칙+Drive 감지 인박스 / 등록 1차=CSV 임포트 / **구현 순서=프론트 우선·서버 후행 이식(DataProvider 어댑터 계층)** / **v1.2: 지시(requested)→제작→컨펌→운영계획서(S9) 조립 파이프라인 — 웹 문서 우선, PPTX·발주처 뷰는 2차** / **v1.3: S0 온보딩(개요→유형→담당자) → 유형(일반형·모객형) 모듈 토글 → 큐시트 정형 에디터(3채널 콘솔, 컨펌 스냅숏 자동)** / **v1.4: 유형별 WBS 템플릿 자동 전개(Configurator 37태스크 이식·호환 코드 체계) + 역할별 R&R 카드** |
 
 ---
 
@@ -78,14 +78,15 @@ MICE 프로젝트 착수 시 역할별(디자인·운영·등록·발주처) 산
 | # | 모듈 | 하위 기능 | 데이터 성격 |
 |---|---|---|---|
 | 1 | 디자인 | 디자인의뢰서(양식+첨부) / 키비주얼 / 제작물(품목: 배너·명찰·백월·리플렛·사이니지 등) | deliverable + 버전 파일 |
-| 2 | 운영 | 운영 시나리오 / 큐시트 / 프로그램 구성 | deliverable + 버전 파일 |
+| 2 | 운영 | 운영 시나리오 / 큐시트(v1.3: 파일이 아닌 정형 에디터) / 프로그램 구성 | deliverable + 버전 파일 / 큐시트=정형 |
 | 3 | 등록 | 모객 RSVP(리스트·발송상태·응답) / 참관객 등록 / 참관객 관리(체크인·통계) | 정형 데이터 테이블 |
 | 4 | 발주처 | 컨펌 큐(전 영역 컨펌요청 집결) / 운영현황 대시보드 | 뷰 전용(자체 데이터 없음) |
-| 5 | 일정 | D-day / 영역별 마감 / 컨펌 기한 | milestones + approvals.due_at |
+| 5 | 일정·WBS·R&R (v1.4 승격) | 유형별 WBS 템플릿 자동 전개(체크리스트·간트) / 담당별 R&R 카드 / D-day·컨펌 기한 | wbs_tasks·role_charters + approvals.due_at |
 | 6 | 공통 | 홈 미결 대시보드 / 기획 문서 / 회의록·의사결정 로그 / 예산·정산 문서함 / 알림 / 미등록 파일 인박스 | 혼합 |
 | 7 | 운영계획서 (v1.2) | S9 웹 문서 — 개요·프로그램·존운영·제작물 리스트·등록 통계·일정 섹션 자동 조립 + 진행률 + 인쇄 CSS | 뷰 + 정형 데이터 |
 
 - 회의록·예산 문서는 별도 모듈 UI 없이 deliverables의 area='common' 카테고리로 수용 (컨펌 루프 없이 보관·버전만).
+- (v1.3) 행사 유형 토글: event_type='general'(일반형)이면 등록 모듈이 경량 모드(참관객 명단·체크인만 — RSVP 파이프라인·모객 대시보드·리마인드 숨김), 'recruiting'(모객형)이면 전체 노출. 스키마는 동일하고 표시 계층 토글이라 유형 변경 시 데이터 손실 없음.
 
 ---
 
@@ -103,6 +104,7 @@ create type deliverable_status as enum
 create type approval_decision as enum ('approved','changes_requested');
 create type invite_status as enum ('none','sent','accepted','declined');
 create type attendee_channel as enum ('rsvp','onsite','import');
+create type event_type as enum ('general','recruiting');   -- v1.3: 일반형·모객형
 
 -- 1. 프로젝트
 create table projects (
@@ -113,6 +115,7 @@ create table projects (
   drive_root_folder_id text,          -- 표준 트리 루트
   slack_webhook_url text,
   -- v1.2 행사개요 (운영계획서 §행사개요 소스)
+  event_type event_type not null default 'general',  -- v1.3 S0 온보딩에서 선택
   theme text, venue text, mc_name text,
   overview_items jsonb,               -- 자유 키-값 개요 불릿 (대상·주차 안내 등)
   created_by uuid references auth.users,
@@ -276,6 +279,48 @@ create table program_sessions (
   sort_order int not null default 0
 );
 
+-- 14. 큐시트 큐 (v1.3 — category='큐시트'인 운영 항목에 귀속, 정형 에디터 소스)
+create table cues (
+  id uuid primary key default gen_random_uuid(),
+  deliverable_id uuid references deliverables on delete cascade,
+  cue_no text,                        -- C01 등 표시 번호
+  time_at time,
+  segment text,                       -- 구분 (사전·오프닝·MC·세션·전환 등)
+  body text,                          -- 내용·대본 (마크다운, 전문 포함)
+  console_audio text, console_light text, console_screen text,   -- 콘솔 3채널
+  sort_order int not null default 0
+);
+-- 큐시트 컨펌 발송 시: 앱이 표를 PDF 스냅숏으로 자동 생성해 버전 등록 → §5 발송 조건(미리보기 포맷) 충족
+
+-- 15. WBS 태스크 (v1.4 — 유형별 템플릿을 온보딩 완료 시 행사일 기준으로 전개)
+create type wbs_status as enum ('todo','doing','done');
+create table wbs_tasks (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid references projects on delete cascade,
+  phase_no int not null, phase_name text not null,   -- 1 사전착수 ~ 6 사후관리
+  code text not null,                 -- '2.5' 등 — Configurator 코드 체계 호환
+  title text not null,
+  offset_start int not null, offset_end int not null, -- D 기준(음수=D-), 원본 보존
+  start_date date, end_date date,     -- 전개 시 event_date로 계산 저장
+  role member_role not null,          -- 커뮤니케이터 역할 매핑
+  origin_role text,                   -- 원본 역할 태그(RS·RO·MC-PM·MC-AT·공동) — Configurator 연동 대비
+  status wbs_status not null default 'todo',
+  done_at timestamptz,
+  linked_deliverable_id uuid references deliverables,  -- 연결 시 상태 뱃지 표시, final이면 자동 done
+  note text, sort_order int not null default 0
+);
+-- 지연 = (미완료 and end_date < today), 임박 = (미완료 and end_date <= today+2) — 저장하지 않고 계산
+
+-- 16. 역할 헌장 R&R (v1.4 — 유형별 템플릿, 온보딩 담당자 지정 시 부여)
+create table role_charters (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid references projects on delete cascade,
+  role member_role not null,
+  origin_role text,
+  title text not null,                -- '총괄 PM' 등
+  items jsonb not null                -- 책임 불릿 배열
+);
+
 -- 무결성 보조 (v1.1 — 감수 M-3·Minor 반영)
 create unique index uq_rsvp_email on rsvp_contacts (project_id, lower(email)) where email is not null;
 create unique index uq_attendee_email on attendees (project_id, lower(email)) where email is not null;
@@ -309,6 +354,7 @@ draft ──(담당/PM)──> internal_review ──(PM만)──> pending_appr
 | pending_approval → changes_requested | 발주처 토큰 | client_comment 필수, Slack |
 | changes_requested → draft | 새 버전 업로드 시 자동 | version_no+1 |
 
+- (v1.3) 큐시트 항목은 컨펌 발송 시 표의 PDF 스냅숏이 자동으로 버전 등록되어 발송 조건을 충족한다.
 - `requires_approval=false` 항목(회의록·예산 등 common)은 draft ↔ internal_review만 사용.
 - 등록 모듈은 상태 머신 미사용 — 파이프라인: rsvp_contacts(none→sent→accepted/declined) → attendees(등록) → checked_in_at(체크인).
 
@@ -410,6 +456,12 @@ draft ──(담당/PM)──> internal_review ──(PM만)──> pending_appr
 | POST /registration/import | pm·reg | CSV 업로드 → rsvp_contacts/attendees 벌크 insert (중복=email 기준 upsert) |
 | PATCH /attendees/{id}/checkin | pm·reg | 체크인 토글 |
 | GET·POST·PATCH·DELETE /program-sessions | pm·ops | 프로그램표 CRUD (v1.2) |
+| GET·POST·PATCH·DELETE /cues | pm·ops | 큐시트 큐 CRUD (v1.3) |
+| POST /deliverables/{id}/cue-snapshot | pm | 큐시트 PDF 스냅숏 생성 → 버전 등록 (v1.3, 컨펌 발송 전처리) |
+| PATCH /projects/{id} | pm | 행사 유형·기본정보 수정 (v1.3) |
+| POST /projects/{id}/wbs-expand | pm | 유형별 WBS 템플릿을 event_date 기준 실제 날짜로 전개 (v1.4, 온보딩 완료 시 자동 호출) |
+| GET·PATCH /wbs-tasks | 담당 역할+pm(체크)·pm(편집) | WBS 태스크 조회·상태 변경 (v1.4) |
+| GET /role-charters | 멤버 | 역할별 R&R 카드 (v1.4) |
 | PATCH /projects/{id}/overview | pm·ops | 행사개요 편집 (v1.2) |
 | GET /projects/{id}/plan | 멤버 | 운영계획서 조립 데이터 — 전 섹션 + 섹션별 진행률 (v1.2) |
 | POST /sync/drive-scan | 멤버(수동)·cron | §7.3 인박스 스캔 |
@@ -437,15 +489,16 @@ draft ──(담당/PM)──> internal_review ──(PM만)──> pending_appr
 
 | # | 화면 | 구성 | 주요 액션 |
 |---|---|---|---|
-| S1 | 홈 대시보드 | 미결 컨펌(기한순) · D-day·마일스톤 · 미등록 인박스 · 영역별 진행률 바 · 최근 활동 | 인박스 연결/무시, 항목 바로가기 |
+| S0 | 온보딩 위저드 (v1.3) | 3단계: ①행사 기본개요 ②행사 유형(일반형/모객형 — 모듈 토글) ③역할별 담당자·발주처 토큰 발급 | 완료 전 본체 진입 차단, 완료 후 S6에서 수정 가능 |
+| S1 | 홈 대시보드 | 미결 컨펌(기한순) · D-day·마일스톤 · **지연/임박 WBS 태스크(v1.4)** · 미등록 인박스 · 영역별 진행률 바 · 최근 활동 | 인박스 연결/무시, 항목·태스크 바로가기 |
 | S2 | 영역 보드 (design/ops 공용) | 카테고리 그룹 카드: 상태 뱃지(지시됨 포함)·최신 vN·담당·마감 | 항목 생성, (pm) 지시 발행 폼, 필터(상태·담당), 상태 전이 |
-| S3 | 항목 상세 | 지시 카드(브리프·스펙 칩, v1.2)·버전 이력(최신 뱃지)·미리보기·코멘트 스레드·컨펌 이력·Drive 폴더 링크 | 버전 업로드, 전이, (pm) 컨펌 발송 |
+| S3 | 항목 상세 | 지시 카드(브리프·스펙 칩, v1.2)·버전 이력(최신 뱃지)·미리보기·코멘트 스레드·컨펌 이력·Drive 폴더 링크 — **큐시트 항목은 파일 대신 정형 에디터 렌더(v1.3: 행 편집·드래그 정렬·대본 전문)** | 버전 업로드, 전이, (pm) 컨펌 발송(큐시트=스냅숏 자동) |
 | S4 | 등록 모듈 | 탭: RSVP 리스트 / 참관객 / 통계(응답률·등록수·체크인율) | CSV 임포트·내보내기, 상태 변경, 체크인 토글, RSVP→참관객 전환 |
-| S5 | 일정·마일스톤 | 타임라인(D-day 기준) + 영역 필터, 컨펌 기한 오버레이 | 마일스톤 CRUD |
+| S5 | 일정·WBS·R&R (v1.4 승격) | 단계 필터(1~6)·체크리스트/간트 토글·태스크(코드·기간·담당·상태·산출물 연결 뱃지)·R&R 카드 그리드·컨펌 기한 오버레이 | 태스크 체크(담당+pm)·편집(pm), 템플릿 재전개(pm), 마일스톤 CRUD |
 | S6 | 프로젝트 설정 | 멤버·역할 / 발주처 연락처·토큰(발급·회수·최근 접속) / Drive 연결 상태 / Slack Webhook | pm 전용 |
 | S7 | 발주처 컨펌 큐 (`/c/{token}`) | 대기 항목 리스트 → 미리보기 → [승인] [수정요청+코멘트] · 처리 완료 이력 | 승인/수정요청 |
 | S8 | 발주처 현황 (`/c/{token}/status`) | 영역별 진행률 · 마일스톤 · 최근 확정본 목록(다운로드) | 읽기 전용 |
-| S9 | 운영계획서 (v1.2) | 섹션 자동 조립: ①행사개요 ②프로그램 ③존별 운영(content+도면) ④제작물 리스트(스펙 표+최신 시안·상태 뱃지) ⑤등록 통계 ⑥일정 — 섹션별 진행률·인쇄 CSS(A4) | 개요·프로그램 인라인 편집(pm·ops), 인쇄(PDF) |
+| S9 | 운영계획서 (v1.2) | 섹션 자동 조립: ①행사개요 ②프로그램 ③존별 운영(content+도면) ④제작물 리스트(스펙 표+최신 시안·상태 뱃지) ⑤등록 통계 ⑥일정 ⑦큐시트 표(v1.3, 프로그램 다음 배치) — 섹션별 진행률·인쇄 CSS(A4) | 개요·프로그램 인라인 편집(pm·ops), 인쇄(PDF) |
 
 UI 공통: 한국어, 데스크톱 우선 + 반응형(발주처 화면은 모바일 대응 필수 — 임원이 폰으로 컨펌하는 시나리오), 장식 최소·표와 뱃지 중심.
 
@@ -477,6 +530,8 @@ UI 공통: 한국어, 데스크톱 우선 + 반응형(발주처 화면은 모바
 | 발주처 토큰 뷰(큐·현황) + final 스냅숏 | 미리보기 위 주석(마크업) 코멘트 |
 | 홈 대시보드·인박스·일정 | 다중 발주처 담당자 승인 체인 |
 | (v1.2) 지시 발행 흐름·프로그램표·S9 운영계획서 웹 문서+인쇄 | (v1.2) 운영계획서 PPTX 내보내기·발주처용 운영계획서 뷰·지시 첨부 테이블 |
+| (v1.3) S0 온보딩 위저드·유형 모듈 토글·큐시트 정형 에디터+S9 연동 | (v1.3) 큐시트 리허설 모드(실시간 진행 표시)·유형별 견적 연동 |
+| (v1.4) WBS 템플릿 전개·체크리스트/간트·R&R 카드·산출물 연결 뱃지+final 자동 done | (v1.4) Configurator 실연동(양방향 동기화)·템플릿 편집기·태스크 코멘트 |
 | — | 현장사진 갤러리·결과보고서 조립 |
 | 등록 CSV 임포트·테이블·체크인 토글·통계 기초 | 통계 대시보드 고도화(mice-dashboard 연동) |
 | Slack·이메일 알림 + D-1 리마인드 | 모바일 앱 수준 최적화, 다국어 |
@@ -486,5 +541,55 @@ UI 공통: 한국어, 데스크톱 우선 + 반응형(발주처 화면은 모바
 ## 14. 개정 이력
 
 - **v1.0** (2026-08-19): 최초 확정 — 구조안 v0.9 승인 승격
+- **v1.4** (2026-08-22): 유형별 WBS·R&R 확장 (시각안 승인) — wbs_tasks·role_charters 테이블, Configurator 37태스크 코드 체계 이식(부록 §15, origin_role 태그로 연동 호환), 온보딩 완료 시 event_date 기준 자동 전개, S5를 일정·WBS·R&R 뷰로 승격(체크리스트/간트 토글), 홈에 지연·임박 집계, 산출물 연결 뱃지+final 자동 done. Configurator 실연동·템플릿 편집기는 2차
+- **v1.3** (2026-08-22): 온보딩·유형·큐시트 확장 (시각안 승인) — S0 위저드(개요→유형→담당자, 완료 전 진입 차단), event_type(general/recruiting) 모듈 토글, cues 테이블·큐시트 정형 에디터(3채널 콘솔·대본)·S9 큐시트 섹션·컨펌 스냅숏 자동, API 3종 추가. 리허설 모드·유형별 견적 연동은 2차
 - **v1.2** (2026-08-22): 지시→제작→컨펌→문서 조립 확장 (시각안 승인 기반) — status 'requested'+지시서·스펙 필드(brief·spec_*·content), program_sessions 신설, projects 행사개요 필드, S9 운영계획서 웹 문서(섹션 자동 조립·진행률·인쇄 CSS), API 4종 추가. 발주처용 운영계획서 뷰·PPTX 내보내기·지시 첨부는 2차
 - **v1.1** (2026-08-19): jc-redteam Deep Audit 반영(판정: 조건부 보완 → 전량 수정) — 코멘트 visibility 분리(C-1) / DataProvider 어댑터 계층·프론트 우선-서버 후행 구현 전략 §2.1 신설(C-2) / 전용 운영 계정+OAuth Production 게시(M-1) / 프록시 스트리밍·100MB 캡·미리보기 포맷 발송 조건·내부 Drive 직접 접근(M-2) / 이메일 partial unique 인덱스(M-3) / final 스냅숏 원자성·재시도(M-4) / Changes API·rename 기본 off(M-5) / 토큰 기본 만료·no-referrer·로그 마스킹(M-6) / Minor 6건(code unique, 기획 카테고리, 규약 확장 명기 등)
+
+---
+
+## 15. 부록 — WBS 기본 템플릿 (모객형 37태스크, Configurator v0.2 이식)
+
+역할 매핑 원칙: 계약·정산·컨펌 게이트=pm / 랜딩·제작물=design / 현장 운영·리허설·결과보고=ops / 리드젠·모객·RSVP·등록=reg. 원본 역할(RS 리멤버영업·RO 리멤버운영·MC-PM 엠앤씨총괄·MC-AT 엠앤씨RSVP·공동)은 origin_role로 보존.
+
+| 코드 | 태스크 | 기간 | 역할(원본) |
+|---|---|---|---|
+| 1.1 | 계약 검토 및 최종 날인 | D-42~40 | pm (RS) |
+| 1.2 | 킥오프 (영업+운영+협력) | D-38~35 | pm (공동) |
+| 1.3 | 클라이언트 실행 계획 미팅 | D-35~33 | pm (RS) |
+| 1.4 | 현장답사 (주차·이동경로·교통) | D-33~28 | ops (MC-PM) |
+| 2.1 | 행사 기초 자료 요청 (Key Visual 등) | D-33~30 | pm (RS) |
+| 2.2 | 기초 자료 수령 리마인더 | D-28~26 | pm (RS) |
+| 2.3 | 기초 자료 수령 | D-26~23 | pm (RS) |
+| 2.4 | 자료 수령 후 협력사 전달 | D-23~22 | pm (RS) |
+| 2.5 | 랜딩페이지 디자인·개발 1차 | D-22~18 | design (MC-PM) |
+| 2.6 | 랜딩페이지 1차 수정·내부 검토 | D-18~17 | design (MC-PM) |
+| 2.7 | 랜딩페이지 최종 컨펌·URL 오픈 | D-17~16 | pm (MC-PM) |
+| 2.8 | 제작물 (배너·렌탈장비·기념품·현수막) | D-13~5 | design (MC-PM) |
+| 3.1 | 리드젠 서베이 문항 설계·시스템 구축 | D-25~22 | reg (RO) |
+| 3.2 | 서베이 링크 전달·검수 | D-22~20 | reg (RO) |
+| 3.3 | 서베이+랜딩 통합 테스트 | D-20~18 | reg (RO) |
+| 3.4 | 대시보드 최초 세팅·전달 | D-18~17 | reg (RO) |
+| 3.5 | 실시간 리드 관리 시트 세팅 | D-17~16 | reg (RO) |
+| 4.1 | 리드 수집 시작 | D-16~5 | reg (RO) |
+| 4.2 | 타겟 일치/불일치 실시간 협의 | D-16~3 | pm (RS) |
+| 4.3 | 불일치 리드 적격 확정 후 전달 | D-16~3 | reg (RO) |
+| 4.4 | 1차 참석 확인 (전화·알림톡·메일) | D-8~5 | reg (MC-AT) |
+| 4.5 | 2차 참석 확정·노쇼 방지 | D-3~1 | reg (MC-AT) |
+| 4.6 | 데일리 현황 공유 (내부) | D-5~1 | reg (MC-AT) |
+| 4.7 | 데일리 현황 공유 (고객) | D-5~1 | reg (RO) |
+| 5.1 | 행사 물류 배송·현장 셋팅 | D-3~2 | ops (MC-PM) |
+| 5.2 | 현장 운영 자료 수집·테스트 | D-2~1 | ops (MC-PM) |
+| 5.3 | 전체 리허설·테크니컬 체크 | D-1 | ops (MC-PM) |
+| 5.4 | 현장 등록 데스크·출입 관리 | D-Day | reg (MC-AT) |
+| 5.5 | VIP 케어·연사 관리·프로그램 운영 | D-Day | ops (MC-PM) |
+| 6.1 | 최종 쇼업 리드 리스트 정리·전달 | D+1~2 | reg (MC-AT) |
+| 6.2 | 쇼업 리드 raw data 납품 | D+2~3 | reg (RO) |
+| 6.3 | 전체 행사 결과 보고서 작성·전달 | D+3~10 | ops (MC-PM) |
+| 6.4 | 운영 견적서 확정·전달 | D+3~5 | pm (MC-PM) |
+| 6.5 | 세금계산서 발행·고객 입금 확인 | D+5~15 | pm (RS) |
+| 6.6 | 운영비 협력사 정산 (이윤 포함) | D+15~20 | pm (RS) |
+| 6.7 | 고객사 회계 처리 마감 | D+20~30 | pm (RS) |
+| 6.8 | 프로젝트 회고·개선 사항 정리 | D+10~20 | pm (공동) |
+
+**일반형 템플릿 (가정 — 확정 시 갱신)**: 위 37건에서 3.x(리드 마케팅)·4.x(모객) 11건을 제외하고, 대체 2건 추가 — 3G.1 참석 대상 명단 확정(D-20~15, reg), 3G.2 초청장 발송·회신 관리(D-14~5, reg). 총 28건.

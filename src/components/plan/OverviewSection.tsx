@@ -7,7 +7,7 @@ import { getDataProvider } from '../../providers'
 import type { OverviewItem, Project } from '../../types/entities'
 import type { ProjectOverviewPatch } from '../../types/views'
 import PlanSection from './PlanSection'
-import type { SectionProgressData } from './planSections'
+import { PLAN_SECTION_META, type SectionProgressData } from './planSections'
 
 const provider = getDataProvider()
 
@@ -24,8 +24,7 @@ export default function OverviewSection({ project, progress, canEdit, onSaved }:
 
   return (
     <PlanSection
-      number="①"
-      title="행사개요"
+      number={PLAN_SECTION_META.overview.number} title={PLAN_SECTION_META.overview.title}
       progress={progress}
       action={
         canEdit && !editing ? (
