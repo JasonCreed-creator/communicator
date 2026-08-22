@@ -1,11 +1,11 @@
-# MICE 커뮤니케이터 — 시스템 설계서 v1.4.1
+# MICE 커뮤니케이터 — 시스템 설계서 v1.5
 
 | 항목 | 내용 |
 |---|---|
-| 문서 상태 | v1.4.1 확정 — v1.4(유형별 WBS·R&R, 2026-08-22 시각안 승인)에 **Phase 3.6·3.7 구현 해석 정본화** 패치: projects.onboarded_at 확정(사용자 승인 2026-08-22) · 임박/지연 배타 산식 · 일반형 28건 파생 규칙 · 재전개 보존 규칙 · 큐시트 스냅숏 mock 규약 (Code PROGRESS 열린 질문 ①~⑤ 종결) |
+| 문서 상태 | v1.5 확정 — **다중 행사(프로젝트 셀렉터·행사 목록) + 행사 설정 메뉴(개요·담당자 입력) 확장** (2026-08-22, 시각안 3화면 승인). 직전 v1.4.1: v1.4(유형별 WBS·R&R, 2026-08-22 시각안 승인)에 **Phase 3.6·3.7 구현 해석 정본화** 패치: projects.onboarded_at 확정(사용자 승인 2026-08-22) · 임박/지연 배타 산식 · 일반형 28건 파생 규칙 · 재전개 보존 규칙 · 큐시트 스냅숏 mock 규약 (Code PROGRESS 열린 질문 ①~⑤ 종결) |
 | 목적 | Claude Code가 본 문서만으로 추가 질문 없이 구현 착수 |
 | 정본 관계 | 스키마·상태 머신·API 계약은 본 문서가 SoT. 구현 지침·작업 순서는 동봉 CLAUDE.md |
-| 확정 결정 | 아키텍처=하이브리드(파일=Drive, 상태=Supabase) / 발주처=무로그인 토큰 링크 / 컨펌 발송=PM 단독 / 업로드=웹앱 경유 원칙+Drive 감지 인박스 / 등록 1차=CSV 임포트 / **구현 순서=프론트 우선·서버 후행 이식(DataProvider 어댑터 계층)** / **v1.2: 지시(requested)→제작→컨펌→운영계획서(S9) 조립 파이프라인 — 웹 문서 우선, PPTX·발주처 뷰는 2차** / **v1.3: S0 온보딩(개요→유형→담당자) → 유형(일반형·모객형) 모듈 토글 → 큐시트 정형 에디터(3채널 콘솔, 컨펌 스냅숏 자동)** / **v1.4: 유형별 WBS 템플릿 자동 전개(Configurator 37태스크 이식·호환 코드 체계) + 역할별 R&R 카드** / **v1.4.1: 온보딩 완료 상태는 projects.onboarded_at 컬럼이 정본(DataProvider v3.1 재동결)** |
+| 확정 결정 | 아키텍처=하이브리드(파일=Drive, 상태=Supabase) / 발주처=무로그인 토큰 링크 / 컨펌 발송=PM 단독 / 업로드=웹앱 경유 원칙+Drive 감지 인박스 / 등록 1차=CSV 임포트 / **구현 순서=프론트 우선·서버 후행 이식(DataProvider 어댑터 계층)** / **v1.2: 지시(requested)→제작→컨펌→운영계획서(S9) 조립 파이프라인 — 웹 문서 우선, PPTX·발주처 뷰는 2차** / **v1.3: S0 온보딩(개요→유형→담당자) → 유형(일반형·모객형) 모듈 토글 → 큐시트 정형 에디터(3채널 콘솔, 컨펌 스냅숏 자동)** / **v1.4: 유형별 WBS 템플릿 자동 전개(Configurator 37태스크 이식·호환 코드 체계) + 역할별 R&R 카드** / **v1.4.1: 온보딩 완료 상태는 projects.onboarded_at 컬럼이 정본(DataProvider v3.1 재동결)** / **v1.5: 다중 행사 — 사이드바 프로젝트 셀렉터+S-1 행사 목록, "행사 설정" 메뉴 상시 노출(①개요 ②담당자 ③유형·연동), S0 위저드=같은 폼의 단계형, 행사개요 단일 원천(S9 ①은 읽기 조립)** |
 
 ---
 
@@ -68,7 +68,8 @@ MICE 프로젝트 착수 시 역할별(디자인·운영·등록·발주처) 산
 ```
 
 - **인터페이스 동결이 전제 조건** — 동결 없이는 이식 시 전 화면 재작업이 발생해 어댑터의 이점이 소멸한다 (감수 Steelman 조건부 판정)
-- 동결 이력: v1(35메서드, Phase 1) → v2(41, v1.2 승인) → v3(53, v1.3·v1.4 승인) → **v3.1(v1.4.1 — 메서드 수 불변, `Project.onboarded_at`·`OnboardingStatus.onboarded_at` 필드 추가만)**. 매 해제는 사용자 승인+본 문서 개정 동반이 조건
+- 동결 이력: v1(35메서드, Phase 1) → v2(41, v1.2 승인) → v3(53, v1.3·v1.4 승인) → v3.1(v1.4.1 — 필드 추가만) → **v4(v1.5 승인 — 다중 행사: `listProjects`·`createProject`·`closeProject`·`addMember`·`removeMember` 5메서드 추가, `Project`·`ProjectPatch` 개요 필드 확장, `ProjectSummary` 뷰 타입 신설. 기존 메서드 시그니처 불변 — projectId 인자는 이미 전 메서드에 존재)**. 매 해제는 사용자 승인+본 문서 개정 동반이 조건
+- **현재 행사 컨텍스트(v1.5)**: 프론트는 `PROJECT_ID` 상수를 쓰지 않는다. `ProjectContext`(React)가 선택된 projectId를 보관(localStorage `communicator.currentProjectId`, 없으면 목록 첫 진행 중 행사)하고 모든 화면은 컨텍스트에서 읽는다. 라우트는 불변(`/`, `/board/...`) — URL prefix(`/p/:projectId/...`) 방식은 2차(북마크 공유 요구 발생 시)
 - Mock 단계 산출: UI/UX 전체 검증 + 발주처 데모 라우트(`/c/demo`)
 - 리스크 직렬화: 최대 리스크인 Drive 계층(OAuth·프록시)을 최후행에 배치
 
@@ -83,7 +84,7 @@ MICE 프로젝트 착수 시 역할별(디자인·운영·등록·발주처) 산
 | 3 | 등록 | 모객 RSVP(리스트·발송상태·응답) / 참관객 등록 / 참관객 관리(체크인·통계) | 정형 데이터 테이블 |
 | 4 | 발주처 | 컨펌 큐(전 영역 컨펌요청 집결) / 운영현황 대시보드 | 뷰 전용(자체 데이터 없음) |
 | 5 | 일정·WBS·R&R (v1.4 승격) | 유형별 WBS 템플릿 자동 전개(체크리스트·간트) / 담당별 R&R 카드 / D-day·컨펌 기한 | wbs_tasks·role_charters + approvals.due_at |
-| 6 | 공통 | 홈 미결 대시보드 / 기획 문서 / 회의록·의사결정 로그 / 예산·정산 문서함 / 알림 / 미등록 파일 인박스 | 혼합 |
+| 6 | 공통 | **행사 목록·프로젝트 셀렉터·행사 설정(v1.5)** / 홈 미결 대시보드 / 기획 문서 / 회의록·의사결정 로그 / 예산·정산 문서함 / 알림 / 미등록 파일 인박스 | 혼합 |
 | 7 | 운영계획서 (v1.2) | S9 웹 문서 — 개요·프로그램·존운영·제작물 리스트·등록 통계·일정 섹션 자동 조립 + 진행률 + 인쇄 CSS | 뷰 + 정형 데이터 |
 
 - 회의록·예산 문서는 별도 모듈 UI 없이 deliverables의 area='common' 카테고리로 수용 (컨펌 루프 없이 보관·버전만).
@@ -106,13 +107,22 @@ create type approval_decision as enum ('approved','changes_requested');
 create type invite_status as enum ('none','sent','accepted','declined');
 create type attendee_channel as enum ('rsvp','onsite','import');
 create type event_type as enum ('general','recruiting');   -- v1.3: 일반형·모객형
+create type project_status as enum ('active','closed');      -- v1.5
 
 -- 1. 프로젝트
 create table projects (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   code text not null unique,          -- 행사 약칭 (파일명 규약에 사용, 전역 유일)
-  event_date date,
+  event_date date,                    -- 시작일 (WBS 전개·D-day 기준)
+  event_end_date date,                -- v1.5 종료일 (null=당일 행사)
+  start_time time, end_time time,     -- v1.5 운영 시간
+  expected_headcount int,             -- v1.5 예상 인원
+  seating text,                       -- v1.5 좌석 형태 (극장식·라운드·교실식·스탠딩·혼합 — 자유 텍스트, enum 아님)
+  organizer text,                     -- v1.5 주최·주관
+  target_audience text,               -- v1.5 참가 대상
+  status project_status not null default 'active',  -- v1.5 active|closed (종료 행사는 읽기 전용·목록 접힘)
+  closed_at timestamptz,
   drive_root_folder_id text,          -- 표준 트리 루트
   slack_webhook_url text,
   -- v1.2 행사개요 (운영계획서 §행사개요 소스)
@@ -131,6 +141,18 @@ create table project_members (
   role member_role not null,
   primary key (project_id, user_id)
 );
+-- v1.5 담당자 '입력': 행사 설정 ②에서 이름·이메일·역할을 직접 추가한다. Phase 4 전(mock)은 추가 즉시 멤버로 취급,
+-- Phase 4부터는 초대 레코드 → 가입·수락 시 project_members로 승격. 같은 사람이 행사마다 다른 역할 가능(역할은 행사 단위).
+create table project_invites (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid references projects on delete cascade,
+  email text not null, display_name text not null,
+  role member_role not null,
+  invited_by uuid references auth.users, invited_at timestamptz default now(),
+  accepted_at timestamptz, accepted_user_id uuid references auth.users,
+  unique (project_id, lower(email))
+);
+-- 제약(앱 레벨): 행사당 role='pm' 멤버(또는 수락 대기 초대) 최소 1명. 마지막 PM 삭제 거부(409).
 
 -- 3. 발주처 연락처·토큰
 create table client_contacts (
@@ -381,6 +403,8 @@ draft ──(담당/PM)──> internal_review ──(PM만)──> pending_appr
 | 코멘트 | ● | ● | ● | ● | ●(자기 큐 항목) |
 | 등록 데이터 CRUD | ● | — | — | ● | — |
 | 멤버·토큰·설정·Drive 연결 | ● | — | — | — | — |
+| 행사 생성(S0 새 행사)·행사개요 편집·종료 (v1.5) | ● | — | — | — | — |
+| 행사 목록 열람·셀렉터 전환 (v1.5) | ●(멤버인 행사만) | ● | ● | ● | — |
 
 ### 6.2 RLS 방향
 - 모든 테이블: `project_id in (select project_id from project_members where user_id = auth.uid())`.
@@ -446,8 +470,10 @@ draft ──(담당/PM)──> internal_review ──(PM만)──> pending_appr
 
 | Method·Path | 권한 | 동작 |
 |---|---|---|
-| POST /projects | 로그인 | 프로젝트 생성 + Drive 표준 트리 생성 + 세션 2파일 템플릿 복사 |
-| POST /projects/{id}/members | pm | 멤버 초대(역할 지정) |
+| GET /projects | 로그인 | 멤버인 행사 목록 + 요약(ProjectSummary: D-day·유형·status·미결 컨펌·지연·확정 비율·온보딩 단계) — 셀렉터·S-1 공용 (v1.5) |
+| POST /projects | 로그인(생성자=pm 자동) | 프로젝트 생성(v1.5: 개요 필드 일괄 수신 — S0 ① 저장 시 호출, onboarded_at은 null) + Drive 표준 트리 생성 + 세션 2파일 템플릿 복사 |
+| POST /projects/{id}/close · reopen | pm | status=closed/active 토글 (v1.5). closed면 쓰기 API 전부 409 |
+| POST /projects/{id}/members | pm | 담당자 추가(이름·이메일·역할 — v1.5 project_invites 생성, mock은 즉시 멤버) / DELETE /projects/{id}/members/{id} = 제거(마지막 pm이면 409) |
 | POST /projects/{id}/client-tokens | pm | 토큰 발급 (연락처·만료) / DELETE = 회수 |
 | GET /projects/{id}/dashboard | 멤버 | 홈 데이터(미결 컨펌·D-day·인박스 수·영역 진행률·최근 활동) |
 | POST /deliverables | 역할-영역 일치 (지시 발행은 pm) | 항목 생성 + Drive 하위 폴더 생성. v1.2: brief·스펙 포함 시 status=requested |
@@ -463,7 +489,7 @@ draft ──(담당/PM)──> internal_review ──(PM만)──> pending_appr
 | GET·POST·PATCH·DELETE /program-sessions | pm·ops | 프로그램표 CRUD (v1.2) |
 | GET·POST·PATCH·DELETE /cues | pm·ops | 큐시트 큐 CRUD (v1.3) |
 | POST /deliverables/{id}/cue-snapshot | pm | 큐시트 PDF 스냅숏 생성 → 버전 등록 (v1.3, 컨펌 발송 전처리). Mock 단계 규약(v1.4.1): 파일명은 `.pdf` 규약 그대로, 내용은 인쇄용 HTML blob — 실제 PDF 렌더는 Phase 5 Drive 이식과 함께 |
-| PATCH /projects/{id} | pm | 행사 유형·기본정보 수정 (v1.3) |
+| PATCH /projects/{id} | pm | 행사 유형·기본정보 수정 (v1.3) — v1.5: 개요 전 필드(종료일·시간·장소·인원·좌석·주최·사회자·대상·overview_items). event_date 변경 시 응답에 `wbs_reexpand_required=true` → S5 배너 |
 | GET /projects/{id}/onboarding | 멤버 | `{completed, onboarded_at}` — 라우트 가드가 참조 (v1.4.1, completed = onboarded_at is not null) |
 | POST /projects/{id}/onboarding-complete | pm | 온보딩 완료 확정: `onboarded_at=now()` 기록 → wbs-expand·R&R 시드 순차 호출 (v1.4.1). 이미 완료면 409. 한 트랜잭션 |
 | POST /projects/{id}/wbs-expand | pm | 유형별 WBS 템플릿을 event_date 기준 실제 날짜로 전개 (v1.4, 온보딩 완료 시 자동 호출). 재호출 시 §4-15 재전개 보존 규칙 적용 (v1.4.1) |
@@ -492,20 +518,24 @@ draft ──(담당/PM)──> internal_review ──(PM만)──> pending_appr
 
 ---
 
-## 10. 화면 명세 (8개)
+## 10. 화면 명세 (v1.5: S-1 추가, S0·S6 재정의)
+
+**진입점 원칙(v1.5)**: 모든 화면은 사이드바 메뉴 또는 명시적 버튼으로 도달 가능해야 하며, 데모 픽스처는 그 진입 흐름을 실제로 보여줘야 한다(게이트 뒤에만 존재하는 화면 금지). 사이드바 순서: [프로젝트 셀렉터] → 행사 목록 → **행사 설정** → 홈 → 디자인 보드 → 운영 보드 → 등록 → 일정 → 운영계획서.
 
 | # | 화면 | 구성 | 주요 액션 |
 |---|---|---|---|
-| S0 | 온보딩 위저드 (v1.3) | 3단계: ①행사 기본개요 ②행사 유형(일반형/모객형 — 모듈 토글) ③역할별 담당자·발주처 토큰 발급 | 완료 전 본체 진입 차단 — **판정 기준 = projects.onboarded_at not null (v1.4.1)**, 완료 후 S6에서 수정 가능(onboarded_at은 불변) |
+| 공통 | 프로젝트 셀렉터 (v1.5) | 사이드바 최상단 드롭다운: 진행 중/종료 그룹, 행사명·유형·D-day·미결 컨펌/지연 요약, "＋ 새 행사 만들기", "전체 목록 보기" | 전환(컨텍스트 변경·마지막 선택 기억), 새 행사 → S0 |
+| S-1 | 행사 목록 (v1.5) | 카드 그리드(행사명·유형·일자·장소·D-day·PM·예상 인원·미결/지연/확정·전체 진행률). 세팅 미완료 행사는 "온보딩 n/3" 표시, 종료 행사는 접힘 | 카드 클릭=전환, 새 행사 만들기, 종료/재개(pm) |
+| S0 | 새 행사 위저드 (v1.3→v1.5 재정의) | **행사 설정 ①②③과 동일한 폼 컴포넌트**를 3단계로 배치: ①행사개요(필수 4: 행사명·코드·시작일·장소) ②담당자(내부 담당자 입력 — 이름·이메일·역할, PM 1명 필수 / 발주처 담당자·토큰 선택) ③유형·확인(일반형/모객형, WBS 전개 예고) | 완료 = onboarded_at 기록 + WBS 전개 + R&R 시드. 미완료 행사는 목록에 남고 진입 시 행사 설정으로 유도(차단 아님) |
 | S1 | 홈 대시보드 | 미결 컨펌(기한순) · D-day·마일스톤 · **지연/임박 WBS 태스크(v1.4)** · 미등록 인박스 · 영역별 진행률 바 · 최근 활동 | 인박스 연결/무시, 항목·태스크 바로가기 |
 | S2 | 영역 보드 (design/ops 공용) | 카테고리 그룹 카드: 상태 뱃지(지시됨 포함)·최신 vN·담당·마감 | 항목 생성, (pm) 지시 발행 폼, 필터(상태·담당), 상태 전이 |
 | S3 | 항목 상세 | 지시 카드(브리프·스펙 칩, v1.2)·버전 이력(최신 뱃지)·미리보기·코멘트 스레드·컨펌 이력·Drive 폴더 링크 — **큐시트 항목은 파일 대신 정형 에디터 렌더(v1.3: 행 편집·드래그 정렬·대본 전문)** | 버전 업로드, 전이, (pm) 컨펌 발송(큐시트=스냅숏 자동) |
 | S4 | 등록 모듈 | 탭: RSVP 리스트 / 참관객 / 통계(응답률·등록수·체크인율) | CSV 임포트·내보내기, 상태 변경, 체크인 토글, RSVP→참관객 전환 |
 | S5 | 일정·WBS·R&R (v1.4 승격) | 단계 필터(1~6)·체크리스트/간트 토글·태스크(코드·기간·담당·상태·산출물 연결 뱃지)·R&R 카드 그리드·컨펌 기한 오버레이 | 태스크 체크(담당+pm)·편집(pm), 템플릿 재전개(pm), 마일스톤 CRUD |
-| S6 | 프로젝트 설정 | 멤버·역할 / 발주처 연락처·토큰(발급·회수·최근 접속) / Drive 연결 상태 / Slack Webhook | pm 전용 |
+| S6 | 행사 설정 (v1.5 재정의 — 메뉴 2번째 상시 노출) | 탭 ①행사개요: 행사명·코드·유형·시작/종료일·시작/종료 시간·장소·예상 인원·좌석 형태·주제·주최/주관·사회자·참가 대상·기타 개요 항목(overview_items) — **행사개요의 단일 원천(S9 ①은 여기서 읽기 조립, 인라인 편집 제거)** / 탭 ②담당자: 내부 담당자 표(추가 행·삭제·역할 변경) + 발주처 담당자·토큰 통합 표(발급·회수·링크 복사) + R&R 미리보기 / 탭 ③유형·연동: 유형 토글 안내·Drive·Slack | pm 편집(타 역할 읽기). 상단에 "세팅 완료·일자" 또는 "세팅 미완료(필수 n개)" 뱃지 |
 | S7 | 발주처 컨펌 큐 (`/c/{token}`) | 대기 항목 리스트 → 미리보기 → [승인] [수정요청+코멘트] · 처리 완료 이력 | 승인/수정요청 |
 | S8 | 발주처 현황 (`/c/{token}/status`) | 영역별 진행률 · 마일스톤 · 최근 확정본 목록(다운로드) | 읽기 전용 |
-| S9 | 운영계획서 (v1.2) | 섹션 자동 조립: ①행사개요 ②프로그램 ③존별 운영(content+도면) ④제작물 리스트(스펙 표+최신 시안·상태 뱃지) ⑤등록 통계 ⑥일정 ⑦큐시트 표(v1.3, 프로그램 다음 배치) — 섹션별 진행률·인쇄 CSS(A4) | 개요·프로그램 인라인 편집(pm·ops), 인쇄(PDF) |
+| S9 | 운영계획서 (v1.2) | 섹션 자동 조립: ①행사개요(v1.5: 행사 설정 ①에서 읽기 조립 — 일자·시간·장소·인원·좌석·주최·대상 포함) ②프로그램 ③존별 운영(content+도면) ④제작물 리스트(스펙 표+최신 시안·상태 뱃지) ⑤등록 통계 ⑥일정 ⑦큐시트 표(v1.3, 프로그램 다음 배치) — 섹션별 진행률·인쇄 CSS(A4) | 프로그램 인라인 편집(pm·ops), 개요는 "행사 설정에서 편집" 링크, 인쇄(PDF) |
 
 UI 공통: 한국어, 데스크톱 우선 + 반응형(발주처 화면은 모바일 대응 필수 — 임원이 폰으로 컨펌하는 시나리오), 장식 최소·표와 뱃지 중심.
 
@@ -539,6 +569,7 @@ UI 공통: 한국어, 데스크톱 우선 + 반응형(발주처 화면은 모바
 | (v1.2) 지시 발행 흐름·프로그램표·S9 운영계획서 웹 문서+인쇄 | (v1.2) 운영계획서 PPTX 내보내기·발주처용 운영계획서 뷰·지시 첨부 테이블 |
 | (v1.3) S0 온보딩 위저드·유형 모듈 토글·큐시트 정형 에디터+S9 연동 | (v1.3) 큐시트 리허설 모드(실시간 진행 표시)·유형별 견적 연동 |
 | (v1.4) WBS 템플릿 전개·체크리스트/간트·R&R 카드·산출물 연결 뱃지+final 자동 done | (v1.4) Configurator 실연동(양방향 동기화)·템플릿 편집기·태스크 코멘트 |
+| (v1.5) 프로젝트 셀렉터·S-1 행사 목록·행사 설정 3탭·S0 동일 폼·담당자 입력·종료/재개 | (v1.5) URL prefix 라우팅(`/p/:id`)·이메일 초대 수락 흐름(Phase 4)·행사 복제·Configurator 견적 → 행사 생성 핸드오프(부록 §16) |
 | — | 현장사진 갤러리·결과보고서 조립 |
 | 등록 CSV 임포트·테이블·체크인 토글·통계 기초 | 통계 대시보드 고도화(mice-dashboard 연동) |
 | Slack·이메일 알림 + D-1 리마인드 | 모바일 앱 수준 최적화, 다국어 |
@@ -548,6 +579,7 @@ UI 공통: 한국어, 데스크톱 우선 + 반응형(발주처 화면은 모바
 ## 14. 개정 이력
 
 - **v1.0** (2026-08-19): 최초 확정 — 구조안 v0.9 승인 승격
+- **v1.5** (2026-08-22): 다중 행사·행사 설정 확장 (시각안 3화면 승인) — 계기: "초기 세팅 메뉴가 없다"(S0가 게이트 뒤에만 존재·담당자 단계 읽기 전용·개요 필드 분산) + 동시 다수 행사 운영. projects 개요 필드 7종·status 추가, project_invites 신설, API(GET /projects·close/reopen·members DELETE·PATCH 확장), DataProvider v4(5메서드 추가), ProjectContext(PROJECT_ID 상수 폐지), S-1 행사 목록·프로젝트 셀렉터, S6를 "행사 설정" 3탭으로 재정의·메뉴 2번째 상시 노출, S0=동일 폼 단계형(미완료 행사는 차단이 아닌 유도), S9 ① 개요 읽기 조립로 단일화, 진입점 원칙 명문화, 부록 §16 Configurator 핸드오프 수신 계약(가정). 2차: URL prefix·초대 수락·행사 복제
 - **v1.4.1** (2026-08-22): 패치 — Phase 3.6·3.7 구현 중 Code가 PROGRESS 열린 질문으로 올린 해석 5건을 정본화(기능 추가 없음). ① `projects.onboarded_at timestamptz` 신설(사용자 승인) — S0 완료 판정·API 2종(GET onboarding / POST onboarding-complete)·DataProvider v3.1 재동결(필드 추가만) ② §4-15 임박 산식을 지연과 배타로 정정(today ≤ end_date ≤ today+2) ③ §15 일반형 28건 제외 집합을 코드 단위로 명시(4.6 존치) — 가정 표기는 유지 ④ wbs-expand 재전개 보존 규칙(code 매칭·status·done_at·연결 보존) ⑤ cue-snapshot mock 규약(.pdf 파일명+HTML blob, PDF 렌더는 Phase 5). 스키마 변경은 ①뿐 — Phase 4 마이그레이션은 v1.4.1 기준
 - **v1.4** (2026-08-22): 유형별 WBS·R&R 확장 (시각안 승인) — wbs_tasks·role_charters 테이블, Configurator 37태스크 코드 체계 이식(부록 §15, origin_role 태그로 연동 호환), 온보딩 완료 시 event_date 기준 자동 전개, S5를 일정·WBS·R&R 뷰로 승격(체크리스트/간트 토글), 홈에 지연·임박 집계, 산출물 연결 뱃지+final 자동 done. Configurator 실연동·템플릿 편집기는 2차
 - **v1.3** (2026-08-22): 온보딩·유형·큐시트 확장 (시각안 승인) — S0 위저드(개요→유형→담당자, 완료 전 진입 차단), event_type(general/recruiting) 모듈 토글, cues 테이블·큐시트 정형 에디터(3채널 콘솔·대본)·S9 큐시트 섹션·컨펌 스냅숏 자동, API 3종 추가. 리허설 모드·유형별 견적 연동은 2차
@@ -601,3 +633,25 @@ UI 공통: 한국어, 데스크톱 우선 + 반응형(발주처 화면은 모바
 | 6.8 | 프로젝트 회고·개선 사항 정리 | D+10~20 | pm (공동) |
 
 **일반형 템플릿 (가정 유지 — 확정 시 갱신)**: 위 37건에서 리드 마케팅·모객 **11건**을 제외하고 대체 2건을 추가해 총 **28건**. 제외 집합은 v1.4.1에서 코드 단위로 명시 — 3.1~3.5(5건) + 4.1·4.2·4.3·4.4·4.5·4.7(6건). **4.6 데일리 현황 공유(내부)는 존치**(내부 현황 공유는 리드 특화 업무가 아님). 추가 2건 — 3G.1 참석 대상 명단 확정(D-20~15, reg, origin_role null), 3G.2 초청장 발송·회신 관리(D-14~5, reg, origin_role null). 정본 구현 = src/fixtures/wbsTemplates.ts(GENERAL_EXCLUDED_CODES·GENERAL_EXTRA_TASKS). 기획자 확정 전까지 "가정" 표기를 유지하며, 확정 시 본 단락만 갱신한다.
+
+---
+
+## 16. 부록 — 견적 Configurator 핸드오프 수신 계약 (v1.5 가정 — jsx-easy-shift 분석 후 확정)
+
+목적: 자사 Remember MICE Configurator(레포 jsx-easy-shift, Lovable/React/Vite/Supabase)에서 견적이 확정되면 "커뮤니케이터로 행사 생성"으로 S0 위저드를 프리필한다. 통합 수준 A(핸드오프)를 v1.5의 전제로 두고, B(같은 Supabase 동거)·C(단일 플랫폼)는 Phase 4 게이트에서 결정한다.
+
+| 커뮤니케이터 projects | Configurator 견적 헤더 (가정 — 실필드명은 분석 보고로 교체) | 변환 |
+|---|---|---|
+| name | 행사명 | 그대로 |
+| code | (없으면) 행사명 이니셜+연도 2자리 자동 제안 | S0 ①에서 확인 |
+| event_date / event_end_date | 행사 일자(시작·종료) | date |
+| start_time / end_time | 운영 시간 | time |
+| venue | 베뉴 DB 선택값(명칭·홀) | text 결합 |
+| expected_headcount | 예상 인원(Tier 산정 입력) | int |
+| seating | 좌석 형태 옵션 | text |
+| event_type | 리드젠 포함 여부 → recruiting / 미포함 → general | 매핑 |
+| organizer / target_audience | 고객사명 / 대상 설명 | text |
+| overview_items | 견적 요약(Tier·섹션·옵션·총액 제외) | 키-값 불릿 (금액은 수신하지 않음 — #RULE 발주처 노출 방지) |
+| wbs_tasks 시드 | Configurator 37태스크 코드(origin_role) | 이미 §15로 이식 — 코드 일치 검증만 |
+
+수신 방식(가정): ① 1차 = JSON 파일/URL 파라미터 수동 임포트(S0 ① 상단 "견적에서 가져오기") ② 2차 = 같은 Supabase면 `configurator_quotes` 뷰 직접 조회. 확정은 jsx-easy-shift 읽기 분석 보고(스키마·견적 출력 구조) 수령 후 v1.5.1로 개정한다.
