@@ -3,18 +3,23 @@
 > 가변 상태 파일. 매 세션 체크아웃 시 에이전트가 갱신한다 (CLAUDE.md §9 리추얼).
 
 ## 1. 상태 요약
-- 현재 Phase: **Phase 0~3.11 구현 완료(머지 대기)** — main=3.10.1 머지 커밋(`bbb2c52`+문서 `a61c577`),
-  Phase 3.11(v2.0 견적 모듈)은 브랜치 `claude/progress-9jxt7x`에서 완료·PR 발행(**머지는 챗 검수 후** —
-  세션 브리프 §1). 다음 = Phase 4(새 Supabase 이식, ★착수 전 사용자 승인 + 새 프로젝트 3키 수령)
-- 정본 문서: `docs/mice-communicator-설계서-v2.0.md` (스키마·상태 머신·API·WBS §15·핸드오프 §16·
+- 현재 Phase: **Phase 0~3.11 완료** — main=`78c8aa9`(PR #14 머지, 챗 실측 검수 통과·사용자 머지 승인
+  2026-08-22). 견적(S-2)→행사 설정→운영→결과의 단일 플랫폼 흐름이 mock 기준으로 전부 동작한다.
+  다음 = **Phase 4(새 Supabase 이식)** — ★착수 전 사용자 승인 + 새 프로젝트 3키 수령 필요
+- 정본 문서: **`docs/mice-communicator-설계서-v2.0.md`** (스키마·상태 머신·API·WBS §15·핸드오프 §16·
   이식 인벤토리 §17·인프라 전환 §18 SoT — v1.5 대체) + `docs/mice-communicator-디자인지시서-v1.md`
-- 브랜치: `main` = 정본. 3.11은 하네스 지정 브랜치 `claude/progress-9jxt7x`(base=main)로 개발·PR —
-  브리프의 `claude/phase-3.11-quote-module` 명명 대신 세션 하네스 지정을 따름(§5 결정 로그)
-- **Phase 3.11 결과: vitest 312개(33파일) = 기준치 124 + 견적 모듈 159(골든 벡터 15/15 0원·그리드
-  47행·이식 84케이스) + dod23(5)·dod24(7)·dod25(10)·리다이렉트(7) 전부 통과(2회 연속 실행 검증) +
+  (디자인 토큰·레이아웃 정본) + 루트 `CLAUDE.md` v2.0(작업 순서·규약)
+- 브랜치: `main` = 정본. 3.11은 하네스 지정 브랜치 `claude/progress-9jxt7x`(base=main)로 개발·PR #14 —
+  브리프의 `claude/phase-3.11-quote-module` 명명 대신 세션 하네스 지정을 따름(§5 결정 로그).
+  머지 후 같은 브랜치는 main에서 재분기해 후속 문서 작업에 재사용
+- **Phase 3.11 결과(머지본 main 재검증 포함): vitest 312개(32파일) = 기준치 124 + 견적 모듈 159
+  (골든 벡터 15/15 0원·그리드 47행·이식 84케이스) + dod23(5)·dod24(7)·dod25(10)·리다이렉트(7)
+  전부 통과(브랜치 2회 + 머지 후 main 1회 = 3회 실행 검증) +
   tsc 클린 + vite build 성공 + grep 가드 4종 0건(gray/slate·PROJECT_ID(*.tsx)·발주처/plan 금액 키·
   onboarding_completed) + 스크린샷 7장(지시분 6장+S5 컴플라이언스 추가컷)**
 - Phase 3.10.1 결과(기준치): vitest 124개·tsc·build·grep 2종 0건 + 1280 큐시트 무스크롤 실측
+- **데모 아티팩트: 실기(實機) 단일 HTML 재발행 완료** — `npm run build:demo`(HashRouter 진입점 +
+  전 청크 인라인) 산출을 기존 URL에 재배포. 하위 경로 서빙 실측 검증(5개 라우트 렌더·외부 요청 0건)
 
 ## 2. 완료
 - 설계서 v1.1 확정 + CLAUDE.md v1.1 (2026-08-19)
@@ -190,7 +195,7 @@
 - **§7 DoD 21~25 테스트 코드화·통과** (2026-08-22, 메인 통합 검수): dod23(금액 키 런타임 부재
   4경로 + 소스 grep 가드), dod24(§16 전 필드·상호 링크·미확정 409·⑤ 비활성·견적 없는 S0 경로·
   완료 후 링크 유지), dod25(staff 메뉴 미표시/403·admin 접근·모객형 그룹 숨김/보존·컴플라이언스
-  왕복), 리다이렉트 가드 7건. **vitest 312개(33파일) 2회 연속 전부 통과 + tsc + build + grep 4종 0건**
+  왕복), 리다이렉트 가드 7건. **vitest 312개(32파일) 2회 연속 전부 통과 + tsc + build + grep 4종 0건**
 
 ## 3. 미결
 - GitHub 기본 브랜치가 아직 `claude/extract-zip-to-repo-t6xstr` — Settings → Branches에서 `main`으로
@@ -201,17 +206,21 @@
 - (경미) 큐시트 발송 시 RequestApprovalInput.version_id에 'auto' 센티널 전달(동결 인터페이스 관례) —
   다음 동결 해제 기회에 version_id 옵셔널화 검토. v1.4.1 ⑤는 스냅숏 파일 규약을 정본화한 것이고
   이 항목은 인터페이스 형상 문제라 별개로 유지
-- **(열린 질문 — v2.0 ①) DataProvider v5 메서드 수**: 설계서 §2.1·CLAUDE.md·브리프는 8메서드
-  열거인데 §8에 `PATCH /compliance-cards`(체크=멤버)가 있고 DoD 25가 "체크 왕복"을 테스트로 요구 —
-  §8·DoD 우선으로 해석해 `updateComplianceCard`를 9번째로 추가(v5=67메서드). 설계서 v2.0.1에서
-  §2.1 열거를 "8+1"로 정정할지 사용자 확인 필요
-- **(열린 질문 — v2.0 ②) 견적서 Excel 로고 판**: 브리프는 `remember-logo-black.png` 지정이나
-  견적서 헤더 밴드가 블랙(#0A0A0A)이라 블랙 로고는 비가시 — 원본(크림/화이트 워드마크)과의 시각
-  등가를 위해 `remember-logo-offwhite.png` 사용. 설계서 §17.1은 "public/brand png 사용"만 규정하므로
-  무저촉으로 판단, 사용자 확인 후 필요 시 교체(1줄)
+- (경미·데모 한정) 아티팩트 뷰어는 페이지가 시작하는 파일 저장(blob 링크·file-saver)을 허용하지 않아
+  데모에서 **'Excel 내려받기' 버튼만 무동작**이다(실제 배포·로컬에서는 정상). 데모에서 견적서 파일을
+  보여야 하면 Artifact `downloads` 능력 선언이 필요 — 현 단계 미적용
+- **(백로그 — v2.1, 지금 수정 금지)** 확정 견적 편집 진입 시 안내 문구 1줄 추가 — "저장하면 새
+  버전(vN)으로 저장됩니다"를 ④ 확인·확정 상단(현 `lockedBanner` 인근)에 명시. 현재도 버튼 라벨이
+  '새 버전으로 저장'으로 바뀌고 잠금 배너가 뜨지만, 저장 결과가 새 버전 번호라는 점을 문구로 못박는
+  것이 목적(사용자 지시 2026-08-22 — **이번 세션 수정 금지**, 다음 UI 작업 때 반영)
 - **(백로그 — v2.0, 지금 수정 금지)** 3.10.1 R3 잔여: 발주처 연락처 표가 **반폭 카드**에서는 액션 열이
   가로 스크롤 뒤에 숨음(전폭에선 정상) — v2.0에서 행사 설정 ② 담당자 탭을 상하 1단 배치로 전환해
   해소 예정(사용자 결정 2026-08-22, 현 단계 수정 금지)
+- ~~(열린 질문 — v2.0 ①) DataProvider v5 메서드 수~~ → **종결** (사용자 확정 2026-08-22, PR #14 검수):
+  **현재 구현대로 v5 = 9메서드(67메서드)** 확정 — `updateComplianceCard` 포함. 설계서 §2.1의 "8메서드"
+  문구 정정은 **챗이 v2.0.1에서 수행해 Phase 4 첨부 시 전달**하므로 레포 문서는 지금 수정하지 않는다
+- ~~(열린 질문 — v2.0 ②) 견적서 Excel 로고 판~~ → **종결** (사용자 확정 2026-08-22, PR #14 검수):
+  **`remember-logo-offwhite.png` 현행 유지** — 블랙 헤더 밴드 위 가시성·원본 시각 등가 근거 채택
 - ~~리멤버 로고 실 자산 미수령~~ → **종결** (2026-08-22 ZIP 수령, png 2종 배치)
 - ~~온보딩 완료 플래그 스키마 확정 필요~~ → **종결** (설계서 v1.4.1 §4-1 projects.onboarded_at,
   사용자 승인 — Phase 3.8a 반영)
@@ -219,18 +228,40 @@
   (설계서 v1.4.1 §4-15·§8·§15 정본화 — 열린 질문 ①~⑤ 전부 종결)
 
 ## 4. 다음 스텝
-- **Phase 3.11 PR 챗 검수 → 머지** (세션 브리프 §1 — 머지는 챗 실측 검수 후). 검수 포인트:
-  스크린샷 7장·골든 벡터 15/15 0원·열린 질문 v2.0 ①②
+- ~~Phase 3.11 PR 챗 검수 → 머지~~ → **완료** (2026-08-22, PR #14 → main `78c8aa9`)
 - **Phase 4 — 새 Supabase 프로젝트 이식** (★착수 전 사용자 승인 + **새 프로젝트 3키**(URL·anon·
   service role — env·Vault만, 문서 기재 금지) 수령, **v2.0 스키마 기준**): 4a 마이그레이션+RLS(§6.2 —
   quotes·profiles·compliance_cards 포함)+seed(픽스처 4행사+견적) → 4b SupabaseProvider v5(67메서드,
   견적 저장 서버 재계산) → 4c 이메일 매직링크 로그인·AuthContext·app_role 게이트 → 4d DoD 26 검증.
-  권장 모델: Fable 5 엑스트라(CLAUDE.md §5)
+  권장 모델: Fable 5 엑스트라(CLAUDE.md §5).
+  **착수 시 첨부 예정: 설계서 v2.0.1**(§2.1 DataProvider v5 열거를 9메서드로 정정한 판 — 챗이 발행).
+  레포의 v2.0 문서는 그때 교체하며, 그 전까지는 §2.1 문구와 코드(9메서드) 차이를 본 미결 종결
+  기록으로 갈음한다
 - **Phase 4.6 — 인프라 전환** (설계서 §18, ■ 게이트마다 사용자 확인): 새 Vercel·env → 옛 Configurator
   DB 1회 임포트(선택·dry-run) → 도메인 rmb-mice.com 이전 → 옛 라우트 301 → jsx-easy-shift 아카이브
 - 이후 Phase 5(Drive) → Phase 6(알림·cron)
 
 ## 5. 결정 로그
+- 2026-08-22 (데모 아티팩트 빌드 방식): 아티팩트는 `/_f/{id}/` 하위 경로로 서빙되는데 앱이 쓰는
+  BrowserRouter는 basename이 `/`라 **전 경로가 404**로 렌더됐다(Playwright로 재현·확인). 앱 라우팅
+  의미를 바꾸지 않기 위해 `src/App.tsx`에서 **라우트 표만 `AppRoutes`로 분리 export**하고, 데모 전용
+  진입점 `demo/main.tsx`가 이를 **HashRouter**로 감싼다(경로 독립). 배포 앱은 그대로 BrowserRouter.
+  레포 구조 추가 2건(CLAUDE.md §3 기록 의무) — `demo/`(진입점 `main.tsx`·`index.html`,
+  자가완결 플러그인 `plugins.ts`, 데모 안내 칩 `DemoNotice.tsx`)과 `vite.demo.config.ts`.
+  빌드는 `npm run build:demo` 한 줄 = `dist-demo/artifact.html` 1파일(앱 빌드와 완전 분리).
+  플러그인 2종: ① `/brand/*.png` 절대 경로를 빌드 타임에 data URI로 치환(3곳 미달이면 빌드 실패)
+  ② HTML·CSS·JS를 아티팩트 본문 조각으로 접고 **남은 자산·청크가 있으면 빌드를 세운다**.
+  exceljs 의존(string_decoder·saxes)이 U+FFFD 리터럴을 갖고 있어 발행이 400으로 거절되므로
+  `�` 이스케이프로 치환(의미 동일). 데모 한정 안내 칩으로 mock·내려받기 제약을 고지.
+  검증 2단: ① 정적 — `node demo/verify/check-artifact.mjs`(문서 셸 없음·외부 참조 0·http URL
+  호스트 전수 분류·fetch 1건(로고 data URI)·U+FFFD 0·인라인 번들 구문 유효, 실패 시 exit 1)
+  ② 실기 — 하위 경로(`/_f/{id}/`)에서 7개 라우트 렌더·Excel 내보내기 무오류·375px 가로 스크롤
+  없음·외부 요청 0건(Playwright 실측)
+- 2026-08-22 (Phase 3.11 검수·머지): **사용자 확정 3건** — ① PR #14 검수 통과, **머지 승인**
+  (main `78c8aa9`) ② 열린 질문 v2.0 ① 종결: **DataProvider v5 = 9메서드(67) 현재 구현 확정**,
+  설계서 §2.1 "8메서드" 문구는 **챗이 v2.0.1에서 정정해 Phase 4 첨부 시 전달 — 레포 문서 지금 수정
+  금지** ③ 열린 질문 v2.0 ② 종결: 견적서 Excel 로고 **offwhite 현행 유지**. 추가 지시: 확정 견적
+  편집 안내 문구 1줄은 **백로그로만 기록(지금 수정 금지)**
 - 2026-08-22 (Phase 3.11a): **DataProvider v4 동결 해제** — 근거: **사용자 v2.0 승인(2026-08-22,
   시각안 3화면·설계서 v2.0 개정 동반 — §9 준수)**. listQuotes·getQuote·createQuote·saveQuoteVersion·
   finalizeQuote·createProjectFromQuote·exportQuoteXlsx·listComplianceCards 8메서드 + updateComplianceCard
@@ -383,7 +414,12 @@
   잠금·Excel) → 3.11c(메인=Y: §16 핸드오프·S0 프리필·모객형 그룹·S5 소통 대상+컴플라이언스·옛 라우트
   리다이렉트) → DoD 21~25 코드화 → 검증(vitest 312 ×2·tsc·build·grep 4종 0건·스크린샷 7장·jsx-easy-shift
   쓰기 0) → PR 발행(드래프트, **머지는 챗 검수 후**). 챗 중간 지시 2건 반영(결정 로그).
-  **다음 세션 = Phase 4 게이트(사용자 승인 + 새 Supabase 3키, Fable 5 엑스트라 권장)**
+- 2026-08-22 세션 #6 계속(체크아웃): 사용자 검수 통과·머지 승인 → **PR #14 머지(main `78c8aa9`)** →
+  머지본 재검증(vitest 312·tsc·build·grep 4종) → 열린 질문 2건 종결·백로그 1건 기록 → **데모
+  아티팩트 실기 재발행**(HashRouter 데모 빌드 신설 — 기존 아티팩트가 하위 경로에서 404였던 문제
+  해결, 결정 로그 참조) → PROGRESS 갱신·PR 발행.
+  **다음 세션 = Phase 4 게이트(사용자 승인 + 새 Supabase 3키, Fable 5 엑스트라 권장).
+  Phase 4 착수 시 챗이 설계서 v2.0.1(§2.1 9메서드 정정판) 첨부 예정**
 
 ## 7. 세션 잠금
 - 잠금 없음 (한 폴더 = 동시 1세션)
