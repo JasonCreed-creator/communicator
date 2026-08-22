@@ -248,15 +248,18 @@
   진입점 `demo/main.tsx`가 이를 **HashRouter**로 감싼다(경로 독립). 배포 앱은 그대로 BrowserRouter.
   레포 구조 추가 2건(CLAUDE.md §3 기록 의무) — `demo/`(진입점 `main.tsx`·`index.html`,
   자가완결 플러그인 `plugins.ts`, 데모 안내 칩 `DemoNotice.tsx`)과 `vite.demo.config.ts`.
-  빌드는 `npm run build:demo` 한 줄 = `dist-demo/artifact.html` 1파일(앱 빌드와 완전 분리).
+  빌드·검증은 `npm run demo` 한 줄(= demo:typecheck → demo:build → demo:check → demo:check:routing)
+  = `dist-demo/artifact.html` 1파일(앱 빌드와 완전 분리). 눈으로 볼 땐 `npm run demo:serve`.
   플러그인 2종: ① `/brand/*.png` 절대 경로를 빌드 타임에 data URI로 치환(3곳 미달이면 빌드 실패)
   ② HTML·CSS·JS를 아티팩트 본문 조각으로 접고 **남은 자산·청크가 있으면 빌드를 세운다**.
   exceljs 의존(string_decoder·saxes)이 U+FFFD 리터럴을 갖고 있어 발행이 400으로 거절되므로
   `�` 이스케이프로 치환(의미 동일). 데모 한정 안내 칩으로 mock·내려받기 제약을 고지.
-  검증 2단: ① 정적 — `node demo/verify/check-artifact.mjs`(문서 셸 없음·외부 참조 0·http URL
-  호스트 전수 분류·fetch 1건(로고 data URI)·U+FFFD 0·인라인 번들 구문 유효, 실패 시 exit 1)
-  ② 실기 — 하위 경로(`/_f/{id}/`)에서 7개 라우트 렌더·Excel 내보내기 무오류·375px 가로 스크롤
-  없음·외부 요청 0건(Playwright 실측)
+  검증 3단(`demo/verify/`, 전부 실패 시 exit 1): ① 정적 `demo:check` — 문서 셸 없음·외부 참조 0·
+  http URL 호스트 전수 분류·`fetch()` 1건(로고 data URI)·U+FFFD 0·인라인 번들 구문 유효·16MB 이하
+  ② 라우팅 `demo:check:routing` — jsdom URL을 실제 아티팩트 경로로 고정한 vitest 4건. **BrowserRouter가
+  거기서 404로 떨어진다는 회귀 테스트 포함**(파일명 `*.check.tsx`라 `npm test` 312건에는 안 잡힘)
+  ③ 실기 `demo:check:browser` — 퍼블리셔 셸을 재현한 서버 + Playwright 15항목(첫 화면·네트워크 요청
+  문서 1건·에러 0·로고 디코드·해시 내비·375px). playwright는 레포 의존이 아니라 미설치면 건너뛴다
 - 2026-08-22 (Phase 3.11 검수·머지): **사용자 확정 3건** — ① PR #14 검수 통과, **머지 승인**
   (main `78c8aa9`) ② 열린 질문 v2.0 ① 종결: **DataProvider v5 = 9메서드(67) 현재 구현 확정**,
   설계서 §2.1 "8메서드" 문구는 **챗이 v2.0.1에서 정정해 Phase 4 첨부 시 전달 — 레포 문서 지금 수정

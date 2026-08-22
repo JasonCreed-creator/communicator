@@ -3,9 +3,9 @@
 // 아티팩트 뷰어 샌드박스는 페이지가 시작한 파일 내려받기(a[download] + blob:/data:)를 차단하고,
 // 인쇄 대화상자도 프레임 안에서는 신뢰할 수 없다. 해당 버튼들이 "눌러도 아무 일 없는" 상태로
 // 보이지 않도록 이유를 한 줄로 알린다. Tailwind는 src/만 스캔하므로 토큰 변수를 인라인으로 쓴다.
-import { useState } from 'react'
+import { useState, type CSSProperties } from 'react'
 
-const WRAP: React.CSSProperties = {
+const WRAP: CSSProperties = {
   position: 'fixed',
   right: 12,
   bottom: 12,
@@ -23,7 +23,7 @@ const WRAP: React.CSSProperties = {
   font: '500 12px/1.5 var(--font-sans, sans-serif)',
 }
 
-const CLOSE: React.CSSProperties = {
+const CLOSE: CSSProperties = {
   flex: 'none',
   border: 0,
   background: 'transparent',

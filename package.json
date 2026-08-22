@@ -6,9 +6,15 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit -p tsconfig.json && vite build",
-    "build:demo": "vite build --config vite.demo.config.ts",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "demo:typecheck": "tsc --noEmit -p tsconfig.demo.json",
+    "demo:build": "npm run demo:typecheck && env -u VITE_DATA_PROVIDER vite build --config vite.demo.config.ts",
+    "demo:check": "node demo/verify/check-artifact.mjs",
+    "demo:check:routing": "vitest run --config demo/verify/vitest.config.ts",
+    "demo:check:browser": "node demo/verify/browser-check.mjs",
+    "demo:serve": "node demo/verify/serve.mjs",
+    "demo": "npm run demo:build && npm run demo:check && npm run demo:check:routing && npm run demo:check:browser"
   },
   "dependencies": {
     "exceljs": "^4.4.0",

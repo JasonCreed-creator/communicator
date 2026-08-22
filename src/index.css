@@ -1,6 +1,11 @@
 @import 'tailwindcss';
 @import './styles/tokens.css';
 
+/* 데모 아티팩트 빌드용 demo/ 디렉터리는 Tailwind 스캔에서 제외한다.
+   (스캔에 들면 demo/ 안의 문자열이 앱 CSS에 유틸리티로 새어 들어 앱 번들이 커진다.)
+   따라서 demo/ 컴포넌트는 Tailwind 클래스 대신 tokens.css 변수를 인라인 스타일로 쓴다. */
+@source not '../demo';
+
 /* ── 전역 베이스 — 디자인지시서 v1 §1·§2 ── */
 @layer base {
   html {
