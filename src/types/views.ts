@@ -283,9 +283,11 @@ export interface ProjectPatch {
   event_type?: EventType
 }
 
-/** 온보딩 완료 여부 — mock은 앱 상태, Phase 4에서 projects 컬럼 확정(PROGRESS 결정 로그) */
+/** 온보딩 완료 상태 — 설계서 v1.4.1 §8 GET /projects/{id}/onboarding.
+ *  정본은 projects.onboarded_at 컬럼: completed = onboarded_at !== null (파생값) */
 export interface OnboardingStatus {
   completed: boolean
+  onboarded_at: IsoDateTime | null
 }
 
 // ── v1.3 큐시트 (§8 /cues, pm·ops) ─────────────────────────────────

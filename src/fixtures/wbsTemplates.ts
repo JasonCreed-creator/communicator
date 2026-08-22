@@ -1,8 +1,7 @@
-// WBS·R&R 기본 템플릿 — 설계서 v1.4 부록 §15의 1:1 이식 (정본은 설계서).
+// WBS·R&R 기본 템플릿 — 설계서 v1.4.1 부록 §15의 1:1 이식 (정본은 설계서).
 // 모객형 37태스크는 표를 그대로 옮긴 것(코드·기간·역할·origin_role 보존 — Configurator v0.2 호환).
-// 일반형 28태스크: §15 하단 규칙에 따라 리드 마케팅·모객 11건 제외 + 3G 2건 추가.
-//   3.x 5건 + 4.x 중 4.1~4.5·4.7 6건을 제외하고 4.6(데일리 현황 공유·내부)은 존치 —
-//   리드 특화 태스크가 아니며 이 해석일 때만 §15가 명시한 총 28건이 성립(PROGRESS 결정 로그).
+// 일반형 28태스크: §15가 코드 단위로 명시한 제외 집합(3.1~3.5 + 4.1~4.5·4.7, 4.6 존치)을
+//   제외하고 3G 2건을 추가 — GENERAL_EXCLUDED_CODES·GENERAL_EXTRA_TASKS가 §15의 정본 구현.
 import type { EventType, MemberRole } from '../types/enums'
 
 export interface WbsTemplateTask {

@@ -52,8 +52,6 @@ export interface MockState {
   cues: Cue[]
   wbs_tasks: WbsTask[]
   role_charters: RoleCharter[]
-  /** v1.3 S0 — §4 스키마에 컬럼 없음: mock은 앱 상태로 관리(Phase 4에서 확정, PROGRESS 결정 로그) */
-  onboarding_completed: boolean
 }
 
 /** v1.2 지시서·스펙·본문 필드 기본값 — 지시 없이 만든 항목은 전부 null (§4) */
@@ -92,6 +90,8 @@ const FIXTURE: MockState = {
       { label: '참가 대상', value: '파트너사·미디어·일반 참관객 300명' },
       { label: '주차 안내', value: '행사장 지하 주차 3시간 지원 (등록데스크 확인)' },
     ],
+    // v1.4.1 — 픽스처 행사는 온보딩 완료 상태에서 시작 (S0 테스트는 mock 헬퍼로 null 리셋)
+    onboarded_at: '2026-08-01T10:00:00.000Z',
     created_by: 'usr-pm',
     created_at: '2026-08-01T09:00:00.000Z',
   },
@@ -481,8 +481,6 @@ const FIXTURE: MockState = {
 
   // v1.4 R&R — createFixtureState()에서 모객형 템플릿으로 시드
   role_charters: [],
-
-  onboarding_completed: true, // 픽스처 행사는 온보딩 완료 상태에서 시작 (S0 테스트는 mock 헬퍼로 리셋)
 
   unregistered_files: [
     {

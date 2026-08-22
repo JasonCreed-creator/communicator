@@ -1,11 +1,11 @@
-# MICE 커뮤니케이터 — 시스템 설계서 v1.4
+# MICE 커뮤니케이터 — 시스템 설계서 v1.4.1
 
 | 항목 | 내용 |
 |---|---|
-| 문서 상태 | v1.4 확정 — 유형별 WBS·담당자 R&R 확장 (2026-08-22, 시각안 승인 · Configurator 37태스크 이식) |
+| 문서 상태 | v1.4.1 확정 — v1.4(유형별 WBS·R&R, 2026-08-22 시각안 승인)에 **Phase 3.6·3.7 구현 해석 정본화** 패치: projects.onboarded_at 확정(사용자 승인 2026-08-22) · 임박/지연 배타 산식 · 일반형 28건 파생 규칙 · 재전개 보존 규칙 · 큐시트 스냅숏 mock 규약 (Code PROGRESS 열린 질문 ①~⑤ 종결) |
 | 목적 | Claude Code가 본 문서만으로 추가 질문 없이 구현 착수 |
 | 정본 관계 | 스키마·상태 머신·API 계약은 본 문서가 SoT. 구현 지침·작업 순서는 동봉 CLAUDE.md |
-| 확정 결정 | 아키텍처=하이브리드(파일=Drive, 상태=Supabase) / 발주처=무로그인 토큰 링크 / 컨펌 발송=PM 단독 / 업로드=웹앱 경유 원칙+Drive 감지 인박스 / 등록 1차=CSV 임포트 / **구현 순서=프론트 우선·서버 후행 이식(DataProvider 어댑터 계층)** / **v1.2: 지시(requested)→제작→컨펌→운영계획서(S9) 조립 파이프라인 — 웹 문서 우선, PPTX·발주처 뷰는 2차** / **v1.3: S0 온보딩(개요→유형→담당자) → 유형(일반형·모객형) 모듈 토글 → 큐시트 정형 에디터(3채널 콘솔, 컨펌 스냅숏 자동)** / **v1.4: 유형별 WBS 템플릿 자동 전개(Configurator 37태스크 이식·호환 코드 체계) + 역할별 R&R 카드** |
+| 확정 결정 | 아키텍처=하이브리드(파일=Drive, 상태=Supabase) / 발주처=무로그인 토큰 링크 / 컨펌 발송=PM 단독 / 업로드=웹앱 경유 원칙+Drive 감지 인박스 / 등록 1차=CSV 임포트 / **구현 순서=프론트 우선·서버 후행 이식(DataProvider 어댑터 계층)** / **v1.2: 지시(requested)→제작→컨펌→운영계획서(S9) 조립 파이프라인 — 웹 문서 우선, PPTX·발주처 뷰는 2차** / **v1.3: S0 온보딩(개요→유형→담당자) → 유형(일반형·모객형) 모듈 토글 → 큐시트 정형 에디터(3채널 콘솔, 컨펌 스냅숏 자동)** / **v1.4: 유형별 WBS 템플릿 자동 전개(Configurator 37태스크 이식·호환 코드 체계) + 역할별 R&R 카드** / **v1.4.1: 온보딩 완료 상태는 projects.onboarded_at 컬럼이 정본(DataProvider v3.1 재동결)** |
 
 ---
 
@@ -68,6 +68,7 @@ MICE 프로젝트 착수 시 역할별(디자인·운영·등록·발주처) 산
 ```
 
 - **인터페이스 동결이 전제 조건** — 동결 없이는 이식 시 전 화면 재작업이 발생해 어댑터의 이점이 소멸한다 (감수 Steelman 조건부 판정)
+- 동결 이력: v1(35메서드, Phase 1) → v2(41, v1.2 승인) → v3(53, v1.3·v1.4 승인) → **v3.1(v1.4.1 — 메서드 수 불변, `Project.onboarded_at`·`OnboardingStatus.onboarded_at` 필드 추가만)**. 매 해제는 사용자 승인+본 문서 개정 동반이 조건
 - Mock 단계 산출: UI/UX 전체 검증 + 발주처 데모 라우트(`/c/demo`)
 - 리스크 직렬화: 최대 리스크인 Drive 계층(OAuth·프록시)을 최후행에 배치
 
@@ -118,6 +119,7 @@ create table projects (
   event_type event_type not null default 'general',  -- v1.3 S0 온보딩에서 선택
   theme text, venue text, mc_name text,
   overview_items jsonb,               -- 자유 키-값 개요 불릿 (대상·주차 안내 등)
+  onboarded_at timestamptz,           -- v1.4.1 S0 온보딩 완료 시각. null=미완료(본체 라우트 차단 기준). pm이 완료 처리 시 now() 기록, 이후 불변
   created_by uuid references auth.users,
   created_at timestamptz default now()
 );
@@ -309,7 +311,10 @@ create table wbs_tasks (
   linked_deliverable_id uuid references deliverables,  -- 연결 시 상태 뱃지 표시, final이면 자동 done
   note text, sort_order int not null default 0
 );
--- 지연 = (미완료 and end_date < today), 임박 = (미완료 and end_date <= today+2) — 저장하지 않고 계산
+-- 지연 = (미완료 and end_date < today)
+-- 임박 = (미완료 and today <= end_date <= today+2) — 지연과 배타 (v1.4.1 정정: 원 산식 end_date<=today+2는 지연⊂임박이라 홈 집계가 중복됨)
+-- 둘 다 저장하지 않고 계산. end_date가 null이면 지연·임박 모두 false. 정본 구현 = src/lib/wbs.ts(isDelayed·isImminent)
+-- 재전개(wbs-expand 재호출) 규칙: code 매칭으로 기존 status·done_at·linked_deliverable_id·note 보존, 날짜만 재계산. 템플릿에서 사라진 code는 삭제하지 않고 유지(사용자 데이터 보호)
 
 -- 16. 역할 헌장 R&R (v1.4 — 유형별 템플릿, 온보딩 담당자 지정 시 부여)
 create table role_charters (
@@ -457,9 +462,11 @@ draft ──(담당/PM)──> internal_review ──(PM만)──> pending_appr
 | PATCH /attendees/{id}/checkin | pm·reg | 체크인 토글 |
 | GET·POST·PATCH·DELETE /program-sessions | pm·ops | 프로그램표 CRUD (v1.2) |
 | GET·POST·PATCH·DELETE /cues | pm·ops | 큐시트 큐 CRUD (v1.3) |
-| POST /deliverables/{id}/cue-snapshot | pm | 큐시트 PDF 스냅숏 생성 → 버전 등록 (v1.3, 컨펌 발송 전처리) |
+| POST /deliverables/{id}/cue-snapshot | pm | 큐시트 PDF 스냅숏 생성 → 버전 등록 (v1.3, 컨펌 발송 전처리). Mock 단계 규약(v1.4.1): 파일명은 `.pdf` 규약 그대로, 내용은 인쇄용 HTML blob — 실제 PDF 렌더는 Phase 5 Drive 이식과 함께 |
 | PATCH /projects/{id} | pm | 행사 유형·기본정보 수정 (v1.3) |
-| POST /projects/{id}/wbs-expand | pm | 유형별 WBS 템플릿을 event_date 기준 실제 날짜로 전개 (v1.4, 온보딩 완료 시 자동 호출) |
+| GET /projects/{id}/onboarding | 멤버 | `{completed, onboarded_at}` — 라우트 가드가 참조 (v1.4.1, completed = onboarded_at is not null) |
+| POST /projects/{id}/onboarding-complete | pm | 온보딩 완료 확정: `onboarded_at=now()` 기록 → wbs-expand·R&R 시드 순차 호출 (v1.4.1). 이미 완료면 409. 한 트랜잭션 |
+| POST /projects/{id}/wbs-expand | pm | 유형별 WBS 템플릿을 event_date 기준 실제 날짜로 전개 (v1.4, 온보딩 완료 시 자동 호출). 재호출 시 §4-15 재전개 보존 규칙 적용 (v1.4.1) |
 | GET·PATCH /wbs-tasks | 담당 역할+pm(체크)·pm(편집) | WBS 태스크 조회·상태 변경 (v1.4) |
 | GET /role-charters | 멤버 | 역할별 R&R 카드 (v1.4) |
 | PATCH /projects/{id}/overview | pm·ops | 행사개요 편집 (v1.2) |
@@ -489,7 +496,7 @@ draft ──(담당/PM)──> internal_review ──(PM만)──> pending_appr
 
 | # | 화면 | 구성 | 주요 액션 |
 |---|---|---|---|
-| S0 | 온보딩 위저드 (v1.3) | 3단계: ①행사 기본개요 ②행사 유형(일반형/모객형 — 모듈 토글) ③역할별 담당자·발주처 토큰 발급 | 완료 전 본체 진입 차단, 완료 후 S6에서 수정 가능 |
+| S0 | 온보딩 위저드 (v1.3) | 3단계: ①행사 기본개요 ②행사 유형(일반형/모객형 — 모듈 토글) ③역할별 담당자·발주처 토큰 발급 | 완료 전 본체 진입 차단 — **판정 기준 = projects.onboarded_at not null (v1.4.1)**, 완료 후 S6에서 수정 가능(onboarded_at은 불변) |
 | S1 | 홈 대시보드 | 미결 컨펌(기한순) · D-day·마일스톤 · **지연/임박 WBS 태스크(v1.4)** · 미등록 인박스 · 영역별 진행률 바 · 최근 활동 | 인박스 연결/무시, 항목·태스크 바로가기 |
 | S2 | 영역 보드 (design/ops 공용) | 카테고리 그룹 카드: 상태 뱃지(지시됨 포함)·최신 vN·담당·마감 | 항목 생성, (pm) 지시 발행 폼, 필터(상태·담당), 상태 전이 |
 | S3 | 항목 상세 | 지시 카드(브리프·스펙 칩, v1.2)·버전 이력(최신 뱃지)·미리보기·코멘트 스레드·컨펌 이력·Drive 폴더 링크 — **큐시트 항목은 파일 대신 정형 에디터 렌더(v1.3: 행 편집·드래그 정렬·대본 전문)** | 버전 업로드, 전이, (pm) 컨펌 발송(큐시트=스냅숏 자동) |
@@ -541,6 +548,7 @@ UI 공통: 한국어, 데스크톱 우선 + 반응형(발주처 화면은 모바
 ## 14. 개정 이력
 
 - **v1.0** (2026-08-19): 최초 확정 — 구조안 v0.9 승인 승격
+- **v1.4.1** (2026-08-22): 패치 — Phase 3.6·3.7 구현 중 Code가 PROGRESS 열린 질문으로 올린 해석 5건을 정본화(기능 추가 없음). ① `projects.onboarded_at timestamptz` 신설(사용자 승인) — S0 완료 판정·API 2종(GET onboarding / POST onboarding-complete)·DataProvider v3.1 재동결(필드 추가만) ② §4-15 임박 산식을 지연과 배타로 정정(today ≤ end_date ≤ today+2) ③ §15 일반형 28건 제외 집합을 코드 단위로 명시(4.6 존치) — 가정 표기는 유지 ④ wbs-expand 재전개 보존 규칙(code 매칭·status·done_at·연결 보존) ⑤ cue-snapshot mock 규약(.pdf 파일명+HTML blob, PDF 렌더는 Phase 5). 스키마 변경은 ①뿐 — Phase 4 마이그레이션은 v1.4.1 기준
 - **v1.4** (2026-08-22): 유형별 WBS·R&R 확장 (시각안 승인) — wbs_tasks·role_charters 테이블, Configurator 37태스크 코드 체계 이식(부록 §15, origin_role 태그로 연동 호환), 온보딩 완료 시 event_date 기준 자동 전개, S5를 일정·WBS·R&R 뷰로 승격(체크리스트/간트 토글), 홈에 지연·임박 집계, 산출물 연결 뱃지+final 자동 done. Configurator 실연동·템플릿 편집기는 2차
 - **v1.3** (2026-08-22): 온보딩·유형·큐시트 확장 (시각안 승인) — S0 위저드(개요→유형→담당자, 완료 전 진입 차단), event_type(general/recruiting) 모듈 토글, cues 테이블·큐시트 정형 에디터(3채널 콘솔·대본)·S9 큐시트 섹션·컨펌 스냅숏 자동, API 3종 추가. 리허설 모드·유형별 견적 연동은 2차
 - **v1.2** (2026-08-22): 지시→제작→컨펌→문서 조립 확장 (시각안 승인 기반) — status 'requested'+지시서·스펙 필드(brief·spec_*·content), program_sessions 신설, projects 행사개요 필드, S9 운영계획서 웹 문서(섹션 자동 조립·진행률·인쇄 CSS), API 4종 추가. 발주처용 운영계획서 뷰·PPTX 내보내기·지시 첨부는 2차
@@ -592,4 +600,4 @@ UI 공통: 한국어, 데스크톱 우선 + 반응형(발주처 화면은 모바
 | 6.7 | 고객사 회계 처리 마감 | D+20~30 | pm (RS) |
 | 6.8 | 프로젝트 회고·개선 사항 정리 | D+10~20 | pm (공동) |
 
-**일반형 템플릿 (가정 — 확정 시 갱신)**: 위 37건에서 3.x(리드 마케팅)·4.x(모객) 11건을 제외하고, 대체 2건 추가 — 3G.1 참석 대상 명단 확정(D-20~15, reg), 3G.2 초청장 발송·회신 관리(D-14~5, reg). 총 28건.
+**일반형 템플릿 (가정 유지 — 확정 시 갱신)**: 위 37건에서 리드 마케팅·모객 **11건**을 제외하고 대체 2건을 추가해 총 **28건**. 제외 집합은 v1.4.1에서 코드 단위로 명시 — 3.1~3.5(5건) + 4.1·4.2·4.3·4.4·4.5·4.7(6건). **4.6 데일리 현황 공유(내부)는 존치**(내부 현황 공유는 리드 특화 업무가 아님). 추가 2건 — 3G.1 참석 대상 명단 확정(D-20~15, reg, origin_role null), 3G.2 초청장 발송·회신 관리(D-14~5, reg, origin_role null). 정본 구현 = src/fixtures/wbsTemplates.ts(GENERAL_EXCLUDED_CODES·GENERAL_EXTRA_TASKS). 기획자 확정 전까지 "가정" 표기를 유지하며, 확정 시 본 단락만 갱신한다.

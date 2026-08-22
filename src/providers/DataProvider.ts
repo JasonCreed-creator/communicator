@@ -1,9 +1,12 @@
 // ─────────────────────────────────────────────────────────────────────
-// DataProvider 인터페이스 v3 — 2026-08-22 재동결 (CLAUDE.md §4 Phase 3.6a·3.7a)
+// DataProvider 인터페이스 v3.1 — 2026-08-22 재동결 (CLAUDE.md §4 Phase 3.8a)
 //   v1: 2026-08-19 동결(35메서드). v2: v1.2 승인 근거로 41메서드 재동결.
 //   v3: 사용자 v1.4 승인(2026-08-22, v1.3 포함)을 근거로 동결 해제 →
 //   온보딩·프로젝트 패치·큐시트 CRUD/스냅숏·WBS 전개/조회/패치·R&R 조회
-//   12메서드 추가(53메서드) 후 재동결. 경위는 PROGRESS.md 결정 로그 참조.
+//   12메서드 추가(53메서드) 후 재동결.
+//   v3.1: 사용자 v1.4.1 승인(2026-08-22)을 근거로 동결 해제 → 메서드 수 53 불변,
+//   Project.onboarded_at·OnboardingStatus.onboarded_at 필드 추가만(설계서 v1.4.1 §4-1·§8)
+//   후 재동결. 경위는 PROGRESS.md 결정 로그 참조.
 //
 // 프론트(S0~S9)는 이 인터페이스만 호출한다. 구현체:
 //   1단계 MockProvider     — 픽스처+메모리, 업로드=blob URL (Phase 1·3.5~3.7)
@@ -76,11 +79,13 @@ export interface DataProvider {
   updateProject(projectId: UUID, patch: ProjectPatch): Promise<Project>
 
   // ── v1.3 S0 온보딩 ────────────────────────────────────────────────
-  /** 완료 전 본체 라우트는 위저드로 차단 — 라우트 가드가 이 값을 본다 */
+  /** 완료 전 본체 라우트는 위저드로 차단 — 라우트 가드가 이 값을 본다.
+   *  v1.4.1: 정본은 projects.onboarded_at — completed는 onboarded_at !== null 파생값 */
   getOnboardingStatus(projectId: UUID): Promise<OnboardingStatus>
   /**
-   * 온보딩 완료 처리 (pm). v1.4 부수 효과: 유형별 WBS 템플릿을 event_date 기준으로
-   * 자동 전개(expandWbs)하고 R&R 카드를 유형별로 시드한다.
+   * 온보딩 완료 처리 (pm) — v1.4.1: onboarded_at=now 기록, 이미 완료면 409 CONFLICT.
+   * v1.4 부수 효과: 유형별 WBS 템플릿을 event_date 기준으로 자동 전개(expandWbs)하고
+   * R&R 카드를 유형별로 시드한다.
    */
   completeOnboarding(projectId: UUID): Promise<void>
 
