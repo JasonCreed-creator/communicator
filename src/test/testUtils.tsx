@@ -6,7 +6,7 @@
 // v1.5: 내부 라우트는 App.tsx처럼 ProjectProvider 스코프 안 — 현재 행사는 localStorage
 // 'communicator.currentProjectId'(파일별 jsdom에서 초기 비어 있음 → 첫 active 행사 = 샘플 테크).
 import { render } from '@testing-library/react'
-import { MemoryRouter, Outlet, Route, Routes } from 'react-router-dom'
+import { MemoryRouter, Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom'
 import ClientLayout from '../components/layout/ClientLayout'
 import InternalLayout from '../components/layout/InternalLayout'
 import OnboardingGuard from '../components/onboarding/OnboardingGuard'
@@ -19,7 +19,10 @@ import ItemDetailPage from '../pages/ItemDetailPage'
 import NotFoundPage from '../pages/NotFoundPage'
 import OnboardingPage from '../pages/OnboardingPage'
 import PlanDocPage from '../pages/PlanDocPage'
+import LegacyGonePage from '../pages/LegacyGonePage'
 import ProjectListPage from '../pages/ProjectListPage'
+import QuoteEditorPage from '../pages/QuoteEditorPage'
+import QuotesPage from '../pages/QuotesPage'
 import RegistrationPage from '../pages/RegistrationPage'
 import SchedulePage from '../pages/SchedulePage'
 import SettingsPage from '../pages/SettingsPage'
@@ -60,6 +63,11 @@ export function renderRoute(path: string) {
             <Route path="/projects" element={<ProjectListPage />} />
             <Route path="/settings" element={<SettingsPage />} />
 
+            {/* v2.0 S-2 견적 — App.tsx와 동일하게 가드 밖, app_role 게이트는 QuoteGate */}
+            <Route path="/quotes" element={<QuotesPage />} />
+            <Route path="/quotes/new" element={<QuoteEditorPage />} />
+            <Route path="/quotes/:quoteId/edit" element={<QuoteEditorPage />} />
+
             <Route element={<OnboardingGuard />}>
               <Route path="/" element={<HomeDashboardPage />} />
               <Route path="/board/:area" element={<AreaBoardPage />} />
@@ -75,8 +83,24 @@ export function renderRoute(path: string) {
           <Route index element={<ClientConfirmQueuePage />} />
           <Route path="status" element={<ClientStatusPage />} />
         </Route>
+
+        {/* v2.0 §10 — 옛 Configurator 라우트 리다이렉트 (App.tsx와 동일 구성) */}
+        <Route path="/quote" element={<Navigate to="/quotes" replace />} />
+        <Route path="/configurator" element={<Navigate to="/quotes" replace />} />
+        <Route path="/setup" element={<Navigate to="/onboarding" replace />} />
+        <Route path="/events" element={<Navigate to="/projects" replace />} />
+        <Route path="/events/:id" element={<Navigate to="/projects" replace />} />
+        <Route path="/events/:id/soc" element={<LegacySocRedirect />} />
+
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </MemoryRouter>,
   )
+}
+
+// App.tsx LegacySocRedirect와 동일 — `?client_view=1` 공유 링크는 410 안내(§12 ④)
+function LegacySocRedirect() {
+  const location = useLocation()
+  if (new URLSearchParams(location.search).get('client_view') === '1') return <LegacyGonePage />
+  return <Navigate to="/schedule" replace />
 }
