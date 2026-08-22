@@ -41,3 +41,15 @@ export type WbsStatus = (typeof WBS_STATUSES)[number]
 // v1.5: 프로젝트 상태 — 종료 행사는 읽기 전용·목록 접힘 (§4-1)
 export const PROJECT_STATUSES = ['active', 'closed'] as const
 export type ProjectStatus = (typeof PROJECT_STATUSES)[number]
+
+// v2.0: 전역 역할 (§4-1b profiles.app_role) — 견적 권한은 admin·sales
+export const APP_ROLES = ['admin', 'sales', 'staff'] as const
+export type AppRole = (typeof APP_ROLES)[number]
+
+// v2.0: 견적 상태 (§4-18 — Configurator estimates.status 승계)
+export const QUOTE_STATUSES = ['draft', 'proposed', 'accepted', 'archived', 'superseded'] as const
+export type QuoteStatus = (typeof QUOTE_STATUSES)[number]
+
+// v2.0: 컴플라이언스 카드 종류 (§4-17)
+export const COMPLIANCE_KINDS = ['internal', 'client'] as const
+export type ComplianceKind = (typeof COMPLIANCE_KINDS)[number]

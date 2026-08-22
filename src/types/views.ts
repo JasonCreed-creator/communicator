@@ -18,6 +18,7 @@ import type {
   WbsTask,
 } from './entities'
 import type {
+  AppRole,
   ApprovalDecision,
   CommentVisibility,
   DeliverableArea,
@@ -27,6 +28,7 @@ import type {
   ProjectStatus,
   WbsStatus,
 } from './enums'
+import type { ComplianceItem, Targeting } from './entities'
 
 // ── 사용자 (auth.users의 앱 레벨 투영) ─────────────────────────────
 export interface UserRef {
@@ -38,6 +40,8 @@ export interface UserRef {
 export interface CurrentUser extends UserRef {
   role: MemberRole
   project_id: UUID
+  /** v2.0 — 전역 역할 (profiles.app_role): 견적 메뉴·API 게이트 (admin·sales) */
+  app_role: AppRole
 }
 
 export interface MemberWithProfile {
@@ -296,6 +300,12 @@ export interface ProjectPatch {
   mc_name?: string | null
   target_audience?: string | null
   overview_items?: OverviewItem[] | null
+  // v2.0 — 행사 설정 ① 모객형 전용 그룹 (일반형이면 숨김·데이터 보존)
+  guarantee_pax?: number | null
+  kpi_show_rate?: number | null
+  targeting?: Targeting | null
+  /** v2.0 — "견적 연결" 액션 (app_role admin·sales 전용, null = 해제) */
+  quote_id?: UUID | null
 }
 
 /** v1.5 — POST /projects 입력(§8): S0 ① 저장 시 개요 필드 일괄 수신, onboarded_at은 null.
@@ -355,6 +365,19 @@ export interface ProjectSummary {
 export interface OnboardingStatus {
   completed: boolean
   onboarded_at: IsoDateTime | null
+}
+
+// ── v2.0 견적 (§8 /quotes, app_role admin·sales) ───────────────────
+/** GET /quotes/{id}/export.xlsx — 자동 외부 업로드 없음. 저장 트리거는 modules/quote(saveQuoteFile) */
+export interface QuoteExportResult {
+  file_name: string
+  blob: Blob
+}
+
+/** PATCH /compliance-cards — items 체크는 멤버, title 편집은 pm (§6.1·§8) */
+export interface ComplianceCardPatch {
+  items?: ComplianceItem[]
+  title?: string
 }
 
 // ── v1.3 큐시트 (§8 /cues, pm·ops) ─────────────────────────────────

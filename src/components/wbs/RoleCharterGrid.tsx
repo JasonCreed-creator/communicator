@@ -7,8 +7,9 @@ export default function RoleCharterGrid({ charters }: { charters: RoleCharter[] 
   if (charters.length === 0) {
     return <p className="text-sm text-ink-cap">등록된 R&amp;R이 없습니다.</p>
   }
+  // v2.0: 컴플라이언스 카드와 좌우 배치(반폭)되면서 4열이 뭉개져 2열 고정 (§6 의미 유지)
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
       {charters.map((c) => (
         <div
           key={c.id}

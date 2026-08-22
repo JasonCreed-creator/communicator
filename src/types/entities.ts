@@ -1,15 +1,18 @@
 // 설계서 v1.4 §4 테이블과 1:1 도메인 타입.
 // 필드명은 DDL의 snake_case를 그대로 유지한다 — SupabaseProvider 이식 시 매핑 계층 없이 row를 그대로 쓰기 위함.
 import type {
+  AppRole,
   ApprovalDecision,
   AttendeeChannel,
   CommentVisibility,
+  ComplianceKind,
   DeliverableArea,
   DeliverableStatus,
   EventType,
   InviteStatus,
   MemberRole,
   ProjectStatus,
+  QuoteStatus,
   WbsStatus,
 } from './enums'
 
@@ -24,6 +27,15 @@ export type IsoDate = string
 export interface OverviewItem {
   label: string
   value: string
+}
+
+/** v2.0 — projects.targeting jsonb: 타겟팅 5축 (§4-1, leadTargeting 상수 키) */
+export interface Targeting {
+  company_size: string[]
+  title: string[]
+  industry: string[]
+  job: string[]
+  region: string[]
 }
 
 // §4-1 projects
@@ -50,6 +62,15 @@ export interface Project {
   /** v1.5 — active|closed. 종료 행사는 읽기 전용·목록 접힘 */
   status: ProjectStatus
   closed_at: IsoDateTime | null
+  // v2.0 모객형 전용 (§4-1 — Configurator events·타겟팅 흡수). 일반형이면 null·UI 숨김(데이터 보존)
+  /** 보장 인원 */
+  guarantee_pax: number | null
+  /** 쇼업 KPI % */
+  kpi_show_rate: number | null
+  /** 타겟팅 5축 */
+  targeting: Targeting | null
+  /** v2.0 — 확정 견적 링크 (quotes.id, 핸드오프 시 기록) */
+  quote_id: UUID | null
   drive_root_folder_id: string | null
   slack_webhook_url: string | null
   /** v1.3 — S0 온보딩에서 선택. general이면 등록 모듈 경량 모드(표시 계층 토글) */
@@ -299,6 +320,8 @@ export interface WbsTask {
   done_at: IsoDateTime | null
   /** 연결 시 상태 뱃지 표시, final이면 자동 done */
   linked_deliverable_id: UUID | null
+  /** v2.0 §4-15b — 소통 대상 (예: '고객사'·'협력사'·'내부', 복수는 '·' 결합). 템플릿 시드 포함 */
+  target: string | null
   note: string | null
   sort_order: number
 }
@@ -314,6 +337,137 @@ export interface RoleCharter {
   title: string
   /** 책임 불릿 배열 */
   items: string[]
+}
+
+// §4-1b profiles (v2.0 — 전역 역할. 견적 메뉴 접근은 admin·sales)
+export interface Profile {
+  id: UUID
+  display_name: string
+  email: string
+  app_role: AppRole
+  created_at: IsoDateTime
+}
+
+// ── v2.0 견적 (§4-18 quotes) ───────────────────────────────────────
+/** quotes.input jsonb — 베뉴 후보 1건 (venuedb 연결 또는 직접 입력) */
+export interface QuoteVenueCandidate {
+  /** venuedb id — 직접 입력이면 null */
+  venue_id?: string | null
+  name: string
+  hall?: string | null
+  /** YYYY-MM-DD ('' = 미정) */
+  date?: string | null
+  rental: number
+}
+
+/** 선택된 베뉴 스냅숏 — §16 매핑(selected_venue.name·hall)과 엔진 택1 인덱스를 함께 보존 */
+export interface QuoteSelectedVenue extends QuoteVenueCandidate {
+  index: number
+}
+
+export interface QuoteContactInfo {
+  name?: string | null
+  email?: string | null
+  phone?: string | null
+}
+
+/** 섹션별 수동 조정 — 엔진 applyAdjustments 델타의 저장 형태 (§4-18 adjustments[]) */
+export interface QuoteAdjustment {
+  key: 's1' | 's2' | 's3' | 's4' | 'ot' | 'leadPkg'
+  delta: number
+  memo?: string | null
+}
+
+/**
+ * quotes.input jsonb — 입력 스냅샷 (§4-18, Configurator config 스키마 승계 + targeting).
+ * 엔진 호출은 modules/quote/engine/quoteInput.ts(toEngineConfig)가 이 형태를 CalcConfig로 변환한다.
+ */
+export interface QuoteInput {
+  event_name: string
+  event_date: IsoDate | null
+  event_end_date?: IsoDate | null
+  start_time: string | null
+  end_time: string | null
+  /** 행사 성격 7종(한글, modules/quote/data/eventTypes) — communicator event_type과 별개 축 */
+  event_type: string | null
+  include_leads: boolean
+  headcount: number
+  guarantee: number
+  venues: QuoteVenueCandidate[]
+  selected_venue: QuoteSelectedVenue | null
+  options: Record<string, boolean>
+  display_type: 'led' | 'projector'
+  targeting: Targeting | null
+  client_company: string | null
+  contact: QuoteContactInfo | null
+  manager: string | null
+  notes: string | null
+  adjustments: QuoteAdjustment[]
+  // Configurator config 승계 확장 (엔진 입력 — 옵션 수치)
+  booth_count?: number
+  booth_premium_count?: number
+  booth_unit_price?: number | null
+  booth_premium_unit_price?: number | null
+  souvenir_price?: number | null
+  souvenir_qty?: number | null
+  gen_attendees?: number
+}
+
+/**
+ * quotes.breakdown jsonb — 산출 스냅샷 (§4-18): 엔진 재계산과 일치해야 함(테스트).
+ * subtotal = pk(VAT 별도) = quotes.total_amount. vat = round(subtotal×0.1). total = subtotal+vat.
+ */
+export interface QuoteBreakdown {
+  s1: number
+  s2: number
+  s3: number
+  s4: number
+  s5: number
+  /** = 엔진 ot (추가옵션) */
+  options: number
+  /** = 엔진 leadPkg (모객 — rsvpPkg+showup, 제외 모드면 0) */
+  recruit: number
+  /** = 엔진 genManage (일반 참관객 관리) */
+  attendee: number
+  subtotal: number
+  vat: number
+  total: number
+}
+
+export interface Quote {
+  id: UUID
+  /** 견적만 있는 단계는 null, 핸드오프 시 연결 */
+  project_id: UUID | null
+  /** 행사명(가칭) */
+  title: string
+  version: number
+  status: QuoteStatus
+  is_final: boolean
+  locked_at: IsoDateTime | null
+  superseded_by: UUID | null
+  input: QuoteInput
+  breakdown: QuoteBreakdown
+  /** 원 단위 (VAT 별도) */
+  total_amount: number
+  created_by: UUID | null
+  created_at: IsoDateTime
+  updated_at: IsoDateTime
+}
+
+// §4-17 compliance_cards (v2.0 — 온보딩 시 시드, 체크는 멤버)
+export interface ComplianceItem {
+  text: string
+  checked: boolean
+  checked_at: IsoDateTime | null
+}
+
+export interface ComplianceCard {
+  id: UUID
+  project_id: UUID
+  kind: ComplianceKind
+  title: string
+  items: ComplianceItem[]
+  sort_order: number
 }
 
 // §4-12 unregistered_files

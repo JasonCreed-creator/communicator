@@ -9,7 +9,13 @@ import {
 } from '../../lib/statusMachine'
 import { isDelayed, isImminent, offsetToDate, toIsoDate } from '../../lib/wbs'
 import { createFixtureState, type MockState } from '../../fixtures/sampleProject'
+import { COMPLIANCE_CARD_TEMPLATES } from '../../fixtures/complianceTemplates'
 import { ROLE_CHARTER_TEMPLATES, wbsTemplateFor } from '../../fixtures/wbsTemplates'
+import { adjustmentDeltas, computeQuoteOutputs, toEngineConfig } from '../../modules/quote/engine/quoteInput'
+import { effectiveAdjust } from '../../modules/quote/engine/quoteMode'
+import { calcEstimate } from '../../modules/quote/engine/calcEstimate'
+import { exportEstimate } from '../../modules/quote/export/exportEstimate'
+import { quoteToProjectDraft } from '../../modules/quote/handoff'
 import type {
   ActivityLogEntry,
   Approval,
@@ -17,12 +23,15 @@ import type {
   ClientContact,
   ClientToken,
   Comment,
+  ComplianceCard,
   Cue,
   Deliverable,
   Milestone,
   ProgramSession,
   Project,
   ProjectMember,
+  Quote,
+  QuoteInput,
   RoleCharter,
   RsvpContact,
   UnregisteredFile,
@@ -30,7 +39,7 @@ import type {
   Version,
   WbsTask,
 } from '../../types/entities'
-import type { DeliverableArea, DeliverableStatus, MemberRole } from '../../types/enums'
+import type { AppRole, DeliverableArea, DeliverableStatus, MemberRole } from '../../types/enums'
 import type {
   AddCommentInput,
   AttendeeWithRsvp,
@@ -38,6 +47,8 @@ import type {
   ClientDecisionInput,
   ClientQueue,
   ClientStatusData,
+  ComplianceCardPatch,
+  QuoteExportResult,
   CreateDeliverableInput,
   CsvImportResult,
   CsvImportRow,
@@ -132,6 +143,24 @@ export class MockProvider implements DataProvider {
     this.state.current_user_id = userId
   }
 
+  /** v2.0 mock 전용 — 현재 사용자의 app_role 전환 (견적 게이트 검증용, 세션 브리프 W-5) */
+  setAppRole(role: AppRole): void {
+    const userId = this.state.current_user_id
+    const profile = this.state.profiles.find((p) => p.id === userId)
+    if (profile) {
+      profile.app_role = role
+    } else {
+      const user = this.mustFindUser(userId)
+      this.state.profiles.push({
+        id: user.id,
+        display_name: user.name,
+        email: user.email ?? '',
+        app_role: role,
+        created_at: nowIso(),
+      })
+    }
+  }
+
   // ── 내부 공통 ─────────────────────────────────────────────────────
   private nextId(prefix: string): string {
     const n = (this.idCounters.get(prefix) ?? 100) + 1
@@ -149,7 +178,12 @@ export class MockProvider implements DataProvider {
     const user = this.mustFindUser(this.state.current_user_id)
     const membership = this.state.members.find((m) => m.user_id === user.id)
     if (!membership) throw new ProviderError('forbidden', '프로젝트 멤버가 아닙니다.')
-    return { ...user, role: membership.role, project_id: membership.project_id }
+    return { ...user, role: membership.role, project_id: membership.project_id, app_role: this.appRoleOf(user.id) }
+  }
+
+  /** §4-1b — profiles 행이 없으면 가입 기본값 'staff' */
+  private appRoleOf(userId: UUID): AppRole {
+    return this.state.profiles.find((p) => p.id === userId)?.app_role ?? 'staff'
   }
 
   private mustFindProject(projectId: UUID): Project {
@@ -313,6 +347,10 @@ export class MockProvider implements DataProvider {
       target_audience: input.target_audience ?? null,
       status: 'active',
       closed_at: null,
+      guarantee_pax: null,
+      kpi_show_rate: null,
+      targeting: null,
+      quote_id: null,
       drive_root_folder_id: null, // Drive 표준 트리 생성은 Phase 5
       slack_webhook_url: null,
       event_type: input.event_type ?? 'general',
@@ -1129,6 +1167,28 @@ export class MockProvider implements DataProvider {
     if (patch.mc_name !== undefined) project.mc_name = patch.mc_name
     if (patch.target_audience !== undefined) project.target_audience = patch.target_audience
     if (patch.overview_items !== undefined) project.overview_items = patch.overview_items
+    // v2.0 — 행사 설정 ① 모객형 전용 그룹 (일반형이면 UI 숨김·데이터 보존)
+    if (patch.guarantee_pax !== undefined) project.guarantee_pax = patch.guarantee_pax
+    if (patch.kpi_show_rate !== undefined) project.kpi_show_rate = patch.kpi_show_rate
+    if (patch.targeting !== undefined) project.targeting = patch.targeting
+    // v2.0 — "견적 연결" 액션: app_role admin·sales 전용 (§6.1·§10), 상호 링크 동기화
+    if (patch.quote_id !== undefined) {
+      if (user.app_role !== 'admin' && user.app_role !== 'sales') {
+        throw new ProviderError('forbidden', '견적 연결은 영업·관리자 권한이 필요합니다.')
+      }
+      if (patch.quote_id === null) {
+        const prev = this.state.quotes.find((q) => q.id === project.quote_id)
+        if (prev) prev.project_id = null
+        project.quote_id = null
+      } else {
+        const quote = this.mustFindQuote(patch.quote_id)
+        if (quote.project_id && quote.project_id !== projectId) {
+          throw new ProviderError('conflict', '이미 다른 행사에 연결된 견적입니다.')
+        }
+        quote.project_id = projectId
+        project.quote_id = quote.id
+      }
+    }
     // 행사일·유형 변경 후 WBS 날짜/구성 갱신은 명시적 재전개(expandWbs)로 수행 — S5 pm 배너·버튼
     this.log(projectId, `user:${user.id}`, 'project.updated', 'project', project.id)
     return project
@@ -1150,6 +1210,8 @@ export class MockProvider implements DataProvider {
     // v1.4 부수 효과: 유형별 WBS 자동 전개 + R&R 카드 시드
     await this.expandWbs(projectId)
     this.seedRoleCharters(projectId)
+    // v2.0 부수 효과: 컴플라이언스 카드 2종 시드 (§4-17)
+    this.seedComplianceCards(projectId)
     this.log(projectId, `user:${user.id}`, 'onboarding.completed', 'project', projectId)
   }
 
@@ -1290,6 +1352,7 @@ export class MockProvider implements DataProvider {
         status: old?.status ?? ('todo' as const),
         done_at: old?.done_at ?? null,
         linked_deliverable_id: old?.linked_deliverable_id ?? null,
+        target: tpl.target, // v2.0 §4-15b — 소통 대상은 템플릿 정본에서 재시드
         note: old?.note ?? null,
         sort_order: i + 1,
       }
@@ -1367,6 +1430,255 @@ export class MockProvider implements DataProvider {
   async listRoleCharters(projectId: UUID): Promise<RoleCharter[]> {
     this.mustFindProject(projectId)
     return this.state.role_charters.filter((c) => c.project_id === projectId)
+  }
+
+  // ── v2.0 견적 S-2 (§8 /quotes — app_role 게이트, 금액은 이 경로에만) ──
+  /** §6.1: 견적 생성·버전·확정·Excel = app_role admin·sales만 (프로젝트 역할과 무관) */
+  private assertQuoteRole(): CurrentUser {
+    const user = this.currentUser()
+    if (user.app_role !== 'admin' && user.app_role !== 'sales') {
+      throw new ProviderError('forbidden', '견적 메뉴는 영업·관리자 권한이 필요합니다.')
+    }
+    return user
+  }
+
+  private mustFindQuote(quoteId: UUID): Quote {
+    const quote = this.state.quotes.find((q) => q.id === quoteId)
+    if (!quote) throw new ProviderError('not_found', '견적을 찾을 수 없습니다.')
+    return quote
+  }
+
+  async listQuotes(): Promise<Quote[]> {
+    this.assertQuoteRole()
+    return [...this.state.quotes].sort(
+      (a, b) => a.created_at.localeCompare(b.created_at) || a.version - b.version,
+    )
+  }
+
+  async getQuote(quoteId: UUID): Promise<Quote> {
+    const user = this.currentUser()
+    const quote = this.mustFindQuote(quoteId)
+    const hasQuoteRole = user.app_role === 'admin' || user.app_role === 'sales'
+    // §6.1: 연결 행사의 pm은 요약 열람 허용
+    const isLinkedPm =
+      !!quote.project_id &&
+      this.state.members.some(
+        (m) => m.project_id === quote.project_id && m.user_id === user.id && m.role === 'pm',
+      )
+    if (!hasQuoteRole && !isLinkedPm) {
+      throw new ProviderError('forbidden', '견적 메뉴는 영업·관리자 권한이 필요합니다.')
+    }
+    return quote
+  }
+
+  async createQuote(input: QuoteInput): Promise<Quote> {
+    const user = this.assertQuoteRole()
+    // §8: breakdown·total_amount는 provider가 엔진으로 재계산해 저장 (클라이언트 값 불신)
+    const { breakdown, total_amount } = computeQuoteOutputs(input)
+    const quote: Quote = {
+      id: this.nextId('quo'),
+      project_id: null,
+      title: input.event_name?.trim() || '새 견적',
+      version: 1,
+      status: 'draft',
+      is_final: false,
+      locked_at: null,
+      superseded_by: null,
+      input: structuredClone(input),
+      breakdown,
+      total_amount,
+      created_by: user.id,
+      created_at: nowIso(),
+      updated_at: nowIso(),
+    }
+    this.state.quotes.push(quote)
+    return quote
+  }
+
+  async saveQuoteVersion(quoteId: UUID, input: QuoteInput): Promise<Quote> {
+    const user = this.assertQuoteRole()
+    const prev = this.mustFindQuote(quoteId)
+    if (prev.superseded_by) {
+      throw new ProviderError('conflict', '이미 새 버전이 있는 견적입니다 — 최신 버전에서 수정하세요.')
+    }
+    const { breakdown, total_amount } = computeQuoteOutputs(input)
+    const next: Quote = {
+      id: this.nextId('quo'),
+      project_id: prev.project_id,
+      title: input.event_name?.trim() || prev.title,
+      version: prev.version + 1,
+      status: 'draft',
+      is_final: false,
+      locked_at: null,
+      superseded_by: null,
+      input: structuredClone(input),
+      breakdown,
+      total_amount,
+      created_by: user.id,
+      created_at: nowIso(),
+      updated_at: nowIso(),
+    }
+    // §4-18: 확정본은 잠금 유지(archived는 finalize에서), 미확정 이전 버전은 superseded 체인
+    prev.superseded_by = next.id
+    if (!prev.is_final) prev.status = 'superseded'
+    prev.updated_at = nowIso()
+    this.state.quotes.push(next)
+    return next
+  }
+
+  async finalizeQuote(quoteId: UUID): Promise<Quote> {
+    const user = this.assertQuoteRole()
+    const quote = this.mustFindQuote(quoteId)
+    if (quote.is_final) throw new ProviderError('conflict', '이미 확정된 견적입니다.')
+    if (quote.superseded_by) {
+      throw new ProviderError('conflict', '새 버전이 있는 견적은 확정할 수 없습니다 — 최신 버전을 확정하세요.')
+    }
+    // §8: 같은 프로젝트의 다른 final은 archived (uq_quote_final_per_project)
+    if (quote.project_id) {
+      for (const other of this.state.quotes) {
+        if (other.id !== quote.id && other.project_id === quote.project_id && other.is_final) {
+          other.is_final = false
+          other.status = 'archived'
+          other.updated_at = nowIso()
+        }
+      }
+    }
+    quote.is_final = true
+    quote.locked_at = nowIso()
+    quote.status = 'accepted'
+    quote.updated_at = nowIso()
+    if (quote.project_id) {
+      const project = this.state.projects.find((p) => p.id === quote.project_id)
+      if (project) project.quote_id = quote.id
+      // §12: 활동 로그에 금액 필드 포함 금지 — 식별자만 기록
+      this.log(quote.project_id, `user:${user.id}`, 'quote.finalized', 'quote', quote.id)
+    }
+    return quote
+  }
+
+  async createProjectFromQuote(quoteId: UUID): Promise<Project> {
+    const user = this.assertQuoteRole()
+    const quote = this.mustFindQuote(quoteId)
+    if (!quote.is_final) {
+      throw new ProviderError('conflict', '확정된 견적에서만 행사를 만들 수 있습니다.')
+    }
+    if (quote.project_id) {
+      throw new ProviderError('conflict', '이미 행사가 연결된 견적입니다.')
+    }
+    // §16 매핑 — 금액·섹션 산출은 어떤 키로도 넘기지 않는다
+    const draft = quoteToProjectDraft(quote)
+    let code = draft.code_suggestion
+    let suffix = 2
+    while (this.state.projects.some((p) => p.code === code)) {
+      code = `${draft.code_suggestion}-${suffix++}`
+    }
+    const project: Project = {
+      id: this.nextId('prj'),
+      name: draft.name,
+      code,
+      event_date: draft.event_date,
+      event_end_date: draft.event_end_date,
+      start_time: draft.start_time,
+      end_time: draft.end_time,
+      expected_headcount: draft.expected_headcount,
+      seating: draft.seating,
+      organizer: draft.organizer,
+      target_audience: draft.target_audience,
+      status: 'active',
+      closed_at: null,
+      guarantee_pax: draft.guarantee_pax,
+      kpi_show_rate: draft.kpi_show_rate,
+      targeting: draft.targeting,
+      quote_id: quote.id,
+      drive_root_folder_id: null,
+      slack_webhook_url: null,
+      event_type: draft.event_type,
+      theme: null,
+      venue: draft.venue,
+      mc_name: null,
+      overview_items: draft.overview_items,
+      onboarded_at: null, // §8: S0 ① 프리필 상태로 진입 — 완료는 S0 위저드에서
+      created_by: user.id,
+      created_at: nowIso(),
+    }
+    this.state.projects.push(project)
+    this.state.members.push({ project_id: project.id, user_id: user.id, role: 'pm' })
+    // 상호 링크 (§16 — 한 트랜잭션)
+    quote.project_id = project.id
+    quote.updated_at = nowIso()
+    this.log(project.id, `user:${user.id}`, 'project.created_from_quote', 'project', project.id, {
+      quote_id: quote.id,
+    })
+    return project
+  }
+
+  async exportQuoteXlsx(quoteId: UUID, lang: 'ko' | 'en' = 'ko'): Promise<QuoteExportResult> {
+    this.assertQuoteRole()
+    const quote = this.mustFindQuote(quoteId)
+    const input = quote.input
+    const cfg = toEngineConfig(input)
+    const base = calcEstimate(input.include_leads ? cfg : { ...cfg, guarantee: 0 })
+    const adjustments = effectiveAdjust(
+      adjustmentDeltas(input.adjustments) as Record<string, number>,
+      input.include_leads,
+    )
+    // 자동 외부 업로드 없음(§12 4중 차단 ③) — 저장 트리거는 UI가 modules/quote(saveQuoteFile)로 수행
+    const { fn, blob } = await exportEstimate(cfg, base, {
+      download: false,
+      excludeLeads: !input.include_leads,
+      lang,
+      adjustments,
+    })
+    return { file_name: fn, blob }
+  }
+
+  // ── v2.0 컴플라이언스 카드 (§8 /compliance-cards — 체크 멤버·편집 pm) ──
+  private seedComplianceCards(projectId: UUID): void {
+    const others = this.state.compliance_cards.filter((c) => c.project_id !== projectId)
+    const seeded: ComplianceCard[] = COMPLIANCE_CARD_TEMPLATES.map((tpl) => ({
+      id: this.nextId('cmp'),
+      project_id: projectId,
+      kind: tpl.kind,
+      title: tpl.title,
+      items: tpl.items.map((text) => ({ text, checked: false, checked_at: null })),
+      sort_order: tpl.sort_order,
+    }))
+    this.state.compliance_cards = [...others, ...seeded]
+  }
+
+  async listComplianceCards(projectId: UUID): Promise<ComplianceCard[]> {
+    this.currentUser()
+    this.mustFindProject(projectId)
+    return this.state.compliance_cards
+      .filter((c) => c.project_id === projectId)
+      .sort((a, b) => a.sort_order - b.sort_order)
+  }
+
+  async updateComplianceCard(cardId: UUID, patch: ComplianceCardPatch): Promise<ComplianceCard> {
+    const user = this.currentUser()
+    const card = this.state.compliance_cards.find((c) => c.id === cardId)
+    if (!card) throw new ProviderError('not_found', '컴플라이언스 카드를 찾을 수 없습니다.')
+    this.assertWritable(card.project_id)
+    if (patch.title !== undefined) {
+      if (user.role !== 'pm') {
+        throw new ProviderError('forbidden', '카드 편집은 PM만 할 수 있습니다.')
+      }
+      if (!patch.title.trim()) throw new ProviderError('validation', '카드 제목은 필수입니다.')
+      card.title = patch.title
+    }
+    if (patch.items !== undefined) {
+      // §6.1: 체크는 멤버 전원 — checked 전환 시 checked_at 자동 기록/해제
+      card.items = patch.items.map((item, i) => {
+        const prev = card.items[i]
+        const checked = !!item.checked
+        return {
+          text: item.text ?? prev?.text ?? '',
+          checked,
+          checked_at: checked ? (prev?.checked && prev.checked_at ? prev.checked_at : nowIso()) : null,
+        }
+      })
+    }
+    return card
   }
 
   /** 최신 버전 참조 — 미리보기 포맷일 때만 preview_url 세팅 */

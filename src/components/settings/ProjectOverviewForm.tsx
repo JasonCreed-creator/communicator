@@ -3,16 +3,36 @@
 // 필수 4(행사명·코드·시작일·장소) 중 시작일·장소만 클라이언트에서 막고, 행사명·코드가 비면
 // updateProject를 그대로 호출해 서버 검증 메시지('행사명은 비울 수 없습니다.' 등)를 그대로 노출한다.
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
+import { Link } from 'react-router-dom'
 import ErrorAlert from '../internal/ErrorAlert'
+import { canUseQuotes } from '../quote/QuoteGate'
 import { useAsync, useMutation } from '../../hooks/useAsync'
+import {
+  COMPANY_SIZE,
+  INDUSTRY,
+  JOB_FUNCTION,
+  POSITION,
+  WORK_REGION,
+} from '../../modules/quote/data/leadTargeting'
 import { getDataProvider } from '../../providers'
-import type { OverviewItem, Project, UUID } from '../../types/entities'
+import type { OverviewItem, Project, Quote, Targeting, UUID } from '../../types/entities'
 import type { EventType } from '../../types/enums'
 import type { ProjectPatch } from '../../types/views'
 
 const provider = getDataProvider()
 
 const SEATING_OPTIONS = ['극장식', '라운드', '교실식', '스탠딩', '혼합']
+
+const EMPTY_TARGETING: Targeting = { company_size: [], title: [], industry: [], job: [], region: [] }
+
+// v2.0 — 모객형 전용 그룹의 타겟팅 5축 (modules/quote/data/leadTargeting 상수 키)
+const TARGETING_AXES: { key: keyof Targeting; label: string; options: string[] }[] = [
+  { key: 'company_size', label: '기업 규모', options: COMPANY_SIZE },
+  { key: 'title', label: '직급', options: POSITION },
+  { key: 'industry', label: '산업/업종', options: INDUSTRY },
+  { key: 'job', label: '직무', options: JOB_FUNCTION },
+  { key: 'region', label: '근무 지역', options: WORK_REGION },
+]
 
 interface FormValues {
   name: string
@@ -30,6 +50,10 @@ interface FormValues {
   mcName: string
   targetAudience: string
   items: OverviewItem[]
+  // v2.0 모객형 전용 (일반형이면 숨김·데이터 보존)
+  guaranteePax: string
+  kpiShowRate: string
+  targeting: Targeting
 }
 
 function valuesFrom(project: Project): FormValues {
@@ -49,6 +73,9 @@ function valuesFrom(project: Project): FormValues {
     mcName: project.mc_name ?? '',
     targetAudience: project.target_audience ?? '',
     items: project.overview_items ?? [],
+    guaranteePax: project.guarantee_pax != null ? String(project.guarantee_pax) : '',
+    kpiShowRate: project.kpi_show_rate != null ? String(project.kpi_show_rate) : '',
+    targeting: project.targeting ? structuredClone(project.targeting) : structuredClone(EMPTY_TARGETING),
   }
 }
 
@@ -71,6 +98,13 @@ export default function ProjectOverviewForm({
   const project = useAsync(() => provider.getProject(projectId), [projectId])
   const [values, setValues] = useState<FormValues | null>(null)
   const save = useMutation((patch: ProjectPatch) => provider.updateProject(projectId, patch))
+  // v2.0 — 견적 연결 상태·액션(admin·sales)용
+  const me = useAsync(() => provider.getCurrentUser(), [])
+  const canQuotes = !!me.data && canUseQuotes(me.data)
+  const linkedQuote = useAsync<Quote | null>(
+    () => (project.data?.quote_id ? provider.getQuote(project.data.quote_id) : Promise.resolve(null)),
+    [project.data?.quote_id],
+  )
 
   // 최초 로드·행사 전환 시에만 폼 값을 프리필한다(재조회로 덮어써 편집 중인 입력을 잃지 않도록).
   useEffect(() => {
@@ -87,6 +121,25 @@ export default function ProjectOverviewForm({
 
   const set = <K extends keyof FormValues>(key: K, v: FormValues[K]) =>
     setValues((prev) => (prev ? { ...prev, [key]: v } : prev))
+
+  // v2.0 §16 — 견적에서 생성된 행사의 S0 ① 프리필 표시: 주황 틴트(--accent-tint)·수정 가능.
+  // 온보딩 완료 후에는 일반 표시로 돌아간다.
+  const prefillFromQuote = !!project.data?.quote_id && !project.data?.onboarded_at
+  const initial = project.data ? valuesFrom(project.data) : null
+  const tintClass = (key: keyof FormValues): string => {
+    if (!prefillFromQuote || !initial) return ''
+    const v = initial[key]
+    const filled = Array.isArray(v) ? v.length > 0 : typeof v === 'string' ? v.trim() !== '' : false
+    return filled ? ' bg-accent-tint' : ''
+  }
+
+  const toggleTargeting = (axis: keyof Targeting, option: string) =>
+    setValues((prev) => {
+      if (!prev) return prev
+      const list = prev.targeting[axis]
+      const nextList = list.includes(option) ? list.filter((v) => v !== option) : [...list, option]
+      return { ...prev, targeting: { ...prev.targeting, [axis]: nextList } }
+    })
 
   const updateItem = (idx: number, patch: Partial<OverviewItem>) => {
     setValues((prev) =>
@@ -126,12 +179,28 @@ export default function ProjectOverviewForm({
       target_audience: values.targetAudience.trim() || null,
       overview_items: values.items.filter((it) => it.label.trim() || it.value.trim()),
     }
+    // v2.0 — 모객형 전용 그룹은 모객형일 때만 patch(일반형이면 필드 자체를 보내지 않아 데이터 보존)
+    if (values.eventType === 'recruiting') {
+      patch.guarantee_pax = values.guaranteePax === '' ? null : Number(values.guaranteePax)
+      patch.kpi_show_rate = values.kpiShowRate === '' ? null : Number(values.kpiShowRate)
+      const hasTargeting = Object.values(values.targeting).some((list) => list.length > 0)
+      patch.targeting = hasTargeting ? values.targeting : null
+    }
     const result = await save.run(patch)
     if (result) onSaved?.()
   }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5 text-sm">
+      {prefillFromQuote && (
+        <p
+          data-testid="quote-prefill-banner"
+          className="rounded-md border border-accent/30 bg-accent-tint px-3 py-2 text-xs text-accent-deep"
+        >
+          🔗 확정 견적에서 프리필된 값입니다(주황 표시) — 전부 수정할 수 있습니다. 행사 코드는 자동
+          제안이니 확인해 주세요.
+        </p>
+      )}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Field id="ov-name" label="행사명" required span="sm:col-span-2">
           <input
@@ -139,7 +208,7 @@ export default function ProjectOverviewForm({
             value={values.name}
             onChange={(e) => set('name', e.target.value)}
             disabled={readOnly}
-            className="ui-input disabled:opacity-60"
+            className={`ui-input disabled:opacity-60${tintClass('name')}`}
           />
         </Field>
         <Field id="ov-code" label="행사 코드" required>
@@ -148,7 +217,7 @@ export default function ProjectOverviewForm({
             value={values.code}
             onChange={(e) => set('code', e.target.value)}
             disabled={readOnly}
-            className="ui-input disabled:opacity-60"
+            className={`ui-input disabled:opacity-60${tintClass('code')}`}
           />
         </Field>
         <Field id="ov-event-type" label="행사 유형">
@@ -175,7 +244,7 @@ export default function ProjectOverviewForm({
             value={values.eventDate}
             onChange={(e) => set('eventDate', e.target.value)}
             disabled={readOnly}
-            className="ui-input disabled:opacity-60"
+            className={`ui-input disabled:opacity-60${tintClass('eventDate')}`}
           />
         </Field>
         <Field id="ov-end-date" label="종료일">
@@ -185,7 +254,7 @@ export default function ProjectOverviewForm({
             value={values.eventEndDate}
             onChange={(e) => set('eventEndDate', e.target.value)}
             disabled={readOnly}
-            className="ui-input disabled:opacity-60"
+            className={`ui-input disabled:opacity-60${tintClass('eventEndDate')}`}
           />
         </Field>
         <Field id="ov-start-time" label="시작 시간">
@@ -195,7 +264,7 @@ export default function ProjectOverviewForm({
             value={values.startTime}
             onChange={(e) => set('startTime', e.target.value)}
             disabled={readOnly}
-            className="ui-input disabled:opacity-60"
+            className={`ui-input disabled:opacity-60${tintClass('startTime')}`}
           />
         </Field>
         <Field id="ov-end-time" label="종료 시간">
@@ -205,7 +274,7 @@ export default function ProjectOverviewForm({
             value={values.endTime}
             onChange={(e) => set('endTime', e.target.value)}
             disabled={readOnly}
-            className="ui-input disabled:opacity-60"
+            className={`ui-input disabled:opacity-60${tintClass('endTime')}`}
           />
         </Field>
 
@@ -215,7 +284,7 @@ export default function ProjectOverviewForm({
             value={values.venue}
             onChange={(e) => set('venue', e.target.value)}
             disabled={readOnly}
-            className="ui-input disabled:opacity-60"
+            className={`ui-input disabled:opacity-60${tintClass('venue')}`}
           />
         </Field>
         <Field id="ov-headcount" label="예상 인원">
@@ -226,7 +295,7 @@ export default function ProjectOverviewForm({
             value={values.expectedHeadcount}
             onChange={(e) => set('expectedHeadcount', e.target.value)}
             disabled={readOnly}
-            className="ui-input disabled:opacity-60"
+            className={`ui-input disabled:opacity-60${tintClass('expectedHeadcount')}`}
           />
         </Field>
         <Field id="ov-seating" label="좌석 형태">
@@ -261,7 +330,7 @@ export default function ProjectOverviewForm({
             value={values.organizer}
             onChange={(e) => set('organizer', e.target.value)}
             disabled={readOnly}
-            className="ui-input disabled:opacity-60"
+            className={`ui-input disabled:opacity-60${tintClass('organizer')}`}
           />
         </Field>
         <Field id="ov-mc" label="사회자">
@@ -279,9 +348,89 @@ export default function ProjectOverviewForm({
             value={values.targetAudience}
             onChange={(e) => set('targetAudience', e.target.value)}
             disabled={readOnly}
-            className="ui-input disabled:opacity-60"
+            className={`ui-input disabled:opacity-60${tintClass('targetAudience')}`}
           />
         </Field>
+
+        {/* v2.0 — 모객형 전용 그룹: 보장 인원·쇼업 KPI·타겟팅 5축·연결 견적 (일반형이면 숨김·데이터 보존) */}
+        {values.eventType === 'recruiting' && (
+          <div
+            data-testid="recruiting-group"
+            className="rounded-[10px] border border-accent/30 bg-canvas p-4 sm:col-span-2 lg:col-span-4"
+          >
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <p className="t-card-title">모객형 전용</p>
+              {project.data?.quote_id && linkedQuote.data ? (
+                <Link
+                  to="/quotes"
+                  className="ml-auto rounded-full bg-accent-tint px-3 py-1 text-xs font-semibold text-accent-deep hover:underline"
+                >
+                  🔗 견적 v{linkedQuote.data.version} 확정 기준 →
+                </Link>
+              ) : (
+                canQuotes &&
+                !readOnly && (
+                  <span className="ml-auto">
+                    <QuoteLinkAction projectId={projectId} onLinked={project.reload} />
+                  </span>
+                )
+              )}
+            </div>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field id="ov-guarantee" label="보장 인원(게런티)">
+                <input
+                  id="ov-guarantee"
+                  type="number"
+                  min={0}
+                  value={values.guaranteePax}
+                  onChange={(e) => set('guaranteePax', e.target.value)}
+                  disabled={readOnly}
+                  className={`ui-input disabled:opacity-60${tintClass('guaranteePax')}`}
+                />
+              </Field>
+              <Field id="ov-kpi" label="쇼업 KPI (%)">
+                <input
+                  id="ov-kpi"
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={values.kpiShowRate}
+                  onChange={(e) => set('kpiShowRate', e.target.value)}
+                  disabled={readOnly}
+                  className={`ui-input disabled:opacity-60${tintClass('kpiShowRate')}`}
+                />
+              </Field>
+            </div>
+            <div className="mt-3 space-y-3">
+              <p className="t-caption">타겟팅 5축</p>
+              {TARGETING_AXES.map((axis) => (
+                <div key={axis.key}>
+                  <p className="mb-1 text-[11px] font-medium text-ink-cap">{axis.label}</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {axis.options.map((option) => {
+                      const active = values.targeting[axis.key].includes(option)
+                      return (
+                        <button
+                          key={option}
+                          type="button"
+                          disabled={readOnly}
+                          onClick={() => toggleTargeting(axis.key, option)}
+                          className={`rounded-full border px-2.5 py-1 text-xs transition-colors disabled:opacity-60 ${
+                            active
+                              ? 'border-accent bg-accent-tint font-semibold text-accent-deep'
+                              : 'border-border bg-card text-ink-sub hover:bg-track'
+                          }`}
+                        >
+                          {option}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="flex flex-col gap-2 sm:col-span-2 lg:col-span-4">
           <p className="t-caption">기타 개요 항목</p>
@@ -331,6 +480,53 @@ export default function ProjectOverviewForm({
         </div>
       )}
     </form>
+  )
+}
+
+/** v2.0 — "견적 연결" 액션 (admin·sales): 확정·미연결 견적을 골라 현재 행사에 연결한다 */
+function QuoteLinkAction({ projectId, onLinked }: { projectId: UUID; onLinked: () => void }) {
+  const [open, setOpen] = useState(false)
+  const candidates = useAsync<Quote[]>(
+    () => (open ? provider.listQuotes().then((qs) => qs.filter((q) => q.is_final && !q.project_id)) : Promise.resolve([])),
+    [open],
+  )
+  const [quoteId, setQuoteId] = useState('')
+  const link = useMutation((id: string) => provider.updateProject(projectId, { quote_id: id }))
+
+  const handleLink = async () => {
+    if (!quoteId) return
+    const result = await link.run(quoteId)
+    if (result) {
+      setOpen(false)
+      onLinked()
+    }
+  }
+
+  if (!open) {
+    return (
+      <button type="button" className="btn btn-ghost btn-sm" onClick={() => setOpen(true)}>
+        견적 연결
+      </button>
+    )
+  }
+  return (
+    <span className="flex flex-wrap items-center gap-2">
+      <select className="ui-input min-h-8 py-1 text-xs" value={quoteId} onChange={(e) => setQuoteId(e.target.value)} aria-label="연결할 견적">
+        <option value="">확정 견적 선택…</option>
+        {(candidates.data ?? []).map((q) => (
+          <option key={q.id} value={q.id}>
+            {q.title} · v{q.version}
+          </option>
+        ))}
+      </select>
+      <button type="button" className="btn btn-ghost btn-sm" onClick={() => void handleLink()} disabled={!quoteId || link.pending}>
+        연결
+      </button>
+      <button type="button" className="btn btn-ghost btn-sm" onClick={() => setOpen(false)}>
+        취소
+      </button>
+      <ErrorAlert message={link.error} />
+    </span>
   )
 }
 

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import Card from '../internal/Card'
 import ErrorAlert from '../internal/ErrorAlert'
+import ComplianceCards from './ComplianceCards'
 import PhaseFilterBar from './PhaseFilterBar'
 import RoleCharterGrid from './RoleCharterGrid'
 import WbsChecklist from './WbsChecklist'
@@ -108,10 +109,16 @@ export default function WbsBoard() {
         </div>
       </Card>
 
-      <Card title="R&R">
-        <ErrorAlert message={roleCharters.error} />
-        <RoleCharterGrid charters={roleCharters.data ?? []} />
-      </Card>
+      {/* v2.0 §10 S5 — R&R 옆 컴플라이언스 카드 2종(내부·고객사 계약 규약, 체크 가능) */}
+      <div className="grid gap-6 xl:grid-cols-2">
+        <Card title="R&R">
+          <ErrorAlert message={roleCharters.error} />
+          <RoleCharterGrid charters={roleCharters.data ?? []} />
+        </Card>
+        <Card title="컴플라이언스">
+          <ComplianceCards />
+        </Card>
+      </div>
     </div>
   )
 }
