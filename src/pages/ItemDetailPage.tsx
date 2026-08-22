@@ -11,7 +11,7 @@ import { useAsync, useMutation } from '../hooks/useAsync'
 import { AREA_LABELS, formatDate, formatDateTime } from '../lib/labels'
 import { getDataProvider } from '../providers'
 import type { Version } from '../types/entities'
-import type { ApprovalDecision, CommentVisibility } from '../types/enums'
+import type { ApprovalDecision, CommentVisibility, DeliverableStatus } from '../types/enums'
 import NotFoundPage from './NotFoundPage'
 
 const provider = getDataProvider()
@@ -67,14 +67,27 @@ function ItemDetail({ itemId }: { itemId: string }) {
         </p>
       </div>
 
-      {/* §6 S3: 2단 분할 — 좌(주 콘텐츠) 지시 카드·상태 액션·미리보기·코멘트 / 우(300 고정) 메타 사이드
-          (상태·담당·마감·버전 타임라인). 큐시트 항목은 에디터가 좌측 전폭, 메타 사이드는 유지. */}
+      {/* §6 S3: 일반 항목 = 2단 분할 — 좌(주 콘텐츠) 지시 카드·상태 액션·미리보기·코멘트 / 우(300 고정)
+          메타 사이드(상태·담당·마감·버전 타임라인).
+          3.9.1 P1: 큐시트 항목 = 1단 전폭 — 7열 정형 표가 깨지지 않도록 메타를 에디터 위
+          가로 스트립 카드로 재배치(버전 이력은 최신 1건 + 전체 보기 토글). */}
       <div
         className={`grid grid-cols-1 gap-6 ${
-          isCuesheet ? 'lg:grid-cols-[minmax(0,1fr)_300px]' : 'lg:grid-cols-[minmax(0,660px)_300px]'
+          isCuesheet ? '' : 'lg:grid-cols-[minmax(0,660px)_300px]'
         }`}
       >
         <div className="min-w-0 space-y-6">
+          {isCuesheet && (
+            <CuesheetMetaStrip
+              status={d.status}
+              assigneeName={memberName(d.assignee_id)}
+              dueDate={d.due_date}
+              versions={d.versions}
+              isFinal={d.status === 'final'}
+              uploaderNameFor={(userId) => memberName(userId)}
+            />
+          )}
+
           <BriefCard deliverable={d} />
 
           <StatusActionBar
@@ -135,6 +148,7 @@ function ItemDetail({ itemId }: { itemId: string }) {
           </Card>
         </div>
 
+        {!isCuesheet && (
         <aside className="space-y-6">
           <div className="ui-card space-y-4 p-5">
             <div>
@@ -180,8 +194,92 @@ function ItemDetail({ itemId }: { itemId: string }) {
             )}
           </Card>
         </aside>
+        )}
       </div>
     </section>
+  )
+}
+
+// ── 큐시트 메타 스트립 (3.9.1 P1) ────────────────────────────────────
+// 큐시트 항목 전용 — 우측 메타 사이드를 대신해 상태·담당·마감·버전을 에디터 위 한 줄로 요약한다.
+// 버전 이력은 최신 1건만 인라인, '전체 보기' 토글 시 기존 세로 타임라인을 그대로 펼친다.
+function CuesheetMetaStrip({
+  status,
+  assigneeName,
+  dueDate,
+  versions,
+  isFinal,
+  uploaderNameFor,
+}: {
+  status: DeliverableStatus
+  assigneeName: string
+  dueDate: string | null
+  versions: Version[]
+  isFinal: boolean
+  uploaderNameFor: (userId: string | null) => string
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const latest = versions[0]
+
+  return (
+    <div className="ui-card p-4">
+      <div className="flex flex-wrap items-start gap-x-8 gap-y-3">
+        <div>
+          <p className="t-caption">상태</p>
+          <div className="mt-1.5">
+            <StatusBadge status={status} />
+          </div>
+        </div>
+        <div>
+          <p className="t-caption">담당</p>
+          <p className="mt-1.5 text-sm text-ink">{assigneeName}</p>
+        </div>
+        <div>
+          <p className="t-caption">마감</p>
+          <div className="mt-1.5 flex items-center gap-2 text-sm text-ink">
+            {dueDate ? (
+              <>
+                {formatDate(dueDate)}
+                <DdayBadge isoDate={dueDate} />
+              </>
+            ) : (
+              '미정'
+            )}
+          </div>
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="t-caption">버전 이력</p>
+          {latest ? (
+            <div className="mt-1.5 flex min-w-0 flex-wrap items-center gap-2 text-sm">
+              <span className="font-medium text-ink">v{latest.version_no}</span>
+              <span className="min-w-0 truncate text-ink-sub" title={latest.file_name}>
+                {latest.file_name}
+              </span>
+              {versions.length > 1 && (
+                <button type="button" onClick={() => setExpanded((v) => !v)} className="btn btn-ghost btn-sm">
+                  {expanded ? '접기' : `전체 보기 (${versions.length})`}
+                </button>
+              )}
+            </div>
+          ) : (
+            <p className="mt-1.5 text-sm text-ink-cap">업로드된 버전이 없습니다.</p>
+          )}
+        </div>
+      </div>
+      {expanded && versions.length > 0 && (
+        <ul className="mt-5 space-y-5 border-l border-border pl-5">
+          {versions.map((v, idx) => (
+            <VersionItem
+              key={v.id}
+              version={v}
+              isLatest={idx === 0}
+              isFinal={isFinal}
+              uploaderName={uploaderNameFor(v.uploaded_by)}
+            />
+          ))}
+        </ul>
+      )}
+    </div>
   )
 }
 

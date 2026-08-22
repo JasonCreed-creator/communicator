@@ -23,10 +23,18 @@ interface CueRowProps {
   onChanged: () => void
 }
 
-/** 콘솔 채널 값 — 값이 있으면 t-caption 톤의 칩, 없으면 대시 (§6 S3: 콘솔 3채널 칩은 t-caption 톤) */
+/** 콘솔 채널 값 — 값이 있으면 t-caption 톤의 칩, 없으면 대시 (§6 S3: 콘솔 3채널 칩은 t-caption 톤).
+ *  3.9.1 P1: 칩은 항상 1줄(whitespace-nowrap) — 열 최대폭을 넘으면 말줄임 + title 툴팁. */
 function ConsoleChip({ value }: { value: string | null }) {
   if (!value) return <span className="text-ink-cap">—</span>
-  return <span className="t-caption inline-flex items-center rounded-full bg-canvas px-2 py-0.5">{value}</span>
+  return (
+    <span
+      title={value}
+      className="t-caption inline-block max-w-[150px] truncate whitespace-nowrap rounded-full bg-canvas px-2 py-0.5"
+    >
+      {value}
+    </span>
+  )
 }
 
 /** S3 큐시트 에디터 — 큐 1행. 보기/인라인 편집/대본 전문 패널 3모드를 오간다 */
@@ -92,7 +100,7 @@ export default function CueRow({ cue, canEdit, isFirst, isLast, onMoveUp, onMove
           <ConsoleChip value={cue.console_screen} />
         </td>
         <td className="py-2 align-top">
-          <div className="flex flex-wrap items-center gap-1.5">
+          <div className="flex flex-nowrap items-center gap-1.5">
             <button
               type="button"
               onClick={() => setScriptOpen((v) => !v)}
