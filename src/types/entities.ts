@@ -41,6 +41,8 @@ export interface Project {
   venue: string | null
   mc_name: string | null
   overview_items: OverviewItem[] | null
+  /** v1.4.1 — S0 온보딩 완료 시각. null=미완료(본체 라우트 차단 기준). 완료 처리 시 기록, 이후 불변 */
+  onboarded_at: IsoDateTime | null
   created_by: UUID | null
   created_at: IsoDateTime
 }

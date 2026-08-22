@@ -919,23 +919,27 @@ export class MockProvider implements DataProvider {
   }
 
   async getOnboardingStatus(projectId: UUID): Promise<OnboardingStatus> {
-    this.mustFindProject(projectId)
-    return { completed: this.state.onboarding_completed }
+    const project = this.mustFindProject(projectId)
+    // v1.4.1 — 정본은 projects.onboarded_at: completed는 파생값
+    return { completed: project.onboarded_at !== null, onboarded_at: project.onboarded_at }
   }
 
   async completeOnboarding(projectId: UUID): Promise<void> {
     const user = this.assertPm()
-    this.mustFindProject(projectId)
-    this.state.onboarding_completed = true
+    const project = this.mustFindProject(projectId)
+    if (project.onboarded_at !== null) {
+      throw new ProviderError('conflict', '이미 온보딩이 완료된 프로젝트입니다.')
+    }
+    project.onboarded_at = new Date().toISOString()
     // v1.4 부수 효과: 유형별 WBS 자동 전개 + R&R 카드 시드
     await this.expandWbs(projectId)
     this.seedRoleCharters(projectId)
     this.log(`user:${user.id}`, 'onboarding.completed', 'project', projectId)
   }
 
-  /** Mock 전용 (인터페이스 외) — S0 라우트 가드 테스트용 온보딩 리셋 */
+  /** Mock 전용 (인터페이스 외) — S0 라우트 가드 테스트용 온보딩 리셋 (v1.4.1: onboarded_at=null 복원) */
   resetOnboarding(): void {
-    this.state.onboarding_completed = false
+    this.state.project.onboarded_at = null
   }
 
   // ── v1.3 큐시트 (pm·ops — §8 /cues) ───────────────────────────────

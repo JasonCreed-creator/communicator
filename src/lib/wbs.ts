@@ -1,7 +1,6 @@
-// WBS 날짜 전개·지연/임박 판정 — 설계서 v1.4 §4-15 산식의 단일 정본.
+// WBS 날짜 전개·지연/임박 판정 — 설계서 v1.4.1 §4-15 산식의 단일 정본.
 // 지연 = 미완료 and end_date < today
-// 임박 = 미완료 and today <= end_date <= today+2 — 설계서 산식(end_date <= today+2)을
-//        그대로 쓰면 지연⊂임박이라 집계가 중복되므로 지연과 배타로 확정(PROGRESS 결정 로그).
+// 임박 = 미완료 and today <= end_date <= today+2 — 지연과 배타 (v1.4.1에서 정본화).
 import type { IsoDate } from '../types/entities'
 import type { WbsTask } from '../types/entities'
 

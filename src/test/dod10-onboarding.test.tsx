@@ -1,8 +1,8 @@
 /** @vitest-environment jsdom */
 // DoD-10: S0 온보딩 위저드 + 라우트 가드 (CLAUDE.md Phase 3.6b §7 DoD-10).
 // 픽스처 초기화 단위 = 이 파일. 시나리오 순서대로 실행되며 같은 MockProvider 상태를 공유한다
-// (src/test/testUtils.tsx 참조). 픽스처는 onboarding_completed=true로 시작하므로
-// resetOnboarding()(mock 전용 헬퍼)으로 미완료 상태를 만들어 가드를 검증한다.
+// (src/test/testUtils.tsx 참조). 픽스처는 onboarded_at이 기록된(완료) 상태로 시작하므로
+// resetOnboarding()(mock 전용 헬퍼, onboarded_at=null 복원)으로 미완료 상태를 만들어 가드를 검증한다.
 import { cleanup, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it } from 'vitest'

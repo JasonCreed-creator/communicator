@@ -3,10 +3,14 @@
 > 가변 상태 파일. 매 세션 체크아웃 시 에이전트가 갱신한다 (CLAUDE.md §9 리추얼).
 
 ## 1. 상태 요약
-- 현재 Phase: **Phase 0~3.7 완료 — 서버 없는 구간(프론트) 전체 종료(v1.2·v1.3·v1.4 증분 포함)**.
-  Phase 4(Supabase 이식)는 착수 전 사용자 승인 필요, **v1.4 스키마 기준**
-- 정본 문서: `docs/mice-communicator-설계서-v1.4.md` (스키마·상태 머신·API·WBS 템플릿 SoT — v1.2 대체)
-- 브랜치: `main` = 정본 — Phase 3.5는 PR #4·#5로, **Phase 3.6+3.7은 PR #7로 머지**(사용자 사전 승인)
+- 현재 Phase: **Phase 0~3.8 완료 — v1.4.1 정본 정합(onboarded_at·DataProvider v3.1) 종료**.
+  다음 = Phase 3.9 디자인 스프린트(별도 PR, 진행 중) → Phase 4(Supabase 이식, 착수 전 사용자 승인·**v1.4.1 스키마 기준**)
+- 정본 문서: `docs/mice-communicator-설계서-v1.4.1.md` (스키마·상태 머신·API·WBS 템플릿 SoT — v1.4 대체)
+  + `docs/mice-communicator-디자인지시서-v1.md` (디자인 토큰·레이아웃·컴포넌트 규격 정본, Phase 3.9)
+- 브랜치: `main` = 정본 — Phase 3.5는 PR #4·#5, Phase 3.6+3.7은 PR #7로 머지. **Phase 3.8 =
+  `claude/phase-3.8-v141-alignment`(본 브랜치), Phase 3.9 = `claude/design-sprint-sections-1-8-ixau6i`
+  (3.8 위에 스택) — 별도 PR·리뷰 diff 분리(CLAUDE.md §5), 머지는 사용자 검수 후**
+- **Phase 3.9 기준치: vitest 117개(19파일) — 3.8 시점 전부 통과 + tsc 클린 + vite build 성공**
 
 ## 2. 완료
 - 설계서 v1.1 확정 + CLAUDE.md v1.1 (2026-08-19)
@@ -72,27 +76,50 @@
   dod8/9 7섹션 갱신 + dod1은 큐시트 자동 스냅숏 도입으로 dlv-005 기반 재작성. 통합 후 섹션 번호
   하드코딩 4건을 PLAN_SECTION_META 파생으로 교정. **vitest 114개(18파일)·tsc·vite build 전부 통과**
 
+- **설계서 v1.4.1 + CLAUDE.md v1.4.1 + 디자인지시서 v1 + 브랜드 자산 채택** (2026-08-22): v1.4 대체.
+  v1.4.1 = Phase 3.6·3.7 구현 해석 5건 정본화(onboarded_at 사용자 승인 포함, 기능 추가 없음).
+  로고 png 2종(`public/brand/remember-logo-offwhite.png`·`remember-logo-black.png`) 수령·배치
+- **Phase 3.8a — onboarded_at 정합·DataProvider v3.1 재동결** (2026-08-22, 메인이 P 역할 수행):
+  `Project.onboarded_at: IsoDateTime | null` + `OnboardingStatus {completed, onboarded_at}`(completed=파생값),
+  MockProvider 앱 상태 플래그 제거 → 프로젝트 필드 파생, completeOnboarding=onboarded_at 기록(재완료 409
+  CONFLICT), resetOnboarding=null 복원, 픽스처 onboarded_at 세팅. 메서드 수 53 불변
+- **Phase 3.8b — 열린 질문 종결·주석 정합** (2026-08-22): 열린 질문 ①~⑤를 설계서 v1.4.1
+  §4-1·§4-15·§8·§15 반영으로 종결, `src/lib/wbs.ts`·`src/fixtures/wbsTemplates.ts` 상단 주석 근거를
+  설계서 v1.4.1로 교체(로직 무변경)
+- **DoD-16 테스트 코드화** (2026-08-22): `src/test/dod16-onboarded-at.test.tsx` 3건 — 완료 시 타임스탬프
+  기록·재완료 409·null 시 가드 리다이렉트 + `grep -rn "onboarding_completed" src` 0건 확인.
+  **vitest 117개(19파일)·tsc·vite build 전부 통과**
+
 ## 3. 미결
-- GitHub 기본 브랜치가 아직 `claude/extract-zip-to-repo-t6xstr` — Settings → Branches에서 `main`으로 변경 필요
-- **리멤버 로고 실 자산 미수령** — 사용자가 보낸 이미지가 파일로 전달되지 않아 텍스트 워드마크 폴백
-  동작 중. `public/brand/remember-logo.svg`(블랙 버전)를 넣으면 자동 교체됨
+- GitHub 기본 브랜치가 아직 `claude/extract-zip-to-repo-t6xstr` — Settings → Branches에서 `main`으로
+  변경 필요 (세션 브리프 부록에 사용자 직접 수행 절차 안내됨 — 구 브랜치 2종 삭제 포함)
 - (경미) `@types/node` 미도입 — dod9가 print CSS 파일 검증에 국소 우회(dynamic import 캐스팅) 사용 중.
   Node API 쓰는 테스트가 늘면 devDependency 추가 검토
-- (경미) plan/StatusPill이 internal/StatusBadge와 렌더 중복 — 병렬 작업 충돌 회피 목적 격리였으므로
-  후속 세션에서 통합 가능
-
-- **온보딩 완료 플래그 스키마 확정 필요** — §4에 컬럼이 없어 mock은 앱 상태로 구현. Phase 4에서
-  projects.onboarded_at 컬럼 추가(설계서 개정 동반)를 사용자에게 확인받을 것
 - (경미) 큐시트 발송 시 RequestApprovalInput.version_id에 'auto' 센티널 전달(동결 인터페이스 관례) —
-  다음 동결 해제 기회에 version_id 옵셔널화 검토
+  다음 동결 해제 기회에 version_id 옵셔널화 검토. v1.4.1 ⑤는 스냅숏 파일 규약을 정본화한 것이고
+  이 항목은 인터페이스 형상 문제라 별개로 유지
+- ~~리멤버 로고 실 자산 미수령~~ → **종결** (2026-08-22 ZIP 수령, png 2종 배치)
+- ~~온보딩 완료 플래그 스키마 확정 필요~~ → **종결** (설계서 v1.4.1 §4-1 projects.onboarded_at,
+  사용자 승인 — Phase 3.8a 반영)
+- ~~일반형 28건 산식·임박 배타 산식·재전개 보존·큐시트 스냅숏 mock 규약 해석~~ → **종결**
+  (설계서 v1.4.1 §4-15·§8·§15 정본화 — 열린 질문 ①~⑤ 전부 종결)
 
 ## 4. 다음 스텝
-- **Phase 4 — Supabase 이식** (★착수 전 사용자 승인 필수, **v1.4 스키마 기준**): 마이그레이션(§4 전체 —
-  cues·wbs_tasks·role_charters·event_type 포함)+RLS(§6.2)+Auth+seed → SupabaseProvider 구현 →
-  MockProvider 교체(프론트 무수정 목표). 온보딩 플래그 컬럼 확정 동반
+- **Phase 3.9 — 디자인 스프린트** (진행 중, 별도 브랜치·별도 PR): 디자인지시서 v1 §1~8 전문 이행 —
+  토큰·Pretendard·사이드바 레이아웃·화면별 depth·스크린샷 11장·데모 아티팩트 재발행.
+  기준치 = 본 시점 vitest 117개 전부 통과 유지 + `grep -rn "gray-\|slate-" src` 0건 (DoD-17)
+- **Phase 4 — Supabase 이식** (★착수 전 사용자 승인 필수, **v1.4.1 스키마 기준**): 마이그레이션(§4 전체 —
+  cues·wbs_tasks·role_charters·event_type·onboarded_at 포함)+RLS(§6.2)+Auth+seed → SupabaseProvider
+  구현 → MockProvider 교체(프론트 무수정 목표)
 - 이후 Phase 5(Drive) → Phase 6(알림·cron)
 
 ## 5. 결정 로그
+- 2026-08-22 (Phase 3.8a): **DataProvider v3 동결 해제** — 근거: **사용자 v1.4.1 승인(2026-08-22,
+  설계서 v1.4.1 개정 동반 — §9 준수)**. `Project.onboarded_at`·`OnboardingStatus.onboarded_at` 필드
+  추가만(메서드 수 53 불변) → **v3.1로 개정 후 재동결 선언** — 이후 변경은 다시 사용자 승인+설계서
+  개정 필요
+- 2026-08-22 (Phase 3.8): 3.8과 3.9는 **별도 커밋·별도 PR**(CLAUDE.md §5 — 타입·로직 vs 스타일 리뷰
+  diff 분리). 3.9 브랜치는 3.8 브랜치 위에 스택 — 3.8 머지 시 3.9 PR base가 main으로 자동 전환
 - 2026-08-22 (Phase 3.6a·3.7a): **DataProvider v2 동결 해제** — 근거: **사용자 v1.4 승인(2026-08-22)**
   (v1.3 내용 포함·설계서 v1.4 개정 동반, §9 준수). EventType·Cue·WbsTask·RoleCharter·WbsStatus 반영,
   큐시트 CRUD/스냅숏·프로젝트 기본정보 패치·온보딩·WBS 전개/조회/패치·R&R 조회 12메서드 추가 →
@@ -148,6 +175,9 @@
   K(온보딩)·L(큐시트)·O(WBS UI) 3병렬 → 메인 통합 검수(섹션 번호 정본화, vitest 114·tsc·빌드 통과,
   DoD 1~15 완비) → PR #7 머지(사용자 사전 승인)·데모 아티팩트 재발행.
   **다음 세션 = Phase 4(착수 전 사용자 승인·Supabase 프로젝트 정보 필요)**
+- 2026-08-22 세션 #3: 문서 채택 커밋(설계서 v1.4.1·CLAUDE.md v1.4.1·디자인지시서 v1·로고 자산) →
+  Phase 3.8(메인 단독: v3.1 재동결·onboarded_at 정합·DoD-16 3건·열린 질문 ①~⑤ 종결, vitest 117·
+  tsc·빌드 통과) → 3.8 PR 발행(드래프트, 머지는 사용자 검수 후). **Phase 3.9 기준치 = 117개 기록**
 
 ## 7. 세션 잠금
 - 잠금 없음 (한 폴더 = 동시 1세션)
