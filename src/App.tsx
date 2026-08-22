@@ -7,6 +7,7 @@ import ClientStatusPage from './pages/ClientStatusPage'
 import HomeDashboardPage from './pages/HomeDashboardPage'
 import ItemDetailPage from './pages/ItemDetailPage'
 import NotFoundPage from './pages/NotFoundPage'
+import PlanDocPage from './pages/PlanDocPage'
 import RegistrationPage from './pages/RegistrationPage'
 import SchedulePage from './pages/SchedulePage'
 import SettingsPage from './pages/SettingsPage'
@@ -22,6 +23,7 @@ export default function App() {
           <Route path="/items/:itemId" element={<ItemDetailPage />} />
           <Route path="/registration" element={<RegistrationPage />} />
           <Route path="/schedule" element={<SchedulePage />} />
+          <Route path="/plan" element={<PlanDocPage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Route>
 

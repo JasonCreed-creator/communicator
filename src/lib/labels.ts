@@ -4,6 +4,7 @@
 import type { DeliverableArea, DeliverableStatus, InviteStatus, MemberRole } from '../types/enums'
 
 export const STATUS_LABELS: Record<DeliverableStatus, string> = {
+  requested: '지시됨',
   draft: '초안',
   internal_review: '내부검토',
   pending_approval: '컨펌대기',
@@ -14,6 +15,7 @@ export const STATUS_LABELS: Record<DeliverableStatus, string> = {
 
 /** 뱃지용 Tailwind 클래스 — 배경 연톤 + 진한 잉크 텍스트 (WCAG 대비 확보) */
 export const STATUS_BADGE_CLASSES: Record<DeliverableStatus, string> = {
+  requested: 'bg-violet-50 text-violet-800',
   draft: 'bg-gray-100 text-gray-700',
   internal_review: 'bg-blue-50 text-blue-800',
   pending_approval: 'bg-amber-50 text-amber-800',

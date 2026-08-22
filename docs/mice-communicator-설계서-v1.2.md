@@ -1,11 +1,11 @@
-# MICE 커뮤니케이터 — 시스템 설계서 v1.1
+# MICE 커뮤니케이터 — 시스템 설계서 v1.2
 
 | 항목 | 내용 |
 |---|---|
-| 문서 상태 | v1.1 확정 — jc-redteam Deep Audit 반영 개정 (2026-08-19, 감수 리포트 별첨) |
+| 문서 상태 | v1.2 확정 — 지시·문서 조립 확장 (2026-08-22, 시각안 승인 기반) |
 | 목적 | Claude Code가 본 문서만으로 추가 질문 없이 구현 착수 |
 | 정본 관계 | 스키마·상태 머신·API 계약은 본 문서가 SoT. 구현 지침·작업 순서는 동봉 CLAUDE.md |
-| 확정 결정 | 아키텍처=하이브리드(파일=Drive, 상태=Supabase) / 발주처=무로그인 토큰 링크 / 컨펌 발송=PM 단독 / 업로드=웹앱 경유 원칙+Drive 감지 인박스 / 등록 1차=CSV 임포트 / **구현 순서=프론트 우선·서버 후행 이식(DataProvider 어댑터 계층)** |
+| 확정 결정 | 아키텍처=하이브리드(파일=Drive, 상태=Supabase) / 발주처=무로그인 토큰 링크 / 컨펌 발송=PM 단독 / 업로드=웹앱 경유 원칙+Drive 감지 인박스 / 등록 1차=CSV 임포트 / **구현 순서=프론트 우선·서버 후행 이식(DataProvider 어댑터 계층)** / **v1.2: 지시(requested)→제작→컨펌→운영계획서(S9) 조립 파이프라인 — 웹 문서 우선, PPTX·발주처 뷰는 2차** |
 
 ---
 
@@ -19,6 +19,7 @@ MICE 프로젝트 착수 시 역할별(디자인·운영·등록·발주처) 산
 3. 발주처는 로그인 없이 토큰 링크 하나로 컨펌과 현황 확인만 한다. 내부 초안·단가·정산은 구조적으로 노출 불가.
 4. 디자인보다 기능·편의성 우선 — 화면은 최소, 클릭 수는 최소.
 5. Drive 공유 권한은 앱이 절대 변경하지 않는다. 파일 접근은 항상 앱 프록시 경유.
+6. (v1.2) 커뮤니케이터의 최종 산출물은 운영계획서다 — 지시서·업로드·컨펌·등록의 모든 입력이 문서 섹션으로 실시간 조립된다.
 
 ---
 
@@ -82,6 +83,7 @@ MICE 프로젝트 착수 시 역할별(디자인·운영·등록·발주처) 산
 | 4 | 발주처 | 컨펌 큐(전 영역 컨펌요청 집결) / 운영현황 대시보드 | 뷰 전용(자체 데이터 없음) |
 | 5 | 일정 | D-day / 영역별 마감 / 컨펌 기한 | milestones + approvals.due_at |
 | 6 | 공통 | 홈 미결 대시보드 / 기획 문서 / 회의록·의사결정 로그 / 예산·정산 문서함 / 알림 / 미등록 파일 인박스 | 혼합 |
+| 7 | 운영계획서 (v1.2) | S9 웹 문서 — 개요·프로그램·존운영·제작물 리스트·등록 통계·일정 섹션 자동 조립 + 진행률 + 인쇄 CSS | 뷰 + 정형 데이터 |
 
 - 회의록·예산 문서는 별도 모듈 UI 없이 deliverables의 area='common' 카테고리로 수용 (컨펌 루프 없이 보관·버전만).
 
@@ -96,7 +98,8 @@ MICE 프로젝트 착수 시 역할별(디자인·운영·등록·발주처) 산
 create type member_role as enum ('pm','design','ops','reg');
 create type deliverable_area as enum ('design','ops','common');
 create type deliverable_status as enum
-  ('draft','internal_review','pending_approval','changes_requested','approved','final');
+  ('requested','draft','internal_review','pending_approval','changes_requested','approved','final');
+  -- v1.2: requested = PM 지시 발행 상태 (산출물 없음)
 create type approval_decision as enum ('approved','changes_requested');
 create type invite_status as enum ('none','sent','accepted','declined');
 create type attendee_channel as enum ('rsvp','onsite','import');
@@ -109,6 +112,9 @@ create table projects (
   event_date date,
   drive_root_folder_id text,          -- 표준 트리 루트
   slack_webhook_url text,
+  -- v1.2 행사개요 (운영계획서 §행사개요 소스)
+  theme text, venue text, mc_name text,
+  overview_items jsonb,               -- 자유 키-값 개요 불릿 (대상·주차 안내 등)
   created_by uuid references auth.users,
   created_at timestamptz default now()
 );
@@ -149,6 +155,14 @@ create table deliverables (
   due_date date,
   drive_folder_id text,               -- 항목 전용 하위 폴더
   requires_approval boolean default true,   -- common 문서는 false
+  -- v1.2 지시서·스펙 (전부 선택적 — 지시 없이 만든 항목은 null)
+  brief text,                         -- 지시 내용
+  brief_refs jsonb,                   -- 참고자료 링크 배열 (첨부 테이블은 2차)
+  spec_size text,                     -- 규격 표기 예: '23000×5000mm'
+  spec_qty int,
+  spec_location text,                 -- 제작·설치 위치
+  spec_type text,                     -- 종류 (현수막·합지·PET·이미지 등)
+  content text,                       -- 항목 본문 (운영사항 등, 마크다운) — 운영계획서 렌더 소스
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
@@ -250,6 +264,18 @@ create table unregistered_files (
   dismissed boolean default false
 );
 
+-- 13. 프로그램 세션 (v1.2 — 운영계획서 §프로그램 섹션의 정형 소스)
+create table program_sessions (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid references projects on delete cascade,
+  section text,                       -- 블록 구분 (오전/오후/애프터파티 등)
+  start_time time, end_time time,
+  title text not null,
+  speaker_name text, speaker_title text, speaker_org text,
+  note text,                          -- 비고 태그 (기조·파트너 연사 등)
+  sort_order int not null default 0
+);
+
 -- 무결성 보조 (v1.1 — 감수 M-3·Minor 반영)
 create unique index uq_rsvp_email on rsvp_contacts (project_id, lower(email)) where email is not null;
 create unique index uq_attendee_email on attendees (project_id, lower(email)) where email is not null;
@@ -262,6 +288,8 @@ create unique index uq_attendee_email on attendees (project_id, lower(email)) wh
 ## 5. 컨펌 워크플로우 — 상태 머신 (정본)
 
 ```
+[PM 지시 발행] requested ──(첫 버전 업로드 시 자동)──> draft   ※ 담당자 셀프 생성은 draft에서 시작
+
 draft ──(담당/PM)──> internal_review ──(PM만)──> pending_approval
   ▲                        │                          │
   │                 (PM 반려)│                  (발주처 토큰)
@@ -271,6 +299,8 @@ draft ──(담당/PM)──> internal_review ──(PM만)──> pending_appr
 
 | 전이 | 주체 | 부수 효과 |
 |---|---|---|
+| (생성·지시 발행) → requested | **PM** | 지시서(brief·스펙·마감·담당) 작성, 담당자 알림 (v1.2) |
+| requested → draft | 자동 — 첫 버전 업로드·인박스 연결 시 | assertTransition 경유 (v1.2) |
 | draft → internal_review | 영역 담당 또는 PM | Slack 알림 |
 | internal_review → draft | PM (반려) | 코멘트 필수 |
 | internal_review → pending_approval | **PM 단독** | **발송 조건: 해당 버전이 미리보기 포맷(PDF·PNG·JPG)일 것** — approvals 생성, 발주처 이메일(토큰 링크), Slack |
@@ -291,6 +321,8 @@ draft ──(담당/PM)──> internal_review ──(PM만)──> pending_appr
 | 기능 | pm | design | ops | reg | 발주처(token) |
 |---|---|---|---|---|---|
 | 자기 영역 deliverable 생성·업로드 | ● | ●(design) | ●(ops) | — | — |
+| 지시 발행(requested 생성) (v1.2) | ● | — | — | — | — |
+| 행사개요·프로그램표 편집 (v1.2) | ● | — | ● | — | — |
 | 전 영역 열람 | ● | ● | ● | ● | — |
 | internal_review 전이 | ● | ● | ● | — | — |
 | pending_approval 발송 | ● | — | — | — | — |
@@ -367,7 +399,7 @@ draft ──(담당/PM)──> internal_review ──(PM만)──> pending_appr
 | POST /projects/{id}/members | pm | 멤버 초대(역할 지정) |
 | POST /projects/{id}/client-tokens | pm | 토큰 발급 (연락처·만료) / DELETE = 회수 |
 | GET /projects/{id}/dashboard | 멤버 | 홈 데이터(미결 컨펌·D-day·인박스 수·영역 진행률·최근 활동) |
-| POST /deliverables | 역할-영역 일치 | 항목 생성 + Drive 하위 폴더 생성 |
+| POST /deliverables | 역할-영역 일치 (지시 발행은 pm) | 항목 생성 + Drive 하위 폴더 생성. v1.2: brief·스펙 포함 시 status=requested |
 | PATCH /deliverables/{id}/status | §5 전이 규칙 | 상태 전이 (검증 실패 시 409) |
 | POST /deliverables/{id}/versions | 역할-영역 일치 | §7.2 업로드 |
 | POST /deliverables/{id}/approvals | **pm** | 컨펌 발송 (due_at 지정) → 이메일+Slack |
@@ -377,6 +409,9 @@ draft ──(담당/PM)──> internal_review ──(PM만)──> pending_appr
 | GET /c/{token}/status | 토큰 | 현황 대시보드 데이터(진행률·마일스톤·최근 확정본) |
 | POST /registration/import | pm·reg | CSV 업로드 → rsvp_contacts/attendees 벌크 insert (중복=email 기준 upsert) |
 | PATCH /attendees/{id}/checkin | pm·reg | 체크인 토글 |
+| GET·POST·PATCH·DELETE /program-sessions | pm·ops | 프로그램표 CRUD (v1.2) |
+| PATCH /projects/{id}/overview | pm·ops | 행사개요 편집 (v1.2) |
+| GET /projects/{id}/plan | 멤버 | 운영계획서 조립 데이터 — 전 섹션 + 섹션별 진행률 (v1.2) |
 | POST /sync/drive-scan | 멤버(수동)·cron | §7.3 인박스 스캔 |
 | cron /jobs/reminders | system | 컨펌 due D-1 미응답·마일스톤 D-1 알림 |
 
@@ -403,13 +438,14 @@ draft ──(담당/PM)──> internal_review ──(PM만)──> pending_appr
 | # | 화면 | 구성 | 주요 액션 |
 |---|---|---|---|
 | S1 | 홈 대시보드 | 미결 컨펌(기한순) · D-day·마일스톤 · 미등록 인박스 · 영역별 진행률 바 · 최근 활동 | 인박스 연결/무시, 항목 바로가기 |
-| S2 | 영역 보드 (design/ops 공용) | 카테고리 그룹 카드: 상태 뱃지·최신 vN·담당·마감 | 항목 생성, 필터(상태·담당), 상태 전이 |
-| S3 | 항목 상세 | 버전 이력(최신 뱃지)·미리보기·코멘트 스레드·컨펌 이력·Drive 폴더 링크 | 버전 업로드, 전이, (pm) 컨펌 발송 |
+| S2 | 영역 보드 (design/ops 공용) | 카테고리 그룹 카드: 상태 뱃지(지시됨 포함)·최신 vN·담당·마감 | 항목 생성, (pm) 지시 발행 폼, 필터(상태·담당), 상태 전이 |
+| S3 | 항목 상세 | 지시 카드(브리프·스펙 칩, v1.2)·버전 이력(최신 뱃지)·미리보기·코멘트 스레드·컨펌 이력·Drive 폴더 링크 | 버전 업로드, 전이, (pm) 컨펌 발송 |
 | S4 | 등록 모듈 | 탭: RSVP 리스트 / 참관객 / 통계(응답률·등록수·체크인율) | CSV 임포트·내보내기, 상태 변경, 체크인 토글, RSVP→참관객 전환 |
 | S5 | 일정·마일스톤 | 타임라인(D-day 기준) + 영역 필터, 컨펌 기한 오버레이 | 마일스톤 CRUD |
 | S6 | 프로젝트 설정 | 멤버·역할 / 발주처 연락처·토큰(발급·회수·최근 접속) / Drive 연결 상태 / Slack Webhook | pm 전용 |
 | S7 | 발주처 컨펌 큐 (`/c/{token}`) | 대기 항목 리스트 → 미리보기 → [승인] [수정요청+코멘트] · 처리 완료 이력 | 승인/수정요청 |
 | S8 | 발주처 현황 (`/c/{token}/status`) | 영역별 진행률 · 마일스톤 · 최근 확정본 목록(다운로드) | 읽기 전용 |
+| S9 | 운영계획서 (v1.2) | 섹션 자동 조립: ①행사개요 ②프로그램 ③존별 운영(content+도면) ④제작물 리스트(스펙 표+최신 시안·상태 뱃지) ⑤등록 통계 ⑥일정 — 섹션별 진행률·인쇄 CSS(A4) | 개요·프로그램 인라인 편집(pm·ops), 인쇄(PDF) |
 
 UI 공통: 한국어, 데스크톱 우선 + 반응형(발주처 화면은 모바일 대응 필수 — 임원이 폰으로 컨펌하는 시나리오), 장식 최소·표와 뱃지 중심.
 
@@ -440,6 +476,8 @@ UI 공통: 한국어, 데스크톱 우선 + 반응형(발주처 화면은 모바
 | design·ops 항목 + 버전 + 컨펌 루프 전체 | QR 체크인·현장 등록 키오스크 |
 | 발주처 토큰 뷰(큐·현황) + final 스냅숏 | 미리보기 위 주석(마크업) 코멘트 |
 | 홈 대시보드·인박스·일정 | 다중 발주처 담당자 승인 체인 |
+| (v1.2) 지시 발행 흐름·프로그램표·S9 운영계획서 웹 문서+인쇄 | (v1.2) 운영계획서 PPTX 내보내기·발주처용 운영계획서 뷰·지시 첨부 테이블 |
+| — | 현장사진 갤러리·결과보고서 조립 |
 | 등록 CSV 임포트·테이블·체크인 토글·통계 기초 | 통계 대시보드 고도화(mice-dashboard 연동) |
 | Slack·이메일 알림 + D-1 리마인드 | 모바일 앱 수준 최적화, 다국어 |
 
@@ -448,4 +486,5 @@ UI 공통: 한국어, 데스크톱 우선 + 반응형(발주처 화면은 모바
 ## 14. 개정 이력
 
 - **v1.0** (2026-08-19): 최초 확정 — 구조안 v0.9 승인 승격
+- **v1.2** (2026-08-22): 지시→제작→컨펌→문서 조립 확장 (시각안 승인 기반) — status 'requested'+지시서·스펙 필드(brief·spec_*·content), program_sessions 신설, projects 행사개요 필드, S9 운영계획서 웹 문서(섹션 자동 조립·진행률·인쇄 CSS), API 4종 추가. 발주처용 운영계획서 뷰·PPTX 내보내기·지시 첨부는 2차
 - **v1.1** (2026-08-19): jc-redteam Deep Audit 반영(판정: 조건부 보완 → 전량 수정) — 코멘트 visibility 분리(C-1) / DataProvider 어댑터 계층·프론트 우선-서버 후행 구현 전략 §2.1 신설(C-2) / 전용 운영 계정+OAuth Production 게시(M-1) / 프록시 스트리밍·100MB 캡·미리보기 포맷 발송 조건·내부 Drive 직접 접근(M-2) / 이메일 partial unique 인덱스(M-3) / final 스냅숏 원자성·재시도(M-4) / Changes API·rename 기본 off(M-5) / 토큰 기본 만료·no-referrer·로그 마스킹(M-6) / Minor 6건(code unique, 기획 카테고리, 규약 확장 명기 등)
