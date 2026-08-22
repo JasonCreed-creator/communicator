@@ -48,13 +48,13 @@ export default function StepOptions({
     })
   }
 
-  // scaler4k 옵션은 100명 미만 전용 — 100명 이상은 시스템 자동 포함/불필요 (RQC soloOpts 규칙)
+  // LED 오퍼레이팅 옵션은 100명 미만 전용 — 100명 이상은 시스템 자동 포함/불필요 (RQC soloOpts 규칙)
   const soloOpts = OPT_CATALOG.filter(
     (o) =>
       o.group !== 'media' &&
       o.group !== 'photowall' &&
       (!o.pureOnly || !form.includeLeads) &&
-      !(o.id === 'scaler4k' && form.target >= 100),
+      !(o.id === 'ledOperating' && form.target >= 100),
   )
   const souvUnit = form.souvenirPrice === '' ? SOUVENIR_UNIT_PRICE : Number(form.souvenirPrice)
   const souvQty = form.souvenirQty === '' ? form.target : Number(form.souvenirQty)
@@ -69,8 +69,11 @@ export default function StepOptions({
 
   const OptionRow = ({ o }: { o: OptCatalogItem }) => {
     const active = !!form.options[o.id]
-    const isLocked = o.id === 'scaler4k' && form.displayType === 'led'
+    const isLocked = o.id === 'ledOperating' && form.displayType === 'led'
     const isLedGated = !!o.ledOnly && form.displayType !== 'led'
+    // 전체 녹화·편집은 중계 선행 필수 — 중계 미선택이면 비활성 표시
+    const relayOn = !!form.options.screenRelay || !!form.options.onlineRelay
+    const isRelayGated = !!o.relayOnly && !relayOn
     return (
       <button
         type="button"
@@ -78,7 +81,7 @@ export default function StepOptions({
         title={o[lang].detail}
         className={`flex w-full items-center gap-3 rounded-[10px] border p-3.5 text-left transition-colors ${
           active ? 'border-accent bg-accent-tint' : 'border-border bg-card hover:bg-track'
-        } ${isLedGated ? 'opacity-50' : ''}`}
+        } ${isLedGated || isRelayGated ? 'opacity-50' : ''}`}
       >
         <span aria-hidden>{o.icon}</span>
         <span className="min-w-0">
@@ -86,6 +89,7 @@ export default function StepOptions({
             {o[lang].label}
             {isLocked && <span className="ml-2 rounded bg-accent-tint px-1.5 py-0.5 text-[10px] font-bold text-accent-deep">{t.ledRequired}</span>}
             {isLedGated && <span className="ml-2 rounded bg-track px-1.5 py-0.5 text-[10px] font-bold text-ink-cap">{t.ledOnlyTag}</span>}
+            {!isLedGated && isRelayGated && <span className="ml-2 rounded bg-track px-1.5 py-0.5 text-[10px] font-bold text-ink-cap">{t.relayRequiredTag}</span>}
           </span>
           <span className="block truncate text-xs text-ink-sub">{o[lang].detail}</span>
         </span>

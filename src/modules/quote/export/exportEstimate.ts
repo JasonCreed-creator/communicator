@@ -13,6 +13,13 @@ import {
   BOOTH_PREMIUM_UNIT_PRICE,
   GEN_ATTENDEE_UNIT_PRICE,
   SOUVENIR_UNIT_PRICE,
+  LED_OPERATING_PRICE,
+  SCREEN_RELAY_PRICE,
+  SCREEN_RELAY_CAMERAS,
+  ONLINE_RELAY_ADDON_PRICE,
+  ONLINE_RELAY_TOTAL_PRICE,
+  ONLINE_RELAY_CAMERAS,
+  FULL_RECORDING_PRICE,
   resolveOverride,
   type EstimateResult,
 } from "../engine/calcEstimate";
@@ -669,6 +676,8 @@ export async function exportEstimate(
 
   // ========== 2. 시스템 ==========
   const sb = p.sysBreakdown;
+  // LED 오퍼레이팅 — 구 키(scaler4k) 미러 폴백 (구버전 저장 견적 호환)
+  const ledOp = sb.ledOperating ?? sb.scaler4k ?? 0;
   r += 2;
   const sec2TitleRow = r;
   sectionTitle(ws, r, en ? "2. System / AV" : "2. 시스템 구축", s2T, T.subtotal);
@@ -685,7 +694,7 @@ export async function exportEstimate(
         : (en ? "In-house registration (base)" : "내부 등록시스템 기본"));
   const sysRows = [
     [en ? "Video Console" : "영상 콘솔", cfg.displayType === "led" ? (en ? "LED display operation" : "LED 디스플레이 운용") : (en ? "Projector setup" : "빔프로젝터 활용"), en ? "Switcher + output console + splitter + full cabling" : "영상 스위처 + 송출 콘솔 + 배분기 + 케이블 일체", sb.video, 1, sb.video, ""],
-    sb.scaler4k > 0 ? [en ? "4K Scaler/KVM" : "4K 스케일러/KVM", en ? "External scaler + KVM" : "외부 스케일러+KVM", en ? "Included for 100+ pax LED events" : "100명 이상 LED 행사 기본 포함", sb.scaler4k, 1, sb.scaler4k, en ? "Auto-applied for 100+ pax with LED" : "100명 이상 · LED 선택 시 자동 적용"] : null,
+    ledOp > 0 ? [en ? "LED Operating" : "LED 오퍼레이팅", en ? "V-mix switching + engineer" : "V-mix 스위칭 + 전담 엔지니어", en ? "Included for 100+ pax LED events · relay cost NOT included" : "100명 이상 LED 행사 기본 포함 · 중계 비용 불포함", ledOp, 1, ledOp, en ? "Auto-applied for 100+ pax with LED · relay is a separate add-on" : "100명 이상 · LED 선택 시 자동 적용 · 중계는 별도 옵션"] : null,
     [en ? "Sound System" : "음향 시스템", en ? "House PA + operation" : "하우스 PA + 운용", basePlusSpec(1_500_000, sb.audio), sb.audio, 1, sb.audio, en ? "+KRW 500,000 per 100 pax" : "인원 100명 단위로 500,000원 가산"],
     [en ? "Engineer" : "엔지니어", en ? "AV operation" : "영상·음향 운용", en ? "1 AV engineer · on-site for 1 day" : "영상·음향 엔지니어 1인 · 1일 상주", sb.engineer, 1, sb.engineer, ""],
     [en ? "Presentation Support" : "발표지원", en ? "Prompter/monitor/clicker" : "프롬프터·모니터·클리커", en ? "Prompter + presenter monitor + wireless clicker + backup laptop" : "프롬프터 + 발표자 모니터 + 무선 클리커 + 백업 노트북", sb.presentation, 1, sb.presentation, ""],
@@ -787,12 +796,16 @@ export async function exportEstimate(
     if (opt.photo) optRows.push([en ? "Photography" : "사진촬영", en ? "Group + sessions" : "단체+세션", en ? "Per day" : "1일 기준", 800000, 1, 800000, ""]);
     if (opt.video) optRows.push([en ? "Videography" : "영상촬영", en ? "3–5 min sketch" : "스케치 3~5분", en ? "Shoot + edit" : "촬영+편집", 2000000, 1, 2000000, ""]);
     if (opt.aving) optRows.push(["AVING", en ? "Media package" : "미디어 패키지", en ? "Photo + video + PR" : "사진+영상+보도", 2500000, 1, 2500000, "AVING Korea/USA"]);
-    // 화면중계 — LED 화면 선택 시에만 유효 (엔진과 동일 게이트)
-    if (opt.screenRelay && cfg.displayType === "led") optRows.push([en ? "Live Screen Relay" : "화면중계", en ? "Live LED feed" : "LED 실시간 송출", en ? "2 cameras + switching + relay operator (1 day)" : "카메라 2대 + 영상 스위칭 + 중계 오퍼레이터 (1일)", 2500000, 1, 2500000, en ? "LED only" : "LED 전용"]);
-    if (opt.fullRecording) optRows.push([en ? "Full Recording & Edit" : "전체 녹화·편집", en ? "All sessions + edited videos" : "풀 녹화 + 세션별 편집본", en ? "Multi-cam · subtitles/titles editing" : "멀티캠 촬영 · 자막/타이틀 기본 편집", 3500000, 1, 3500000, ""]);
+    // ─── 중계 계열 — 과금 판정은 엔진(relayBreakdown)이 단일 출처. 여기선 표기만 한다. ───
+    // 화면중계·온라인중계·전체 녹화·편집은 각각 별도 행으로 나가며, LED 오퍼레이팅과 금액이 섞이지 않는다.
+    const rb = p.relayBreakdown || {};
+    if (rb.screenRelay > 0) optRows.push([en ? "Live Screen Relay" : "화면중계", en ? "Live feed to venue screen" : "행사장 화면 실시간 송출", en ? `${SCREEN_RELAY_CAMERAS} cameras + video switching + relay operator (1 day)` : `카메라 ${SCREEN_RELAY_CAMERAS}대 + 영상 스위칭 + 중계 오퍼레이터 (1일)`, SCREEN_RELAY_PRICE, 1, rb.screenRelay, en ? "LED only · separate from LED Operating" : "LED 전용 · LED 오퍼레이팅과 별도"]);
+    if (rb.onlineRelay > 0) optRows.push([en ? "Online Relay" : "온라인중계", en ? "External online streaming + relay recording" : "외부 온라인 송출 + 중계녹화", en ? `${ONLINE_RELAY_CAMERAS} cameras + streaming system (add-on over Live Screen Relay)` : `카메라 ${ONLINE_RELAY_CAMERAS}대 + 온라인 송출 시스템 (화면중계 대비 증분)`, ONLINE_RELAY_ADDON_PRICE, 1, rb.onlineRelay, en ? `LED only · total with relay ${won(ONLINE_RELAY_TOTAL_PRICE)}` : `LED 전용 · 화면중계 포함 합계 ${won(ONLINE_RELAY_TOTAL_PRICE)}`]);
+    if (rb.fullRecording > 0) optRows.push([en ? "Full Recording & Edit" : "전체 녹화·편집", en ? "All sessions + edited videos" : "풀 녹화 + 세션별 편집본", en ? "Add-on over the relay system · subtitles/titles editing" : "중계 시스템 위 증분 · 자막/타이틀 기본 편집", FULL_RECORDING_PRICE, 1, rb.fullRecording, en ? "Requires a relay option" : "중계 옵션 선택 시에만 적용"]);
     // RSVP 응대 대행 (패키지 옵션) — 전체 참석 × 2만원(평균). 게런티(모객) 보장 아님.
     if (opt.rsvpHandling) optRows.push([en ? "RSVP Handling" : "RSVP 응대 대행", en ? "Direct handling of all attendees" : "전체 참석 직접 응대", en ? `${target} pax × KRW 20,000 (avg.)` : `참석 ${target}명 × 인당 20,000원 (평균)`, 20000, target, target * 20000, en ? "Not a headcount guarantee" : "게런티(모객) 보장 아님"]);
-    if (opt.scaler4k && target < 100) optRows.push([en ? "4K Scaler" : "4K 스케일러", en ? "Add-on" : "옵션 추가분", en ? "Optional" : "선택 옵션", 2500000, 1, 2500000, ""]);
+    // LED 오퍼레이팅 옵션분 (100명 미만 전용) — 구 키 scaler4k도 동일 인정 (엔진과 동일 게이트)
+    if ((opt.ledOperating || opt.scaler4k) && target < 100) optRows.push([en ? "LED Operating" : "LED 오퍼레이팅", en ? "Add-on" : "옵션 추가분", en ? "V-mix switching + engineer · relay cost NOT included" : "V-mix 스위칭 + 전담 엔지니어 · 중계 비용 불포함", LED_OPERATING_PRICE, 1, LED_OPERATING_PRICE, ""]);
     if (opt.survey) optRows.push([en ? "Post-survey" : "사후설문", en ? "Design + analysis" : "설계+분석", en ? "Report" : "보고서 제출", 1000000, 1, 1000000, ""]);
     if (opt.photowall_basic) optRows.push([en ? "Photo Wall" : "포토월", en ? "Basic (I-banner)" : "일반형 (I배너)", en ? "Install/removal incl." : "설치·철거 포함", 500000, 1, 500000, ""]);
     if (opt.photowall_premium) optRows.push([en ? "Photo Wall" : "포토월", en ? "Premium (carpentry)" : "고급형 (목공월)", en ? "Install/removal incl." : "설치·철거 포함", 2000000, 1, 2000000, ""]);
