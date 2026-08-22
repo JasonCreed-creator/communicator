@@ -78,8 +78,8 @@ await tab.goto(`${ORIGIN}${DIR}`, { waitUntil: 'networkidle' })
 // ── 1. 첫 화면이 홈 대시보드(S1)인가 ──
 const notFound = await tab.getByText('페이지를 찾을 수 없습니다').count()
 check(notFound === 0, '첫 화면이 404가 아님', `NotFound 노드 ${notFound}개`)
-await tab.getByText('메인 키비주얼').first().waitFor({ timeout: 10_000 })
-check(true, '홈 대시보드(S1) 렌더', '"메인 키비주얼" 미결 컨펌 카드 확인')
+await tab.getByText('외관 대형 현수막').first().waitFor({ timeout: 10_000 })
+check(true, '홈 대시보드(S1) 렌더', '데모 기본 행사(RE:BUILD 27)의 미결 컨펌 카드 확인')
 
 // ── 2. 네트워크 요청이 문서 1건뿐인가 ──
 check(requests.length === 1, '브라우저 네트워크 요청', `${requests.length}건 → ${requests.join(' | ')}`)

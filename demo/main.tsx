@@ -15,6 +15,10 @@ import { HashRouter } from 'react-router-dom'
 import { AppRoutes } from '../src/App'
 import '../src/index.css'
 import DemoNotice from './DemoNotice'
+import { seedDemoProject } from './seedProject'
+
+// 데모 기본 선택 행사 = RE:BUILD 27 (렌더 전에 써야 ProjectProvider의 최초 읽기에 반영된다)
+seedDemoProject()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

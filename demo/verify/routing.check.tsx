@@ -5,9 +5,15 @@
 //
 // jsdom URL은 demo/verify/vitest.config.ts에서 실제 아티팩트 경로로 고정한다.
 import { cleanup, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { BrowserRouter, HashRouter } from 'react-router-dom'
 import { AppRoutes } from '../../src/App'
+import { seedDemoProject } from '../seedProject'
+
+// 아티팩트 엔트리(demo/main.tsx)와 같은 시드를 적용한다 — 데모 첫 화면은 RE:BUILD 27이다.
+beforeEach(() => {
+  seedDemoProject()
+})
 
 afterEach(() => {
   cleanup()
@@ -40,8 +46,9 @@ describe('아티팩트 중첩 경로 라우팅', () => {
       </HashRouter>,
     )
     // 초기 위치를 location.hash에서만 읽으므로(빈 해시 → '/') 경로에 독립적이다.
-    expect(await screen.findByText('메인 키비주얼')).toBeTruthy()
-    expect(screen.getByText('키비주얼 확정')).toBeTruthy()
+    // 데모 기본 행사 = RE:BUILD 27 — 미결 컨펌 카드와 마일스톤이 그 행사 것으로 렌더된다.
+    expect(await screen.findByText('외관 대형 현수막')).toBeTruthy()
+    expect(screen.getByText('베뉴 계약 확정')).toBeTruthy()
     expect(screen.queryByText('페이지를 찾을 수 없습니다')).toBeNull()
   })
 
@@ -56,7 +63,7 @@ describe('아티팩트 중첩 경로 라우팅', () => {
         <AppRoutes />
       </HashRouter>,
     )
-    await screen.findByText('메인 키비주얼')
+    await screen.findByText('외관 대형 현수막')
 
     const links = [...document.querySelectorAll('a[href]')] as HTMLAnchorElement[]
     expect(links.length).toBeGreaterThan(0)
