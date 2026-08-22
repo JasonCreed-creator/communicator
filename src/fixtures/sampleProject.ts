@@ -622,7 +622,7 @@ export function createFixtureState(): MockState {
       slack_webhook_url: null,
       event_type: 'general',
       theme: null,
-      venue: null, // 필수 4 중 장소 미입력 → 세팅 미완료(온보딩 1/3)
+      venue: '가상트레이닝센터 오디토리움(가안)', // ③=개요만 입력(온보딩 1/3): PM 미지정·완료 전
       mc_name: null,
       overview_items: null,
       onboarded_at: null,
