@@ -1,8 +1,8 @@
 /** @vitest-environment jsdom */
 // DoD-9: S9 인쇄 미리보기(A4) — jsdom은 실제 인쇄 레이아웃·페이지 분할을 계산하지 못하므로
 // (a) src/index.css의 인쇄 CSS 규칙 원문 존재를, (b)(c) 렌더 결과에 인쇄 시 숨겨야 할 UI의
-// plan-print-hidden 클래스와 6개 섹션 컨테이너의 plan-section(page-break 회피) 클래스가
-// 부여됐는지를 구조 계약 가드로 증명한다 (CLAUDE.md v1.2 §7 DoD-9, DoD-6 선례 방식 준용).
+// plan-print-hidden 클래스와 7개 섹션(v1.3부터 ③큐시트 추가) 컨테이너의 plan-section(page-break
+// 회피) 클래스가 부여됐는지를 구조 계약 가드로 증명한다 (CLAUDE.md v1.4 §7 DoD-9, DoD-6 선례 방식 준용).
 import { cleanup, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { renderRoute } from './testUtils'
@@ -37,7 +37,7 @@ describe('DoD-9 S9 인쇄 미리보기(A4)', () => {
     expect(css).toMatch(/break-inside:\s*avoid/)
   })
 
-  it('(b) 편집·인쇄 버튼에 plan-print-hidden, 6개 섹션 컨테이너에 plan-section 클래스가 부여된다', async () => {
+  it('(b) 편집·인쇄 버튼에 plan-print-hidden, 7개 섹션 컨테이너에 plan-section 클래스가 부여된다', async () => {
     renderRoute('/plan')
     await screen.findByRole('heading', { name: /행사개요/ })
 
@@ -54,7 +54,7 @@ describe('DoD-9 S9 인쇄 미리보기(A4)', () => {
     manageHeaders.forEach((el) => expect(el.className).toContain('plan-print-hidden'))
 
     const sections = document.querySelectorAll('.plan-section')
-    expect(sections.length).toBe(6)
+    expect(sections.length).toBe(7)
   })
 
   it('(c) 인쇄 버튼이 렌더되고 window.print를 호출한다', async () => {

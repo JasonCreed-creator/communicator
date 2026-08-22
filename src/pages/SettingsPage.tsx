@@ -5,7 +5,8 @@ import { PROJECT_ID } from '../fixtures/sampleProject'
 import { useAsync, useMutation } from '../hooks/useAsync'
 import { ROLE_LABELS, formatDateTime } from '../lib/labels'
 import { getDataProvider } from '../providers'
-import type { ClientContact, ClientToken } from '../types/entities'
+import type { ClientContact, ClientToken, Project } from '../types/entities'
+import type { EventType } from '../types/enums'
 
 const provider = getDataProvider()
 
@@ -65,6 +66,8 @@ function SettingsBody() {
         <p className="font-mono text-xs text-gray-400">S6</p>
         <h1 className="mt-1 text-2xl font-bold text-gray-900">프로젝트 설정</h1>
       </div>
+
+      {project.data && <EventBasicsCard project={project.data} onReload={project.reload} />}
 
       <Card title="멤버">
         <ErrorAlert message={members.error} />
@@ -167,6 +170,78 @@ function SettingsBody() {
         <p className="mt-1 text-xs text-gray-400">Phase 6에서 이식 예정</p>
       </Card>
     </section>
+  )
+}
+
+/** 행사 기본정보 편집 (S0 온보딩 ①·②와 동일 필드) — S6는 pm 전용이므로 별도 role 게이팅 없이 재사용 */
+function EventBasicsCard({ project, onReload }: { project: Project; onReload: () => void }) {
+  const [name, setName] = useState(project.name)
+  const [eventDate, setEventDate] = useState(project.event_date ?? '')
+  const [eventType, setEventType] = useState<EventType>(project.event_type)
+  const save = useMutation(async () => {
+    await provider.updateProject(PROJECT_ID, {
+      name: name.trim(),
+      event_date: eventDate || null,
+      event_type: eventType,
+    })
+    return true
+  })
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!name.trim()) {
+      save.setError('행사명은 비울 수 없습니다.')
+      return
+    }
+    const ok = await save.run()
+    if (ok) onReload()
+  }
+
+  return (
+    <Card title="행사 기본정보">
+      <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-3">
+        <label className="flex flex-col gap-1 text-xs text-gray-500">
+          행사명
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="w-56 rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900"
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-xs text-gray-500">
+          행사일
+          <input
+            type="date"
+            value={eventDate}
+            onChange={(e) => setEventDate(e.target.value)}
+            className="rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900"
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-xs text-gray-500">
+          행사 유형
+          <select
+            value={eventType}
+            onChange={(e) => setEventType(e.target.value as EventType)}
+            className="rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900"
+          >
+            <option value="general">일반형</option>
+            <option value="recruiting">모객형</option>
+          </select>
+        </label>
+        <button
+          type="submit"
+          disabled={save.pending}
+          className="rounded-md bg-gray-900 px-4 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+        >
+          저장
+        </button>
+      </form>
+      <ErrorAlert message={save.error} />
+      <p className="mt-2 text-xs text-gray-400">
+        행사 유형을 바꿔도 등록 데이터는 삭제되지 않습니다(표시 계층만 전환). WBS 재전개는 일정 화면에서
+        실행하세요.
+      </p>
+    </Card>
   )
 }
 

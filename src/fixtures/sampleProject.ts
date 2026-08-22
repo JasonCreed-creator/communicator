@@ -7,16 +7,21 @@ import type {
   ClientContact,
   ClientToken,
   Comment,
+  Cue,
   Deliverable,
   Milestone,
   ProgramSession,
   Project,
   ProjectMember,
+  RoleCharter,
   RsvpContact,
   UnregisteredFile,
   Version,
+  WbsTask,
 } from '../types/entities'
 import type { UserRef } from '../types/views'
+import { offsetToDate } from '../lib/wbs'
+import { RECRUITING_WBS_TEMPLATE, ROLE_CHARTER_TEMPLATES } from './wbsTemplates'
 
 /** `/c/demo` 데모 라우트용 토큰 값 (CLAUDE.md §4 Phase 3) */
 export const DEMO_TOKEN = 'demo'
@@ -44,6 +49,11 @@ export interface MockState {
   activity_log: ActivityLogEntry[]
   unregistered_files: UnregisteredFile[]
   program_sessions: ProgramSession[]
+  cues: Cue[]
+  wbs_tasks: WbsTask[]
+  role_charters: RoleCharter[]
+  /** v1.3 S0 — §4 스키마에 컬럼 없음: mock은 앱 상태로 관리(Phase 4에서 확정, PROGRESS 결정 로그) */
+  onboarding_completed: boolean
 }
 
 /** v1.2 지시서·스펙·본문 필드 기본값 — 지시 없이 만든 항목은 전부 null (§4) */
@@ -73,6 +83,7 @@ const FIXTURE: MockState = {
     event_date: '2026-10-22',
     drive_root_folder_id: 'drv-root-stc26',
     slack_webhook_url: null,
+    event_type: 'recruiting', // v1.3 — 픽스처는 RSVP 파이프라인을 쓰는 모객형
     // v1.2 행사개요 — S9 §행사개요 소스 (전부 가상 명칭)
     theme: '연결, 다음 단계로',
     venue: '가상컨벤션센터 3F 그랜드볼룸',
@@ -457,6 +468,22 @@ const FIXTURE: MockState = {
     { id: 'pgs-005', project_id: PROJECT_ID, section: '오후', start_time: '15:00', end_time: '16:00', title: '패널 토론', speaker_name: null, speaker_title: null, speaker_org: null, note: '패널 4인', sort_order: 5 },
   ],
 
+  // v1.3 큐시트 — dlv-004(개막식 큐시트)의 정형 큐 (sort_order 순, 콘솔 3채널·대본 전문)
+  cues: [
+    { id: 'cue-001', deliverable_id: 'dlv-004', cue_no: 'C01', time_at: '09:20', segment: '사전', body: '### 사전 안내방송\n잠시 후 개막식이 시작됩니다. 좌석에 착석해 주시기 바랍니다.', console_audio: 'BGM 페이드아웃', console_light: '객석 50%', console_screen: '대기 화면', sort_order: 1 },
+    { id: 'cue-002', deliverable_id: 'dlv-004', cue_no: 'C02', time_at: '09:58', segment: '오프닝', body: '오프닝 타이틀 영상 재생 (90초)', console_audio: '영상 사운드', console_light: '암전', console_screen: '오프닝 영상', sort_order: 2 },
+    { id: 'cue-003', deliverable_id: 'dlv-004', cue_no: 'C03', time_at: '10:00', segment: 'MC', body: '### MC 오프닝 멘트\n안녕하십니까. 연결, 다음 단계로 — 오늘 이 자리를 찾아주신 여러분을 진심으로 환영합니다.', console_audio: 'MC 마이크 온', console_light: '무대 풀', console_screen: '행사 타이틀', sort_order: 3 },
+    { id: 'cue-004', deliverable_id: 'dlv-004', cue_no: 'C04', time_at: '10:02', segment: '전환', body: '개회사 연사 무대 이동 — MC 소개 멘트 후 등단', console_audio: '등장 SFX', console_light: '연단 스팟', console_screen: '연사 프로필', sort_order: 4 },
+  ],
+
+  // v1.4 WBS — createFixtureState()에서 모객형 37태스크를 event_date 기준으로 전개해 채움
+  wbs_tasks: [],
+
+  // v1.4 R&R — createFixtureState()에서 모객형 템플릿으로 시드
+  role_charters: [],
+
+  onboarding_completed: true, // 픽스처 행사는 온보딩 완료 상태에서 시작 (S0 테스트는 mock 헬퍼로 리셋)
+
   unregistered_files: [
     {
       id: 'inb-001',
@@ -483,5 +510,42 @@ const FIXTURE: MockState = {
 
 /** 픽스처의 독립 사본 — MockProvider 인스턴스 간 상태 공유 방지 */
 export function createFixtureState(): MockState {
-  return structuredClone(FIXTURE)
+  const state = structuredClone(FIXTURE)
+  // v1.4 — 모객형 37태스크 전개(event_date 기준). 리터럴 중복 대신 정본 템플릿에서 파생.
+  state.wbs_tasks = RECRUITING_WBS_TEMPLATE.map((tpl, i) => ({
+    id: `wbs-${String(i + 1).padStart(3, '0')}`,
+    project_id: PROJECT_ID,
+    phase_no: tpl.phase_no,
+    phase_name: tpl.phase_name,
+    code: tpl.code,
+    title: tpl.title,
+    offset_start: tpl.offset_start,
+    offset_end: tpl.offset_end,
+    start_date: offsetToDate(FIXTURE.project.event_date!, tpl.offset_start),
+    end_date: offsetToDate(FIXTURE.project.event_date!, tpl.offset_end),
+    role: tpl.role,
+    origin_role: tpl.origin_role,
+    status: 'todo',
+    done_at: null,
+    linked_deliverable_id: null,
+    note: null,
+    sort_order: i + 1,
+  }))
+  // 데모용 상태 분포: 1.1·1.2 완료, 1.3 진행 중, 2.8 제작물 ↔ dlv-007(현수막 지시) 연결
+  const byCode = new Map(state.wbs_tasks.map((task) => [task.code, task]))
+  byCode.get('1.1')!.status = 'done'
+  byCode.get('1.1')!.done_at = '2026-09-12T09:00:00.000Z'
+  byCode.get('1.2')!.status = 'done'
+  byCode.get('1.2')!.done_at = '2026-09-17T09:00:00.000Z'
+  byCode.get('1.3')!.status = 'doing'
+  byCode.get('2.8')!.linked_deliverable_id = 'dlv-007'
+  state.role_charters = ROLE_CHARTER_TEMPLATES.recruiting.map((tpl, i) => ({
+    id: `rrc-${String(i + 1).padStart(3, '0')}`,
+    project_id: PROJECT_ID,
+    role: tpl.role,
+    origin_role: tpl.origin_role,
+    title: tpl.title,
+    items: [...tpl.items],
+  }))
+  return state
 }

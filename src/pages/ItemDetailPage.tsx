@@ -1,5 +1,6 @@
 import { useState, type ChangeEvent, type FormEvent } from 'react'
 import { useParams } from 'react-router-dom'
+import CuesheetEditor from '../components/cue/CuesheetEditor'
 import BriefCard from '../components/internal/BriefCard'
 import Card from '../components/internal/Card'
 import DdayBadge from '../components/internal/DdayBadge'
@@ -50,6 +51,9 @@ function ItemDetail({ itemId }: { itemId: string }) {
   const role = currentUser.data?.role
   const canWriteArea = !!role && (role === 'pm' || role === d.area)
   const isPm = role === 'pm'
+  // v1.3 큐시트: category='큐시트' 항목은 파일 대신 정형 표 에디터 — 편집은 pm·ops 전용(§6.1)
+  const isCuesheet = d.category === '큐시트'
+  const canEditCue = role === 'pm' || role === 'ops'
   const memberName = (userId: string | null) =>
     members.data?.find((m) => m.user_id === userId)?.profile.name ?? (userId ? userId : '미배정')
 
@@ -91,6 +95,7 @@ function ItemDetail({ itemId }: { itemId: string }) {
       <StatusActionBar
         deliverableId={d.id}
         status={d.status}
+        category={d.category}
         requiresApproval={d.requires_approval}
         versions={d.versions}
         isPm={isPm}
@@ -104,7 +109,11 @@ function ItemDetail({ itemId }: { itemId: string }) {
         onChanged={detail.reload}
       />
 
-      <VersionUploadForm deliverableId={d.id} canWrite={canWriteArea} onUploaded={detail.reload} />
+      {isCuesheet ? (
+        <CuesheetEditor deliverableId={d.id} canEdit={canEditCue} />
+      ) : (
+        <VersionUploadForm deliverableId={d.id} canWrite={canWriteArea} onUploaded={detail.reload} />
+      )}
 
       <Card title="버전 이력">
         {d.versions.length === 0 && <p className="text-sm text-gray-400">업로드된 버전이 없습니다.</p>}
@@ -156,6 +165,7 @@ function ItemDetail({ itemId }: { itemId: string }) {
 function StatusActionBar({
   deliverableId,
   status,
+  category,
   requiresApproval,
   versions,
   isPm,
@@ -165,6 +175,7 @@ function StatusActionBar({
 }: {
   deliverableId: string
   status: string
+  category: string
   requiresApproval: boolean
   versions: Version[]
   isPm: boolean
@@ -172,6 +183,9 @@ function StatusActionBar({
   lastChangesRequestedComment: string | null
   onChanged: () => void
 }) {
+  // v1.3 큐시트: 발송 시 provider(requestApproval)가 표를 .pdf 스냅숏으로 자동 버전 등록하고
+  // version_id는 무시한다 — 버전 선택 셀렉트 대신 안내 문구로 대체한다.
+  const isCuesheet = category === '큐시트'
   const toReview = useMutation(() => provider.transitionStatus(deliverableId, 'internal_review'))
   const [rejectComment, setRejectComment] = useState('')
   const reject = useMutation((comment: string) =>
@@ -181,7 +195,10 @@ function StatusActionBar({
   const [dueAt, setDueAt] = useState('')
   const requestApproval = useMutation(() =>
     provider.requestApproval(deliverableId, {
-      version_id: versionId,
+      // 큐시트 항목은 DataProvider가 version_id를 무시하고 createCueSnapshot으로 대체한다.
+      // 동결된 RequestApprovalInput이 version_id를 필수로 요구해 관례상 리터럴 'auto'를 보낸다
+      // (§8 cue-snapshot 전처리 — MockProvider.requestApproval 참조).
+      version_id: isCuesheet ? 'auto' : versionId,
       due_at: dueAt ? new Date(dueAt).toISOString() : undefined,
     }),
   )
@@ -203,7 +220,7 @@ function StatusActionBar({
 
   const handleRequestApproval = async (e: FormEvent) => {
     e.preventDefault()
-    if (!versionId) {
+    if (!isCuesheet && !versionId) {
       requestApproval.setError('발송할 버전을 선택하세요.')
       return
     }
@@ -275,21 +292,27 @@ function StatusActionBar({
             <form onSubmit={handleRequestApproval} className="space-y-2 border-t border-gray-100 pt-4">
               <p className="text-xs font-medium text-gray-500">컨펌 발송</p>
               <div className="flex flex-wrap items-end gap-2">
-                <label className="flex flex-col gap-1 text-xs text-gray-500">
-                  버전
-                  <select
-                    value={versionId}
-                    onChange={(e) => setVersionId(e.target.value)}
-                    className="w-64 rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900"
-                  >
-                    <option value="">버전 선택…</option>
-                    {versions.map((v) => (
-                      <option key={v.id} value={v.id}>
-                        v{v.version_no} — {v.file_name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                {isCuesheet ? (
+                  <p className="max-w-xs text-xs text-gray-500">
+                    발송 시 표의 스냅숏(.pdf)이 자동 버전으로 등록됩니다.
+                  </p>
+                ) : (
+                  <label className="flex flex-col gap-1 text-xs text-gray-500">
+                    버전
+                    <select
+                      value={versionId}
+                      onChange={(e) => setVersionId(e.target.value)}
+                      className="w-64 rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900"
+                    >
+                      <option value="">버전 선택…</option>
+                      {versions.map((v) => (
+                        <option key={v.id} value={v.id}>
+                          v{v.version_no} — {v.file_name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
                 <label className="flex flex-col gap-1 text-xs text-gray-500">
                   컨펌 기한
                   <input

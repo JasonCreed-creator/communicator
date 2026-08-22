@@ -1,5 +1,5 @@
 import PlanSection from './PlanSection'
-import type { SectionProgressData } from './planSections'
+import { PLAN_SECTION_META, type SectionProgressData } from './planSections'
 import { AREA_LABELS, formatDate } from '../../lib/labels'
 import type { Milestone } from '../../types/entities'
 
@@ -12,7 +12,7 @@ export default function ScheduleSection({
   progress: SectionProgressData
 }) {
   return (
-    <PlanSection number="⑥" title="일정" progress={progress}>
+    <PlanSection number={PLAN_SECTION_META.schedule.number} title={PLAN_SECTION_META.schedule.title} progress={progress}>
       {milestones.length === 0 ? (
         <p className="text-xs text-gray-400">등록된 마일스톤이 없습니다.</p>
       ) : (
