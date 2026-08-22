@@ -284,10 +284,12 @@ export class MockProvider implements DataProvider {
         deliverable_total: deliverables.length,
       }
     })
-    // 진행 중 먼저(행사일 임박순), 종료는 뒤로(최근 종료순)
+    // 진행 중 먼저(등록순 — 기본 선택이 결정적이도록 created_at 기준), 종료는 뒤로(최근 종료순)
+    const createdAt = (id: UUID) => this.mustFindProject(id).created_at
     return summaries.sort((a, b) => {
       if (a.status !== b.status) return a.status === 'active' ? -1 : 1
-      return (a.event_date ?? '9999').localeCompare(b.event_date ?? '9999')
+      if (a.status === 'closed') return createdAt(b.id).localeCompare(createdAt(a.id))
+      return createdAt(a.id).localeCompare(createdAt(b.id))
     })
   }
 

@@ -1,56 +1,57 @@
-import { useState, type FormEvent } from 'react'
-import ErrorAlert from '../internal/ErrorAlert'
-import { PROJECT_ID } from '../../fixtures/sampleProject'
-import { useMutation } from '../../hooks/useAsync'
+// S9 ①행사개요 — 읽기 조립 전용(설계서 v1.5 §10 S9). 인라인 편집 UI는 제거되었고, 수정은
+// 행사 설정(S6) ①탭의 ProjectOverviewForm으로 일원화되었다 — 우측 상단 링크로 안내한다.
+import { Link } from 'react-router-dom'
 import { ddayLabel, formatDate } from '../../lib/labels'
-import { getDataProvider } from '../../providers'
-import type { OverviewItem, Project } from '../../types/entities'
-import type { ProjectOverviewPatch } from '../../types/views'
+import type { Project } from '../../types/entities'
 import PlanSection from './PlanSection'
 import { PLAN_SECTION_META, type SectionProgressData } from './planSections'
-
-const provider = getDataProvider()
 
 interface OverviewSectionProps {
   project: Project
   progress: SectionProgressData
-  /** pm·ops만 true — §6.1 행사개요 편집 권한 */
-  canEdit: boolean
-  onSaved: () => void
+  /**
+   * v1.5 — 읽기 조립 전환으로 더 이상 쓰지 않는다(편집은 행사 설정 S6로 일원화).
+   * 호출부(PlanDocPage, 별도 담당)의 기존 호출과의 타입 호환을 위해 옵션으로만 계속 수용한다.
+   */
+  canEdit?: boolean
+  onSaved?: () => void
 }
 
-export default function OverviewSection({ project, progress, canEdit, onSaved }: OverviewSectionProps) {
-  const [editing, setEditing] = useState(false)
-
+export default function OverviewSection({ project, progress }: OverviewSectionProps) {
   return (
     <PlanSection
-      number={PLAN_SECTION_META.overview.number} title={PLAN_SECTION_META.overview.title}
+      number={PLAN_SECTION_META.overview.number}
+      title={PLAN_SECTION_META.overview.title}
       progress={progress}
       action={
-        canEdit && !editing ? (
-          <button type="button" onClick={() => setEditing(true)} className="btn btn-ghost btn-sm plan-print-hidden">
-            편집
-          </button>
-        ) : undefined
+        <Link to="/settings" className="plan-print-hidden text-xs text-steel underline">
+          행사 설정에서 편집
+        </Link>
       }
     >
-      {editing ? (
-        <OverviewForm
-          project={project}
-          onCancel={() => setEditing(false)}
-          onSaved={() => {
-            setEditing(false)
-            onSaved()
-          }}
-        />
-      ) : (
-        <OverviewReadOnly project={project} />
-      )}
+      <OverviewReadOnly project={project} />
     </PlanSection>
   )
 }
 
+/** YYYY-MM-DD 범위 표시 — 종료일이 없거나 시작일과 같으면 단일 일자만 보여준다 */
+function dateRangeLabel(project: Project): string | null {
+  if (!project.event_date) return null
+  const start = formatDate(project.event_date)
+  if (!project.event_end_date || project.event_end_date === project.event_date) return start
+  return `${start} ~ ${formatDate(project.event_end_date)}`
+}
+
+function timeRangeLabel(project: Project): string | null {
+  if (!project.start_time && !project.end_time) return null
+  if (project.start_time && project.end_time) return `${project.start_time} ~ ${project.end_time}`
+  return project.start_time ?? project.end_time
+}
+
 function OverviewReadOnly({ project }: { project: Project }) {
+  const dateRange = dateRangeLabel(project)
+  const timeRange = timeRangeLabel(project)
+
   return (
     <div className="space-y-3 text-sm text-ink">
       <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
@@ -58,13 +59,21 @@ function OverviewReadOnly({ project }: { project: Project }) {
           <span className="text-ink-cap">행사명 </span>
           <span className="font-semibold text-ink">{project.name}</span>
         </p>
-        {project.event_date && (
+        {dateRange && (
           <p className="flex items-center gap-2">
             <span className="text-ink-cap">일자 </span>
-            <span>{formatDate(project.event_date)}</span>
-            <span className="rounded-full bg-track px-2 py-0.5 text-xs text-ink-sub">
-              {ddayLabel(project.event_date)}
-            </span>
+            <span>{dateRange}</span>
+            {project.event_date && (
+              <span className="rounded-full bg-track px-2 py-0.5 text-xs text-ink-sub">
+                {ddayLabel(project.event_date)}
+              </span>
+            )}
+          </p>
+        )}
+        {timeRange && (
+          <p className="flex items-center gap-1">
+            <span className="text-ink-cap">시간</span>
+            <span>{timeRange}</span>
           </p>
         )}
         {project.venue && (
@@ -73,16 +82,40 @@ function OverviewReadOnly({ project }: { project: Project }) {
             <span>{project.venue}</span>
           </p>
         )}
+        {project.expected_headcount != null && (
+          <p className="flex items-center gap-1">
+            <span className="text-ink-cap">예상 인원</span>
+            <span>{project.expected_headcount}명</span>
+          </p>
+        )}
+        {project.seating && (
+          <p className="flex items-center gap-1">
+            <span className="text-ink-cap">좌석 형태</span>
+            <span>{project.seating}</span>
+          </p>
+        )}
         {project.theme && (
           <p className="flex items-center gap-1">
             <span className="text-ink-cap">주제</span>
             <span>{project.theme}</span>
           </p>
         )}
+        {project.organizer && (
+          <p className="flex items-center gap-1">
+            <span className="text-ink-cap">주최·주관</span>
+            <span>{project.organizer}</span>
+          </p>
+        )}
         {project.mc_name && (
           <p className="flex items-center gap-1">
             <span className="text-ink-cap">사회</span>
             <span>{project.mc_name}</span>
+          </p>
+        )}
+        {project.target_audience && (
+          <p className="flex items-center gap-1">
+            <span className="text-ink-cap">참가 대상</span>
+            <span>{project.target_audience}</span>
           </p>
         )}
       </div>
@@ -98,104 +131,5 @@ function OverviewReadOnly({ project }: { project: Project }) {
         <p className="text-xs text-ink-cap">등록된 개요 항목이 없습니다.</p>
       )}
     </div>
-  )
-}
-
-function OverviewForm({
-  project,
-  onCancel,
-  onSaved,
-}: {
-  project: Project
-  onCancel: () => void
-  onSaved: () => void
-}) {
-  const [eventDate, setEventDate] = useState(project.event_date ?? '')
-  const [theme, setTheme] = useState(project.theme ?? '')
-  const [venue, setVenue] = useState(project.venue ?? '')
-  const [mcName, setMcName] = useState(project.mc_name ?? '')
-  const [items, setItems] = useState<OverviewItem[]>(project.overview_items ?? [])
-  const save = useMutation((patch: ProjectOverviewPatch) => provider.updateProjectOverview(PROJECT_ID, patch))
-
-  const updateItem = (idx: number, patch: Partial<OverviewItem>) => {
-    setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, ...patch } : it)))
-  }
-  const addItem = () => setItems((prev) => [...prev, { label: '', value: '' }])
-  const removeItem = (idx: number) => setItems((prev) => prev.filter((_, i) => i !== idx))
-
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault()
-    const result = await save.run({
-      event_date: eventDate || null,
-      theme: theme.trim() || null,
-      venue: venue.trim() || null,
-      mc_name: mcName.trim() || null,
-      overview_items: items.filter((it) => it.label.trim() || it.value.trim()),
-    })
-    if (result) onSaved()
-  }
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-4 text-sm">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <label className="flex flex-col gap-1 t-caption">
-          일자
-          <input
-            type="date"
-            value={eventDate}
-            onChange={(e) => setEventDate(e.target.value)}
-            className="ui-input"
-          />
-        </label>
-        <label className="flex flex-col gap-1 t-caption">
-          장소
-          <input value={venue} onChange={(e) => setVenue(e.target.value)} className="ui-input" />
-        </label>
-        <label className="flex flex-col gap-1 t-caption">
-          주제
-          <input value={theme} onChange={(e) => setTheme(e.target.value)} className="ui-input" />
-        </label>
-        <label className="flex flex-col gap-1 t-caption">
-          사회
-          <input value={mcName} onChange={(e) => setMcName(e.target.value)} className="ui-input" />
-        </label>
-      </div>
-
-      <div className="space-y-2">
-        <p className="t-caption">개요 항목</p>
-        {items.map((item, idx) => (
-          <div key={idx} className="flex items-center gap-2">
-            <input
-              placeholder="라벨"
-              value={item.label}
-              onChange={(e) => updateItem(idx, { label: e.target.value })}
-              className="ui-input w-32 text-xs"
-            />
-            <input
-              placeholder="내용"
-              value={item.value}
-              onChange={(e) => updateItem(idx, { value: e.target.value })}
-              className="ui-input flex-1 text-xs"
-            />
-            <button type="button" onClick={() => removeItem(idx)} className="shrink-0 text-xs text-negative">
-              삭제
-            </button>
-          </div>
-        ))}
-        <button type="button" onClick={addItem} className="text-xs text-ink-sub underline">
-          + 항목 추가
-        </button>
-      </div>
-
-      <div className="flex items-center gap-2">
-        <button type="submit" disabled={save.pending} className="btn btn-primary btn-sm">
-          저장
-        </button>
-        <button type="button" onClick={onCancel} className="btn btn-ghost btn-sm">
-          취소
-        </button>
-      </div>
-      <ErrorAlert message={save.error} />
-    </form>
   )
 }

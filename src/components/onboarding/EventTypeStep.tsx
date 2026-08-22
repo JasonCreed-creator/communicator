@@ -1,12 +1,13 @@
-// S0 ②단계 — 행사 유형(일반형/모객형) 카드 선택. updateProject({event_type}, pm 전용).
-// 유형 라벨은 아직 어디에도 정의되어 있지 않아 이 스텝(및 EventBasicsCard·RegistrationPage)에서
-// 자체 정의한다: 일반형 = 참관객 명단·체크인 중심 / 모객형 = 리드젠·RSVP 파이프라인 전체.
+// S0 ③단계의 유형 선택 카드 — 일반형/모객형. updateProject({event_type}, pm 전용).
+// v1.5: 헤더·이전/다음 내비게이션은 OnboardingPage(③ 유형·확인)가 담당하고, 이 컴포넌트는
+// 라디오 카드만 렌더한다 — 선택 즉시 저장(auto-save)해 부모 스텝의 요약·완료 버튼과 한 화면에 공존한다.
+// 유형 라벨은 아직 어디에도 정의되어 있지 않아 이 컴포넌트(및 RegistrationPage)에서 자체 정의한다:
+// 일반형 = 참관객 명단·체크인 중심 / 모객형 = 리드젠·RSVP 파이프라인 전체.
 import { useState } from 'react'
 import ErrorAlert from '../internal/ErrorAlert'
-import { PROJECT_ID } from '../../fixtures/sampleProject'
 import { useMutation } from '../../hooks/useAsync'
 import { getDataProvider } from '../../providers'
-import type { Project } from '../../types/entities'
+import type { Project, UUID } from '../../types/entities'
 import type { EventType } from '../../types/enums'
 
 const provider = getDataProvider()
@@ -17,28 +18,30 @@ const OPTIONS: { value: EventType; title: string; desc: string }[] = [
 ]
 
 export default function EventTypeStep({
+  projectId,
   project,
-  onPrev,
-  onSaved,
+  onChanged,
 }: {
+  projectId: UUID
   project: Project
-  onPrev: () => void
-  onSaved: () => void
+  onChanged?: () => void
 }) {
   const [value, setValue] = useState<EventType>(project.event_type)
-  const save = useMutation(async () => {
-    await provider.updateProject(PROJECT_ID, { event_type: value })
-    return true
-  })
+  const save = useMutation((next: EventType) => provider.updateProject(projectId, { event_type: next }))
 
-  const handleNext = async () => {
-    const ok = await save.run()
-    if (ok) onSaved()
+  const handleSelect = async (next: EventType) => {
+    const prev = value
+    setValue(next)
+    const result = await save.run(next)
+    if (result) {
+      onChanged?.()
+    } else {
+      setValue(prev)
+    }
   }
 
   return (
-    <section>
-      <h2 className="t-section-title mb-4">② 행사 유형</h2>
+    <div>
       <fieldset className="space-y-3">
         <legend className="sr-only">행사 유형 선택</legend>
         {OPTIONS.map((opt) => (
@@ -55,7 +58,8 @@ export default function EventTypeStep({
               name="event_type"
               value={opt.value}
               checked={value === opt.value}
-              onChange={() => setValue(opt.value)}
+              onChange={() => handleSelect(opt.value)}
+              disabled={save.pending}
               className="mt-0.5"
             />
             <span>
@@ -65,17 +69,7 @@ export default function EventTypeStep({
           </label>
         ))}
       </fieldset>
-
       <ErrorAlert message={save.error} />
-
-      <div className="mt-4 flex justify-between">
-        <button type="button" onClick={onPrev} className="btn btn-ghost">
-          이전
-        </button>
-        <button type="button" onClick={handleNext} disabled={save.pending} className="btn btn-primary">
-          다음
-        </button>
-      </div>
-    </section>
+    </div>
   )
 }

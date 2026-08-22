@@ -3,16 +3,16 @@
 > 가변 상태 파일. 매 세션 체크아웃 시 에이전트가 갱신한다 (CLAUDE.md §9 리추얼).
 
 ## 1. 상태 요약
-- 현재 Phase: **Phase 0~3.9 완료 + 3.9.1 폴리시(4건) PR 대기** — 다음 = v1.5 문서 채택 →
-  Phase 3.10(다중 행사·행사 설정) → Phase 4(Supabase 이식, 착수 전 사용자 승인·**v1.5 스키마 기준**)
-- 정본 문서: `docs/mice-communicator-설계서-v1.4.1.md` (스키마·상태 머신·API·WBS 템플릿 SoT — v1.4 대체)
+- 현재 Phase: **Phase 0~3.10 완료(다중 행사·행사 설정, v1.5)** — 다음 = Phase 4(Supabase 이식,
+  ★착수 전 사용자 승인·**v1.5 스키마 기준**). Configurator(jsx-easy-shift) 읽기 분석은 **새 세션**에서
+  v2 브리프로 착수(사용자 지시 2026-08-22)
+- 정본 문서: `docs/mice-communicator-설계서-v1.5.md` (스키마·상태 머신·API·WBS 템플릿 SoT — v1.4.1 대체)
   + `docs/mice-communicator-디자인지시서-v1.md` (디자인 토큰·레이아웃·컴포넌트 규격 정본, Phase 3.9)
-- 브랜치: `main` = 정본 — Phase 3.5는 PR #4·#5, Phase 3.6+3.7은 PR #7로 머지. **Phase 3.8 =
-  `claude/phase-3.8-v141-alignment`(본 브랜치), Phase 3.9 = `claude/design-sprint-sections-1-8-ixau6i`
-  (3.8 위에 스택) — 별도 PR·리뷰 diff 분리(CLAUDE.md §5), 머지는 사용자 검수 후**
-- **Phase 3.9 기준치: vitest 117개(19파일) — 3.8 시점 전부 통과 + tsc 클린 + vite build 성공**
-- **Phase 3.9 결과: 기준치 117개 전부 통과 유지 + tsc 클린 + vite build 성공 +
-  `grep -rn "gray-\|slate-" src` 0건 + 스크린샷 11장 + 데모 아티팩트 재발행 (DoD-17 전부 충족)**
+- 브랜치: `main` = 정본 — 3.8은 PR #9, 3.9는 PR #10, 3.9.1은 PR #11 머지. **Phase 3.10 =
+  `claude/phase-3.10-multi-project`(base=main)** — 머지된 브랜치 재사용 금지 원칙(신규 브랜치 분기)
+- **Phase 3.10 결과: vitest 124개(22파일) = 기준치 117 + dod18(3)·dod19(2)·dod20(2) 전부 통과 +
+  tsc 클린 + vite build 성공 + `grep -rn "gray-\|slate-" src` 0건 +
+  `grep -rn "PROJECT_ID" src --include=*.tsx` 0건(픽스처 .ts 내 정의만) + 스크린샷 6장 (DoD 18~20 충족)**
 
 ## 2. 완료
 - 설계서 v1.1 확정 + CLAUDE.md v1.1 (2026-08-19)
@@ -118,11 +118,41 @@
   P2 S5 간트 바 코드 라벨(3일 미만 기간은 바 밖 우측)+행 좌측 160px 라벨 컬럼(코드+제목)+7일 간격
   눈금(대시 --border, D-day만 brown 실선)+축 캡션 / P3 S4 상단 통계 3카드 상시 노출(일반형=참관객 수
   대체, 통계 탭은 보조 수치만) / P4 오늘이 축 범위 밖이면 "오늘 D-n · 축 범위 밖" 캡션.
-  **117/117·tsc·build·gray/slate 0 유지, dod13·14 가드 무수정 통과**
+  **117/117·tsc·build·gray/slate 0 유지, dod13·14 가드 무수정 통과** — PR #11 머지
+
+- **설계서 v1.5 + CLAUDE.md v1.5 채택** (2026-08-22): v1.4.1 대체 — 다중 행사(projects 복수·status
+  active/closed·행사개요 확장 필드·초대), 행사 설정 3탭 = S0 동일 폼, 진입점 원칙(§10),
+  DataProvider v4(+5메서드), DoD 18~20, Phase 3.10 로드맵 추가. 목업 HTML은 참고만(정본=설계서 §10,
+  레포 미저장 — 사용자 지시)
+- **Phase 3.10a — DataProvider v4 재동결·다중 행사 코어** (2026-08-22, 메인이 T 역할 수행):
+  ProjectStatus('active'|'closed')·Project 확장(event_end_date·start/end_time·expected_headcount·
+  seating·organizer·target_audience·status·closed_at)·ProjectInvite·ProjectSummary(온보딩 단계 0~3
+  포함)·ProjectCreateInput·MemberInput → **v4(58메서드: +listProjects·createProject·closeProject·
+  addMember·removeMember, 기존 53 시그니처 불변) 재동결**. MockProvider 전면 다중 행사화 —
+  projects[] 배열·전 조회/집계 project_id 스코프·assertWritable(closed 쓰기 409)·마지막 PM 삭제 409·
+  이메일 중복 409·createProject(코드 자동 EVT-nnn·생성자 pm 자동·onboarded_at null)·
+  wbs 재전개 프로젝트 단위 치환. 픽스처 4행사(①모객형 완료 ②일반형 완료·28건 전개 ③세팅 미완료
+  ④closed — ②~④는 오늘 기준 상대 날짜 생성)
+- **Phase 3.10b — 셀렉터·S-1·컨텍스트 배선** (2026-08-22, 에이전트 U 역할): ProjectContext
+  (localStorage `communicator.currentProjectId`·미저장 시 첫 active 기본, 라우트 불변 — URL prefix 2차)
+  → 화면 8곳 PROJECT_ID 상수 제거·useProject() 치환 / 사이드바 셀렉터 드롭다운(진행 중·종료 그룹·
+  새 행사 만들기·전체 목록 링크)+메뉴 순서(행사 목록→행사 설정→홈→…) / S-1 행사 목록(카드 그리드·
+  요약 수치·종료 뱃지·새 행사 만들기) / S5 행사일 변경 시 재전개 유도 배너
+- **Phase 3.10c — 행사 설정 3탭·S0 공용 폼·유도 동선** (2026-08-22, 에이전트 V 역할):
+  S6 행사 설정 = '① 행사개요'(16필드·필수 4 클라이언트 검증)/'② 담당자'(추가·삭제·마지막 PM 409
+  표면화)/'③ 유형·연동' 3탭 + 세팅 완료/미완료 뱃지·'온보딩 이어서 하기' 유도 배너 / S0 위저드가
+  동일 폼 컴포넌트 재사용(①행사개요→②담당자→③유형·확인) / OnboardingGuard = 차단 대신 /settings
+  유도(v1.5 §10) / S9 ①은 행사 설정 값 읽기 조립+'행사 설정에서 편집' 링크(인쇄 숨김) /
+  MembersEditor 삭제 성공 판정 버그 픽스(useMutation void 반환 → return true 래핑)
+- **§7 DoD 18~20 테스트 코드화·통과** (2026-08-22, 메인 통합 검수): dod18(셀렉터 전환 시 화면 데이터
+  전환·localStorage 유지·② 일반형 28건), dod19(필수 미입력 저장 거부·미완료 뱃지·담당자 추가/삭제·
+  마지막 PM 409), dod20(S-1 새 행사→S0 3단계→onboarded_at·WBS 28건·R&R 시드·목록 반영 + 미완료 행사
+  /settings 유도 동선). **vitest 124개(22파일)·tsc·vite build 전부 통과, PROJECT_ID grep(*.tsx) 0건**
 
 ## 3. 미결
 - GitHub 기본 브랜치가 아직 `claude/extract-zip-to-repo-t6xstr` — Settings → Branches에서 `main`으로
-  변경 필요 (세션 브리프 부록에 사용자 직접 수행 절차 안내됨 — 구 브랜치 2종 삭제 포함)
+  변경 필요 (세션 브리프 부록에 사용자 직접 수행 절차 안내됨). 머지된 `claude/*` 브랜치 삭제도
+  사용자 직접 수행(git proxy가 ref 삭제 푸시 차단)
 - (경미) `@types/node` 미도입 — dod9가 print CSS 파일 검증에 국소 우회(dynamic import 캐스팅) 사용 중.
   Node API 쓰는 테스트가 늘면 devDependency 추가 검토
 - (경미) 큐시트 발송 시 RequestApprovalInput.version_id에 'auto' 센티널 전달(동결 인터페이스 관례) —
@@ -135,13 +165,31 @@
   (설계서 v1.4.1 §4-15·§8·§15 정본화 — 열린 질문 ①~⑤ 전부 종결)
 
 ## 4. 다음 스텝
-- 3.8 PR → 3.9 PR 순서로 사용자 검수·머지 (3.8 머지 시 3.9 PR base가 main으로 자동 전환)
-- **Phase 4 — Supabase 이식** (★착수 전 사용자 승인 필수, **v1.4.1 스키마 기준**): 마이그레이션(§4 전체 —
-  cues·wbs_tasks·role_charters·event_type·onboarded_at 포함)+RLS(§6.2)+Auth+seed → SupabaseProvider
-  구현 → MockProvider 교체(프론트 무수정 목표)
+- **Configurator(jsx-easy-shift) 읽기 분석 — 새 세션에서 v2 브리프로 착수** (사용자 지시 2026-08-22):
+  add_repo 읽기 전용·해당 레포 브랜치/커밋/파일 생성 금지·보고서는 대화창 출력만(communicator에도
+  미저장)·"## 0. 이식 인벤토리" 절 포함 확인. 맥락: Lovable 폐기 확정, 통합 베이스=communicator,
+  가격 엔진·베뉴 DB → `src/modules/quote` 이식 예정(분석 세션에선 이식 코드 작성 금지 — 인벤토리·
+  사실 보고까지만)
+- **Phase 4 — Supabase 이식** (★착수 전 사용자 승인 필수, **v1.5 스키마 기준**): 마이그레이션(§4 전체 —
+  projects 복수·status/closed_at·행사개요 확장·invites·cues·wbs_tasks·role_charters·event_type·
+  onboarded_at 포함)+RLS(§6.2)+Auth+seed → SupabaseProvider 구현(v4 58메서드) → MockProvider 교체
+  (프론트 무수정 목표). Supabase 프로젝트 정보(URL·anon key·service role key) 필요
 - 이후 Phase 5(Drive) → Phase 6(알림·cron)
 
 ## 5. 결정 로그
+- 2026-08-22 (Phase 3.10a): **DataProvider v3.1 동결 해제** — 근거: **사용자 v1.5 승인(2026-08-22,
+  설계서 v1.5 개정 동반 — §9 준수)**. listProjects·createProject·closeProject·addMember·removeMember
+  5메서드 추가, 기존 53 시그니처 불변 → **v4(58메서드)로 개정 후 재동결 선언** — 이후 변경은 다시
+  사용자 승인+설계서 개정 필요
+- 2026-08-22 (Phase 3.10 구현 판단 — 설계서 무저촉 범위): ① listProjects 정렬 = active 먼저
+  created_at asc, closed는 뒤에 closed_at desc(셀렉터 기본 선택 안정성 — 테스트 기본 행사 = ①)
+  ② ProjectContext는 저장값 검증을 생략(새 행사 즉시 신뢰 — mock에 행사 삭제 없음)
+  ③ 픽스처 ②~④ 행사는 오늘 기준 상대 날짜로 생성해 지연·임박 집계를 결정적으로 고정
+  ④ 테스트 내 행사 ID는 리터럴 문자열(PROJECT_ID grep 0건 계약 — 픽스처 .ts 정의만 허용)
+  ⑤ MembersEditor useMutation은 void 반환 시 성공 판정 불가 → return true 래핑(실버그 픽스)
+- 2026-08-22 (Phase 3.10 운영): 머지된 브랜치 재사용 금지 — 3.9.1=`claude/phase-3.9.1-polish`,
+  3.10=`claude/phase-3.10-multi-project`(3.9.1 머지 후 main 분기), 둘 다 base=main. Configurator
+  연동 코드·라우트 prefix·토큰 값 변경 금지(경계 준수). Configurator 분석은 새 세션 이관(사용자 지시)
 - 2026-08-22 (Phase 3.9 디자인 해석 — 지시서 개정 없이 값 미변경 원칙 하의 구현 판단):
   ① `--border-strong`(#C9C2B2)은 §5 테이블 규격이 참조하나 §1 표에 미정의 — --border 1단계 진한
   값으로 파생해 tokens.css에 등록 ② 간트 바는 역할 컬러가 기본이되 지연=--negative·임박=--accent가
@@ -224,6 +272,12 @@
   (메인 단독, 브랜치 `claude/phase-3.9.1-polish`, base=main — 기본 브랜치 미전환 지속) →
   PR 발행·체크아웃 보고, 머지는 사용자 검수 후. 다음 = v1.5 채택 → Phase 3.10(T→U·V) →
   Configurator 읽기 분석(v2 브리프, ② PR 후)
+- 2026-08-22 세션 #4 계속: PR #11 머지(사용자 지시) → 설계서 v1.5·CLAUDE.md v1.5 채택 커밋 →
+  **Phase 3.10** — 3.10a(메인: v4 재동결·MockProvider 다중 행사화·픽스처 4행사) → 3.10b(U)·3.10c(V)
+  병렬 → 메인 통합 검수(DoD 18~20 코드화, vitest 124·tsc·빌드·grep 2종 0건, 스크린샷 6장) →
+  PR 발행·머지(사용자 사전 승인 "작업 완료되면 머지/커밋 진행")·데모 아티팩트 재발행.
+  **다음 세션 = ① Configurator 읽기 분석(v2 브리프) ② Phase 4 게이트(착수 전 사용자 승인·
+  Supabase 프로젝트 정보 필요)**
 
 ## 7. 세션 잠금
 - 잠금 없음 (한 폴더 = 동시 1세션)

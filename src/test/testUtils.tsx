@@ -40,6 +40,14 @@ function ProjectScope() {
 }
 
 export function renderRoute(path: string) {
+  // 기본 선택 행사 = ① 샘플 테크(픽스처 정본) — 이미 선택값이 있으면 존중(dod18 전환·유지 검증용)
+  try {
+    if (!localStorage.getItem('communicator.currentProjectId')) {
+      localStorage.setItem('communicator.currentProjectId', 'prj-stc26')
+    }
+  } catch {
+    // jsdom 외 환경 무시
+  }
   return render(
     <MemoryRouter initialEntries={[path]}>
       <Routes>

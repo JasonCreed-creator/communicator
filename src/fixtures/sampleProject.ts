@@ -104,8 +104,8 @@ const FIXTURE: MockState = {
     theme: '연결, 다음 단계로',
     venue: '가상컨벤션센터 3F 그랜드볼룸',
     mc_name: '진행자 조무대',
+    // v1.5: 참가 대상은 target_audience 필드로 승격 — overview_items는 잔여 자유 항목만
     overview_items: [
-      { label: '참가 대상', value: '파트너사·미디어·일반 참관객 300명' },
       { label: '주차 안내', value: '행사장 지하 주차 3시간 지원 (등록데스크 확인)' },
     ],
     // v1.4.1 — 픽스처 행사는 온보딩 완료 상태에서 시작 (S0 테스트는 mock 헬퍼로 null 리셋)
@@ -600,9 +600,10 @@ export function createFixtureState(): MockState {
       venue: '본사 대강당',
       mc_name: null,
       overview_items: null,
-      onboarded_at: `${addDays(today, -30)}T09:00:00.000Z`,
+      // ①(2026-08-01 등록)보다 뒤 등록 — 목록·기본 선택이 ① 우선이 되도록 오늘 기준 상대값 사용
+      onboarded_at: `${addDays(today, -8)}T09:00:00.000Z`,
       created_by: 'usr-pm',
-      created_at: `${addDays(today, -35)}T09:00:00.000Z`,
+      created_at: `${addDays(today, -9)}T09:00:00.000Z`,
     },
     {
       id: PROJECT_ID_DRAFT,

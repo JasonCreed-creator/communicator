@@ -1,4 +1,4 @@
-// v1.5 — 현재 행사 컨텍스트 (설계서 §2.1): 프론트는 PROJECT_ID 상수를 쓰지 않는다.
+// v1.5 — 현재 행사 컨텍스트 (설계서 §2.1): 프론트는 고정 행사 ID 상수를 쓰지 않는다.
 // 선택 행사는 localStorage('communicator.currentProjectId')에 보존하고, 저장값이 없으면
 // 목록의 첫 진행 중(active) 행사를 기본 선택한다. 라우트는 불변 — URL prefix는 2차(§2.1).
 import {
