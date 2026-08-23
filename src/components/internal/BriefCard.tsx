@@ -1,24 +1,33 @@
 import Card from './Card'
 import type { Deliverable } from '../../types/entities'
+import { areaPreset } from '../../lib/boardPresets'
 
 type BriefFields = Pick<
   Deliverable,
-  'brief' | 'brief_refs' | 'spec_size' | 'spec_qty' | 'spec_location' | 'spec_type'
+  'area' | 'brief' | 'brief_refs' | 'spec_size' | 'spec_qty' | 'spec_location' | 'spec_type'
 >
 
 /**
  * S3 가이드 카드 (v1.2) — brief·brief_refs·spec_* 중 하나라도 있으면 렌더.
+ * 스펙 라벨은 항목의 area를 따른다(디자인=규격·수량 / 운영=규모·투입 인원).
  * PM 가이드 발행(§8 POST /deliverables)의 결과를 담당자 화면에 보여주는 용도.
  * 값이 없는 필드는 표시하지 않는다(스펙은 전부 선택적).
  */
 export default function BriefCard({ deliverable }: { deliverable: BriefFields }) {
   const hasBrief = !!deliverable.brief?.trim()
   const refs = deliverable.brief_refs ?? []
+  // 스펙 라벨·단위는 영역마다 다르다 — 제작물의 '규격·수량'을 운영 항목에 그대로 쓰면 말이 안 맞는다
+  // (src/lib/boardPresets.ts 정본). 컬럼은 그대로 두고 해석만 영역 안에서 한다.
+  const { specLabels, qtyUnit } = areaPreset(deliverable.area)
   const specs: { label: string; value: string }[] = []
-  if (deliverable.spec_size) specs.push({ label: '규격', value: deliverable.spec_size })
-  if (deliverable.spec_qty != null) specs.push({ label: '수량', value: `${deliverable.spec_qty}개` })
-  if (deliverable.spec_location) specs.push({ label: '위치', value: deliverable.spec_location })
-  if (deliverable.spec_type) specs.push({ label: '종류', value: deliverable.spec_type })
+  if (deliverable.spec_size) specs.push({ label: specLabels.size, value: deliverable.spec_size })
+  if (deliverable.spec_qty != null) {
+    specs.push({ label: specLabels.qty, value: `${deliverable.spec_qty}${qtyUnit}` })
+  }
+  if (deliverable.spec_location) {
+    specs.push({ label: specLabels.location, value: deliverable.spec_location })
+  }
+  if (deliverable.spec_type) specs.push({ label: specLabels.type, value: deliverable.spec_type })
 
   if (!hasBrief && refs.length === 0 && specs.length === 0) return null
 

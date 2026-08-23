@@ -20,6 +20,9 @@ describe('DoD-7 가이드 발행 흐름', () => {
     const heading = await screen.findByRole('heading', { name: '가이드 발행' })
     const form = heading.closest('div')!.parentElement!
 
+    // 카테고리는 영역별 프리셋 선택이 기본이고, 목록에 없는 항목은 '직접 입력'으로 만든다.
+    // '사이니지'는 프리셋에 없는 값이라 자유 입력 경로까지 함께 검증된다.
+    await userEvent.selectOptions(within(form).getByLabelText('카테고리'), '__custom__')
     await userEvent.type(within(form).getByLabelText('카테고리'), '사이니지')
     await userEvent.type(within(form).getByLabelText('제목'), '입구 사이니지')
     const assigneeSelect = within(form).getByLabelText('담당자')
