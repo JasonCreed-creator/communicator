@@ -34,6 +34,7 @@ import { computeQuoteOutputs } from '../modules/quote/engine/quoteInput'
 import { RECRUITING_WBS_TEMPLATE, ROLE_CHARTER_TEMPLATES } from './wbsTemplates'
 import type { MockState } from './sampleProject'
 import { appendLanding, buildLanding } from './landingFixtures'
+import type { SectionSpec } from '../lib/landingTemplate'
 
 /** ⑤ 종료 — 실제 운영 행사(2026-05-07). 읽기 전용·목록 접힘 */
 export const PROJECT_ID_REBUILD26 = 'prj-rebuild26'
@@ -719,6 +720,140 @@ function buildCompliance(projectId: string, prefix: string): ComplianceCard[] {
 }
 
 /** 기존 픽스처 상태에 RE:BUILD 26·27을 덧붙인다 (기존 데이터는 일절 수정하지 않는다) */
+/** ⑤ 종료 행사 — 실제 진행된 내용으로 채워진 발행본 (결과보고서 기준) */
+const REBUILD26_LANDING_SECTIONS: SectionSpec[] = [
+  { type: 'hero', headline: null, body: null, autofill: true, items: [] },
+  {
+    type: 'lead',
+    headline: 'AI 시대, 무엇을 다시 세울 것인가',
+    body: '성장 공식이 흔들리는 시기입니다. 현장에서 실제로 작동한 B2B 성장 사례를 한자리에서 공유합니다.',
+    autofill: false,
+    items: [],
+  },
+  { type: 'speakers', headline: '연사 라인업', body: null, autofill: true, items: [] },
+  { type: 'agenda', headline: 'SESSION TIME TABLE', body: null, autofill: true, items: [] },
+  {
+    type: 'tickets',
+    headline: '참가 신청',
+    body: '*좌석 한정 · 조기 마감될 수 있습니다',
+    autofill: false,
+    items: [
+      ['일반 참가', '본 세션 · 다과 · 부대 프로그램', '유료'],
+      ['참가 + 애프터파티', '정원 150명 한정', '유료'],
+    ],
+  },
+  {
+    type: 'pitch',
+    headline: '현장에서만 얻을 수 있는 것',
+    body: '발표로 끝나지 않습니다. 부스 상담과 네트워킹으로 바로 다음 액션을 만들어 가세요.',
+    autofill: false,
+    items: [],
+  },
+  {
+    type: 'benefits',
+    headline: '참가자 혜택',
+    body: null,
+    autofill: false,
+    items: [
+      ['네트워킹', '커넥트존 상담 테이블 운영', '🤝'],
+      ['식음 제공', '다과 · 커피 브레이크 · 애프터파티', '🍱'],
+      ['기념품', '전시존 체험 이벤트 참여', '🎁'],
+      ['경품 추첨', '본 세션 종료 직전 진행', '🎉'],
+    ],
+  },
+  { type: 'zones', headline: '행사장 존 안내', body: null, autofill: true, items: [] },
+  {
+    type: 'sponsors',
+    headline: '함께하는 기업',
+    body: null,
+    autofill: false,
+    items: [
+      ['참여 기업', '부스 운영 및 세션 참여', null],
+      ['협찬 문의', '사무국으로 문의해 주세요.', null],
+    ],
+  },
+  { type: 'venue', headline: '오시는 길', body: null, autofill: true, items: [] },
+  {
+    type: 'faq',
+    headline: '자주 묻는 질문',
+    body: null,
+    autofill: false,
+    items: [
+      ['신청하면 모두 참석할 수 있나요?', '좌석 한정으로 선착순 마감되며, 확정 여부는 별도 안내드립니다.', '참가신청'],
+      ['몇 시부터 입장할 수 있나요?', '등록 데스크는 본 세션 시작 1시간 30분 전부터 운영합니다.', '참석관련'],
+      ['주차 지원이 되나요?', '주차 지원이 어렵습니다. 대중교통 이용을 권장드립니다.', '참석관련'],
+      ['애프터파티는 따로 신청해야 하나요?', '신청 시 함께 선택하셔야 하며, 현장에서 손목 띠지를 확인합니다.', '부대행사'],
+    ],
+  },
+  { type: 'form', headline: '참가 신청', body: null, autofill: false, items: [] },
+  {
+    type: 'footer',
+    headline: null,
+    body: null,
+    autofill: false,
+    items: [
+      ['주최', '행사 사무국', null],
+      ['문의', 'event@example.com', null],
+    ],
+  },
+]
+
+/** ⑥ 준비 중 — 베뉴 계약 전이라 확정 문구가 비어 있는 작성 중 상태 */
+const REBUILD27_LANDING_SECTIONS: SectionSpec[] = [
+  { type: 'hero', headline: null, body: null, autofill: true, items: [] },
+  {
+    type: 'lead',
+    headline: '(가안) 다시, 성장의 공식',
+    body: '메인 카피 확정 전 — 기획 확정 후 교체합니다.',
+    autofill: false,
+    items: [],
+  },
+  { type: 'speakers', headline: '연사 라인업', body: null, autofill: true, items: [] },
+  { type: 'agenda', headline: 'SESSION TIME TABLE', body: null, autofill: true, items: [] },
+  {
+    type: 'tickets',
+    headline: '참가 신청',
+    body: '*가격·정원 확정 전',
+    autofill: false,
+    items: [['일반 참가', '구성 확정 전', '미정']],
+  },
+  {
+    type: 'pitch',
+    headline: '',
+    body: '얼리버드 운영 여부 검토 중.',
+    autofill: false,
+    items: [],
+  },
+  {
+    type: 'benefits',
+    headline: '참가자 혜택 (검토 중)',
+    body: null,
+    autofill: false,
+    items: [
+      ['네트워킹', '전년 구성 기준 검토', '🤝'],
+      ['식음 제공', '케이터링 견적 대기', '🍱'],
+    ],
+  },
+  { type: 'zones', headline: '행사장 존 안내', body: null, autofill: true, items: [] },
+  { type: 'sponsors', headline: '함께하는 기업', body: '협찬사 모집 중', autofill: false, items: [] },
+  { type: 'venue', headline: '오시는 길', body: null, autofill: true, items: [] },
+  {
+    type: 'faq',
+    headline: '자주 묻는 질문',
+    body: null,
+    autofill: false,
+    items: [['주차 지원이 되나요?', '베뉴 확정 후 안내드립니다.', '참석관련']],
+  },
+  { type: 'form', headline: '참가 신청', body: null, autofill: false, items: [] },
+  {
+    type: 'footer',
+    headline: null,
+    body: null,
+    autofill: false,
+    items: [['문의', 'event@example.com', null]],
+  },
+]
+
 export function appendRebuildFixtures(state: MockState): void {
   const today = toIsoDate(new Date())
   state.projects.push(REBUILD26_PROJECT, REBUILD27_PROJECT)
@@ -1067,6 +1202,9 @@ export function appendRebuildFixtures(state: MockState): void {
   // ── 랜딩 (v2.1 §4-21) — 행사마다 자기 랜딩을 갖는다 ────────────────
   // ⑤는 종료 행사라 발행 완료본이 남아 있고, ⑥은 준비 중이라 초안이다.
   // slug는 (project_id, slug) 복합 유일이라 두 행사가 같은 slug를 써도 정상이다(R-L4).
+  // **섹션 내용도 행사마다 다르다** — 빈 기본 템플릿을 두 행사에 그대로 깔면 랜딩보드가
+  // 행사별로 달라 보이지 않는다. hero·연사·타임테이블·존·오시는 길은 autofill이 각 행사의
+  // 세션·존·개요에서 조립하고, 나머지 카피는 아래 스펙이 행사 단계에 맞게 채운다.
   appendLanding(
     state,
     buildLanding({
@@ -1078,6 +1216,7 @@ export function appendRebuildFixtures(state: MockState): void {
       gaMeasurementId: 'G-RB26DEMO01',
       createdAt: '2026-03-25T09:00:00.000Z',
       updatedAt: '2026-05-07T09:00:00.000Z',
+      sections: REBUILD26_LANDING_SECTIONS,
     }),
     today,
   )
@@ -1092,6 +1231,7 @@ export function appendRebuildFixtures(state: MockState): void {
       gaMeasurementId: 'G-RB27DEMO01',
       createdAt: '2026-08-05T09:00:00.000Z',
       updatedAt: '2026-08-20T09:00:00.000Z',
+      sections: REBUILD27_LANDING_SECTIONS,
     }),
     today,
   )

@@ -3,7 +3,13 @@
 // 지표는 실행 시점 기준 상대 날짜로 생성해 D-day·추세가 언제 열어도 자연스럽게 보이도록 한다.
 import type { LandingDailyMetric, LandingPage } from '../types/entities'
 import type { MockState } from './sampleProject'
-import { defaultConsents, defaultFormFields, defaultSections } from '../lib/landingTemplate'
+import {
+  defaultConsents,
+  defaultFormFields,
+  defaultSections,
+  sectionsFromSpec,
+  type SectionSpec,
+} from '../lib/landingTemplate'
 
 export const LANDING_ID_SAMPLE = 'lnd-001'
 
@@ -49,6 +55,8 @@ export interface LandingSeedOptions {
   gaMeasurementId: string | null
   createdAt: string
   updatedAt: string
+  /** 행사별 섹션 내용. 생략하면 빈 기본 템플릿이 들어간다 */
+  sections?: SectionSpec[]
 }
 
 /**
@@ -75,7 +83,7 @@ export function buildLanding(opts: LandingSeedOptions): LandingPage {
       gtm_container_id: null,
       conversion_event: 'generate_lead',
     },
-    sections: defaultSections(idFor),
+    sections: opts.sections ? sectionsFromSpec(opts.sections, idFor) : defaultSections(idFor),
     form_fields: defaultFormFields(idFor),
     consents: defaultConsents(idFor),
     created_at: opts.createdAt,

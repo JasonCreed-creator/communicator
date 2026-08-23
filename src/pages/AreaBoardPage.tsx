@@ -9,6 +9,7 @@ import StatusBadge from '../components/internal/StatusBadge'
 import { useProject } from '../context/ProjectContext'
 import { useAsync, useMutation } from '../hooks/useAsync'
 import { AREA_LABELS, STATUS_LABELS, STATUS_STRIP_CLASSES, formatDate } from '../lib/labels'
+import { areaPreset, categoryPreset } from '../lib/boardPresets'
 import { getDataProvider } from '../providers'
 import type { Deliverable } from '../types/entities'
 import type { DeliverableArea, DeliverableStatus } from '../types/enums'
@@ -203,6 +204,83 @@ function BoardRowItem({
   )
 }
 
+/**
+ * 영역별 카테고리 선택 — 프리셋 목록 + '직접 입력'.
+ * 자유 입력을 막지 않되, 기본값은 그 보드에 맞는 항목만 보이게 한다(src/lib/boardPresets.ts 정본).
+ */
+function CategoryPicker({
+  area,
+  value,
+  onChange,
+  id,
+}: {
+  area: DeliverableArea
+  value: string
+  onChange: (next: string) => void
+  id: string
+}) {
+  const preset = areaPreset(area)
+  const known = preset.categories.some((c) => c.name === value)
+  // 값이 비었거나 프리셋에 있으면 select 모드, 사용자가 직접 입력을 고르면 자유 입력 모드
+  const [freeform, setFreeform] = useState(false)
+  const asSelect = !freeform && (value === '' || known)
+
+  if (asSelect) {
+    return (
+      <select
+        id={id}
+        value={value}
+        onChange={(e) => {
+          if (e.target.value === '__custom__') {
+            setFreeform(true)
+            onChange('')
+            return
+          }
+          onChange(e.target.value)
+        }}
+        required
+        className="ui-input w-40"
+      >
+        <option value="">항목 선택…</option>
+        {[...new Set(preset.categories.map((c) => c.phase))].map((phase) => (
+          <optgroup key={phase} label={phase}>
+            {preset.categories
+              .filter((c) => c.phase === phase)
+              .map((c) => (
+                <option key={c.name} value={c.name}>
+                  {c.name}
+                </option>
+              ))}
+          </optgroup>
+        ))}
+        <option value="__custom__">직접 입력…</option>
+      </select>
+    )
+  }
+  return (
+    <span className="flex items-center gap-1.5">
+      <input
+        id={id}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        required
+        placeholder="항목명"
+        className="ui-input w-28"
+      />
+      <button
+        type="button"
+        onClick={() => {
+          setFreeform(false)
+          onChange('')
+        }}
+        className="text-xs text-steel hover:underline"
+      >
+        목록
+      </button>
+    </span>
+  )
+}
+
 function CreateDeliverableForm({ area, onCreated }: { area: DeliverableArea; onCreated: () => void }) {
   const { projectId } = useProject()
   const members = useAsync(() => provider.listMembers(projectId), [projectId])
@@ -236,15 +314,9 @@ function CreateDeliverableForm({ area, onCreated }: { area: DeliverableArea; onC
   return (
     <Card title="새 항목 생성">
       <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-3">
-        <label className="flex flex-col gap-1 t-caption">
+        <label className="flex flex-col gap-1 t-caption" htmlFor="create-category">
           카테고리
-          <input
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            required
-            placeholder="예: 배너"
-            className="ui-input w-32"
-          />
+          <CategoryPicker area={area} value={category} onChange={setCategory} id="create-category" />
         </label>
         <label className="flex flex-col gap-1 t-caption">
           제목
@@ -290,6 +362,7 @@ function CreateDeliverableForm({ area, onCreated }: { area: DeliverableArea; onC
 }
 
 // ── (v1.2) PM 전용 가이드 발행 폼 ────────────────────────────────────────
+// 가이드 내용 textarea는 12줄 — 프리셋 초안이 체크리스트라 3줄로는 읽히지 않는다.
 // 기존 CreateDeliverableForm(항목 셀프 생성, status='draft')과는 별도 폼 —
 // brief·스펙을 넣어 provider.createDeliverable을 호출하면 status='requested'로 발행된다.
 function IssueBriefForm({ area, onCreated }: { area: DeliverableArea; onCreated: () => void }) {
@@ -305,6 +378,20 @@ function IssueBriefForm({ area, onCreated }: { area: DeliverableArea; onCreated:
   const [specQty, setSpecQty] = useState('')
   const [specLocation, setSpecLocation] = useState('')
   const [specType, setSpecType] = useState('')
+
+  const preset = areaPreset(area)
+  const hints = categoryPreset(area, category)?.specHints ?? {}
+
+  /**
+   * 카테고리를 고르면 그 항목의 가이드 초안을 채운다.
+   * 사용자가 이미 쓴 내용은 덮지 않는다 — 비어 있거나 직전 템플릿 그대로일 때만 교체한다.
+   */
+  const pickCategory = (next: string) => {
+    const prevTemplate = categoryPreset(area, category)?.briefTemplate ?? ''
+    const nextTemplate = categoryPreset(area, next)?.briefTemplate ?? ''
+    setCategory(next)
+    setBrief((cur) => (cur.trim() === '' || cur === prevTemplate ? nextTemplate : cur))
+  }
 
   const issue = useMutation(() => {
     if (!assigneeId) throw new Error('가이드에는 담당자 지정이 필요합니다.')
@@ -351,15 +438,9 @@ function IssueBriefForm({ area, onCreated }: { area: DeliverableArea; onCreated:
     <Card title="가이드 발행">
       <form onSubmit={handleSubmit} className="space-y-3">
         <div className="flex flex-wrap items-end gap-3">
-          <label className="flex flex-col gap-1 t-caption">
+          <label className="flex flex-col gap-1 t-caption" htmlFor="brief-category">
             카테고리
-            <input
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              required
-              placeholder="예: 현수막"
-              className="ui-input w-32"
-            />
+            <CategoryPicker area={area} value={category} onChange={pickCategory} id="brief-category" />
           </label>
           <label className="flex flex-col gap-1 t-caption">
             제목
@@ -404,7 +485,7 @@ function IssueBriefForm({ area, onCreated }: { area: DeliverableArea; onCreated:
             value={brief}
             onChange={(e) => setBrief(e.target.value)}
             required
-            rows={3}
+            rows={12}
             placeholder="담당자에게 전달할 가이드 내용을 입력하세요"
             className="ui-input w-full"
           />
@@ -423,39 +504,40 @@ function IssueBriefForm({ area, onCreated }: { area: DeliverableArea; onCreated:
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <label className="flex flex-col gap-1 t-caption">
-            규격 (선택)
+            {preset.specLabels.size} (선택)
             <input
               value={specSize}
               onChange={(e) => setSpecSize(e.target.value)}
-              placeholder="예: 23000×5000mm"
+              placeholder={hints.size ? `예: ${hints.size}` : ''}
               className="ui-input"
             />
           </label>
           <label className="flex flex-col gap-1 t-caption">
-            수량 (선택)
+            {preset.specLabels.qty} (선택)
             <input
               type="number"
               min="0"
+              placeholder={hints.qty ?? ''}
               value={specQty}
               onChange={(e) => setSpecQty(e.target.value)}
               className="ui-input"
             />
           </label>
           <label className="flex flex-col gap-1 t-caption">
-            위치 (선택)
+            {preset.specLabels.location} (선택)
             <input
               value={specLocation}
               onChange={(e) => setSpecLocation(e.target.value)}
-              placeholder="예: 메인 게이트 외벽"
+              placeholder={hints.location ? `예: ${hints.location}` : ''}
               className="ui-input"
             />
           </label>
           <label className="flex flex-col gap-1 t-caption">
-            종류 (선택)
+            {preset.specLabels.type} (선택)
             <input
               value={specType}
               onChange={(e) => setSpecType(e.target.value)}
-              placeholder="예: 현수막"
+              placeholder={hints.type ? `예: ${hints.type}` : ''}
               className="ui-input"
             />
           </label>
