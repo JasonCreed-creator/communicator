@@ -239,13 +239,19 @@ function CategoryPicker({
           onChange(e.target.value)
         }}
         required
-        className="ui-input w-36"
+        className="ui-input w-40"
       >
         <option value="">항목 선택…</option>
-        {preset.categories.map((c) => (
-          <option key={c.name} value={c.name}>
-            {c.name}
-          </option>
+        {[...new Set(preset.categories.map((c) => c.phase))].map((phase) => (
+          <optgroup key={phase} label={phase}>
+            {preset.categories
+              .filter((c) => c.phase === phase)
+              .map((c) => (
+                <option key={c.name} value={c.name}>
+                  {c.name}
+                </option>
+              ))}
+          </optgroup>
         ))}
         <option value="__custom__">직접 입력…</option>
       </select>
@@ -356,6 +362,7 @@ function CreateDeliverableForm({ area, onCreated }: { area: DeliverableArea; onC
 }
 
 // ── (v1.2) PM 전용 가이드 발행 폼 ────────────────────────────────────────
+// 가이드 내용 textarea는 12줄 — 프리셋 초안이 체크리스트라 3줄로는 읽히지 않는다.
 // 기존 CreateDeliverableForm(항목 셀프 생성, status='draft')과는 별도 폼 —
 // brief·스펙을 넣어 provider.createDeliverable을 호출하면 status='requested'로 발행된다.
 function IssueBriefForm({ area, onCreated }: { area: DeliverableArea; onCreated: () => void }) {
@@ -478,7 +485,7 @@ function IssueBriefForm({ area, onCreated }: { area: DeliverableArea; onCreated:
             value={brief}
             onChange={(e) => setBrief(e.target.value)}
             required
-            rows={3}
+            rows={12}
             placeholder="담당자에게 전달할 가이드 내용을 입력하세요"
             className="ui-input w-full"
           />

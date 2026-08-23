@@ -39,21 +39,42 @@ describe('보드 프리셋 (a) 데이터 정합', () => {
     for (const opsItem of ['큐시트', '시나리오', '존운영', '운영안', '안내문']) {
       expect(ops).toContain(opsItem)
     }
+    // 운영계획서가 실제로 다루는 주제들 — 이게 빠져 있으면 프리셋이 껍데기다
+    for (const opsItem of [
+      '무대·시스템',
+      '스크린플레이',
+      '전기·네트워크',
+      '참가자 동선·등록',
+      '케이터링·F&B',
+      '부대 이벤트',
+      '협찬사 운영',
+      '사이니지·외부 조성',
+    ]) {
+      expect(ops, `운영 프리셋에 ${opsItem}이(가) 필요하다`).toContain(opsItem)
+    }
   })
 
   it('영역마다 스펙 라벨이 다르다 — 제작물 어휘를 운영에 쓰지 않는다', () => {
     const design = areaPreset('design').specLabels
     const ops = areaPreset('ops').specLabels
     expect(design).toEqual({ size: '규격', qty: '수량', location: '위치', type: '종류' })
-    expect(ops.size).not.toBe('규격')
-    expect(ops.qty).not.toBe('수량')
-    expect(ops).toEqual({ size: '규모', qty: '투입 인원', location: '장소·구역', type: '운영 구분' })
+    // 운영 항목도 규격을 갖지만(LED 12×3m 등) 제작물 '규격'과 같은 말은 아니고,
+    // 위치는 존·구역 단위다 — 실제 운영계획서의 어휘를 따른다.
+    expect(ops).toEqual({
+      size: '규격·규모',
+      qty: '수량',
+      location: '장소·구역',
+      type: '운영 구분',
+    })
+    expect(ops.location).not.toBe(design.location)
+    expect(ops.size).not.toBe(design.size)
   })
 
   it('카테고리마다 가이드 초안이 있다', () => {
     for (const area of DELIVERABLE_AREAS) {
       for (const c of areaPreset(area).categories) {
         expect(c.briefTemplate.trim().length, `${area}/${c.name} 초안 비어 있음`).toBeGreaterThan(20)
+        expect(c.phase, `${area}/${c.name} phase 없음`).toBeTruthy()
         expect(categoryPreset(area, c.name)?.name).toBe(c.name)
       }
     }
@@ -76,13 +97,13 @@ describe('보드 프리셋 (b) 운영 보드 화면', () => {
     renderRoute('/board/ops')
     const form = await briefForm()
 
-    expect(within(form).getByLabelText('규모 (선택)')).toBeTruthy()
-    expect(within(form).getByLabelText('투입 인원 (선택)')).toBeTruthy()
+    expect(within(form).getByLabelText('규격·규모 (선택)')).toBeTruthy()
+    expect(within(form).getByLabelText('수량 (선택)')).toBeTruthy()
     expect(within(form).getByLabelText('장소·구역 (선택)')).toBeTruthy()
     expect(within(form).getByLabelText('운영 구분 (선택)')).toBeTruthy()
-    // 제작물 어휘는 운영 보드에 없다
+    // 제작물 전용 어휘는 운영 보드에 없다
     expect(within(form).queryByLabelText('규격 (선택)')).toBeNull()
-    expect(within(form).queryByLabelText('수량 (선택)')).toBeNull()
+    expect(within(form).queryByLabelText('위치 (선택)')).toBeNull()
   })
 
   it('디자인 보드는 제작물 어휘를 그대로 쓴다 (대조군)', async () => {
@@ -90,8 +111,9 @@ describe('보드 프리셋 (b) 운영 보드 화면', () => {
     const form = await briefForm()
 
     expect(within(form).getByLabelText('규격 (선택)')).toBeTruthy()
-    expect(within(form).getByLabelText('수량 (선택)')).toBeTruthy()
-    expect(within(form).queryByLabelText('투입 인원 (선택)')).toBeNull()
+    expect(within(form).getByLabelText('위치 (선택)')).toBeTruthy()
+    expect(within(form).queryByLabelText('규격·규모 (선택)')).toBeNull()
+    expect(within(form).queryByLabelText('장소·구역 (선택)')).toBeNull()
   })
 })
 
