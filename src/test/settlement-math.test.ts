@@ -69,7 +69,9 @@ describe('정산 집계 (a) 실물 검산 — §19.1', () => {
     const pco = bucket('s5', 10_043_500, { has_cost: false })
     const rsvp = bucket('rc', 4_000_000, { has_cost: false })
     const lead = bucket('ld', 21_000_000, { has_cost: false, is_margin_base: false })
-    const items = [item(cost.id, 46_100_091)]
+    // 발주액을 실집행과 **다르게** 둔다 — 마진은 실비 기준이지 발주 기준이 아니다(§19.1).
+    // 이 차이가 없으면 `quote − ordered`로 식을 바꿔도 검산이 통과해 버린다.
+    const items = [item(cost.id, 46_100_091, { ordered_amount: 44_000_000 })]
 
     const t = computeTotals([cost, pco, rsvp, lead], items)
     expect(bucketMarkup(cost, items)).toBe(13_899_909)
@@ -81,7 +83,7 @@ describe('정산 집계 (a) 실물 검산 — §19.1', () => {
     const cost = bucket('s1', 14_000_000)
     const pco = bucket('s5', 1_830_000, { has_cost: false })
     const rsvp = bucket('rc', 760_000, { has_cost: false })
-    const items = [item(cost.id, 7_174_864)]
+    const items = [item(cost.id, 7_174_864, { ordered_amount: 6_900_000 })]
 
     const t = computeTotals([cost, pco, rsvp], items)
     expect(bucketMarkup(cost, items)).toBe(6_825_136)

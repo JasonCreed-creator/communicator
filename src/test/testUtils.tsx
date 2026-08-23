@@ -26,6 +26,7 @@ import QuotesPage from '../pages/QuotesPage'
 import RegistrationPage from '../pages/RegistrationPage'
 import SchedulePage from '../pages/SchedulePage'
 import SettingsPage from '../pages/SettingsPage'
+import SettlementPage from '../pages/SettlementPage'
 import { getDataProvider } from '../providers'
 import type { MockProvider } from '../providers'
 
@@ -75,6 +76,8 @@ export function renderRoute(path: string) {
               <Route path="/registration" element={<RegistrationPage />} />
               <Route path="/schedule" element={<SchedulePage />} />
               <Route path="/plan" element={<PlanDocPage />} />
+              {/* v2.2 S-10 정산보드 */}
+              <Route path="/settlement" element={<SettlementPage />} />
             </Route>
           </Route>
         </Route>

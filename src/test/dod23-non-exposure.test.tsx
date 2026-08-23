@@ -81,17 +81,28 @@ describe('DoD-23 금액 비노출 (런타임 객체)', () => {
   })
 })
 
-describe('DoD-23 금액 비노출 (소스 grep 가드)', () => {
-  it('발주처 페이지·plan/client 컴포넌트 소스에 total_amount·breakdown이 없다', () => {
+// v2.2 DoD-30 — grep 범위를 랜딩(pages/Landing*·lib/landing*)까지 넓히고, 금지 키에 정산
+// 식별자를 더한다. `margin`은 **일부러 빼 둔다** — 랜딩 내보내기 HTML의 인라인 CSS에
+// `margin:` 선언이 정상적으로 들어 있어 식별자와 구분되지 않기 때문이다. 정산 값이 실제로
+// 랜딩 산출물에 실리는지는 dod30 테스트가 만들어진 HTML 문자열로 따로 본다.
+const BANNED_SOURCE_RE = /total_amount|breakdown|settlement|ordered_amount|actual_amount|markup|marginBase|finalMargin/
+
+describe('DoD-23·30 금액·정산 비노출 (소스 grep 가드)', () => {
+  it('발주처·plan·랜딩 소스에 금액·정산 식별자가 없다', () => {
     const sources = {
       ...import.meta.glob('../pages/Client*.tsx', { query: '?raw', import: 'default', eager: true }),
       ...import.meta.glob('../components/plan/**/*.{ts,tsx}', { query: '?raw', import: 'default', eager: true }),
       ...import.meta.glob('../components/client/**/*.{ts,tsx}', { query: '?raw', import: 'default', eager: true }),
+      // v2.2 — 랜딩은 공개 산출물이라 발주처 경로와 같은 등급으로 본다(§19.7)
+      ...import.meta.glob('../pages/Landing*.tsx', { query: '?raw', import: 'default', eager: true }),
+      ...import.meta.glob('../lib/landing*.ts', { query: '?raw', import: 'default', eager: true }),
     } as Record<string, string>
     const files = Object.keys(sources)
     expect(files.length).toBeGreaterThan(0)
+    // 범위가 실제로 넓어졌는지 — 글롭이 조용히 0건이 되면 가드가 무력해진다
+    expect(files.filter((f) => /Landing|landing/.test(f)).length).toBeGreaterThan(0)
     for (const [file, src] of Object.entries(sources)) {
-      expect(src, `${file}에 금액 키 노출`).not.toMatch(/total_amount|breakdown/)
+      expect(src, `${file}에 금액·정산 식별자 노출`).not.toMatch(BANNED_SOURCE_RE)
     }
   })
 })

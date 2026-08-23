@@ -18,6 +18,7 @@ import type {
 } from '../types/entities'
 import type { MockState } from './sampleProject'
 import { computeQuoteOutputs } from '../modules/quote/engine/quoteInput'
+import { quoteBucketSpec } from '../lib/settlement'
 
 export const SETTLEMENT_BOARD_ID = 'brd-001'
 
@@ -104,28 +105,16 @@ export function seedSettlementFixtures(
   }
   state.settlement_boards.push(board)
 
-  // 버킷 스냅숏 — provider와 같은 규칙(§19.2). rc/ld는 엔진 산출값을 그대로 쓴다.
+  // 버킷 스냅숏 — provider와 **같은 표**를 쓴다(§19.2, src/lib/settlement.ts).
   const engine = computeQuoteOutputs(quote.input).result
-  const bd = quote.breakdown
-  const spec: [string, string, number, boolean, boolean][] = [
-    ['s1', '베뉴 사용료', bd.s1, true, true],
-    ['s2', '시스템 구축', bd.s2, true, true],
-    ['s3', '디자인·브랜딩', bd.s3, true, true],
-    ['s4', '운영·등록·보험', bd.s4, true, true],
-    ['ot', '추가옵션', bd.options, true, true],
-    ['at', '참관객 관리', bd.attendee, true, true],
-    ['s5', 'PCO 기획료', bd.s5, false, true],
-    ['rc', 'RSVP 운영비', engine.rsvpPkg, false, true],
-    ['ld', '리드젠(쇼업 보장)', engine.showup, false, false],
-  ]
-  const buckets: SettlementBucket[] = spec.map(([code, label, amount, hasCost, base], i) => ({
-    id: `bkt-${code}`,
+  const buckets: SettlementBucket[] = quoteBucketSpec(quote.breakdown, engine).map((row, i) => ({
+    id: `bkt-${row.code}`,
     board_id: board.id,
-    code,
-    label,
-    quote_amount: amount,
-    has_cost: hasCost,
-    is_margin_base: base,
+    code: row.code,
+    label: row.label,
+    quote_amount: row.quote_amount,
+    has_cost: row.has_cost,
+    is_margin_base: row.is_margin_base,
     source: 'quote',
     sort_order: i + 1,
     created_at: now,

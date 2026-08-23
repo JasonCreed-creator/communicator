@@ -118,3 +118,35 @@ export function computeTotals(
 export function toVatExcluded(amount: number, vatIncluded: boolean): number {
   return vatIncluded ? Math.round(amount / 1.1) : amount
 }
+
+// ── 견적 → 버킷 스냅숏 매핑 (§19.2) ──────────────────────────────────
+//
+// `recruit`를 rc(RSVP 운영비)·ld(리드젠)로 쪼개는 것이 유일한 비자명 매핑이며,
+// 값은 견적 input에서 재유도하지 않고 **엔진 산출값(rsvpPkg·showup)을 그대로** 쓴다.
+// provider(스냅숏)·픽스처(시드)·화면(기준 갱신 차이 미리보기)이 같은 표를 봐야 하므로
+// 정의는 여기 한 곳뿐이다.
+export interface BucketSpecRow {
+  code: string
+  label: string
+  quote_amount: number
+  has_cost: boolean
+  is_margin_base: boolean
+}
+
+export function quoteBucketSpec(
+  breakdown: { s1: number; s2: number; s3: number; s4: number; s5: number; options: number; attendee: number },
+  engine: { rsvpPkg: number; showup: number },
+): BucketSpecRow[] {
+  return [
+    { code: 's1', label: '베뉴 사용료', quote_amount: breakdown.s1, has_cost: true, is_margin_base: true },
+    { code: 's2', label: '시스템 구축', quote_amount: breakdown.s2, has_cost: true, is_margin_base: true },
+    { code: 's3', label: '디자인·브랜딩', quote_amount: breakdown.s3, has_cost: true, is_margin_base: true },
+    { code: 's4', label: '운영·등록·보험', quote_amount: breakdown.s4, has_cost: true, is_margin_base: true },
+    { code: 'ot', label: '추가옵션', quote_amount: breakdown.options, has_cost: true, is_margin_base: true },
+    { code: 'at', label: '참관객 관리', quote_amount: breakdown.attendee, has_cost: true, is_margin_base: true },
+    { code: 's5', label: 'PCO 기획료', quote_amount: breakdown.s5, has_cost: false, is_margin_base: true },
+    { code: 'rc', label: 'RSVP 운영비', quote_amount: engine.rsvpPkg, has_cost: false, is_margin_base: true },
+    // 리드젠(쇼업 보장)은 외부 매체비 성격이라 마진 기준 계약액에서 뺀다(§19.1)
+    { code: 'ld', label: '리드젠(쇼업 보장)', quote_amount: engine.showup, has_cost: false, is_margin_base: false },
+  ]
+}
