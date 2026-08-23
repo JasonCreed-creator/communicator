@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────
-// DataProvider 인터페이스 v5 — 2026-08-22 재동결 (CLAUDE.md §4 Phase 3.11a)
+// DataProvider 인터페이스 v6.1 — 2026-08-23 재동결 (설계서 v2.1 §2.1·§4-21)
 //   v1: 2026-08-19 동결(35메서드). v2: v1.2 승인 근거로 41메서드 재동결.
 //   v3: 사용자 v1.4 승인(2026-08-22, v1.3 포함)을 근거로 동결 해제 →
 //   온보딩·프로젝트 패치·큐시트 CRUD/스냅숏·WBS 전개/조회/패치·R&R 조회
@@ -16,8 +16,16 @@
 //   v6: 사용자 v2.1 승인(2026-08-22, 랜딩보드 4문항 승인)을 근거로 동결 해제 → 랜딩보드:
 //   listLandingPages·getLandingPage·createLandingPage·updateLandingPage·publishLandingPage·
 //   deleteLandingPage·listLandingMetrics·submitLandingLead 8메서드 추가 = 75메서드.
-//   **기존 67메서드 시그니처 불변** 후 재동결.
+//   **기존 67메서드 시그니처 불변** 후 재동결. 단 v6은 설계서 선행 없이 코드가 먼저 나간
+//   사례이며, 설계서 v2.1이 이를 사후 정본화했다(§2.1 동결 이력 · §4-21 말미 재발 방지).
+//   v6.1: 사용자 승인(2026-08-23) + 설계서 v2.1 §4-21을 근거로 동결 해제 → 랜딩 스코프 정정:
+//   listLandingPages(projectId)·createLandingPage(projectId, input) 2메서드의 시그니처만 변경
+//   (프로젝트 스코프는 인자로 받는다 — R-L1). 나머지 6메서드는 landingId로 대상을 찾고
+//   가드를 landing.project_id로 판정하므로 불변(R-L2). 메서드 수 75 불변 후 재동결.
 //   경위는 PROGRESS.md 결정 로그 참조.
+//
+// 프로젝트 스코프 규칙(설계서 v2.1 §4-21 R-L1): 프로젝트 단위 조회·생성 메서드는 projectId를
+// 인자로 받는다. currentUser()는 행위자 신원·권한 판정 전용이며 스코프 유도에 쓰지 않는다.
 //
 // 프론트(S-2·S0~S9)는 이 인터페이스만 호출한다. 구현체:
 //   1단계 MockProvider     — 픽스처+메모리, 업로드=blob URL (Phase 1·3.5~3.11)
@@ -262,14 +270,15 @@ export interface DataProvider {
   updateComplianceCard(cardId: UUID, patch: ComplianceCardPatch): Promise<ComplianceCard>
 
   // ── S-3 랜딩보드 (v2.1 §4-19~§4-22) ───────────────────────────────
-  /** 현재 행사의 랜딩 목록 (최신 수정순) */
-  listLandingPages(): Promise<LandingPage[]>
+  /** 그 행사의 랜딩 목록 (최신 수정순). projectId 필수 — §4-21 R-L1 */
+  listLandingPages(projectId: UUID): Promise<LandingPage[]>
   getLandingPage(landingId: UUID): Promise<LandingPage>
   /**
    * 새 랜딩. 섹션·폼·동의는 기본 템플릿으로 시드되고,
    * autofill 섹션은 행사 데이터(개요·세션·존)에서 즉시 조립된다.
+   * projectId 필수 — 쓰기 가드·slug 유일성 판정 대상이다(§4-21 R-L1·R-L3·R-L4).
    */
-  createLandingPage(input: LandingPageInput): Promise<LandingPage>
+  createLandingPage(projectId: UUID, input: LandingPageInput): Promise<LandingPage>
   /** 부분 수정 — 배열 필드(sections·form_fields·consents)는 통째로 교체된다 */
   updateLandingPage(landingId: UUID, patch: LandingPagePatch): Promise<LandingPage>
   /**

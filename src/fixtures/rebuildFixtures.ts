@@ -33,6 +33,7 @@ import { COMPLIANCE_CARD_TEMPLATES } from './complianceTemplates'
 import { computeQuoteOutputs } from '../modules/quote/engine/quoteInput'
 import { RECRUITING_WBS_TEMPLATE, ROLE_CHARTER_TEMPLATES } from './wbsTemplates'
 import type { MockState } from './sampleProject'
+import { appendLanding, buildLanding } from './landingFixtures'
 
 /** ⑤ 종료 — 실제 운영 행사(2026-05-07). 읽기 전용·목록 접힘 */
 export const PROJECT_ID_REBUILD26 = 'prj-rebuild26'
@@ -40,6 +41,11 @@ export const PROJECT_ID_REBUILD26 = 'prj-rebuild26'
 export const PROJECT_ID_REBUILD27 = 'prj-rebuild27'
 /** ⑥의 발주처 링크 토큰 — 데모 기본 행사에서도 컨펌 루프를 밟을 수 있게 한다 */
 export const REBUILD27_TOKEN = 'rb27'
+
+/** ⑤의 랜딩 — 종료 행사이므로 발행 완료 상태로 남는다 */
+export const LANDING_ID_REBUILD26 = 'lnd-rb26'
+/** ⑥의 랜딩 — 준비 중이므로 초안. 랜딩보드의 기본 표시 대상이다 */
+export const LANDING_ID_REBUILD27 = 'lnd-rb27'
 
 const RB26 = PROJECT_ID_REBUILD26
 const RB27 = PROJECT_ID_REBUILD27
@@ -1057,6 +1063,38 @@ export function appendRebuildFixtures(state: MockState): void {
     }, '2026-08-18'),
   ]
   state.quotes.push(...quotes)
+
+  // ── 랜딩 (v2.1 §4-21) — 행사마다 자기 랜딩을 갖는다 ────────────────
+  // ⑤는 종료 행사라 발행 완료본이 남아 있고, ⑥은 준비 중이라 초안이다.
+  // slug는 (project_id, slug) 복합 유일이라 두 행사가 같은 slug를 써도 정상이다(R-L4).
+  appendLanding(
+    state,
+    buildLanding({
+      id: LANDING_ID_REBUILD26,
+      projectId: RB26,
+      title: 'RE:BUILD 26 참가 신청',
+      slug: 'rebuild',
+      publicUrl: 'https://example.com/ads/rebuild26/',
+      gaMeasurementId: 'G-RB26DEMO01',
+      createdAt: '2026-03-25T09:00:00.000Z',
+      updatedAt: '2026-05-07T09:00:00.000Z',
+    }),
+    today,
+  )
+  appendLanding(
+    state,
+    buildLanding({
+      id: LANDING_ID_REBUILD27,
+      projectId: RB27,
+      title: 'RE:BUILD 27 참가 신청',
+      slug: 'rebuild',
+      publicUrl: null,
+      gaMeasurementId: 'G-RB27DEMO01',
+      createdAt: '2026-08-05T09:00:00.000Z',
+      updatedAt: '2026-08-20T09:00:00.000Z',
+    }),
+    today,
+  )
 }
 
 function buildQuote(

@@ -8,6 +8,7 @@
 > v1.4 변경 핵심: **유형별 WBS 템플릿 자동 전개 + 역할별 R&R** — Phase 3.7 프론트 증분(여전히 서버 0).
 > v1.4.1 변경 핵심: **구현 해석 정본화(onboarded_at 등 5건) → Phase 3.8** + **디자인 스프린트(웜 페이퍼 룩 전환, 기능 무변경) → Phase 3.9**.
 > v1.5 변경 핵심: **다중 행사(프로젝트 셀렉터·S-1 행사 목록) + 행사 설정 메뉴(개요·담당자 입력) + S0 동일 폼 → Phase 3.10**.
+> v2.1 변경 핵심: **랜딩보드(S-3) 사후 정본화 + 랜딩 스코프 계약(§4-21) + 골든 데이터셋 출처 규약(§17.3-4)·가격 상수 v1.1(§17.4)** — Phase 3.13.1 핫픽스.
 > v2.0 변경 핵심: **견적 Configurator(jsx-easy-shift) 흡수 — Phase 3.11 견적 모듈(mock, 프론트 우선) → Phase 4 새 Supabase 이식(Auth·RLS 포함) → Phase 4.6 인프라 전환(Vercel·도메인·1회 임포트·아카이브)**. 이후 Phase 5 Drive · 6 알림.
 
 ## 1. 프로젝트 정의
@@ -180,6 +181,18 @@ Phase 3.8과 3.9는 **별도 커밋·별도 PR**로 분리한다(3.8 = 타입·�
 25. (v2.0) 권한: app_role staff는 견적 메뉴 미표시·/quotes 접근 시 403 화면, sales·admin은 접근; 행사 설정 ① 모객형 그룹은 일반형에서 숨김·데이터 보존; 컴플라이언스 카드 체크 왕복 (테스트로 증명)
 26. (Phase 4) `VITE_DATA_PROVIDER=supabase`에서 DoD 1~25 전부 재현 + RLS 거부 3종(staff→quotes, 비멤버→project, 토큰 경로→quotes) + 로그인 매직링크 왕복 + 서버 재계산(클라이언트가 보낸 total과 다르면 서버 값 저장) (테스트로 증명)
 27. (v2.1) 랜딩보드: 기본 13섹션 시드 · autofill이 세션/개요/존에서 조립(끄면 입력 보존) · 유효한 GA4/GTM ID일 때만 스니펫 주입(형식 불일치는 미주입) · 측정 ID 없으면 내보낸 HTML의 외부 요청 0건 · 사용자 입력 이스케이프 · 폼 제출이 등록(S4) Attendee로 유입되고 당일 지표 반영 (테스트로 증명)
+28. (v2.1 §4-21) **행사 스코프**: 랜딩 목록·생성이 현재 행사(`ProjectContext`)로 스코프되고 — 행사 A→B 전환 시 목록이 바뀌고, 종료 행사 생성은 409, 같은 slug를 다른 행사에 만들 수 있음 (테스트로 증명)
+
+### 상시 grep 가드 (매 세션 종료 시 0건 확인 — 위 DoD와 별개로 항상 검사)
+| 가드 | 명령 | 근거 |
+|---|---|---|
+| 디자인 토큰 | `grep -rn "gray-\|slate-" src` | DoD 17 |
+| 행사 ID 상수 | `grep -rn "PROJECT_ID" src --include=*.tsx` | DoD 18 |
+| **행사 스코프 유도** | `grep -rn "user\.project_id\|currentUser()\.project_id" src --include=*.ts --include=*.tsx` | **v2.1 §4-21 — 랜딩 결함 재발 방지. 예외는 `scope-exempt:` 주석 + 테스트의 화이트리스트 둘 다 필요(무설명 예외 금지)** |
+| 금액 비노출 | `grep -rn "total_amount\|breakdown" src/pages/Client* src/components/plan src/components/client` | DoD 23 |
+| 온보딩 플래그 | `grep -rn "onboarding_completed" src` | DoD 16 |
+
+앞의 3종은 `src/test/dod-project-scope-guard.test.ts`·기존 DoD 테스트가 상시 자동 검증한다 — 셸 grep은 이중 확인용이다.
 
 ## 8. 서버 이식 완료 기준 (Phase 4~6 DoD)
 0. (v2.0) Phase 4 = §7 DoD 26 / Phase 4.6 = 설계서 §18 1~6 전 게이트 통과 + 옛 라우트 301 + 임포트 dry-run 로그 첨부
