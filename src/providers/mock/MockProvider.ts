@@ -29,6 +29,10 @@ import type {
   Deliverable,
   LandingDailyMetric,
   LandingPage,
+  SettlementBoard,
+  SettlementBucket,
+  SettlementItem,
+  Vendor,
   Milestone,
   ProgramSession,
   Project,
@@ -79,8 +83,26 @@ import type {
   UserRef,
   WbsTaskFilter,
   WbsTaskPatch,
+  SettlementBoardView,
 } from '../../types/views'
-import type { DataProvider, LandingPageInput, LandingPagePatch } from '../DataProvider'
+import type {
+  DataProvider,
+  LandingPageInput,
+  LandingPagePatch,
+  SettlementBucketInput,
+  SettlementItemInput,
+  VendorInput,
+} from '../DataProvider'
+import {
+  bucketActual,
+  bucketMarkup,
+  bucketMarkupRate,
+  bucketOrdered,
+  computeTotals,
+  isOverBudget,
+  quoteBucketSpec,
+  toVatExcluded,
+} from '../../lib/settlement'
 
 const UPLOADABLE_STATUSES: readonly DeliverableStatus[] = [
   'requested', // v1.2: 첫 버전 업로드 시 draft 자동 전이
@@ -2000,6 +2022,423 @@ export class MockProvider implements DataProvider {
   }
 
   // ── 발주처 뷰 (토큰 스코프 — §6.2 화이트리스트 쿼리 재현) ─────────
+  // ── S-10 정산보드 (v2.2 §19 · 계약 §4-24) ─────────────────────────
+  // 스코프는 인자로만 정한다(R-S1 · §4-21 R-L1 승계). currentUser()는 행위자 신원 전용.
+
+  private mustFindBoard(projectId: UUID): SettlementBoard {
+    const b = this.state.settlement_boards.find((x) => x.project_id === projectId)
+    if (!b) throw new ProviderError('not_found', '정산 보드가 없습니다.')
+    return b
+  }
+
+  private mustFindBucket(bucketId: UUID): SettlementBucket {
+    const b = this.state.settlement_buckets.find((x) => x.id === bucketId)
+    if (!b) throw new ProviderError('not_found', '버킷을 찾을 수 없습니다.')
+    return b
+  }
+
+  private mustFindItem(itemId: UUID): SettlementItem {
+    const i = this.state.settlement_items.find((x) => x.id === itemId)
+    if (!i) throw new ProviderError('not_found', '발주 항목을 찾을 수 없습니다.')
+    return i
+  }
+
+  /** 버킷 → 그 버킷이 속한 행사. 가드는 항상 이 값으로 판정한다(R-S1) */
+  private projectOfBucket(bucket: SettlementBucket): UUID {
+    const board = this.state.settlement_boards.find((b) => b.id === bucket.board_id)
+    if (!board) throw new ProviderError('not_found', '정산 보드가 없습니다.')
+    return board.project_id
+  }
+
+  /**
+   * 확정 견적 breakdown → 버킷 9종 스냅숏 (§19.2).
+   * `recruit`를 rc/ld로 쪼개는 것이 유일한 비자명 매핑이며, 값은 견적 input에서
+   * 재유도하지 않고 **엔진 산출값(rsvpPkg·showup)을 그대로** 쓴다.
+   */
+  private snapshotBuckets(boardId: UUID, quote: Quote): SettlementBucket[] {
+    const engine = computeQuoteOutputs(quote.input).result
+    const now = nowIso()
+    return quoteBucketSpec(quote.breakdown, engine).map((row, i) => ({
+      id: this.nextId('bkt'),
+      board_id: boardId,
+      code: row.code,
+      label: row.label,
+      quote_amount: row.quote_amount,
+      has_cost: row.has_cost,
+      is_margin_base: row.is_margin_base,
+      source: 'quote' as const,
+      sort_order: i + 1,
+      created_at: now,
+    }))
+  }
+
+  private buildBoardView(board: SettlementBoard): SettlementBoardView {
+    const buckets = this.state.settlement_buckets
+      .filter((b) => b.board_id === board.id)
+      .sort((a, b) => a.sort_order - b.sort_order)
+    const items = this.state.settlement_items.filter((i) => i.board_id === board.id)
+    const quote = board.quote_id ? this.state.quotes.find((q) => q.id === board.quote_id) : undefined
+    return {
+      board: { ...board },
+      // 기준 견적은 **버전·제목만** 노출한다 — 금액은 버킷 스냅숏이 이미 갖고 있다
+      quote_label: quote ? `${quote.title} v${quote.version}` : null,
+      buckets: buckets.map((bucket) => ({
+        bucket: { ...bucket },
+        items: items
+          .filter((i) => i.bucket_id === bucket.id)
+          .map((i) => ({ ...i }))
+          .sort((a, b) => a.created_at.localeCompare(b.created_at)),
+        ordered: bucketOrdered(bucket, items),
+        actual: bucketActual(bucket, items),
+        markup: bucketMarkup(bucket, items),
+        markup_rate: bucketMarkupRate(bucket, items),
+        over_budget: isOverBudget(bucket, items),
+      })),
+      totals: computeTotals(buckets, items),
+    }
+  }
+
+  async getSettlementBoard(projectId: UUID): Promise<SettlementBoardView | null> {
+    this.mustFindProject(projectId)
+    const board = this.state.settlement_boards.find((b) => b.project_id === projectId)
+    return board ? this.buildBoardView(board) : null
+  }
+
+  async createSettlementBoard(projectId: UUID, quoteId: UUID): Promise<SettlementBoardView> {
+    this.assertWritable(projectId)
+    this.assertPm()
+    if (this.state.settlement_boards.some((b) => b.project_id === projectId)) {
+      throw new ProviderError('conflict', '이미 정산 보드가 있습니다.')
+    }
+    const quote = this.state.quotes.find((q) => q.id === quoteId)
+    if (!quote) throw new ProviderError('not_found', '견적을 찾을 수 없습니다.')
+    if (!quote.is_final) {
+      throw new ProviderError('validation', '확정된 견적만 정산 기준으로 쓸 수 있습니다.')
+    }
+    const now = nowIso()
+    const board: SettlementBoard = {
+      id: this.nextId('brd'),
+      project_id: projectId,
+      quote_id: quote.id,
+      quote_version: quote.version,
+      baselined_at: now,
+      created_at: now,
+      updated_at: now,
+    }
+    this.state.settlement_boards.push(board)
+    this.state.settlement_buckets.push(...this.snapshotBuckets(board.id, quote))
+    this.log(projectId, `user:${this.currentUser().id}`, 'settlement.baselined', 'settlement', board.id, {
+      quote_version: quote.version,
+    })
+    return this.buildBoardView(board)
+  }
+
+  /**
+   * 기준 견적 갱신 (R-S2). 버킷의 quote_amount만 새 스냅숏으로 갈고,
+   * **항목은 그대로 둔다** — 이미 집행된 발주를 기준 변경이 지우면 안 된다.
+   * quote 버킷은 code 매칭으로 금액만 교체하고, custom 버킷은 손대지 않는다.
+   */
+  async rebaseSettlementBoard(projectId: UUID, quoteId: UUID): Promise<SettlementBoardView> {
+    this.assertWritable(projectId)
+    this.assertPm()
+    const board = this.mustFindBoard(projectId)
+    const quote = this.state.quotes.find((q) => q.id === quoteId)
+    if (!quote) throw new ProviderError('not_found', '견적을 찾을 수 없습니다.')
+    if (!quote.is_final) {
+      throw new ProviderError('validation', '확정된 견적만 정산 기준으로 쓸 수 있습니다.')
+    }
+    const fresh = this.snapshotBuckets(board.id, quote)
+
+    // 스냅숏은 code마다 has_cost를 고정값으로 되돌린다. PM이 원가를 켜 두고(허용된 동작)
+    // 금액을 입력한 버킷이라면 그 되돌림이 F1과 같은 부풀림을 일으키므로 — 실집행이 통째로
+    // 빠지고 마진이 같은 크기로 오르며 항등식은 상쇄돼 조용히 통과한다 — 갱신 자체를 막는다.
+    const wouldSilenceCost = fresh
+      .filter((next) => !next.has_cost)
+      .map((next) => this.state.settlement_buckets.find((b) => b.board_id === board.id && b.code === next.code))
+      .filter(
+        (cur): cur is SettlementBucket =>
+          !!cur && cur.has_cost && this.bucketHasEnteredAmounts(cur),
+      )
+    if (wouldSilenceCost.length > 0) {
+      throw new ProviderError(
+        'conflict',
+        `기준을 갱신하면 ${wouldSilenceCost
+          .map((b) => `'${b.label}'`)
+          .join('·')}이(가) 원가 없음으로 되돌아가 이미 입력된 금액이 집계에서 빠집니다. 항목을 먼저 정리하세요.`,
+      )
+    }
+
+    const prevVersion = board.quote_version
+    for (const next of fresh) {
+      const cur = this.state.settlement_buckets.find(
+        (b) => b.board_id === board.id && b.code === next.code,
+      )
+      if (cur) {
+        cur.quote_amount = next.quote_amount
+        cur.has_cost = next.has_cost
+        cur.is_margin_base = next.is_margin_base
+      } else {
+        this.state.settlement_buckets.push(next)
+      }
+    }
+    board.quote_id = quote.id
+    board.quote_version = quote.version
+    board.baselined_at = nowIso()
+    board.updated_at = nowIso()
+    this.log(projectId, `user:${this.currentUser().id}`, 'settlement.rebased', 'settlement', board.id, {
+      from_version: prevVersion,
+      to_version: quote.version,
+    })
+    return this.buildBoardView(board)
+  }
+
+  async createSettlementBucket(
+    projectId: UUID,
+    input: SettlementBucketInput,
+  ): Promise<SettlementBucket> {
+    this.assertWritable(projectId)
+    this.assertPm()
+    const board = this.mustFindBoard(projectId)
+    const code = input.code?.trim()
+    if (!code) throw new ProviderError('validation', '버킷 코드는 필수입니다.')
+    if (!input.label?.trim()) throw new ProviderError('validation', '버킷 이름은 필수입니다.')
+    if (this.state.settlement_buckets.some((b) => b.board_id === board.id && b.code === code)) {
+      throw new ProviderError('conflict', '이미 있는 버킷 코드입니다.')
+    }
+    const bucket: SettlementBucket = {
+      id: this.nextId('bkt'),
+      board_id: board.id,
+      code,
+      label: input.label.trim(),
+      // 행사별 추가 버킷은 견적에 없던 비용이다 — 0원에서 시작해 마크업이 음수로 잡히는 게 맞다(§19.2)
+      quote_amount: input.quote_amount ?? 0,
+      has_cost: input.has_cost ?? true,
+      is_margin_base: input.is_margin_base ?? true,
+      source: 'custom',
+      sort_order:
+        input.sort_order ??
+        this.state.settlement_buckets.filter((b) => b.board_id === board.id).length + 1,
+      created_at: nowIso(),
+    }
+    this.state.settlement_buckets.push(bucket)
+    return { ...bucket }
+  }
+
+  async updateSettlementBucket(
+    bucketId: UUID,
+    patch: Partial<SettlementBucketInput>,
+  ): Promise<SettlementBucket> {
+    const bucket = this.mustFindBucket(bucketId)
+    this.assertWritable(this.projectOfBucket(bucket))
+    this.assertPm()
+    if (patch.label !== undefined) {
+      if (!patch.label.trim()) throw new ProviderError('validation', '버킷 이름은 필수입니다.')
+      bucket.label = patch.label.trim()
+    }
+    if (patch.quote_amount !== undefined) bucket.quote_amount = patch.quote_amount
+    // R-S4 역방향: 원가를 **끄는** 것도 막는다. 끄는 순간 그 버킷의 실집행이 집계에서
+    // 통째로 빠지면서 마진이 같은 크기로 부풀고, 두 값이 함께 움직여 상쇄되므로
+    // 항등식(marginBase − totalActual === finalMargin)은 이 조작을 구조적으로 못 잡는다.
+    // 그래서 검사는 여기(입력 경로)에 둔다 — 마진 식은 손대지 않는다(§19.1 · R-S10).
+    if (patch.has_cost === false && this.bucketHasEnteredAmounts(bucket)) {
+      throw new ProviderError(
+        'conflict',
+        '이미 발주·실비가 입력된 버킷은 원가 없음으로 바꿀 수 없습니다. 항목을 먼저 정리하세요.',
+      )
+    }
+    if (patch.has_cost !== undefined) bucket.has_cost = patch.has_cost
+    if (patch.is_margin_base !== undefined) bucket.is_margin_base = patch.is_margin_base
+    if (patch.sort_order !== undefined) bucket.sort_order = patch.sort_order
+    return { ...bucket }
+  }
+
+  async deleteSettlementBucket(bucketId: UUID): Promise<void> {
+    const bucket = this.mustFindBucket(bucketId)
+    this.assertWritable(this.projectOfBucket(bucket))
+    this.assertPm()
+    if (bucket.source === 'quote') {
+      throw new ProviderError('conflict', '견적에서 온 버킷은 삭제할 수 없습니다.')
+    }
+    if (this.state.settlement_items.some((i) => i.bucket_id === bucketId)) {
+      throw new ProviderError('conflict', '발주 항목이 있는 버킷은 삭제할 수 없습니다.')
+    }
+    this.state.settlement_buckets = this.state.settlement_buckets.filter((b) => b.id !== bucketId)
+  }
+
+  /** 그 버킷에 금액이 실제로 들어간 항목이 있는가 (취소 항목은 제외 — 집계에서 빠지므로) */
+  private bucketHasEnteredAmounts(bucket: SettlementBucket): boolean {
+    return this.state.settlement_items.some(
+      (i) =>
+        i.bucket_id === bucket.id &&
+        i.status !== 'cancelled' &&
+        (i.ordered_amount !== null || i.actual_amount !== null),
+    )
+  }
+
+  /**
+   * 원가 없는 버킷에 금액이 얹히는 것을 막는다 — 422 (R-S4).
+   *
+   * 판정 대상은 **patch가 아니라 patch를 적용한 뒤 항목의 최종 상태**다. patch만 보면
+   * `bucket_id`만 바꾸는 이동(금액은 항목에 이미 들어 있는)이 검사를 통과해 버리고,
+   * 그 순간 실집행이 집계에서 빠지며 마진이 같은 크기로 부푼다 — F1과 같은 실패 모드다.
+   * 취소 항목은 애초에 집계에 들어가지 않으므로 이동을 막지 않는다.
+   */
+  private assertCostAllowed(
+    bucket: SettlementBucket,
+    input: Partial<SettlementItemInput>,
+    existing?: SettlementItem,
+  ): void {
+    if (bucket.has_cost) return
+
+    const pick = <K extends 'ordered_amount' | 'actual_amount'>(key: K): number | null =>
+      input[key] !== undefined ? (input[key] ?? null) : (existing?.[key] ?? null)
+    const status = input.status ?? existing?.status ?? 'planned'
+    if (status === 'cancelled') return
+    if (pick('ordered_amount') === null && pick('actual_amount') === null) return
+
+    // 같은 금지 규칙이지만 사용자가 한 동작이 다르므로 안내도 다르게 준다
+    const isMove = existing !== undefined && input.bucket_id !== undefined && input.bucket_id !== existing.bucket_id
+    throw new ProviderError(
+      'validation',
+      isMove
+        ? `'${bucket.label}'은 원가가 없는 항목이라 금액이 든 발주 항목을 옮길 수 없습니다. 금액을 지우거나 다른 버킷으로 옮기세요.`
+        : `'${bucket.label}'은 원가가 없는 항목이라 발주·실비를 넣을 수 없습니다.`,
+    )
+  }
+
+  /** 금액 입력 권한 — pm 또는 그 항목의 담당자 본인 (§6.1) */
+  private assertItemWritable(item: SettlementItem): void {
+    const user = this.currentUser()
+    if (user.role === 'pm') return
+    if (item.assignee_id && item.assignee_id === user.id) return
+    throw new ProviderError('forbidden', '본인이 담당한 발주 항목만 입력할 수 있습니다.')
+  }
+
+  async createSettlementItem(
+    projectId: UUID,
+    bucketId: UUID,
+    input: SettlementItemInput,
+  ): Promise<SettlementItem> {
+    this.assertWritable(projectId)
+    this.assertPm()
+    const bucket = this.mustFindBucket(bucketId)
+    if (this.projectOfBucket(bucket) !== projectId) {
+      throw new ProviderError('validation', '다른 행사의 버킷입니다.')
+    }
+    if (!input.title?.trim()) throw new ProviderError('validation', '항목명은 필수입니다.')
+    this.assertCostAllowed(bucket, input)
+
+    const vatIncluded = input.vat_included_input ?? false
+    const raw = input.actual_amount ?? input.ordered_amount ?? null
+    const now = nowIso()
+    const item: SettlementItem = {
+      id: this.nextId('sti'),
+      board_id: bucket.board_id,
+      bucket_id: bucketId,
+      title: input.title.trim(),
+      spec: input.spec ?? null,
+      vendor_id: input.vendor_id ?? null,
+      assignee_id: input.assignee_id ?? null,
+      ordered_amount:
+        input.ordered_amount == null ? null : toVatExcluded(input.ordered_amount, vatIncluded),
+      actual_amount:
+        input.actual_amount == null ? null : toVatExcluded(input.actual_amount, vatIncluded),
+      input_amount_raw: vatIncluded ? raw : null,
+      vat_included_input: vatIncluded,
+      status: input.status ?? 'planned',
+      evidence: input.evidence ?? null,
+      import_id: null,
+      note: input.note ?? null,
+      created_at: now,
+      updated_at: now,
+    }
+    this.state.settlement_items.push(item)
+    return { ...item }
+  }
+
+  async updateSettlementItem(
+    itemId: UUID,
+    patch: Partial<SettlementItemInput>,
+  ): Promise<SettlementItem> {
+    const item = this.mustFindItem(itemId)
+    const bucket = this.mustFindBucket(patch.bucket_id ?? item.bucket_id)
+    this.assertWritable(this.projectOfBucket(bucket))
+    this.assertItemWritable(item)
+    this.assertCostAllowed(bucket, patch, item)
+
+    if (patch.bucket_id !== undefined) item.bucket_id = patch.bucket_id
+    if (patch.title !== undefined) {
+      if (!patch.title.trim()) throw new ProviderError('validation', '항목명은 필수입니다.')
+      item.title = patch.title.trim()
+    }
+    if (patch.spec !== undefined) item.spec = patch.spec
+    if (patch.vendor_id !== undefined) item.vendor_id = patch.vendor_id
+    if (patch.assignee_id !== undefined) item.assignee_id = patch.assignee_id
+    if (patch.status !== undefined) item.status = patch.status
+    if (patch.evidence !== undefined) item.evidence = patch.evidence
+    if (patch.note !== undefined) item.note = patch.note
+
+    // 부가세 처리 — 이번 patch가 금액을 건드릴 때만 재계산한다(§19.4)
+    const touchesAmount = patch.ordered_amount !== undefined || patch.actual_amount !== undefined
+    if (touchesAmount) {
+      const vatIncluded = patch.vat_included_input ?? false
+      if (patch.ordered_amount !== undefined) {
+        item.ordered_amount =
+          patch.ordered_amount == null ? null : toVatExcluded(patch.ordered_amount, vatIncluded)
+      }
+      if (patch.actual_amount !== undefined) {
+        item.actual_amount =
+          patch.actual_amount == null ? null : toVatExcluded(patch.actual_amount, vatIncluded)
+      }
+      const raw = patch.actual_amount ?? patch.ordered_amount ?? null
+      item.vat_included_input = vatIncluded
+      item.input_amount_raw = vatIncluded ? raw : null
+    }
+    item.updated_at = nowIso()
+    return { ...item }
+  }
+
+  async deleteSettlementItem(itemId: UUID): Promise<void> {
+    const item = this.mustFindItem(itemId)
+    const bucket = this.mustFindBucket(item.bucket_id)
+    this.assertWritable(this.projectOfBucket(bucket))
+    this.assertItemWritable(item)
+    this.state.settlement_items = this.state.settlement_items.filter((i) => i.id !== itemId)
+  }
+
+  async listVendors(): Promise<Vendor[]> {
+    // 협력사는 프로젝트 비종속 조직 마스터다(§19.6) — projectId를 받지 않는 것이 맞다
+    return this.state.vendors
+      .filter((v) => v.archived_at === null)
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((v) => ({ ...v }))
+  }
+
+  async upsertVendor(input: VendorInput): Promise<Vendor> {
+    this.currentUser()
+    const name = input.name?.trim()
+    if (!name) throw new ProviderError('validation', '협력사명은 필수입니다.')
+    const existing = input.id
+      ? this.state.vendors.find((v) => v.id === input.id)
+      : this.state.vendors.find((v) => v.archived_at === null && v.name === name)
+    if (existing) {
+      existing.name = name
+      if (input.biz_no !== undefined) existing.biz_no = input.biz_no
+      if (input.note !== undefined) existing.note = input.note
+      return { ...existing }
+    }
+    const vendor: Vendor = {
+      id: this.nextId('ven'),
+      name,
+      biz_no: input.biz_no ?? null,
+      note: input.note ?? null,
+      archived_at: null,
+      created_at: nowIso(),
+    }
+    this.state.vendors.push(vendor)
+    return { ...vendor }
+  }
+
   async getClientQueue(token: string): Promise<ClientQueue> {
     const t = this.resolveToken(token)
     const project = this.mustFindProject(t.project_id)

@@ -20,6 +20,8 @@ export default function HomeDashboardPage() {
   const dashboard = useAsync(() => provider.getDashboard(projectId), [projectId])
   const inbox = useAsync(() => provider.listInbox(projectId), [projectId])
   const deliverables = useAsync(() => provider.listDeliverables(projectId), [projectId])
+  // v2.2 §19.1 — 견적 초과는 막지 않고 알린다. 홈에서 먼저 눈에 띄어야 대응이 빨라진다.
+  const settlement = useAsync(() => provider.getSettlementBoard(projectId), [projectId])
 
   const reloadAll = () => {
     dashboard.reload()
@@ -31,6 +33,19 @@ export default function HomeDashboardPage() {
       <PageHeader caption="S1 · 홈" title="홈 대시보드" />
 
       <ErrorAlert message={dashboard.error} />
+
+      {/* 정산 초과 경보 — 금액은 싣지 않고 건수만 알린다(S-10에서 확인) */}
+      {settlement.data && settlement.data.totals.overBudgetCount > 0 && (
+        <Link
+          to="/settlement"
+          className="flex items-center justify-between gap-3 rounded-[12px] border border-negative bg-negative-tint px-4 py-3"
+        >
+          <span className="text-sm font-medium text-negative">
+            정산 · 견적 초과 버킷 {settlement.data.totals.overBudgetCount}건
+          </span>
+          <span className="text-xs text-negative">정산보드에서 보기 →</span>
+        </Link>
+      )}
 
       {dashboard.data && (
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">

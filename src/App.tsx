@@ -20,6 +20,7 @@ import QuotesPage from './pages/QuotesPage'
 import RegistrationPage from './pages/RegistrationPage'
 import SchedulePage from './pages/SchedulePage'
 import SettingsPage from './pages/SettingsPage'
+import SettlementPage from './pages/SettlementPage'
 
 // v1.5 진입점 원칙(설계서 §2.1·§10): /onboarding·본체·S-1·행사 설정은 모두 같은 ProjectProvider
 // 스코프 안에서 "현재 행사"를 공유한다. /c/:token(발주처 무로그인 뷰)은 이 스코프 밖.
@@ -75,6 +76,8 @@ export function AppRoutes() {
             <Route path="/registration" element={<RegistrationPage />} />
             <Route path="/schedule" element={<SchedulePage />} />
             <Route path="/plan" element={<PlanDocPage />} />
+            {/* v2.2 S-10 정산보드 — 운영 그룹 마지막. 내부 전용이라 /c/* 밖에만 있다 */}
+            <Route path="/settlement" element={<SettlementPage />} />
           </Route>
         </Route>
       </Route>

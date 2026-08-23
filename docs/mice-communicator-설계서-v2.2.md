@@ -1,8 +1,8 @@
-# MICE 커뮤니케이터 — 시스템 설계서 v2.1
+# MICE 커뮤니케이터 — 시스템 설계서 v2.2
 
 | 항목 | 내용 |
 |---|---|
-| 문서 상태 | v2.1 확정 — **랜딩보드(S-3) 정본화 + 랜딩 스코프 계약 + 가격 상수 v1.1 정의** (2026-08-23). 코드가 선행한 Phase 3.13 랜딩보드를 §4-19~§4-22·§8·§10에 정본으로 흡수하고, `listLandingPages`·`createLandingPage`가 현재 행사가 아닌 사용자 첫 멤버십으로 스코프되던 결함을 계약으로 못박는다(§4-21). LED 오퍼레이팅·중계 단가 분리(§17.4)와 골든 데이터셋 출처 규약(§17.3)을 확정. 직전 v2.0: **견적 Configurator(jsx-easy-shift) 단일 플랫폼 통합** (2026-08-22, 시각안 3화면 승인 · 읽기 분석 보고 기반): 견적 모듈 S-2 · 견적→행사 핸드오프 · 새 Supabase 프로젝트 · 인프라 전환 절차. 직전 v1.5: **다중 행사(프로젝트 셀렉터·행사 목록) + 행사 설정 메뉴(개요·담당자 입력) 확장** (2026-08-22, 시각안 3화면 승인). 직전 v1.4.1: v1.4(유형별 WBS·R&R, 2026-08-22 시각안 승인)에 **Phase 3.6·3.7 구현 해석 정본화** 패치: projects.onboarded_at 확정(사용자 승인 2026-08-22) · 임박/지연 배타 산식 · 일반형 28건 파생 규칙 · 재전개 보존 규칙 · 큐시트 스냅숏 mock 규약 (Code PROGRESS 열린 질문 ①~⑤ 종결) |
+| 문서 상태 | v2.2 확정 — **정산보드(S-10) 신설** (2026-08-23, 내부정산 실물 13건 분석 기반·시각안 승인). 마진 식(항목 마크업 + PCO 기획료 + RSVP 운영비, 리드젠 제외)을 실물 2건에서 원 단위 검산하고 §19에 정본화한다. §4-23 테이블 4종 + §4-24 계약 R-S1~R-S10, DataProvider **v7 재동결(11메서드 · 86메서드)**. 직전 v2.1 — **랜딩보드(S-3) 정본화 + 랜딩 스코프 계약 + 가격 상수 v1.1 정의** (2026-08-23). 코드가 선행한 Phase 3.13 랜딩보드를 §4-19~§4-22·§8·§10에 정본으로 흡수하고, `listLandingPages`·`createLandingPage`가 현재 행사가 아닌 사용자 첫 멤버십으로 스코프되던 결함을 계약으로 못박는다(§4-21). LED 오퍼레이팅·중계 단가 분리(§17.4)와 골든 데이터셋 출처 규약(§17.3)을 확정. 직전 v2.0: **견적 Configurator(jsx-easy-shift) 단일 플랫폼 통합** (2026-08-22, 시각안 3화면 승인 · 읽기 분석 보고 기반): 견적 모듈 S-2 · 견적→행사 핸드오프 · 새 Supabase 프로젝트 · 인프라 전환 절차. 직전 v1.5: **다중 행사(프로젝트 셀렉터·행사 목록) + 행사 설정 메뉴(개요·담당자 입력) 확장** (2026-08-22, 시각안 3화면 승인). 직전 v1.4.1: v1.4(유형별 WBS·R&R, 2026-08-22 시각안 승인)에 **Phase 3.6·3.7 구현 해석 정본화** 패치: projects.onboarded_at 확정(사용자 승인 2026-08-22) · 임박/지연 배타 산식 · 일반형 28건 파생 규칙 · 재전개 보존 규칙 · 큐시트 스냅숏 mock 규약 (Code PROGRESS 열린 질문 ①~⑤ 종결) |
 | 목적 | Claude Code가 본 문서만으로 추가 질문 없이 구현 착수 |
 | 정본 관계 | 스키마·상태 머신·API 계약은 본 문서가 SoT. 구현 지침·작업 순서는 동봉 CLAUDE.md |
 | 확정 결정 | 아키텍처=하이브리드(파일=Drive, 상태=Supabase) / 발주처=무로그인 토큰 링크 / 컨펌 발송=PM 단독 / 업로드=웹앱 경유 원칙+Drive 감지 인박스 / 등록 1차=CSV 임포트 / **구현 순서=프론트 우선·서버 후행 이식(DataProvider 어댑터 계층)** / **v1.2: 지시(requested)→제작→컨펌→운영계획서(S9) 조립 파이프라인 — 웹 문서 우선, PPTX·발주처 뷰는 2차** / **v1.3: S0 온보딩(개요→유형→담당자) → 유형(일반형·모객형) 모듈 토글 → 큐시트 정형 에디터(3채널 콘솔, 컨펌 스냅숏 자동)** / **v1.4: 유형별 WBS 템플릿 자동 전개(Configurator 37태스크 이식·호환 코드 체계) + 역할별 R&R 카드** / **v1.4.1: 온보딩 완료 상태는 projects.onboarded_at 컬럼이 정본(DataProvider v3.1 재동결)** / **v1.5: 다중 행사 — 사이드바 프로젝트 셀렉터+S-1 행사 목록, "행사 설정" 메뉴 상시 노출(①개요 ②담당자 ③유형·연동), S0 위저드=같은 폼의 단계형, 행사개요 단일 원천(S9 ①은 읽기 조립)** / **v2.0: 견적 모듈(S-2) 흡수 — 가격 엔진·베뉴 DB를 `src/modules/quote`로 이식, 견적 확정→행사 생성 프리필, 견적은 로그인 내부 전용(금액은 발주처·운영계획서에 구조적 비노출), 데이터는 새 Supabase 프로젝트(옛 Configurator DB는 1회 임포트 후 폐기), 도메인 rmb-mice.com 재연결·jsx-easy-shift 아카이브** |
@@ -69,7 +69,7 @@ MICE 프로젝트 착수 시 역할별(디자인·운영·등록·발주처) 산
 ```
 
 - **인터페이스 동결이 전제 조건** — 동결 없이는 이식 시 전 화면 재작업이 발생해 어댑터의 이점이 소멸한다 (감수 Steelman 조건부 판정)
-- 동결 이력: v1(35메서드, Phase 1) → v2(41, v1.2 승인) → v3(53, v1.3·v1.4 승인) → v3.1(v1.4.1 — 필드 추가만) → v4(v1.5 승인 — 다중 행사 5메서드) → **v5(v2.0 승인 — 견적 모듈: `listQuotes`·`getQuote`·`createQuote`·`saveQuoteVersion`·`finalizeQuote`·`createProjectFromQuote`·`exportQuoteXlsx`·`listComplianceCards`·`updateComplianceCard` **9메서드** 추가, `Project`에 모객 필드(guarantee_pax·targeting·kpi_show_rate·quote_id), `WbsTask.target` 추가. 기존 시그니처 불변)** → **v6(v2.1 승인 — 랜딩보드 8메서드: `listLandingPages`·`getLandingPage`·`createLandingPage`·`updateLandingPage`·`publishLandingPage`·`deleteLandingPage`·`listLandingMetrics`·`submitLandingLead`)** → **v6.1(v2.1 정정 — 스코프 결함 해소: `listLandingPages(projectId)`·`createLandingPage(projectId, input)`로 시그니처 변경. 나머지 6메서드는 landingId로 프로젝트를 역참조하므로 불변)**. v5부터는 MockProvider와 SupabaseProvider가 동시에 이 인터페이스를 구현한다(Phase 4). 매 해제는 사용자 승인+본 문서 개정 동반이 조건 — **v6은 이 조건을 어기고 코드가 선행했다(2026-08-22 Phase 3.13). v2.1이 사후 정본화하며, 재발 방지 규칙은 §4-21 말미에 둔다**
+- 동결 이력: v1(35메서드, Phase 1) → v2(41, v1.2 승인) → v3(53, v1.3·v1.4 승인) → v3.1(v1.4.1 — 필드 추가만) → v4(v1.5 승인 — 다중 행사 5메서드) → **v5(v2.0 승인 — 견적 모듈: `listQuotes`·`getQuote`·`createQuote`·`saveQuoteVersion`·`finalizeQuote`·`createProjectFromQuote`·`exportQuoteXlsx`·`listComplianceCards`·`updateComplianceCard` **9메서드** 추가, `Project`에 모객 필드(guarantee_pax·targeting·kpi_show_rate·quote_id), `WbsTask.target` 추가. 기존 시그니처 불변)** → **v6(v2.1 승인 — 랜딩보드 8메서드: `listLandingPages`·`getLandingPage`·`createLandingPage`·`updateLandingPage`·`publishLandingPage`·`deleteLandingPage`·`listLandingMetrics`·`submitLandingLead`)** → **v6.1(v2.1 정정 — 스코프 결함 해소: `listLandingPages(projectId)`·`createLandingPage(projectId, input)`로 시그니처 변경. 나머지 6메서드는 landingId로 프로젝트를 역참조하므로 불변)** → **v7(v2.2 승인 — 정산보드 11메서드: `getSettlementBoard`·`createSettlementBoard`·`rebaseSettlementBoard`·`createSettlementBucket`·`updateSettlementBucket`·`deleteSettlementBucket`·`createSettlementItem`·`updateSettlementItem`·`deleteSettlementItem`·`listVendors`·`upsertVendor` = **86메서드**. 기존 시그니처 불변. 업로드 파싱(`importVendorQuote`)은 서버 의존이라 v8 예약 슬롯으로 남긴다 — §19.5)**. v5부터는 MockProvider와 SupabaseProvider가 동시에 이 인터페이스를 구현한다(Phase 4). 매 해제는 사용자 승인+본 문서 개정 동반이 조건 — **v6은 이 조건을 어기고 코드가 선행했다(2026-08-22 Phase 3.13). v2.1이 사후 정본화하며, 재발 방지 규칙은 §4-21 말미에 둔다**
 - **현재 행사 컨텍스트(v1.5)**: 프론트는 `PROJECT_ID` 상수를 쓰지 않는다. `ProjectContext`(React)가 선택된 projectId를 보관(localStorage `communicator.currentProjectId`, 없으면 목록 첫 진행 중 행사)하고 모든 화면은 컨텍스트에서 읽는다. 라우트는 불변(`/`, `/board/...`) — URL prefix(`/p/:projectId/...`) 방식은 2차(북마크 공유 요구 발생 시)
 - Mock 단계 산출: UI/UX 전체 검증 + 발주처 데모 라우트(`/c/demo`)
 - 리스크 직렬화: 최대 리스크인 Drive 계층(OAuth·프록시)을 최후행에 배치
@@ -473,6 +473,105 @@ create unique index uq_attendee_email on attendees (project_id, lower(email)) wh
 
 ---
 
+### §4-23 정산 테이블 (v2.2 — S-10)
+
+```sql
+-- 협력사 마스터 (프로젝트 비종속 — 조직 단위)
+create table vendors (
+  id            uuid primary key default gen_random_uuid(),
+  name          text not null,                    -- 실거래처명 (#RULE-NO-COMPANY 예외, 픽스처는 가상명)
+  biz_no        text,                             -- 사업자번호 (선택)
+  note          text,
+  archived_at   timestamptz,
+  created_at    timestamptz not null default now()
+);
+create unique index vendors_name_uniq on vendors (name) where archived_at is null;
+
+-- 정산 보드 (행사당 1개, 확정 견적 스냅숏 보유)
+create table settlement_boards (
+  id                uuid primary key default gen_random_uuid(),
+  project_id        uuid not null unique references projects(id) on delete cascade,
+  quote_id          uuid references quotes(id),   -- 기준 견적 (스냅숏 출처)
+  quote_version     int,                          -- 스냅숏 시점 버전
+  baselined_at      timestamptz not null default now(),
+  created_at        timestamptz not null default now(),
+  updated_at        timestamptz not null default now()
+);
+
+-- 버킷 (기본 9 + 행사별 추가) — §19.2
+create table settlement_buckets (
+  id              uuid primary key default gen_random_uuid(),
+  board_id        uuid not null references settlement_boards(id) on delete cascade,
+  code            text not null,                  -- s1·s2·s3·s4·ot·at·s5·rc·ld 또는 custom 슬러그
+  label           text not null,
+  quote_amount    bigint not null default 0,      -- 부가세 별도, 스냅숏 시점 고정
+  has_cost        boolean not null default true,  -- false = 원가 없음(발주·실비 입력 금지)
+  is_margin_base  boolean not null default true,  -- false = 마진 기준 계약액에서 제외(리드젠)
+  source          text not null default 'quote'   -- 'quote' | 'custom'
+                  check (source in ('quote','custom')),
+  sort_order      int not null default 0,
+  created_at      timestamptz not null default now()
+);
+create unique index settlement_buckets_code_uniq on settlement_buckets (board_id, code);
+
+-- 항목 (발주 단위 = 견적 항목 단위) — §19.3
+create table settlement_items (
+  id                 uuid primary key default gen_random_uuid(),
+  board_id           uuid not null references settlement_boards(id) on delete cascade,
+  bucket_id          uuid not null references settlement_buckets(id) on delete cascade,
+  title              text not null,
+  spec               text,
+  vendor_id          uuid references vendors(id),
+  assignee_id        uuid references profiles(id),
+  ordered_amount     bigint,                      -- 발주(약정) · 부가세 별도
+  actual_amount      bigint,                      -- 실비(집행) · 부가세 별도
+  input_amount_raw   bigint,                      -- 담당자가 실제로 받은 원본 금액(포함/별도 표기 그대로)
+  vat_included_input boolean not null default false,
+  status             text not null default 'planned'
+                     check (status in ('planned','ordered','settled','cancelled')),
+  evidence           text,                        -- 세금계산서·카드전표 등 근거 표기
+  import_id          uuid references settlement_imports(id),  -- 업로드에서 생성된 경우
+  note               text,
+  created_at         timestamptz not null default now(),
+  updated_at         timestamptz not null default now()
+);
+create index settlement_items_bucket on settlement_items (bucket_id);
+
+-- 협력사 견적서 업로드 (Phase 4.7 — 스키마만 v2.2에서 확정) — §19.5
+create table settlement_imports (
+  id           uuid primary key default gen_random_uuid(),
+  board_id     uuid not null references settlement_boards(id) on delete cascade,
+  file_name    text not null,
+  drive_file_id text,                             -- 원본 보존 (Phase 5 이후)
+  vendor_id    uuid references vendors(id),
+  parsed       jsonb,                             -- 파싱 결과 원본
+  questions    jsonb,                             -- 확인 큐 (미해결 항목)
+  status       text not null default 'parsed'
+               check (status in ('parsed','confirmed','discarded')),
+  created_by   uuid references profiles(id),
+  created_at   timestamptz not null default now()
+);
+```
+
+> `settlement_items.import_id`는 `settlement_imports`를 참조하므로 마이그레이션 순서는 **vendors → settlement_boards → settlement_buckets → settlement_imports → settlement_items**다.
+
+### §4-24 정산 계약 (v2.2 — 정본)
+
+| 규칙 | 내용 |
+|---|---|
+| R-S1 | 정산은 **행사에 종속**된다. 목록·생성 API는 projectId를 인자로 받는다(§4-21 R-L1 승계). `currentUser().project_id`로 유도 금지 |
+| R-S2 | 기준 견적은 **스냅숏**이다. 버킷의 `quote_amount`는 불러온 시점에 고정되며 `quotes`를 실시간 참조하지 않는다. 갱신은 `rebaseSettlementBoard`로만 — 이전 기준과의 차이를 보여주고 activity_log에 남긴다 |
+| R-S3 | 모든 금액은 **부가세 별도**로 저장한다. `vat_included_input=true`로 들어온 값은 저장 직전 `round(v / 1.1)`로 분리하고 원본을 `input_amount_raw`에 남긴다(§19.4) |
+| R-S4 | `has_cost=false` 버킷(`s5`·`rc`·`ld`)에는 **발주·실비를 넣을 수 없다** — API는 422, UI는 입력 칸 자체를 두지 않는다 |
+| R-S5 | `is_margin_base=false` 버킷(`ld` 리드젠)은 마진 기준 계약액에서 제외한다. 화면에서 **숨기지 않고** 회색으로 남겨 제외 사유를 보인다 |
+| R-S6 | 발주는 **항목 단위**다. 한 항목에 협력사 하나. 협력사가 여러 항목을 묶어 청구하면 항목별로 나눠 적는다(§19.3) |
+| R-S7 | `projects.status='closed'`에서는 정산 **생성·수정·삭제가 전부 409**(`assertWritable` 승계) |
+| R-S8 | 견적 초과는 **막지 않는다**. 버킷 헤더 경고 + 홈 카드로 알리되 저장은 통과시킨다 — 정산은 사후 기입이라 게이트는 이미 쓴 돈을 막는 셈이다 |
+| R-S9 | 정산 데이터는 **발주처 토큰 경로·운영계획서 조립·랜딩·알림 본문 어디에도 나가지 않는다**. 금지 키·검사 범위는 §19.7 |
+| R-S10 | 마진 식과 항등식은 §19.1이 정본이다. 화면은 `마진 기준 계약액 − Σ실집행 = 최종 마진`을 검산해 어긋나면 경고한다 |
+
+---
+
 ## 5. 컨펌 워크플로우 — 상태 머신 (정본)
 
 ```
@@ -524,10 +623,16 @@ draft ──(담당/PM)──> internal_review ──(PM만)──> pending_appr
 | 견적 생성·버전·확정·Excel (v2.0) | ●(app_role admin·sales만 — 프로젝트 역할과 무관) | — | — | — | — |
 | 연결 견적 요약 열람 (v2.0) | ●(해당 행사 pm) | — | — | — | — (토큰 경로는 quotes 테이블 자체를 조회 불가) |
 | 컴플라이언스 카드 체크 (v2.0) | ● | ● | ● | ● | — |
+| 정산보드 열람 (v2.2) | ● | ● | ● | ● | — (토큰 경로는 settlement_* 조회 불가) |
+| 정산 버킷 추가·삭제·기준 견적 갱신 (v2.2) | ● | — | — | — | — |
+| 발주 항목 생성 (v2.2) | ● | — | — | — | — |
+| 발주액·실비 입력 (v2.2) | ● | ●(자기 담당 항목) | ●(자기 담당 항목) | ●(자기 담당 항목) | — |
+| 협력사 마스터 등록·수정 (v2.2) | ● | ● | ● | ● | — |
 
 ### 6.2 RLS 방향
 - 모든 테이블: `project_id in (select project_id from project_members where user_id = auth.uid())`.
 - 쓰기: deliverables/versions는 역할-영역 일치 또는 pm. approvals insert는 pm만.
+- (v2.2) settlement_boards·settlement_buckets·settlement_items·settlement_imports: `select` = 프로젝트 멤버 전원. `insert·update·delete` = 보드·버킷·기준 갱신은 pm만, 항목 금액은 pm 또는 `assignee_id = auth.uid()`. vendors는 조직 단위라 로그인 사용자 전원 `select`, `insert·update`도 전원(중복 등록 방지는 unique 인덱스). **토큰 경로 화이트리스트에 settlement_*·vendors를 추가하지 않는다**(§19.7).
 - (v2.0) quotes: `select` = profiles.app_role in (admin,sales) OR (project_id가 null이 아니고 해당 프로젝트 pm 멤버) / `insert·update` = admin·sales만. compliance_cards·profiles: 멤버 범위.
 - 발주처 토큰 경로는 **RLS를 통과하지 않고** Edge Function(service role)이 토큰 검증 후 화이트리스트 쿼리만 수행 — 토큰으로 접근 가능한 데이터: 자기 프로젝트의 pending_approval 항목 + 그 버전 파일 + final 항목 + 마일스톤 진행률 + **visibility='shared' 코멘트만**(internal 코멘트는 쿼리 자체에서 제외 — v1.1, C-1). 그 외 어떤 테이블도 조회 불가.
 
@@ -651,7 +756,7 @@ draft ──(담당/PM)──> internal_review ──(PM만)──> pending_appr
 
 ## 10. 화면 명세 (v1.5: S-1 추가, S0·S6 재정의)
 
-**진입점 원칙(v1.5)**: 모든 화면은 사이드바 메뉴 또는 명시적 버튼으로 도달 가능해야 하며, 데모 픽스처는 그 진입 흐름을 실제로 보여줘야 한다(게이트 뒤에만 존재하는 화면 금지). 사이드바 순서(v2.0): [프로젝트 셀렉터] → 행사 목록 → **준비** 그룹(견적 · 랜딩보드 · 행사 설정) → **운영** 그룹(홈 → 디자인 보드 → 운영 보드 → 등록 → 일정 → 운영계획서). 견적 메뉴는 app_role이 admin·sales가 아니면 숨김. 셀렉터에 "견적만 있음 · 행사 미생성" 상태 표시.
+**진입점 원칙(v1.5)**: 모든 화면은 사이드바 메뉴 또는 명시적 버튼으로 도달 가능해야 하며, 데모 픽스처는 그 진입 흐름을 실제로 보여줘야 한다(게이트 뒤에만 존재하는 화면 금지). 사이드바 순서(v2.0): [프로젝트 셀렉터] → 행사 목록 → **준비** 그룹(견적 · 랜딩보드 · 행사 설정) → **운영** 그룹(홈 → 디자인 보드 → 운영 보드 → 등록 → 일정 → 운영계획서 → **정산보드(v2.2)**). 정산보드는 견적 메뉴와 달리 **프로젝트 멤버 전원에게 보인다**(내부 한정·발주처 비공개). 견적 메뉴는 app_role이 admin·sales가 아니면 숨김. 셀렉터에 "견적만 있음 · 행사 미생성" 상태 표시.
 
 | # | 화면 | 구성 | 주요 액션 |
 |---|---|---|---|
@@ -668,6 +773,7 @@ draft ──(담당/PM)──> internal_review ──(PM만)──> pending_appr
 | S6 | 행사 설정 (v1.5 재정의 — 메뉴 2번째 상시 노출) | 탭 ①행사개요: 행사명·코드·유형·시작/종료일·시작/종료 시간·장소·예상 인원·좌석 형태·주제·주최/주관·사회자·참가 대상·기타 개요 항목(overview_items) + **(v2.0) 모객형 전용 그룹: 보장 인원·쇼업 KPI·타겟팅 5축 칩, 연결 견적 링크("견적 v3 확정 기준")** — **행사개요의 단일 원천(S9 ①은 여기서 읽기 조립, 인라인 편집 제거)** / 탭 ②담당자: 내부 담당자 표(추가 행·삭제·역할 변경) + 발주처 담당자·토큰 통합 표(발급·회수·링크 복사) + R&R 미리보기 / 탭 ③유형·연동: 유형 토글 안내·Drive·Slack | pm 편집(타 역할 읽기). 상단에 "세팅 완료·일자" 또는 "세팅 미완료(필수 n개)" 뱃지 |
 | S7 | 발주처 컨펌 큐 (`/c/{token}`) | 대기 항목 리스트 → 미리보기 → [승인] [수정요청+코멘트] · 처리 완료 이력 | 승인/수정요청 |
 | S8 | 발주처 현황 (`/c/{token}/status`) | 영역별 진행률 · 마일스톤 · 최근 확정본 목록(다운로드) | 읽기 전용 |
+| S-10 | 정산보드 (v2.2, 메뉴 "운영" 그룹 마지막) | 상단 KPI 4(마진 기준 계약액·실집행·최종 마진·마진율) + **마진 구성 3분할 막대**(항목 마크업=변동 / PCO 기획료=고정 / RSVP 운영비=고정)와 검산 블록 / 버킷 표(견적·발주·실집행·마크업·마크업률, `has_cost=false`는 "원가 없음"·`ld`는 "마진 계산 밖") / 버킷 펼침 = 발주 항목 표(항목·협력사·담당·발주·실비·상태·증빙) / 협력사 견적서 업로드 패널(Phase 4.7 전에는 안내) | ＋발주 항목(pm)·발주액/실비 입력(담당)·버킷 추가(pm)·기준 견적 바꾸기(pm)·협력사 견적서 올리기. **발주처에게 절대 노출되지 않는다(§19.7)**. 견적 초과는 경고만 하고 막지 않는다 |
 | S9 | 운영계획서 (v1.2) | 섹션 자동 조립: ①행사개요(v1.5: 행사 설정 ①에서 읽기 조립 — 일자·시간·장소·인원·좌석·주최·대상 포함) ②프로그램 ③존별 운영(content+도면) ④제작물 리스트(스펙 표+최신 시안·상태 뱃지) ⑤등록 통계 ⑥일정 ⑦큐시트 표(v1.3, 프로그램 다음 배치) — 섹션별 진행률·인쇄 CSS(A4) | 프로그램 인라인 편집(pm·ops), 개요는 "행사 설정에서 편집" 링크, 인쇄(PDF) |
 
 **옛 Configurator 라우트 리다이렉트(v2.0, 도메인 재연결 후 301)**: `/quote`→`/quotes`(로그인 필요) · `/setup`→`/onboarding` · `/configurator`→`/quotes` · `/events`→`/projects` · `/events/:id`→`/projects`(셀렉터 안내) · `/events/:id/soc`→`/schedule` · `/events/:id/soc?client_view=1`→410 안내("발주처 링크는 담당자에게 새 링크를 요청"). 구버전 MiceConfigurator·PreSetup·SocDashboard 화면은 이식하지 않는다(기능은 행사 설정·일정·S-2가 흡수).
@@ -691,6 +797,7 @@ UI 공통: 한국어, 데스크톱 우선 + 반응형(발주처 화면은 모바
 - 회사명·실명 하드코딩 금지(#RULE-NO-COMPANY) — 발주처·행사명은 전부 데이터.
 - 백업: DB는 Supabase 자동 백업, 파일은 Drive 자체가 원본.
 - (v2.0) 금액 비노출 4중 차단 — 분석 보고에서 확인된 Configurator의 노출 경로를 전부 닫는다: ① `/quote` 공개 렌더 → 로그인+app_role 게이트 ② estimates RLS 개방 → quotes RLS(§6.2) + 새 프로젝트 ③ Excel 다운로드 시 외부 Edge Function으로 자동 Drive 업로드 → 제거(Phase 5 Drive 모듈의 명시 버튼만) ④ `?client_view=1` URL 파라미터 공유 → 폐기(발주처는 `/c/{token}`만). 운영계획서·활동 로그·알림 본문에 금액 필드 포함 금지(테스트로 증명).
+- (v2.2) 정산 비노출 — 금지 키에 `settlement`·`ordered_amount`·`actual_amount`·`markup`·`margin`을 추가하고, 검사 범위에 `pages/Landing*`·`lib/landing*`를 추가한다(랜딩은 토큰조차 없는 유일한 완전 공개 지면인데 v2.1까지 검사 밖이었다). 가드는 결함을 되돌려 넣어 **실제로 실패하는지 역검증**한 뒤 통과로 인정한다. 상세는 §19.7.
 - (v2.0) 클라이언트 번들에 Supabase URL·anon key 하드코딩 금지 — env만. 베뉴 DB의 `reference_cases`(실고객사명·실거래액)는 이식하지 않는다(#RULE-NO-COMPANY).
 - (v2.0) 내부 로그인 = Supabase Auth 이메일 매직링크, 허용 도메인 화이트리스트(env). profiles.app_role 승격은 admin만.
 
@@ -709,6 +816,7 @@ UI 공통: 한국어, 데스크톱 우선 + 반응형(발주처 화면은 모바
 | (v1.4) WBS 템플릿 전개·체크리스트/간트·R&R 카드·산출물 연결 뱃지+final 자동 done | (v1.4) Configurator 실연동(양방향 동기화)·템플릿 편집기·태스크 코멘트 |
 | (v1.5) 프로젝트 셀렉터·S-1 행사 목록·행사 설정 3탭·S0 동일 폼·담당자 입력·종료/재개 | (v1.5) URL prefix 라우팅(`/p/:id`)·이메일 초대 수락 흐름(Phase 4)·행사 복제 |
 | (v2.0) 견적 모듈 S-2(엔진·베뉴 DB·옵션·버전·확정·Excel)·견적→행사 핸드오프·모객형 필드·컴플라이언스 카드·WBS 소통 대상·새 Supabase·로그인·인프라 전환 | (v2.0) 단가·베뉴·옵션 DB화(pricing_rules)와 관리 화면·견적 PDF·고객용 견적 공유 링크·견적 승인 워크플로우·Configurator 랜딩 아카이브 |
+| (v2.2) 정산보드 S-10(마진 3분할·버킷 9+추가·항목 3단 추적·부가세 자동 분리·협력사 마스터) | (v2.2) 협력사 견적서 업로드 파싱(Phase 4.7)·발주서 발행·협력사 단가 누적 통계 → 견적 단가 DB화 연결 |
 | — | 현장사진 갤러리·결과보고서 조립 |
 | 등록 CSV 임포트·테이블·체크인 토글·통계 기초 | 통계 대시보드 고도화(mice-dashboard 연동) |
 | Slack·이메일 알림 + D-1 리마인드 | 모바일 앱 수준 최적화, 다국어 |
@@ -716,6 +824,8 @@ UI 공통: 한국어, 데스크톱 우선 + 반응형(발주처 화면은 모바
 ---
 
 ## 14. 개정 이력
+
+- **v2.2** (2026-08-23): **정산보드(S-10) 신설** — 내부정산 실물 13건 분석 기반, 시각안 승인. ① **§19 정산보드 정본** — 마진 식(항목 마크업 + PCO 기획료 + RSVP 운영비, 리드젠 제외)을 실물 2건에서 원 단위 검산 ② §4-23 테이블 4종(vendors·settlement_boards·settlement_buckets·settlement_items) + settlement_imports ③ **§4-24 정산 계약 R-S1~R-S10** — 견적 스냅숏 고정·부가세 별도 저장·원가 없음 버킷 입력 차단·리드젠 제외·항목 단위 발주·초과는 경고만 ④ 버킷 기본 9종(견적 `recruit`를 rc/ld로 분리하는 것이 유일한 비자명 매핑) + **행사별 버킷 추가**(실물 섹션 수 5~9 가변) ⑤ §6.1 권한 5행·§6.2 RLS·§10 S-10 화면·사이드바 순서 ⑥ **§19.7 비노출 가드 확장** — 금지 키 5종 추가 + 검사 범위에 랜딩 파일 포함 + 역검증 의무 ⑦ §19.5 협력사 견적서 업로드 파싱(Phase 4.7, 스키마만 선반영). **DataProvider v7 재동결(11메서드 · 86메서드)**
 
 - **v2.1** (2026-08-23): **랜딩보드(S-3) 사후 정본화 + 스코프 결함 정정 + 가격 상수 v1.1 확정**. ① §4-19·§4-20 랜딩 테이블 신설 ② **§4-21 랜딩 스코프 계약** — `listLandingPages(projectId)`·`createLandingPage(projectId, input)`로 시그니처 정정, 쓰기 가드는 `landing.project_id` 기준, DoD grep에 `user.project_id` 추가(v1.5가 없앤 단일 프로젝트 전제가 랜딩 모듈에만 되살아난 결함) ③ §4-22 랜딩→등록 유입 계약(금액 비노출 재확인) ④ §8 랜딩 API 6종·§10 S-3 화면 명세·사이드바 순서 갱신 ⑤ **§17.3-4 골든 데이터셋 출처 규약** — 원본 생성기 산출물만 인정, `source.commit`은 실제 생성 커밋(어긋나면 검증 실패로 간주) ⑥ **§17.4 가격 상수** — LED 오퍼레이팅 250만원 = V-mix 스위칭 + 전담 엔지니어 일체(사용자 확정), 화면중계 200만·온라인중계 +150만 증분·전체 녹화 100만, `scaler4k`→`ledOperating` 승계 ⑦ §2.1 동결 이력 정정(v5는 9메서드) + v6·v6.1 기록. **DataProvider v6.1 재동결**
 
@@ -858,3 +968,124 @@ UI 공통: 한국어, 데스크톱 우선 + 반응형(발주처 화면은 모바
 5. Vercel: communicator용 새 Vercel 프로젝트 생성 → env 3종(URL·anon·allowed domains) → 프리뷰 배포 확인 ■ → 도메인 `rmb-mice.com`을 옛 프로젝트에서 제거하고 새 프로젝트에 추가(DNS 변경 없음, Vercel 내부 이전) ■ → 옛 라우트 리다이렉트(§10 표) 동작 확인.
 6. 옛 Vercel 프로젝트(jsx-easy-shift)는 도메인 제거 후 1주 유지 → 삭제 ■. GitHub jsx-easy-shift는 README 상단에 "아카이브 — communicator로 통합(2026-xx-xx)" 1줄 커밋 후 Archive ■. 옛 Supabase 프로젝트는 임포트 검증 후 Pause → 30일 뒤 삭제 ■.
 7. 롤백: 5단계까지는 도메인을 옛 프로젝트로 되돌리면 즉시 복구. 6단계 이후는 아카이브 해제로 복구.
+
+---
+
+## 19. 부록 — 정산보드 정본 (v2.2, S-10)
+
+> 근거: 내부정산 실물 13건(2026-08-23 사용자 제공) 분석. 마진 식은 실물 2건에서 원 단위 일치 검산을 마쳤다.
+> 실고객사명·실거래액은 본 문서에 담지 않는다(#RULE-NO-COMPANY). 화면 예시 수치는 데모 확정 견적 `quo-003`의 엔진 산출값을 쓴다.
+
+### 19.1 마진 모델 (정본)
+
+사용자 정의: **최종 마진 = 항목별 마크업 합 + PCO 기획료 + RSVP 운영비. 리드젠(쇼업 보장)은 제외.**
+
+```
+항목 마크업(bucket) = bucket.quote_amount − Σ item.actual_amount      … has_cost=true 버킷만
+최종 마진           = Σ 항목 마크업 + Σ bucket.quote_amount           … 뒤 항은 has_cost=false·is_margin_base=true 버킷
+마진 기준 계약액     = Σ bucket.quote_amount                          … is_margin_base=true 버킷 전체
+마진율              = 최종 마진 ÷ 마진 기준 계약액
+```
+
+**항등식(화면 검산에 쓴다)**: `마진 기준 계약액 − Σ 실집행 = 최종 마진`. 두 값이 어긋나면 화면 상단에 경고를 띄운다 — 어긋나는 경우는 버킷 플래그가 잘못 설정된 때뿐이다.
+
+실물 검산(고객사명 제외):
+
+| 계약 규모 | 항목 마크업 | ＋ PCO 기획료 | ＋ RSVP 운영비 | ＝ 계산값 | 파일의 마진 |
+|---|---:|---:|---:|---:|---:|
+| 84.0M | 13,899,909 | 10,043,500 | 4,000,000 | **27,943,409** | 27,943,409 |
+| 16.6M | 6,825,136 | 1,830,000 | 760,000 | **9,415,136** | 9,415,136 |
+
+- 실물 내부정산 시트의 실집행 합계 수식은 **PCO 기획료·모객 섹션을 아예 더하지 않는다**(예: `=G18+G31+G52+G62+G68`). 원가 없음을 실무가 이미 수식으로 표현하고 있었다.
+- 리드젠(쇼업 보장)은 실물에서도 **별도 계약**이라 견적 총액에 포함되지 않는다. RSVP 운영비는 운영의 몫이므로 마진에 남고, PCO 기획료 base에도 포함된다.
+- 실측 마진율 밴드 **27.5% ~ 69.0%**(7건). 규모가 클수록 낮아진다(100M대 31.8% ↔ 16M대 56.6%). 화면은 이 밴드를 참고선으로 표시하되 **판정하지 않는다**(표본 7건, 가정).
+
+### 19.2 버킷 체계 — 기본 9 + 행사별 추가
+
+기본 버킷은 확정 견적 breakdown에서 스냅숏된다. `recruit` 한 덩어리를 **rc와 ld로 쪼개는 것이 유일한 비자명 매핑**이다.
+
+| code | 라벨 | 견적 breakdown 출처 | has_cost | is_margin_base |
+|---|---|---|:---:|:---:|
+| `s1` | 베뉴 사용료 | `s1` | ● | ● |
+| `s2` | 시스템 구축 | `s2` | ● | ● |
+| `s3` | 디자인·브랜딩 | `s3` | ● | ● |
+| `s4` | 운영·등록·보험 | `s4` | ● | ● |
+| `ot` | 추가옵션 | `options` | ● | ● |
+| `at` | 참관객 관리 | `attendee` | ● | ● |
+| `s5` | PCO 기획료 | `s5` | — | ● |
+| `rc` | RSVP 운영비 | `recruit` 중 `rsvpPkg` | — | ● |
+| `ld` | 리드젠(쇼업 보장) | `recruit` 중 `showup` | — | — |
+
+- `has_cost=false` 버킷은 **발주·실비 입력을 UI와 API 양쪽에서 막는다**(입력 시 422). 견적액 전체가 마진이다.
+- `is_margin_base=false`(현재 `ld`뿐)는 마진 기준 계약액에서 빠진다. 화면에는 회색으로 남겨 "왜 안 세는지"를 보이게 한다 — 숨기면 담당자가 누락으로 오해한다.
+- **행사별 버킷 추가**: `source='custom'`, `quote_amount=0`, `has_cost=true`, `is_margin_base=true`가 기본값. 넣는 즉시 마크업이 음수로 잡히고 그것이 맞다.
+  - 실물 근거 — 섹션 수가 행사마다 5~9개로 다르고, 다음이 실제로 추가되었다: F&B 추가비용 · 전시 및 이벤트 · 가구 임차 · 기념품 · 연사 사례비 · 행사장 조성비용 · 추가 발생 비용. 고정 8버킷으로는 담기지 않는다.
+
+### 19.3 3단 추적과 항목 상태
+
+한 항목은 **견적(버킷이 보유) → 발주(약정) → 실비(집행)** 세 값을 갖는다. 실물에는 발주/실비 구분이 없고 실집행 한 칸뿐이므로, 3단은 **새로 얹는 층**이다.
+
+| 상태 | 뜻 | 쓰는 사람 | 금액 |
+|---|---|---|---|
+| `planned` | PM이 목록에 올림 | pm | 없어도 됨 |
+| `ordered` | 담당자가 협력사·발주액 확정 | 담당자 | `ordered_amount` 필수 |
+| `settled` | 실비·증빙 확정 | 담당자 | `actual_amount` 필수 |
+| `cancelled` | 취소 — 집계에서 제외 | pm·담당자 | 보존 |
+
+- **발주는 항목 단위다.** 실물에서 한 협력사의 11개 항목 중 10개가 0원이고 한 줄에 몰려 있는 사례가 있으나, 이는 구조가 아니라 **손입력 부담 때문의 관행**이다(협력사 견적서에는 상세 항목이 다 있다). 묶음 입력을 허용하면 관행이 그대로 옮겨 와 버킷별 ± 외에는 아무것도 얻지 못한다.
+- 그 대가로 **§19.5 업로드 파싱이 필수 전제**가 된다. 파싱 없이 항목 단위를 강제하면 담당자는 첫 행사에서 이탈한다.
+- 할인·조정은 **음수 금액 항목**으로 넣는다(실물에 `-4,550,000` 사례 존재). 별도 필드를 만들지 않는다.
+
+### 19.4 부가세 규약 (실물 결함 대응)
+
+실물 시트가 손계산 중이다 — `=23320000/1.1`, 심한 곳은 `=241000+(85800/1.1)`로 **한 셀에 포함분과 별도분이 섞여** 있다.
+
+| 규칙 | 내용 |
+|---|---|
+| 저장 | 모든 금액은 **부가세 별도**로 저장한다. 견적 breakdown이 별도 기준이므로 비교축이 일치한다 |
+| 입력 | 입력 칸마다 `vat_included` 토글. `true`면 저장 직전 `round(v / 1.1)`로 분리하고, 받은 원본값을 `input_amount_raw`에 함께 남긴다 |
+| 표시 | 항목 상세에 "받은 금액 1,320,000(포함) → 저장 1,200,000(별도)"를 같이 보여준다. 사람이 계산하게 두지 않는다 |
+| 파싱 | 업로드 문서에 부가세 표기가 없으면 **자동 판정하지 않고 반드시 묻는다**(§19.5 확인 큐) |
+| 반올림 | 원 단위 반올림. 버킷 소계는 항목 저장값의 단순 합이며 재반올림하지 않는다 |
+
+### 19.5 협력사 견적서 업로드 → 자동 배분 (Phase 4.7)
+
+PDF·엑셀·사진에서 항목·단가·수량을 읽어 버킷에 배정하고, **확신이 서지 않는 것만 담당자에게 묻는다.**
+
+```
+업로드 → 파싱(서버) → 자동 배정(확신 높음) ┐
+                     └ 확인 큐(확신 낮음) ┴→ 담당자 확인 → settlement_items 생성
+                                              원본 파일은 근거로 보존
+```
+
+- 묻는 것은 대개 둘이다 — **어느 버킷인지**, **부가세가 포함인지**. 그 외는 자동으로 넣는다.
+- **읽은 결과는 항상 담당자 확인을 거쳐 저장한다.** 파싱 결과를 직접 커밋하지 않는다(오독이 곧 정산 오류가 된다).
+- 단계: 엑셀(구조가 가장 또렷) → PDF → 사진. 엑셀만으로도 항목 단위가 성립한다.
+- 파싱은 서버가 필요하므로 **Phase 4.7**로 둔다. 스키마(`settlement_imports`)는 v2.2에서 미리 만들고, Mock 단계에서는 업로드 버튼이 "Phase 4.7에서 열립니다" 안내를 띄운다 — **게이트 뒤에 숨기지 않는다**(§10 진입점 원칙).
+- 이 절이 §19.3의 항목 단위를 성립시키는 조건이다. 순서를 뒤집지 말 것.
+
+### 19.6 협력사 마스터
+
+같은 협력사가 행사 간에 반복 등장하고, 실물에는 같은 업체가 역할별로 갈려 적힌 사례가 있다. 행사마다 이름을 다시 치면 표기가 갈려 집계가 불가능해진다.
+
+- `vendors`는 **프로젝트에 종속되지 않는 조직 단위 마스터**다(§4-23 DDL 참조). 항목은 `vendor_id`로 참조하고, 자유 입력은 신규 등록으로 승격시킨다.
+- 누적되면 "이 협력사는 이 버킷에서 평균 얼마"가 나오고, 그것이 다음 견적의 근거가 된다 — 단가표를 코드에서 DB로 옮기는 2차 과제(§13)와 연결된다.
+- `vendors.name`은 실제 거래처명이라 **#RULE-NO-COMPANY의 예외**다(픽스처에는 가상 명칭만 쓴다).
+
+### 19.7 비공개 보증 — 규칙이 아니라 가드로
+
+"발주처 절대 비공개"는 문장으로는 지켜지지 않는다. §12의 금액 비노출 검사를 확장한다.
+
+| 조치 | 내용 |
+|---|---|
+| 금지 키 확장 | `quotes` · `breakdown` · `total_amount`에 **`settlement` · `ordered_amount` · `actual_amount` · `markup` · `margin`** 추가 |
+| 검사 범위 확장 | 기존 `pages/Client*` · `components/plan` · `components/client`에 **`pages/Landing*` · `lib/landing*`** 추가 — 랜딩은 토큰조차 없는 유일한 완전 공개 지면인데 현재 검사 밖이다 |
+| 런타임 검사 | `getClientQueue` · `getClientStatus` · `getPlan` · `listActivity` 응답 객체 트리에 위 키가 0건 |
+| 역검증 | 결함을 일부러 되돌려 넣어 가드가 실제로 실패하는지 확인하고, 그 사실을 체크아웃 보고에 적는다 |
+| 토큰 경로 | `settlement_*` · `vendors`는 §6.2 화이트리스트 쿼리에 **포함하지 않는다**. Edge Function이 조회 대상으로 삼는 테이블 목록에 추가 금지 |
+
+### 19.8 열린 질문 (v2.2 시점)
+
+- 실측 마진율 밴드는 표본 7건이다. 참고선으로만 쓰고, 20건 이상 쌓이면 규모 구간별 기준선으로 승격을 재검토한다 — **가정**.
+- 협력사 견적서 파싱의 정확도 목표치는 정하지 않았다. Phase 4.7 착수 시 엑셀 10건으로 실측한 뒤 정한다 — **가정**.
+- 발주서 발행(우리 → 협력사) 기능은 이번 범위 밖이다. 정산보드는 **기록**만 하며, 발주 문서 자체는 기존 방식을 유지한다.

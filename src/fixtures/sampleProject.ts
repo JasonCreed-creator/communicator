@@ -22,6 +22,10 @@ import type {
   Version,
   WbsTask,
   LandingDailyMetric,
+  SettlementBoard,
+  SettlementBucket,
+  SettlementItem,
+  Vendor,
   LandingPage,
 } from '../types/entities'
 import type { DeliverableArea, DeliverableStatus } from '../types/enums'
@@ -37,6 +41,7 @@ import {
   REBUILD27_TOKEN,
 } from './rebuildFixtures'
 import { seedLandingFixtures } from './landingFixtures'
+import { seedSettlementFixtures } from './settlementFixtures'
 
 /** `/c/demo` 데모 라우트용 토큰 값 (CLAUDE.md §4 Phase 3) */
 export const DEMO_TOKEN = 'demo'
@@ -85,6 +90,11 @@ export interface MockState {
   landing_pages: LandingPage[]
   /** v2.1 §4-22 — 일자별 유입 지표 (mock 픽스처 / Phase 4는 GA Data API) */
   landing_metrics: Record<string, LandingDailyMetric[]>
+  // v2.2 정산 (§4-23)
+  vendors: Vendor[]
+  settlement_boards: SettlementBoard[]
+  settlement_buckets: SettlementBucket[]
+  settlement_items: SettlementItem[]
 }
 
 /** v1.2 가이드 문서·스펙·본문 필드 기본값 — 가이드 없이 만든 항목은 전부 null (§4) */
@@ -562,6 +572,10 @@ const FIXTURE: MockState = {
   // v2.1 랜딩보드 — createFixtureState()에서 샘플 랜딩 1건 + 30일치 지표를 시드
   landing_pages: [],
   landing_metrics: {},
+  vendors: [],
+  settlement_boards: [],
+  settlement_buckets: [],
+  settlement_items: [],
 
   unregistered_files: [
     {
@@ -840,6 +854,11 @@ export function createFixtureState(): MockState {
 
   // ── v2.1 랜딩보드 — 샘플 행사에 랜딩 1건 + 최근 30일 지표 ──
   seedLandingFixtures(state, PROJECT_ID, today)
+
+  // ── v2.2 정산보드 — 샘플 행사의 확정 견적을 기준으로 보드 1건 ──
+  // RE:BUILD 27에는 일부러 만들지 않는다 → "확정 견적에서 시작" 빈 상태가 데모에 보인다
+  const finalQuote = state.quotes.find((q) => q.id === FINAL_QUOTE_ID)
+  if (finalQuote) seedSettlementFixtures(state, PROJECT_ID, finalQuote, today)
 
   return state
 }
