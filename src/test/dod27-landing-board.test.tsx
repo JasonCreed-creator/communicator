@@ -370,3 +370,67 @@ describe('DoD-27 (g) 랜딩 스코프 계약 (§4-21)', () => {
     )
   })
 })
+
+// ── 행사별 랜딩 차별화 (§4-21) ─────────────────────────────────────
+// 랜딩은 행사에 종속된 산출물이므로 목록만 갈라지면 안 되고 **내용도 달라야** 한다.
+// autofill 섹션(hero·speakers·agenda·zones·venue)은 각 행사의 세션·존·개요에서 조립되고,
+// 나머지 카피는 픽스처가 행사 단계에 맞게 채운다(종료 행사=확정본 / 준비 중=작성 중).
+describe('DoD-27 (h) 행사별 랜딩 내용', () => {
+  let provider: MockProvider
+
+  beforeEach(() => {
+    provider = new MockProvider(createFixtureState())
+  })
+
+  it('행사마다 랜딩 카피가 다르다 — 같은 기본 템플릿이 아니다', async () => {
+    const rb26 = await provider.getLandingPage(LANDING_ID_REBUILD26)
+    const rb27 = await provider.getLandingPage(LANDING_ID_REBUILD27)
+    const sample = await provider.getLandingPage(LANDING_ID_SAMPLE)
+
+    const lead = (p: typeof rb26) => p.sections.find((s) => s.type === 'lead')!.headline
+    expect(new Set([lead(rb26), lead(rb27), lead(sample)]).size).toBe(3)
+
+    // 종료 행사는 확정 문구, 준비 중 행사는 작성 중 문구
+    expect(lead(rb27)).toContain('가안')
+    expect(lead(rb26)).not.toContain('가안')
+  })
+
+  it('행사 단계가 섹션 내용에 드러난다', async () => {
+    const rb26 = await provider.getLandingPage(LANDING_ID_REBUILD26)
+    const rb27 = await provider.getLandingPage(LANDING_ID_REBUILD27)
+    const tickets = (p: typeof rb26) => p.sections.find((s) => s.type === 'tickets')!
+
+    // 진행된 행사는 티켓 구성이 잡혀 있고, 준비 중 행사는 미정이다
+    expect(tickets(rb26).items.length).toBeGreaterThan(tickets(rb27).items.length)
+    expect(tickets(rb27).items[0].meta).toBe('미정')
+    expect(tickets(rb26).items.some((i) => i.label.includes('애프터파티'))).toBe(true)
+
+    // FAQ도 행사마다 다르다
+    const faq = (p: typeof rb26) => p.sections.find((s) => s.type === 'faq')!.items.length
+    expect(faq(rb26)).toBeGreaterThan(faq(rb27))
+  })
+
+  it('autofill 섹션은 각 행사의 세션·존에서 조립된다', async () => {
+    for (const [landingId, projectId] of [
+      [LANDING_ID_REBUILD26, PROJECT_ID_REBUILD26],
+      [LANDING_ID_REBUILD27, PROJECT_ID_REBUILD27],
+    ] as const) {
+      const page = await provider.getLandingPage(landingId)
+      const filled = autofillSections(page.sections, {
+        project: await provider.getProject(projectId),
+        sessions: await provider.listProgramSessions(projectId),
+        // 편집기와 같은 필터 — 존 운영 항목만 autofill 소스로 쓴다
+        zoneDeliverables: (await provider.listDeliverables(projectId, { area: 'ops' })).filter(
+          (d) => d.category?.includes('존'),
+        ),
+      })
+      const agenda = filled.find((s) => s.type === 'agenda')!
+      const sessions = await provider.listProgramSessions(projectId)
+      expect(agenda.items).toHaveLength(sessions.length)
+    }
+
+    // 두 행사의 타임테이블 길이가 실제로 다르다 (20세션 vs 가안 4세션)
+    const n = async (pid: string) => (await provider.listProgramSessions(pid)).length
+    expect(await n(PROJECT_ID_REBUILD26)).not.toBe(await n(PROJECT_ID_REBUILD27))
+  })
+})
