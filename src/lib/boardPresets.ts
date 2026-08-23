@@ -6,13 +6,16 @@
 //
 // 스키마는 건드리지 않는다 — `Deliverable.spec_size|qty|location|type` 4열은 그대로 쓰고,
 // **영역별로 라벨과 프리셋만 갈아 끼운다**. 컬럼의 의미는 영역 안에서만 해석한다:
-//   design  size=규격      qty=수량       location=위치      type=종류
-//   ops     size=규모      qty=투입 인원   location=장소·구역  type=운영 구분
+//   design  size=규격      qty=수량   location=위치       type=종류
+//   ops     size=규격·규모  qty=수량   location=장소·구역   type=운영 구분
+//   common  size=분량      qty=부수   location=보관·공유   type=문서 종류
 //
 // 카테고리 목록의 근거:
 //   · 픽스처 실측 — design 7종(키비주얼·배너·현수막·초청장·백월·리플렛·명찰),
 //     ops 5종(큐시트·시나리오·존운영·운영안·안내문)
 //   · 설계서 §15 WBS의 ops 태스크 — 현장답사(1.4)·물류/셋팅(5.1)·리허설(5.3)·결과보고(6.3)
+//   · 실제 운영계획서·결과보고서(rebuildFixtures 이식본)의 존 운영 사양·큐시트 구조 —
+//     무대 조성·콘솔·송출(스크린플레이)·전기/LAN·동선/명찰·케이터링·부대 이벤트·협찬사 제공 사양
 // 목록에 없는 항목은 '직접 입력'으로 언제든 만들 수 있다(자유 입력을 막지 않는다).
 import type { DeliverableArea } from '../types/enums'
 
