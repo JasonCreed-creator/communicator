@@ -85,7 +85,8 @@ describe('DoD-23 금액 비노출 (런타임 객체)', () => {
 // 식별자를 더한다. `margin`은 **일부러 빼 둔다** — 랜딩 내보내기 HTML의 인라인 CSS에
 // `margin:` 선언이 정상적으로 들어 있어 식별자와 구분되지 않기 때문이다. 정산 값이 실제로
 // 랜딩 산출물에 실리는지는 dod30 테스트가 만들어진 HTML 문자열로 따로 본다.
-const BANNED_SOURCE_RE = /total_amount|breakdown|settlement|ordered_amount|actual_amount|markup|marginBase|finalMargin/
+const BANNED_SOURCE_RE =
+  /total_amount|quote_amount|breakdown|settlement|ordered_amount|actual_amount|markup|marginBase|finalMargin/
 
 describe('DoD-23·30 금액·정산 비노출 (소스 grep 가드)', () => {
   it('발주처·plan·랜딩 소스에 금액·정산 식별자가 없다', () => {

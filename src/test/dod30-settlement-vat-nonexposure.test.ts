@@ -13,6 +13,8 @@ import { mockProvider } from './testUtils'
 
 const SETTLEMENT_KEYS = new Set([
   'settlement',
+  // 버킷 견적액도 금액 필드다 — 견적 total_amount와 같은 등급으로 본다
+  'quote_amount',
   'settlement_boards',
   'settlement_buckets',
   'settlement_items',

@@ -135,3 +135,69 @@ describe('DoD-29 ⑤ 견적 초과는 막지 않고 표시한다 (R-S8)', () => 
     expect(view.totals.overBudgetCount).toBeGreaterThan(0)
   })
 })
+
+describe('DoD-29 ⑥ 원가 끄기 차단 — 항등식이 못 잡는 구멍(R-S4 역방향)', () => {
+  // has_cost를 끄면 그 버킷의 실집행이 집계에서 통째로 빠지면서 마진이 같은 크기로 부푼다.
+  // totalActual과 finalMargin이 함께 움직여 상쇄되므로 **항등식은 이 조작에 눈이 멀어 있다** —
+  // 그래서 검사는 마진 식이 아니라 입력 경로에 있다.
+  it('금액이 든 버킷의 has_cost를 끄면 409', async () => {
+    const provider = mockProvider()
+    const view = (await provider.getSettlementBoard(SAMPLE))!
+    const s2 = view.buckets.find((b) => b.bucket.code === 's2')!
+    expect(s2.actual).toBeGreaterThan(0)
+
+    await expect(
+      provider.updateSettlementBucket(s2.bucket.id, { has_cost: false }),
+    ).rejects.toMatchObject({ code: 'conflict' })
+
+    // 막힌 뒤에도 집계는 그대로다 — 부분 적용이 남지 않는다
+    const after = (await provider.getSettlementBoard(SAMPLE))!
+    expect(after.totals.finalMargin).toBe(view.totals.finalMargin)
+    expect(after.buckets.find((b) => b.bucket.code === 's2')!.bucket.has_cost).toBe(true)
+  })
+
+  it('발주액만 들어 있어도 막는다 — 실비가 아직 없다고 열어 주지 않는다', async () => {
+    const provider = mockProvider()
+    // 공유 픽스처와 얽히지 않도록 전용 버킷을 만들어 발주액만 넣는다
+    const bucket = await provider.createSettlementBucket(SAMPLE, {
+      code: 'ord-only',
+      label: '발주만 있는 버킷',
+    })
+    await provider.createSettlementItem(SAMPLE, bucket.id, {
+      title: '발주만 넣은 항목',
+      ordered_amount: 1_000_000,
+    })
+
+    await expect(
+      provider.updateSettlementBucket(bucket.id, { has_cost: false }),
+    ).rejects.toMatchObject({ code: 'conflict' })
+  })
+
+  it('금액이 없는 버킷은 끌 수 있다', async () => {
+    const provider = mockProvider()
+    const view = (await provider.getSettlementBoard(SAMPLE))!
+    // at(참관객 관리)는 항목이 아예 없다
+    const at = view.buckets.find((b) => b.bucket.code === 'at')!
+    const updated = await provider.updateSettlementBucket(at.bucket.id, { has_cost: false })
+    expect(updated.has_cost).toBe(false)
+  })
+
+  it('항목이 전부 취소면 끌 수 있다 — 취소는 집계에서 빠지므로', async () => {
+    const provider = mockProvider()
+    const view = (await provider.getSettlementBoard(SAMPLE))!
+    const ot = view.buckets.find((b) => b.bucket.code === 'ot')!
+    for (const item of ot.items) {
+      await provider.updateSettlementItem(item.id, { status: 'cancelled' })
+    }
+    const updated = await provider.updateSettlementBucket(ot.bucket.id, { has_cost: false })
+    expect(updated.has_cost).toBe(false)
+  })
+
+  it('원가를 다시 켜는 것은 언제든 허용된다 — 막는 건 끄는 방향뿐이다', async () => {
+    const provider = mockProvider()
+    const view = (await provider.getSettlementBoard(SAMPLE))!
+    const s5 = view.buckets.find((b) => b.bucket.code === 's5')!
+    const updated = await provider.updateSettlementBucket(s5.bucket.id, { has_cost: true })
+    expect(updated.has_cost).toBe(true)
+  })
+})

@@ -2216,6 +2216,16 @@ export class MockProvider implements DataProvider {
       bucket.label = patch.label.trim()
     }
     if (patch.quote_amount !== undefined) bucket.quote_amount = patch.quote_amount
+    // R-S4 역방향: 원가를 **끄는** 것도 막는다. 끄는 순간 그 버킷의 실집행이 집계에서
+    // 통째로 빠지면서 마진이 같은 크기로 부풀고, 두 값이 함께 움직여 상쇄되므로
+    // 항등식(marginBase − totalActual === finalMargin)은 이 조작을 구조적으로 못 잡는다.
+    // 그래서 검사는 여기(입력 경로)에 둔다 — 마진 식은 손대지 않는다(§19.1 · R-S10).
+    if (patch.has_cost === false && this.bucketHasEnteredAmounts(bucket)) {
+      throw new ProviderError(
+        'conflict',
+        '이미 발주·실비가 입력된 버킷은 원가 없음으로 바꿀 수 없습니다. 항목을 먼저 정리하세요.',
+      )
+    }
     if (patch.has_cost !== undefined) bucket.has_cost = patch.has_cost
     if (patch.is_margin_base !== undefined) bucket.is_margin_base = patch.is_margin_base
     if (patch.sort_order !== undefined) bucket.sort_order = patch.sort_order
@@ -2233,6 +2243,16 @@ export class MockProvider implements DataProvider {
       throw new ProviderError('conflict', '발주 항목이 있는 버킷은 삭제할 수 없습니다.')
     }
     this.state.settlement_buckets = this.state.settlement_buckets.filter((b) => b.id !== bucketId)
+  }
+
+  /** 그 버킷에 금액이 실제로 들어간 항목이 있는가 (취소 항목은 제외 — 집계에서 빠지므로) */
+  private bucketHasEnteredAmounts(bucket: SettlementBucket): boolean {
+    return this.state.settlement_items.some(
+      (i) =>
+        i.bucket_id === bucket.id &&
+        i.status !== 'cancelled' &&
+        (i.ordered_amount !== null || i.actual_amount !== null),
+    )
   }
 
   /** has_cost=false 버킷에 금액을 넣으려 하면 422 (R-S4) */

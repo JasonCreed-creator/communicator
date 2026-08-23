@@ -108,8 +108,15 @@ export function computeTotals(
     excluded,
     overBudgetCount: buckets.filter((b) => isOverBudget(b, items)).length,
     // 리드젠은 마진 기준에서 빠지지만 원가도 없으므로 항등식은 그대로 성립한다.
-    // 어긋나는 경우는 has_cost=false인데 is_margin_base=false가 아닌 버킷에 실비가
-    // 들어간 때뿐이고, 그건 R-S4가 막는다.
+    //
+    // 실제로 항등식이 어긋나는 조건은 하나뿐이다 — **has_cost=true + is_margin_base=false**
+    // 버킷에 실비가 들어간 때. 그 실비는 totalActual에는 더해지지만 finalMargin에는 반영되지
+    // 않는다. (has_cost=false 버킷은 bucketActual이 항상 0이라 애초에 항등식을 깨뜨릴 수 없다.)
+    //
+    // 반대로 **항등식이 구조적으로 못 잡는** 조작도 하나 있다 — 금액이 든 버킷의 has_cost를
+    // 끄는 것. totalActual과 finalMargin이 같은 크기로 함께 줄어 상쇄되므로 여기서는 조용히
+    // 통과한다. 그건 이 식으로 잡을 수 없고, `updateSettlementBucket`이 409로 막는다.
+    // **막는 곳을 옮기려고 이 식을 고치지 말 것** — 마진 식 변경은 금지 항목이다(§19.1 · R-S10).
     identityOk: marginBase - totalActual === finalMargin,
   }
 }
