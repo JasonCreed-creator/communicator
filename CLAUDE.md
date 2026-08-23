@@ -1,7 +1,7 @@
-# CLAUDE.md — MICE 커뮤니케이터 구현 지침 v2.1 (Claude Code용)
+# CLAUDE.md — MICE 커뮤니케이터 구현 지침 v2.2 (Claude Code용)
 
-> 레포 루트에 이 파일을 두고, `docs/mice-communicator-설계서-v2.1.md`를 함께 배치할 것(v2.0은 대체). `docs/mice-communicator-디자인지시서-v1.md`도 함께 배치(Phase 3.9 정본).
-> **스키마·상태 머신·API 계약·권한 규칙·WBS 템플릿(§15)·핸드오프 계약(§16)·이식 인벤토리(§17)·인프라 전환(§18)의 정본은 설계서 v2.1이다.** 디자인 토큰·레이아웃·컴포넌트 규격의 정본은 디자인지시서 v1이다. 본 파일은 작업 순서와 규약만 정의한다. 충돌 시 설계서 우선.
+> 레포 루트에 이 파일을 두고, `docs/mice-communicator-설계서-v2.2.md`를 함께 배치할 것(v2.1은 대체). `docs/mice-communicator-디자인지시서-v1.md`도 함께 배치(Phase 3.9 정본).
+> **스키마·상태 머신·API 계약·권한 규칙·WBS 템플릿(§15)·핸드오프 계약(§16)·이식 인벤토리(§17)·인프라 전환(§18)의 정본은 설계서 v2.2이다(정산보드는 §19·§4-23·§4-24).** 디자인 토큰·레이아웃·컴포넌트 규격의 정본은 디자인지시서 v1이다. 본 파일은 작업 순서와 규약만 정의한다. 충돌 시 설계서 우선.
 > v1.1 변경 핵심: **프론트 우선·서버 후행** — Phase 0~3은 서버 0, Supabase·Drive는 Phase 4~5 이식.
 > v1.2 변경 핵심: **지시(requested)→제작→컨펌→운영계획서(S9) 조립 파이프라인** — Phase 3.5 프론트 증분.
 > v1.3 변경 핵심: **S0 온보딩 → 유형 토글 → 큐시트 에디터** — Phase 3.6 프론트 증분.
@@ -9,6 +9,7 @@
 > v1.4.1 변경 핵심: **구현 해석 정본화(onboarded_at 등 5건) → Phase 3.8** + **디자인 스프린트(웜 페이퍼 룩 전환, 기능 무변경) → Phase 3.9**.
 > v1.5 변경 핵심: **다중 행사(프로젝트 셀렉터·S-1 행사 목록) + 행사 설정 메뉴(개요·담당자 입력) + S0 동일 폼 → Phase 3.10**.
 > v2.1 변경 핵심: **랜딩보드(S-3) 사후 정본화 + 랜딩 스코프 계약(§4-21) + 골든 데이터셋 출처 규약(§17.3-4)·가격 상수 v1.1(§17.4)** — Phase 3.13.1 핫픽스.
+> v2.2 변경 핵심: **정산보드(S-10) 신설 — 확정 견적 버킷 스냅숏·견적/발주/실비 3단·마진 3분할(§19)** — Phase 3.14.
 > v2.0 변경 핵심: **견적 Configurator(jsx-easy-shift) 흡수 — Phase 3.11 견적 모듈(mock, 프론트 우선) → Phase 4 새 Supabase 이식(Auth·RLS 포함) → Phase 4.6 인프라 전환(Vercel·도메인·1회 임포트·아카이브)**. 이후 Phase 5 Drive · 6 알림.
 
 ## 1. 프로젝트 정의
@@ -97,6 +98,23 @@ MICE 프로젝트 협업 허브 — 역할별(디자인·운영·등록) 산출�
   - 지표는 mock 픽스처(30일) → Phase 4에서 GA Data API로 교체. DataProvider v6(8메서드 추가, 75메서드).
   - 금지: 랜딩에 견적 금액(total_amount·breakdown) 노출, 측정 ID 형식 검증 우회
 
+- **Phase 3.14 — v2.2 정산보드 (서버 0, Phase 3.13.4 머지 후)**
+  - S-10 정산보드: 확정 견적 breakdown을 **버킷 스냅숏**으로 불러와, 버킷마다 견적·발주·실비 3단을 추적하고
+    마진을 실시간으로 보여준다. 내부 한정 — 발주처에게는 어떤 경로로도 나가지 않는다.
+  - **마진 식은 설계서 §19.1이 정본**: `최종 마진 = Σ항목 마크업 + PCO 기획료 + RSVP 운영비`, 리드젠(쇼업 보장) 제외.
+    화면은 `마진 기준 계약액 − Σ실집행 = 최종 마진` 항등식을 검산해 어긋나면 경고한다. **식을 임의로 바꾸지 말 것** —
+    실물 내부정산 2건에서 원 단위 일치를 확인한 값이다.
+  - **버킷 9종 + 행사별 추가**(§19.2). 견적 `recruit`를 `rc`(RSVP)와 `ld`(리드젠)로 **쪼개는 것이 유일한 비자명 매핑**이다.
+    `has_cost=false`(s5·rc·ld)는 발주·실비 입력을 API 422 + UI 부재로 이중 차단.
+  - **발주는 항목 단위**(§19.3). 협력사 단위 묶음 입력을 만들지 말 것 — 실물의 묶음 기재는 구조가 아니라 손입력 관행이다.
+  - **부가세는 별도로 저장**(§19.4). `vat_included` 토글로 받은 값은 저장 직전 `round(v/1.1)` 분리 + 원본을 `input_amount_raw`에 보존.
+  - 업로드 파싱(§19.5)은 Phase 4.7. **이번 단계에서는 스키마(`settlement_imports`)와 업로드 버튼만 두고,
+    버튼은 "Phase 4.7에서 열립니다" 안내를 띄운다** — 게이트 뒤에 숨기지 않는다(§10 진입점 원칙).
+  - 협력사 마스터 `vendors`(프로젝트 비종속). 픽스처는 가상 명칭만.
+  - DataProvider **v7 재동결**(11메서드 추가, 86메서드). `importVendorQuote`는 v8 예약 — 지금 만들지 말 것.
+  - 금지: 정산 금액을 Project·PlanDoc·ActivityLog·발주처 뷰·랜딩 타입에 추가, 견적 초과를 저장 단계에서 차단,
+    `has_cost=false` 버킷에 금액 입력 칸 노출, 마진 식 변형
+
 ### 서버 이식 구간 (Phase 3.11 머지 후 — 착수 전 사용자 승인 + 새 Supabase 3키 수령)
 - **Phase 4 — 새 Supabase 프로젝트 이식** (설계서 §4 v2.0 전체 기준)
   - 4a 마이그레이션+RLS+seed (에이전트 D): §4 순서대로, RLS §6.2(quotes·profiles·compliance_cards 포함), seed = 픽스처 4행사+견적 3버전. **Supabase 3키는 env·Vault만 — 코드·문서·PR 본문 기재 금지**
@@ -104,6 +122,7 @@ MICE 프로젝트 협업 허브 — 역할별(디자인·운영·등록) 산출�
   - 4c 로그인·프로필 (에이전트 D2): 이메일 매직링크 로그인 화면(웜 페이퍼 토큰), AuthContext, profiles 자동 생성 트리거, 허용 도메인 env, app_role 게이트(견적 메뉴·API), 발주처 `/c/*`는 비로그인 유지
   - 4d 교체 검증: Provider를 supabase로 두고 **DoD 1~25 전부 실DB에서 재현**(DoD 26) + RLS 거부 테스트(staff의 quotes 조회 거부·비멤버 프로젝트 거부·토큰 경로 quotes 불가)
 - **Phase 4.6 — 인프라 전환** (에이전트 Z, 설계서 §18 — ■ 게이트마다 사용자 확인 후 진행): 새 Vercel 프로젝트·env → 프리뷰 확인 → 옛 Configurator DB 1회 임포트(선택, dry-run 출력 후 실행) → 도메인 rmb-mice.com 이전 → 옛 라우트 301 확인 → jsx-easy-shift 아카이브 커밋·옛 Vercel/Supabase 정리
+- **Phase 4.7 — 협력사 견적서 파싱** (설계서 §19.5): 업로드 → 서버 파싱 → 버킷 자동 배정 + **확인 큐**(어느 버킷인지 / 부가세 포함인지). 엑셀 → PDF → 사진 순. **파싱 결과를 직접 커밋하지 않는다** — 항상 담당자 확인을 거쳐 `settlement_items`를 만들고 원본을 근거로 보존. DataProvider v8(`importVendorQuote`) 해제는 이 시점에 사용자 승인 + 설계서 개정 동반
 - **Phase 5 — Drive 이식**: OAuth(운영 계정·Production)·표준 트리(§7.1)·업로드+파일명 규약(§7.2)·프록시 ReadableStream 패스스루+100MB 캡(§7.4)·Changes API 인박스(§7.3)·final 스냅숏 원자성(§7.5) — `supabase/functions/_shared/drive.ts` 모듈화
 - **Phase 6 — 알림·cron**: Slack·이메일 유틸 + 이벤트 훅(§9) + reminders cron
 
@@ -183,13 +202,16 @@ Phase 3.8과 3.9는 **별도 커밋·별도 PR**로 분리한다(3.8 = 타입·�
 27. (v2.1) 랜딩보드: 기본 13섹션 시드 · autofill이 세션/개요/존에서 조립(끄면 입력 보존) · 유효한 GA4/GTM ID일 때만 스니펫 주입(형식 불일치는 미주입) · 측정 ID 없으면 내보낸 HTML의 외부 요청 0건 · 사용자 입력 이스케이프 · 폼 제출이 등록(S4) Attendee로 유입되고 당일 지표 반영 (테스트로 증명)
 28. (v2.1 §4-21) **행사 스코프**: 랜딩 목록·생성이 현재 행사(`ProjectContext`)로 스코프되고 — 행사 A→B 전환 시 목록이 바뀌고, 종료 행사 생성은 409, 같은 slug를 다른 행사에 만들 수 있음 (테스트로 증명)
 
+29. (v2.2 §19.1) **정산 마진**: 확정 견적을 불러오면 버킷 9종이 스냅숏되고(`recruit`가 rc/ld로 분리됨), `마진 기준 계약액 − Σ실집행 = 최종 마진` 항등식이 성립하며, `has_cost=false` 버킷에 발주·실비를 넣으면 422; 리드젠 버킷은 마진 기준 계약액에서 빠지되 화면에는 남는다 (테스트로 증명)
+30. (v2.2 §19.4·§19.7) **정산 부가세·비노출**: `vat_included=true` 입력이 `round(v/1.1)`로 저장되고 원본이 보존됨; `settlement`·`ordered_amount`·`actual_amount`·`markup`·`margin` 키가 `/c/*` 응답·운영계획서 조립 데이터·랜딩 내보내기 HTML·activity_log 어디에도 0건 + 소스 grep 범위에 `pages/Landing*`·`lib/landing*` 포함 (테스트로 증명, **역검증 결과를 체크아웃 보고에 기재**)
+
 ### 상시 grep 가드 (매 세션 종료 시 0건 확인 — 위 DoD와 별개로 항상 검사)
 | 가드 | 명령 | 근거 |
 |---|---|---|
 | 디자인 토큰 | `grep -rn "gray-\|slate-" src` | DoD 17 |
 | 행사 ID 상수 | `grep -rn "PROJECT_ID" src --include=*.tsx` | DoD 18 |
 | **행사 스코프 유도** | `grep -rn "user\.project_id\|currentUser()\.project_id" src --include=*.ts --include=*.tsx` | **v2.1 §4-21 — 랜딩 결함 재발 방지. 예외는 `scope-exempt:` 주석 + 테스트의 화이트리스트 둘 다 필요(무설명 예외 금지)** |
-| 금액 비노출 | `grep -rn "total_amount\|breakdown" src/pages/Client* src/components/plan src/components/client` | DoD 23 |
+| 금액 비노출 | `grep -rn "total_amount\|breakdown\|ordered_amount\|actual_amount\|markup\|margin\|settlement" src/pages/Client* src/pages/Landing* src/lib/landing* src/components/plan src/components/client` | **DoD 23·30 (v2.2 — 키 5종·랜딩 파일 확대)** |
 | 온보딩 플래그 | `grep -rn "onboarding_completed" src` | DoD 16 |
 
 앞의 3종은 `src/test/dod-project-scope-guard.test.ts`·기존 DoD 테스트가 상시 자동 검증한다 — 셸 grep은 이중 확인용이다.
