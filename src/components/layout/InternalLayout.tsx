@@ -66,6 +66,8 @@ const NAV_OPS = [
   { to: '/registration', label: '등록', icon: 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM19 8v6M22 11h-6' },
   { to: '/schedule', label: '일정', icon: 'M8 2v4M16 2v4M3 9h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z' },
   { to: '/plan', label: '운영계획서', icon: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M9 13h6M9 17h6' },
+  // v2.2 S-10 — 운영 그룹 **마지막**. 견적 메뉴와 달리 app_role 게이트가 없다(멤버 전원)
+  { to: '/settlement', label: '정산보드', icon: 'M7 3h10a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2ZM8 7h8M8 11h3M13 11h3M8 15h3M13 15h3' },
 ]
 
 /** 사이드바 그룹 캡션 — §10 준비/운영 */
