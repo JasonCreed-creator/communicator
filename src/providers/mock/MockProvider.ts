@@ -2148,6 +2148,26 @@ export class MockProvider implements DataProvider {
       throw new ProviderError('validation', '확정된 견적만 정산 기준으로 쓸 수 있습니다.')
     }
     const fresh = this.snapshotBuckets(board.id, quote)
+
+    // 스냅숏은 code마다 has_cost를 고정값으로 되돌린다. PM이 원가를 켜 두고(허용된 동작)
+    // 금액을 입력한 버킷이라면 그 되돌림이 F1과 같은 부풀림을 일으키므로 — 실집행이 통째로
+    // 빠지고 마진이 같은 크기로 오르며 항등식은 상쇄돼 조용히 통과한다 — 갱신 자체를 막는다.
+    const wouldSilenceCost = fresh
+      .filter((next) => !next.has_cost)
+      .map((next) => this.state.settlement_buckets.find((b) => b.board_id === board.id && b.code === next.code))
+      .filter(
+        (cur): cur is SettlementBucket =>
+          !!cur && cur.has_cost && this.bucketHasEnteredAmounts(cur),
+      )
+    if (wouldSilenceCost.length > 0) {
+      throw new ProviderError(
+        'conflict',
+        `기준을 갱신하면 ${wouldSilenceCost
+          .map((b) => `'${b.label}'`)
+          .join('·')}이(가) 원가 없음으로 되돌아가 이미 입력된 금액이 집계에서 빠집니다. 항목을 먼저 정리하세요.`,
+      )
+    }
+
     const prevVersion = board.quote_version
     for (const next of fresh) {
       const cur = this.state.settlement_buckets.find(
@@ -2255,15 +2275,35 @@ export class MockProvider implements DataProvider {
     )
   }
 
-  /** has_cost=false 버킷에 금액을 넣으려 하면 422 (R-S4) */
-  private assertCostAllowed(bucket: SettlementBucket, input: Partial<SettlementItemInput>): void {
-    const wantsAmount = input.ordered_amount != null || input.actual_amount != null
-    if (!bucket.has_cost && wantsAmount) {
-      throw new ProviderError(
-        'validation',
-        `'${bucket.label}'은 원가가 없는 항목이라 발주·실비를 넣을 수 없습니다.`,
-      )
-    }
+  /**
+   * 원가 없는 버킷에 금액이 얹히는 것을 막는다 — 422 (R-S4).
+   *
+   * 판정 대상은 **patch가 아니라 patch를 적용한 뒤 항목의 최종 상태**다. patch만 보면
+   * `bucket_id`만 바꾸는 이동(금액은 항목에 이미 들어 있는)이 검사를 통과해 버리고,
+   * 그 순간 실집행이 집계에서 빠지며 마진이 같은 크기로 부푼다 — F1과 같은 실패 모드다.
+   * 취소 항목은 애초에 집계에 들어가지 않으므로 이동을 막지 않는다.
+   */
+  private assertCostAllowed(
+    bucket: SettlementBucket,
+    input: Partial<SettlementItemInput>,
+    existing?: SettlementItem,
+  ): void {
+    if (bucket.has_cost) return
+
+    const pick = <K extends 'ordered_amount' | 'actual_amount'>(key: K): number | null =>
+      input[key] !== undefined ? (input[key] ?? null) : (existing?.[key] ?? null)
+    const status = input.status ?? existing?.status ?? 'planned'
+    if (status === 'cancelled') return
+    if (pick('ordered_amount') === null && pick('actual_amount') === null) return
+
+    // 같은 금지 규칙이지만 사용자가 한 동작이 다르므로 안내도 다르게 준다
+    const isMove = existing !== undefined && input.bucket_id !== undefined && input.bucket_id !== existing.bucket_id
+    throw new ProviderError(
+      'validation',
+      isMove
+        ? `'${bucket.label}'은 원가가 없는 항목이라 금액이 든 발주 항목을 옮길 수 없습니다. 금액을 지우거나 다른 버킷으로 옮기세요.`
+        : `'${bucket.label}'은 원가가 없는 항목이라 발주·실비를 넣을 수 없습니다.`,
+    )
   }
 
   /** 금액 입력 권한 — pm 또는 그 항목의 담당자 본인 (§6.1) */
@@ -2324,7 +2364,7 @@ export class MockProvider implements DataProvider {
     const bucket = this.mustFindBucket(patch.bucket_id ?? item.bucket_id)
     this.assertWritable(this.projectOfBucket(bucket))
     this.assertItemWritable(item)
-    this.assertCostAllowed(bucket, patch)
+    this.assertCostAllowed(bucket, patch, item)
 
     if (patch.bucket_id !== undefined) item.bucket_id = patch.bucket_id
     if (patch.title !== undefined) {

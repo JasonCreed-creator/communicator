@@ -201,3 +201,102 @@ describe('DoD-29 ⑥ 원가 끄기 차단 — 항등식이 못 잡는 구멍(R-S
     expect(updated.has_cost).toBe(true)
   })
 })
+
+// 주의: 한 파일 안의 테스트는 같은 MockProvider 상태를 공유한다(testUtils 주석 참조).
+// ⑦은 앞선 케이스가 건드리지 않은 `rc`(RSVP 운영비)를 목적지로 써서 has_cost=false를 보장한다.
+describe('DoD-29 ⑦ 항목 이동 차단 — 같은 실패 모드의 다른 문(R-S4 병합 판정)', () => {
+  // 판정 대상은 patch가 아니라 **patch를 적용한 뒤 항목의 최종 상태**다.
+  // bucket_id만 바꾸는 patch는 금액을 건드리지 않으므로, patch만 보면 그대로 통과한다.
+  it('금액이 든 항목을 원가 없는 버킷으로 옮기면 422', async () => {
+    const provider = mockProvider()
+    const view = (await provider.getSettlementBoard(SAMPLE))!
+    const s1 = view.buckets.find((b) => b.bucket.code === 's1')!
+    const rc = view.buckets.find((b) => b.bucket.code === 'rc')!
+    const item = s1.items.find((i) => i.actual_amount !== null)!
+
+    await expect(
+      provider.updateSettlementItem(item.id, { bucket_id: rc.bucket.id }),
+    ).rejects.toMatchObject({ code: 'validation' })
+
+    // 막힌 뒤 집계가 그대로다 — 부분 적용이 남지 않는다
+    const after = (await provider.getSettlementBoard(SAMPLE))!
+    expect(after.totals.finalMargin).toBe(view.totals.finalMargin)
+    expect(after.totals.totalActual).toBe(view.totals.totalActual)
+  })
+
+  it('금액이 없는 항목은 옮길 수 있다', async () => {
+    const provider = mockProvider()
+    const view = (await provider.getSettlementBoard(SAMPLE))!
+    const s4 = view.buckets.find((b) => b.bucket.code === 's4')!
+    const rc = view.buckets.find((b) => b.bucket.code === 'rc')!
+    const empty = s4.items.find((i) => i.ordered_amount === null && i.actual_amount === null)!
+
+    const moved = await provider.updateSettlementItem(empty.id, { bucket_id: rc.bucket.id })
+    expect(moved.bucket_id).toBe(rc.bucket.id)
+  })
+
+  it('취소 항목은 옮길 수 있다 — 어차피 집계에서 빠진다', async () => {
+    const provider = mockProvider()
+    const view = (await provider.getSettlementBoard(SAMPLE))!
+    const s1 = view.buckets.find((b) => b.bucket.code === 's1')!
+    const rc = view.buckets.find((b) => b.bucket.code === 'rc')!
+    const item = s1.items.find((i) => i.actual_amount !== null)!
+
+    await provider.updateSettlementItem(item.id, { status: 'cancelled' })
+    const moved = await provider.updateSettlementItem(item.id, { bucket_id: rc.bucket.id })
+    expect(moved.bucket_id).toBe(rc.bucket.id)
+    expect(moved.actual_amount).not.toBeNull() // 금액은 기록으로 남는다
+  })
+
+  it('이동과 동시에 금액을 지우는 patch는 통과한다', async () => {
+    const provider = mockProvider()
+    const view = (await provider.getSettlementBoard(SAMPLE))!
+    const s2 = view.buckets.find((b) => b.bucket.code === 's2')!
+    const rc = view.buckets.find((b) => b.bucket.code === 'rc')!
+    const item = s2.items.find((i) => i.actual_amount !== null)!
+
+    const moved = await provider.updateSettlementItem(item.id, {
+      bucket_id: rc.bucket.id,
+      ordered_amount: null,
+      actual_amount: null,
+    })
+    expect(moved.bucket_id).toBe(rc.bucket.id)
+    expect(moved.actual_amount).toBeNull()
+  })
+})
+
+describe('DoD-29 ⑧ 기준 갱신이 원가를 되돌리는 경우 — 전수 훑기에서 나온 세 번째 문', () => {
+  // 스냅숏은 code마다 has_cost를 고정값으로 되돌린다. 원가를 켜 두고(허용된 동작) 금액을
+  // 입력한 버킷이 있으면, 그 되돌림이 F1과 같은 부풀림을 일으킨다.
+  it('원가를 켜 금액을 넣은 버킷이 있으면 기준 갱신이 409', async () => {
+    const provider = mockProvider()
+    const view = (await provider.getSettlementBoard(SAMPLE))!
+    const s5 = view.buckets.find((b) => b.bucket.code === 's5')!
+
+    await provider.updateSettlementBucket(s5.bucket.id, { has_cost: true })
+    await provider.createSettlementItem(SAMPLE, s5.bucket.id, {
+      title: '기획 인건비',
+      actual_amount: 9_000_000,
+    })
+
+    await expect(
+      provider.rebaseSettlementBoard(SAMPLE, view.board.quote_id!),
+    ).rejects.toMatchObject({ code: 'conflict' })
+  })
+
+  it('정리한 뒤에는 갱신된다 — 막는 것이지 잠그는 것이 아니다', async () => {
+    const provider = mockProvider()
+    const view = (await provider.getSettlementBoard(SAMPLE))!
+    const s5 = view.buckets.find((b) => b.bucket.code === 's5')!
+    const stray = (await provider.getSettlementBoard(SAMPLE))!
+      .buckets.find((b) => b.bucket.code === 's5')!
+      .items.filter((i) => i.ordered_amount !== null || i.actual_amount !== null)
+    expect(stray.length).toBeGreaterThan(0)
+    for (const item of stray) await provider.deleteSettlementItem(item.id)
+    await provider.updateSettlementBucket(s5.bucket.id, { has_cost: false })
+
+    const rebased = await provider.rebaseSettlementBoard(SAMPLE, view.board.quote_id!)
+    expect(rebased.buckets.find((b) => b.bucket.code === 's5')!.bucket.has_cost).toBe(false)
+    expect(rebased.totals.identityOk).toBe(true)
+  })
+})

@@ -113,9 +113,12 @@ export function computeTotals(
     // 버킷에 실비가 들어간 때. 그 실비는 totalActual에는 더해지지만 finalMargin에는 반영되지
     // 않는다. (has_cost=false 버킷은 bucketActual이 항상 0이라 애초에 항등식을 깨뜨릴 수 없다.)
     //
-    // 반대로 **항등식이 구조적으로 못 잡는** 조작도 하나 있다 — 금액이 든 버킷의 has_cost를
-    // 끄는 것. totalActual과 finalMargin이 같은 크기로 함께 줄어 상쇄되므로 여기서는 조용히
-    // 통과한다. 그건 이 식으로 잡을 수 없고, `updateSettlementBucket`이 409로 막는다.
+    // 반대로 **항등식이 구조적으로 못 잡는** 조작이 있다 — 금액이 든 항목을 집계 밖으로
+    // 빼는 전이. totalActual과 finalMargin이 같은 크기로 함께 줄어 상쇄되므로 여기서는
+    // 조용히 통과한다. 들어오는 문이 셋이고, 전부 provider의 입력 경로에서 막는다:
+    //   ① 버킷의 has_cost 끄기            → updateSettlementBucket이 409
+    //   ② 항목을 원가 없는 버킷으로 이동    → updateSettlementItem이 422 (병합 결과로 판정)
+    //   ③ 기준 갱신이 has_cost를 되돌림     → rebaseSettlementBoard가 409
     // **막는 곳을 옮기려고 이 식을 고치지 말 것** — 마진 식 변경은 금지 항목이다(§19.1 · R-S10).
     identityOk: marginBase - totalActual === finalMargin,
   }
