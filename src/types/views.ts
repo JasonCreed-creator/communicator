@@ -1,5 +1,7 @@
 // 화면(S1~S9)·API 계약(설계서 §8)이 요구하는 뷰 모델과 입력 타입.
 // 엔티티(§4)와 달리 여기는 조합 형태라 프론트 편의에 맞춰 정의하되, 필드명은 snake_case로 통일한다.
+import type { SettlementBoard, SettlementBucket, SettlementItem } from './entities'
+import type { SettlementTotals } from '../lib/settlement'
 import type {
   ActivityLogEntry,
   Approval,
@@ -483,4 +485,33 @@ export interface PlanData {
   /** 기한순 */
   milestones: Milestone[]
   section_progress: PlanSectionProgress[]
+}
+
+// ── S-10 정산보드 뷰 (v2.2 §19) ───────────────────────────────────────
+
+/** 버킷 + 그 버킷의 항목 + 파생 수치 (화면이 바로 그릴 수 있는 형태) */
+export interface SettlementBucketView {
+  bucket: SettlementBucket
+  items: SettlementItem[]
+  /** 발주 합 (표시용 — 마진 식에는 쓰지 않는다) */
+  ordered: number
+  /** 실집행 합 */
+  actual: number
+  /** quote_amount − actual */
+  markup: number
+  /** quote_amount가 0이면 null */
+  markup_rate: number | null
+  over_budget: boolean
+}
+
+/**
+ * 정산보드 전체. 금액은 전부 부가세 별도이며 **내부 전용**이다 —
+ * 이 타입은 발주처 뷰·운영계획서·랜딩 어디에도 흘러가지 않는다(§4-24 R-S9).
+ */
+export interface SettlementBoardView {
+  board: SettlementBoard
+  /** 기준 견적 표시용 — 금액이 아니라 버전·제목만 */
+  quote_label: string | null
+  buckets: SettlementBucketView[]
+  totals: SettlementTotals
 }

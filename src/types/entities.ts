@@ -594,3 +594,89 @@ export interface LandingPage {
   updated_at: IsoDateTime
   published_at: IsoDateTime | null
 }
+
+// ── 정산 (v2.2 §4-23) ─────────────────────────────────────────────────
+// 금액은 전부 **부가세 별도**로 저장한다(§4-24 R-S3). 견적 breakdown이 별도 기준이라
+// 비교축이 일치한다. 포함으로 받은 값은 저장 직전 분리하고 원본을 input_amount_raw에 남긴다.
+
+/** 협력사 마스터 — 프로젝트에 종속되지 않는 조직 단위 (§19.6) */
+export interface Vendor {
+  id: UUID
+  /** 실거래처명 — #RULE-NO-COMPANY 예외. 픽스처는 가상 명칭만 */
+  name: string
+  biz_no: string | null
+  note: string | null
+  archived_at: IsoDateTime | null
+  created_at: IsoDateTime
+}
+
+/** 행사당 1개. 확정 견적 스냅숏을 보유한다(§4-24 R-S2) */
+export interface SettlementBoard {
+  id: UUID
+  project_id: UUID
+  /** 기준 견적 — 스냅숏 출처. 실시간 참조가 아니다 */
+  quote_id: UUID | null
+  quote_version: number | null
+  baselined_at: IsoDateTime
+  created_at: IsoDateTime
+  updated_at: IsoDateTime
+}
+
+/** 기본 9종 + 행사별 추가 (§19.2) */
+export interface SettlementBucket {
+  id: UUID
+  board_id: UUID
+  /** s1·s2·s3·s4·ot·at·s5·rc·ld 또는 custom 슬러그 */
+  code: string
+  label: string
+  /** 부가세 별도. 스냅숏 시점에 고정 */
+  quote_amount: number
+  /** false = 원가 없음 — 발주·실비 입력 금지(R-S4). 견적액 전체가 마진 */
+  has_cost: boolean
+  /** false = 마진 기준 계약액에서 제외(R-S5). 현재 ld뿐 */
+  is_margin_base: boolean
+  source: 'quote' | 'custom'
+  sort_order: number
+  created_at: IsoDateTime
+}
+
+export type SettlementItemStatus = 'planned' | 'ordered' | 'settled' | 'cancelled'
+
+/** 발주 단위 = 견적 항목 단위 (§19.3). 협력사 묶음 입력을 만들지 않는다 */
+export interface SettlementItem {
+  id: UUID
+  board_id: UUID
+  bucket_id: UUID
+  title: string
+  spec: string | null
+  vendor_id: UUID | null
+  assignee_id: UUID | null
+  /** 발주(약정) · 부가세 별도 */
+  ordered_amount: number | null
+  /** 실비(집행) · 부가세 별도 */
+  actual_amount: number | null
+  /** 담당자가 실제로 받은 원본 금액(포함/별도 표기 그대로) */
+  input_amount_raw: number | null
+  vat_included_input: boolean
+  status: SettlementItemStatus
+  /** 세금계산서·카드전표 등 근거 표기 */
+  evidence: string | null
+  import_id: UUID | null
+  note: string | null
+  created_at: IsoDateTime
+  updated_at: IsoDateTime
+}
+
+/** 협력사 견적서 업로드 — Phase 4.7. v2.2는 스키마만 확정한다(§19.5) */
+export interface SettlementImport {
+  id: UUID
+  board_id: UUID
+  file_name: string
+  drive_file_id: string | null
+  vendor_id: UUID | null
+  parsed: unknown
+  questions: unknown
+  status: 'parsed' | 'confirmed' | 'discarded'
+  created_by: UUID | null
+  created_at: IsoDateTime
+}

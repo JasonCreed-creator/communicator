@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────
-// DataProvider 인터페이스 v6.1 — 2026-08-23 재동결 (설계서 v2.1 §2.1·§4-21)
+// DataProvider 인터페이스 v7 — 2026-08-23 재동결 (설계서 v2.2 §2.1·§19)
 //   v1: 2026-08-19 동결(35메서드). v2: v1.2 승인 근거로 41메서드 재동결.
 //   v3: 사용자 v1.4 승인(2026-08-22, v1.3 포함)을 근거로 동결 해제 →
 //   온보딩·프로젝트 패치·큐시트 CRUD/스냅숏·WBS 전개/조회/패치·R&R 조회
@@ -22,6 +22,12 @@
 //   listLandingPages(projectId)·createLandingPage(projectId, input) 2메서드의 시그니처만 변경
 //   (프로젝트 스코프는 인자로 받는다 — R-L1). 나머지 6메서드는 landingId로 대상을 찾고
 //   가드를 landing.project_id로 판정하므로 불변(R-L2). 메서드 수 75 불변 후 재동결.
+//   v7: 사용자 승인(2026-08-23, 시각안) + 설계서 v2.2 §19를 근거로 동결 해제 → 정산보드:
+//   getSettlementBoard·createSettlementBoard·rebaseSettlementBoard·createSettlementBucket·
+//   updateSettlementBucket·deleteSettlementBucket·createSettlementItem·updateSettlementItem·
+//   deleteSettlementItem·listVendors·upsertVendor 11메서드 추가 = 86메서드.
+//   **기존 75메서드 시그니처 불변** 후 재동결. v6과 달리 **설계서가 선행했다**.
+//   `importVendorQuote`(업로드 파싱)는 서버 의존이라 **v8 예약 — 지금 만들지 않는다**(§19.5).
 //   경위는 PROGRESS.md 결정 로그 참조.
 //
 // 프로젝트 스코프 규칙(설계서 v2.1 §4-21 R-L1): 프로젝트 단위 조회·생성 메서드는 projectId를
@@ -47,6 +53,10 @@ import type {
   Deliverable,
   LandingDailyMetric,
   LandingPage,
+  SettlementBucket,
+  SettlementItem,
+  SettlementItemStatus,
+  Vendor,
   Milestone,
   ProgramSession,
   Project,
@@ -94,6 +104,7 @@ import type {
   UploadVersionInput,
   WbsTaskFilter,
   WbsTaskPatch,
+  SettlementBoardView,
 } from '../types/views'
 
 export interface DataProvider {
@@ -295,6 +306,38 @@ export interface DataProvider {
    */
   submitLandingLead(landingId: UUID, values: Record<string, string>): Promise<Attendee>
 
+  // ── S-10 정산보드 (v2.2 §19 · 계약 §4-24) ─────────────────────────
+  // 내부 한정. 발주처 토큰 경로에는 어떤 정산 데이터도 나가지 않는다(R-S9).
+  /** 그 행사의 정산 보드. 아직 없으면 null — 화면은 "확정 견적에서 시작" 빈 상태를 띄운다 */
+  getSettlementBoard(projectId: UUID): Promise<SettlementBoardView | null>
+  /**
+   * 확정 견적 breakdown을 버킷 9종으로 **스냅숏**해 보드를 만든다(R-S2).
+   * `recruit`를 rc(RSVP 운영비)·ld(리드젠)로 쪼개는 것이 유일한 비자명 매핑이며,
+   * 값은 견적 input에서 재유도하지 않고 엔진 산출값을 그대로 쓴다(§19.2).
+   */
+  createSettlementBoard(projectId: UUID, quoteId: UUID): Promise<SettlementBoardView>
+  /** 기준 견적 갱신. 이전 기준과의 차이를 남기고 activity_log에 기록한다(R-S2) */
+  rebaseSettlementBoard(projectId: UUID, quoteId: UUID): Promise<SettlementBoardView>
+  /** 행사별 버킷 추가 — source='custom'·quote_amount=0이 기본(§19.2) */
+  createSettlementBucket(projectId: UUID, input: SettlementBucketInput): Promise<SettlementBucket>
+  updateSettlementBucket(
+    bucketId: UUID,
+    patch: Partial<SettlementBucketInput>,
+  ): Promise<SettlementBucket>
+  deleteSettlementBucket(bucketId: UUID): Promise<void>
+  /** 발주 항목 생성(pm). has_cost=false 버킷에 금액을 넣으면 422(R-S4) */
+  createSettlementItem(
+    projectId: UUID,
+    bucketId: UUID,
+    input: SettlementItemInput,
+  ): Promise<SettlementItem>
+  /** 발주액·실비 입력 — pm 또는 assignee 본인. 부가세 포함 입력은 저장 직전 분리(R-S3) */
+  updateSettlementItem(itemId: UUID, patch: Partial<SettlementItemInput>): Promise<SettlementItem>
+  deleteSettlementItem(itemId: UUID): Promise<void>
+  /** 협력사 마스터 — 프로젝트 비종속(§19.6) */
+  listVendors(): Promise<Vendor[]>
+  upsertVendor(input: VendorInput): Promise<Vendor>
+
   // ── 발주처 뷰 (S7·S8) — 토큰 스코프, 만료·회수 시 410 ─────────────
   /** 컨펌 대기 큐 + 처리 이력. 코멘트는 shared만 포함(§6.2) */
   getClientQueue(token: string): Promise<ClientQueue>
@@ -331,3 +374,36 @@ export type LandingPagePatch = Partial<
     | 'consents'
   >
 >
+
+
+// ── S-10 정산 입출력 (v2.2) ───────────────────────────────────────────
+export interface SettlementBucketInput {
+  code: string
+  label: string
+  quote_amount?: number
+  has_cost?: boolean
+  is_margin_base?: boolean
+  sort_order?: number
+}
+
+export interface SettlementItemInput {
+  title: string
+  spec?: string | null
+  vendor_id?: UUID | null
+  assignee_id?: UUID | null
+  ordered_amount?: number | null
+  actual_amount?: number | null
+  /** true면 위 금액을 부가세 포함으로 보고 저장 직전 분리한다(§19.4) */
+  vat_included_input?: boolean
+  status?: SettlementItemStatus
+  evidence?: string | null
+  note?: string | null
+  bucket_id?: UUID
+}
+
+export interface VendorInput {
+  id?: UUID
+  name: string
+  biz_no?: string | null
+  note?: string | null
+}
