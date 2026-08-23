@@ -1,8 +1,8 @@
-# MICE 커뮤니케이터 — 시스템 설계서 v2.0
+# MICE 커뮤니케이터 — 시스템 설계서 v2.1
 
 | 항목 | 내용 |
 |---|---|
-| 문서 상태 | v2.0 확정 — **견적 Configurator(jsx-easy-shift) 단일 플랫폼 통합** (2026-08-22, 시각안 3화면 승인 · 읽기 분석 보고 기반): 견적 모듈 S-2 · 견적→행사 핸드오프 · 새 Supabase 프로젝트 · 인프라 전환 절차. 직전 v1.5: **다중 행사(프로젝트 셀렉터·행사 목록) + 행사 설정 메뉴(개요·담당자 입력) 확장** (2026-08-22, 시각안 3화면 승인). 직전 v1.4.1: v1.4(유형별 WBS·R&R, 2026-08-22 시각안 승인)에 **Phase 3.6·3.7 구현 해석 정본화** 패치: projects.onboarded_at 확정(사용자 승인 2026-08-22) · 임박/지연 배타 산식 · 일반형 28건 파생 규칙 · 재전개 보존 규칙 · 큐시트 스냅숏 mock 규약 (Code PROGRESS 열린 질문 ①~⑤ 종결) |
+| 문서 상태 | v2.1 확정 — **랜딩보드(S-3) 정본화 + 랜딩 스코프 계약 + 가격 상수 v1.1 정의** (2026-08-23). 코드가 선행한 Phase 3.13 랜딩보드를 §4-19~§4-22·§8·§10에 정본으로 흡수하고, `listLandingPages`·`createLandingPage`가 현재 행사가 아닌 사용자 첫 멤버십으로 스코프되던 결함을 계약으로 못박는다(§4-21). LED 오퍼레이팅·중계 단가 분리(§17.4)와 골든 데이터셋 출처 규약(§17.3)을 확정. 직전 v2.0: **견적 Configurator(jsx-easy-shift) 단일 플랫폼 통합** (2026-08-22, 시각안 3화면 승인 · 읽기 분석 보고 기반): 견적 모듈 S-2 · 견적→행사 핸드오프 · 새 Supabase 프로젝트 · 인프라 전환 절차. 직전 v1.5: **다중 행사(프로젝트 셀렉터·행사 목록) + 행사 설정 메뉴(개요·담당자 입력) 확장** (2026-08-22, 시각안 3화면 승인). 직전 v1.4.1: v1.4(유형별 WBS·R&R, 2026-08-22 시각안 승인)에 **Phase 3.6·3.7 구현 해석 정본화** 패치: projects.onboarded_at 확정(사용자 승인 2026-08-22) · 임박/지연 배타 산식 · 일반형 28건 파생 규칙 · 재전개 보존 규칙 · 큐시트 스냅숏 mock 규약 (Code PROGRESS 열린 질문 ①~⑤ 종결) |
 | 목적 | Claude Code가 본 문서만으로 추가 질문 없이 구현 착수 |
 | 정본 관계 | 스키마·상태 머신·API 계약은 본 문서가 SoT. 구현 지침·작업 순서는 동봉 CLAUDE.md |
 | 확정 결정 | 아키텍처=하이브리드(파일=Drive, 상태=Supabase) / 발주처=무로그인 토큰 링크 / 컨펌 발송=PM 단독 / 업로드=웹앱 경유 원칙+Drive 감지 인박스 / 등록 1차=CSV 임포트 / **구현 순서=프론트 우선·서버 후행 이식(DataProvider 어댑터 계층)** / **v1.2: 지시(requested)→제작→컨펌→운영계획서(S9) 조립 파이프라인 — 웹 문서 우선, PPTX·발주처 뷰는 2차** / **v1.3: S0 온보딩(개요→유형→담당자) → 유형(일반형·모객형) 모듈 토글 → 큐시트 정형 에디터(3채널 콘솔, 컨펌 스냅숏 자동)** / **v1.4: 유형별 WBS 템플릿 자동 전개(Configurator 37태스크 이식·호환 코드 체계) + 역할별 R&R 카드** / **v1.4.1: 온보딩 완료 상태는 projects.onboarded_at 컬럼이 정본(DataProvider v3.1 재동결)** / **v1.5: 다중 행사 — 사이드바 프로젝트 셀렉터+S-1 행사 목록, "행사 설정" 메뉴 상시 노출(①개요 ②담당자 ③유형·연동), S0 위저드=같은 폼의 단계형, 행사개요 단일 원천(S9 ①은 읽기 조립)** / **v2.0: 견적 모듈(S-2) 흡수 — 가격 엔진·베뉴 DB를 `src/modules/quote`로 이식, 견적 확정→행사 생성 프리필, 견적은 로그인 내부 전용(금액은 발주처·운영계획서에 구조적 비노출), 데이터는 새 Supabase 프로젝트(옛 Configurator DB는 1회 임포트 후 폐기), 도메인 rmb-mice.com 재연결·jsx-easy-shift 아카이브** |
@@ -69,7 +69,7 @@ MICE 프로젝트 착수 시 역할별(디자인·운영·등록·발주처) 산
 ```
 
 - **인터페이스 동결이 전제 조건** — 동결 없이는 이식 시 전 화면 재작업이 발생해 어댑터의 이점이 소멸한다 (감수 Steelman 조건부 판정)
-- 동결 이력: v1(35메서드, Phase 1) → v2(41, v1.2 승인) → v3(53, v1.3·v1.4 승인) → v3.1(v1.4.1 — 필드 추가만) → v4(v1.5 승인 — 다중 행사 5메서드) → **v5(v2.0 승인 — 견적 모듈: `listQuotes`·`getQuote`·`createQuote`·`saveQuoteVersion`·`finalizeQuote`·`createProjectFromQuote`·`exportQuoteXlsx`·`listComplianceCards` 8메서드 추가, `Project`에 모객 필드(guarantee_pax·targeting·kpi_show_rate·quote_id), `WbsTask.target` 추가. 기존 시그니처 불변)**. v5부터는 MockProvider와 SupabaseProvider가 동시에 이 인터페이스를 구현한다(Phase 4). 매 해제는 사용자 승인+본 문서 개정 동반이 조건
+- 동결 이력: v1(35메서드, Phase 1) → v2(41, v1.2 승인) → v3(53, v1.3·v1.4 승인) → v3.1(v1.4.1 — 필드 추가만) → v4(v1.5 승인 — 다중 행사 5메서드) → **v5(v2.0 승인 — 견적 모듈: `listQuotes`·`getQuote`·`createQuote`·`saveQuoteVersion`·`finalizeQuote`·`createProjectFromQuote`·`exportQuoteXlsx`·`listComplianceCards`·`updateComplianceCard` **9메서드** 추가, `Project`에 모객 필드(guarantee_pax·targeting·kpi_show_rate·quote_id), `WbsTask.target` 추가. 기존 시그니처 불변)** → **v6(v2.1 승인 — 랜딩보드 8메서드: `listLandingPages`·`getLandingPage`·`createLandingPage`·`updateLandingPage`·`publishLandingPage`·`deleteLandingPage`·`listLandingMetrics`·`submitLandingLead`)** → **v6.1(v2.1 정정 — 스코프 결함 해소: `listLandingPages(projectId)`·`createLandingPage(projectId, input)`로 시그니처 변경. 나머지 6메서드는 landingId로 프로젝트를 역참조하므로 불변)**. v5부터는 MockProvider와 SupabaseProvider가 동시에 이 인터페이스를 구현한다(Phase 4). 매 해제는 사용자 승인+본 문서 개정 동반이 조건 — **v6은 이 조건을 어기고 코드가 선행했다(2026-08-22 Phase 3.13). v2.1이 사후 정본화하며, 재발 방지 규칙은 §4-21 말미에 둔다**
 - **현재 행사 컨텍스트(v1.5)**: 프론트는 `PROJECT_ID` 상수를 쓰지 않는다. `ProjectContext`(React)가 선택된 projectId를 보관(localStorage `communicator.currentProjectId`, 없으면 목록 첫 진행 중 행사)하고 모든 화면은 컨텍스트에서 읽는다. 라우트는 불변(`/`, `/board/...`) — URL prefix(`/p/:projectId/...`) 방식은 2차(북마크 공유 요구 발생 시)
 - Mock 단계 산출: UI/UX 전체 검증 + 발주처 데모 라우트(`/c/demo`)
 - 리스크 직렬화: 최대 리스크인 Drive 계층(OAuth·프록시)을 최후행에 배치
@@ -402,12 +402,74 @@ create unique index uq_quote_final_per_project on quotes (project_id) where is_f
 alter table projects add constraint fk_projects_quote foreign key (quote_id) references quotes(id);
 -- 확정(is_final) 후 input·breakdown·total_amount 변경은 트리거로 거부(409) — Configurator lock_finalized_estimate 승계. 수정은 새 버전(superseded_by 체인)
 
+-- 19. 랜딩 페이지 (v2.1 — Phase 3.13 사후 정본화. 섹션·폼·동의는 mock과 1:1로 jsonb 유지, 정규화는 2차)
+create table landing_pages (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references projects on delete cascade,  -- **행사 종속. §4-21 스코프 계약**
+  title text not null,
+  slug text not null,                 -- 영소문자·숫자·하이픈. 내보낸 파일명·공개 주소에 사용
+  status landing_status not null default 'draft',   -- draft | published | closed
+  public_url text,                    -- 내보낸 HTML을 올린 위치(수동 입력). 앱이 서빙하지 않는다
+  sticky_nav boolean not null default true,
+  cta_label text not null default '참가 신청',
+  submit_target landing_submit_target not null default 'registration',  -- registration | external
+  external_submit_url text,           -- submit_target='external'일 때만
+  analytics jsonb not null default '{}'::jsonb,  -- {ga_measurement_id, conversion_event}
+  sections jsonb not null default '[]'::jsonb,        -- LandingSection[] (type·정렬·autofill 여부·본문)
+  form_fields jsonb not null default '[]'::jsonb,     -- LandingFormField[]
+  consents jsonb not null default '[]'::jsonb,        -- LandingConsent[] (필수 동의는 개인정보 항목)
+  created_at timestamptz default now(),
+  updated_at timestamptz default now(),
+  published_at timestamptz
+);
+create unique index uq_landing_slug on landing_pages (project_id, slug);   -- slug는 **행사 안에서만** 유일
+create index ix_landing_project on landing_pages (project_id, updated_at desc);
+
+-- 20. 랜딩 일자별 유입 지표 (v2.1 — mock=픽스처 / Phase 4=GA Data API 적재)
+create table landing_daily_metrics (
+  landing_id uuid not null references landing_pages on delete cascade,
+  day date not null,
+  pageviews int not null default 0,
+  visitors int not null default 0,
+  form_views int not null default 0,
+  submits int not null default 0,
+  primary key (landing_id, day)
+);
+-- 지표는 GA에서 당겨온 파생값이다. 앱이 직접 계측하지 않으며, 제출 수(submits)와 attendees 실제 행 수는
+-- 일치하지 않을 수 있다(중복 제출·외부 제출 대상). 불일치는 화면에 그대로 노출하고 보정하지 않는다.
+
 -- 무결성 보조 (v1.1 — 감수 M-3·Minor 반영)
 create unique index uq_rsvp_email on rsvp_contacts (project_id, lower(email)) where email is not null;
 create unique index uq_attendee_email on attendees (project_id, lower(email)) where email is not null;
 -- deliverables.updated_at은 moddatetime 트리거로 자동 갱신
 -- client_tokens.contact_id insert 시 contact의 project_id 일치를 앱 레벨에서 검증(교차 프로젝트 연결 차단)
 ```
+
+### §4-21 랜딩 스코프 계약 (v2.1 — 결함 정정)
+
+랜딩은 **행사에 종속된 산출물**이다. "현재 행사"는 언제나 `ProjectContext`가 보관한 선택 행사이며, 사용자의 멤버십 행에서 유도하지 않는다.
+
+| 규칙 | 내용 |
+|---|---|
+| R-L1 | 목록·생성 API는 **projectId를 인자로 받는다**. `listLandingPages(projectId)` · `createLandingPage(projectId, input)` |
+| R-L2 | 조회·수정·발행·삭제·지표는 `landingId`로 대상을 찾고, 권한·쓰기 가드는 **그 랜딩의 `project_id`**로 판정한다(`landing.project_id`, 사용자 소속이 아님) |
+| R-L3 | `status='closed'` 행사에서는 랜딩 **생성·수정·발행·삭제가 전부 409**. 판정 대상은 R-L1/R-L2가 정한 projectId다 |
+| R-L4 | slug 유일성은 `(project_id, slug)` 복합 — 다른 행사가 같은 slug를 쓰는 것은 정상이다 |
+| R-L5 | 폼 제출(`submitLandingLead`)은 랜딩의 `project_id`로 `attendees`(channel='rsvp')에 적재한다. 교차 행사 적재는 금지 |
+
+> **왜 규칙으로 못박는가** — Phase 3.13 구현에서 `listLandingPages()`가 인자 없이 `currentUser().project_id`(멤버십 첫 행)로 필터해, 다른 행사를 보고 있어도 같은 목록이 뜨고 종료 행사에서도 생성이 통과했다. v1.5가 `PROJECT_ID` 상수를 없앴지만 **DoD grep이 리터럴 `PROJECT_ID`만 검사**해 `user.project_id` 경로가 통과했다.
+>
+> **재발 방지(정본)**: ① DoD grep 대상에 `user.project_id`·`currentUser().project_id`를 추가하고, 프로젝트 스코프가 필요한 provider 메서드는 **projectId 인자 없이는 구현 금지**. ② 새 모듈은 "행사 A를 보다가 B로 전환하면 목록이 바뀐다"를 테스트로 반드시 포함. ③ **DataProvider 동결 해제는 설계서 개정이 선행**한다 — v6은 이 순서를 어겼고 v2.1이 사후 정본화한 사례다.
+
+### §4-22 랜딩 → 등록 유입 계약 (v2.1)
+
+| 항목 | 내용 |
+|---|---|
+| 제출 대상 | `submit_target='registration'`이면 앱 내부 등록(S4)으로, `'external'`이면 `external_submit_url`로 넘긴다 |
+| 적재 | 내부 제출은 `attendees`에 `channel='rsvp'`로 1행. 랜딩 폼 필드 ↔ 참관객 필드 매핑은 이름·소속·직함·이메일·연락처 고정 |
+| 개인정보 | 필수 동의(consents) 미체크 제출은 거부. 동의 이력은 제출 행에 함께 남긴다 |
+| 지표 | 화면의 페이지뷰·순 방문자·폼 열람·신청 완료는 **§4-20의 GA 파생값**이며 `attendees` 집계와 별개다. 두 값이 다를 수 있음을 화면 캡션에 명시한다 |
+| 금액 | 랜딩은 발주처·외부 공개물이다. **§원칙 7(NO-PRICE-TO-CLIENT)이 그대로 적용** — 섹션 템플릿·autofill·내보낸 HTML 어디에도 견적 금액이 들어가지 않는다 |
 
 ---
 
@@ -534,6 +596,11 @@ draft ──(담당/PM)──> internal_review ──(PM만)──> pending_appr
 | POST /projects/{id}/members | pm | 담당자 추가(이름·이메일·역할 — v1.5 project_invites 생성, mock은 즉시 멤버) / DELETE /projects/{id}/members/{id} = 제거(마지막 pm이면 409) |
 | POST /projects/{id}/client-tokens | pm | 토큰 발급 (연락처·만료) / DELETE = 회수 |
 | GET /projects/{id}/dashboard | 멤버 | 홈 데이터(미결 컨펌·D-day·인박스 수·영역 진행률·최근 활동) |
+| GET /projects/{id}/landings | 멤버 | 그 행사의 랜딩 목록(최신 수정순) — **projectId 필수, §4-21 R-L1** (v2.1) |
+| POST /projects/{id}/landings | 멤버 | 랜딩 생성. 섹션·폼·동의는 기본 템플릿 시드, autofill 섹션은 행사 개요·세션·존에서 즉시 조립. closed 행사면 409 (v2.1) |
+| PATCH /landings/{id} · POST /landings/{id}/publish · DELETE /landings/{id} | 멤버(삭제=pm) | 수정·발행(공개 주소 기록, null이면 draft 복귀)·삭제. 권한 판정은 `landing.project_id` 기준 (v2.1) |
+| GET /landings/{id}/metrics | 멤버 | 일자별 유입 지표. mock=픽스처 / Phase 4=GA Data API (v2.1) |
+| POST /landings/{id}/leads | 공개(폼) | 랜딩 폼 제출 → attendees(channel=rsvp) 적재. §4-22 계약 (v2.1) |
 | POST /deliverables | 역할-영역 일치 (지시 발행은 pm) | 항목 생성 + Drive 하위 폴더 생성. v1.2: brief·스펙 포함 시 status=requested |
 | PATCH /deliverables/{id}/status | §5 전이 규칙 | 상태 전이 (검증 실패 시 409) |
 | POST /deliverables/{id}/versions | 역할-영역 일치 | §7.2 업로드 |
@@ -584,12 +651,13 @@ draft ──(담당/PM)──> internal_review ──(PM만)──> pending_appr
 
 ## 10. 화면 명세 (v1.5: S-1 추가, S0·S6 재정의)
 
-**진입점 원칙(v1.5)**: 모든 화면은 사이드바 메뉴 또는 명시적 버튼으로 도달 가능해야 하며, 데모 픽스처는 그 진입 흐름을 실제로 보여줘야 한다(게이트 뒤에만 존재하는 화면 금지). 사이드바 순서(v2.0): [프로젝트 셀렉터] → 행사 목록 → **준비** 그룹(견적 · 행사 설정) → **운영** 그룹(홈 → 디자인 보드 → 운영 보드 → 등록 → 일정 → 운영계획서). 견적 메뉴는 app_role이 admin·sales가 아니면 숨김. 셀렉터에 "견적만 있음 · 행사 미생성" 상태 표시.
+**진입점 원칙(v1.5)**: 모든 화면은 사이드바 메뉴 또는 명시적 버튼으로 도달 가능해야 하며, 데모 픽스처는 그 진입 흐름을 실제로 보여줘야 한다(게이트 뒤에만 존재하는 화면 금지). 사이드바 순서(v2.0): [프로젝트 셀렉터] → 행사 목록 → **준비** 그룹(견적 · 랜딩보드 · 행사 설정) → **운영** 그룹(홈 → 디자인 보드 → 운영 보드 → 등록 → 일정 → 운영계획서). 견적 메뉴는 app_role이 admin·sales가 아니면 숨김. 셀렉터에 "견적만 있음 · 행사 미생성" 상태 표시.
 
 | # | 화면 | 구성 | 주요 액션 |
 |---|---|---|---|
 | 공통 | 프로젝트 셀렉터 (v1.5) | 사이드바 최상단 드롭다운: 진행 중/종료 그룹, 행사명·유형·D-day·미결 컨펌/지연 요약, "＋ 새 행사 만들기", "전체 목록 보기" | 전환(컨텍스트 변경·마지막 선택 기억), 새 행사 → S0 |
 | S-2 | 견적 (v2.0, 메뉴 "준비" 그룹) | 좌: 견적 버전 표(버전·인원·베뉴·모객 포함·총액·상태) / 우: 선택 버전 요약(섹션별 금액·합계·VAT 별도) / 에디터 5스텝 ①규모·유형(행사명·일자·시간·유형·인원·보장·타겟팅) ②베뉴(20곳 필터·홀 적합도·후보 택1) ③옵션(12종+부스) ④확인·확정(Excel 미리보기) ⑤행사 만들기(확정 후 활성) | 새 버전·확정·Excel 내려받기·"이 견적으로 행사 만들기". 접근 = admin·sales. 금액은 이 화면과 Excel에만 |
+| S-3 | 랜딩보드 (v2.1, 메뉴 "준비" 그룹) | 좌: 랜딩 표(제목·slug·상태·GA 측정 ID·수정일) / 우: 선택 랜딩 요약(공개 주소·제출 대상·GA·전환 이벤트) + 유입 지표 4카드(페이지뷰·순 방문자·폼 열람·신청 완료)와 일자별 막대. 빌더는 섹션 템플릿 13종·폼 필드·동의 편집 + HTML 내보내기(GA 주입) | 새 랜딩·편집·발행·내보내기. **현재 행사의 랜딩만 보인다(§4-21)**. 지표는 GA 파생값 — mock 단계에서는 픽스처임을 화면에 명시 |
 | S-1 | 행사 목록 (v1.5) | 카드 그리드(행사명·유형·일자·장소·D-day·PM·예상 인원·미결/지연/확정·전체 진행률). 세팅 미완료 행사는 "온보딩 n/3" 표시, 종료 행사는 접힘 | 카드 클릭=전환, 새 행사 만들기, 종료/재개(pm) |
 | S0 | 새 행사 위저드 (v1.3→v1.5 재정의) | **행사 설정 ①②③과 동일한 폼 컴포넌트**를 3단계로 배치: ①행사개요(필수 4: 행사명·코드·시작일·장소) ②담당자(내부 담당자 입력 — 이름·이메일·역할, PM 1명 필수 / 발주처 담당자·토큰 선택) ③유형·확인(일반형/모객형, WBS 전개 예고) | 완료 = onboarded_at 기록 + WBS 전개 + R&R 시드. 미완료 행사는 목록에 남고 진입 시 행사 설정으로 유도(차단 아님) |
 | S1 | 홈 대시보드 | 미결 컨펌(기한순) · D-day·마일스톤 · **지연/임박 WBS 태스크(v1.4)** · 미등록 인박스 · 영역별 진행률 바 · 최근 활동 | 인박스 연결/무시, 항목·태스크 바로가기 |
@@ -648,6 +716,8 @@ UI 공통: 한국어, 데스크톱 우선 + 반응형(발주처 화면은 모바
 ---
 
 ## 14. 개정 이력
+
+- **v2.1** (2026-08-23): **랜딩보드(S-3) 사후 정본화 + 스코프 결함 정정 + 가격 상수 v1.1 확정**. ① §4-19·§4-20 랜딩 테이블 신설 ② **§4-21 랜딩 스코프 계약** — `listLandingPages(projectId)`·`createLandingPage(projectId, input)`로 시그니처 정정, 쓰기 가드는 `landing.project_id` 기준, DoD grep에 `user.project_id` 추가(v1.5가 없앤 단일 프로젝트 전제가 랜딩 모듈에만 되살아난 결함) ③ §4-22 랜딩→등록 유입 계약(금액 비노출 재확인) ④ §8 랜딩 API 6종·§10 S-3 화면 명세·사이드바 순서 갱신 ⑤ **§17.3-4 골든 데이터셋 출처 규약** — 원본 생성기 산출물만 인정, `source.commit`은 실제 생성 커밋(어긋나면 검증 실패로 간주) ⑥ **§17.4 가격 상수** — LED 오퍼레이팅 250만원 = V-mix 스위칭 + 전담 엔지니어 일체(사용자 확정), 화면중계 200만·온라인중계 +150만 증분·전체 녹화 100만, `scaler4k`→`ledOperating` 승계 ⑦ §2.1 동결 이력 정정(v5는 9메서드) + v6·v6.1 기록. **DataProvider v6.1 재동결**
 
 - **v1.0** (2026-08-19): 최초 확정 — 구조안 v0.9 승인 승격
 - **v2.0** (2026-08-22): 견적 Configurator 단일 플랫폼 통합 (시각안 3화면 승인, jsx-easy-shift 읽기 분석 보고 기반) — 원칙 7(#RULE-NO-PRICE-TO-CLIENT) · 모듈 8 견적 · profiles(app_role)·quotes·compliance_cards 신설, projects 모객 필드 4종·wbs_tasks.target · API 7건 · S-2 견적 화면·사이드바 준비/운영 그룹·옛 라우트 리다이렉트 · RLS·보안 4중 차단 · DataProvider v5(8메서드) · 부록 §16 핸드오프 계약 확정(실필드 매핑 11/13+보정 2) · §17 이식 인벤토리·검증 기준(골든 벡터 0원 일치) · §18 인프라 전환 절차(새 Supabase·Vercel·도메인·1회 임포트·아카이브). 전제: Lovable 폐기, 홈 레포=communicator, 옛 DB 폐기
@@ -746,7 +816,7 @@ UI 공통: 한국어, 데스크톱 우선 + 반응형(발주처 화면은 모바
 | src/lib/venuedb.js (2,542) | src/modules/quote/data/venuedb.ts | **reference_cases 필드 전부 제거**(실고객사명·실거래액). 20곳·holls·pricing·extraction_confidence 유지. "DO NOT EDIT" 헤더 유지 |
 | src/lib/leadTargeting.ts (43) · eventTypes.ts (41) · dateFormat.ts (33) | src/modules/quote/data/ · lib/ | 타겟팅 5축·행사 성격 7종 |
 | src/lib/exportEstimate.js (934) | src/modules/quote/export/exportEstimate.ts | ExcelJS·file-saver 유지. **driveUpload 호출·backup 파라미터 제거**. 로고 자산은 public/brand png 사용 |
-| handover/cowork-port/remember-pricing-dataset_v1.json | src/modules/quote/__tests__/fixtures/pricing-dataset.json | 골든 벡터 14 + 조정 벡터 1 |
+| handover/cowork-port/remember-pricing-dataset_*.json | src/modules/quote/__tests__/fixtures/pricing-dataset.json | **v1.1.0 기준 골든 벡터 21 + 조정 벡터 1 + 인원 그리드 47행**(v2.1 — LED↔중계 분리 반영). `source.commit`은 **생성에 실제로 사용한 jsx-easy-shift 커밋**이어야 한다(§17.3-4) |
 | src/lib/__tests__ (calcEstimate 14·exportEstimate 26·kpiRules 5·pricingExtensions 28·rememberQuote 11) | src/modules/quote/__tests__/ | 84케이스 중 엔진·Excel 관련 전부 이식, UI 의존 케이스는 RTL로 재작성 |
 
 ### 17.2 UI 이식
@@ -754,9 +824,28 @@ UI 공통: 한국어, 데스크톱 우선 + 반응형(발주처 화면은 모바
 - 이식하지 않음: MiceConfigurator.jsx(구버전), PreSetup.tsx, EventBriefForm.tsx, EventList.tsx, EventDetail.tsx, SocDashboard.tsx, shadcn/ui 50개, landingPages.js·public/landing-archives(고객 실명 — 아카이브만).
 
 ### 17.3 검증 기준 (DoD 21~23의 정본)
-1. **엔진 등가**: pricing-dataset.json의 전 벡터(14+1)에 대해 이식 엔진 산출이 **0원 차이** — Configurator README_코웍이식 합격 기준 그대로.
+1. **엔진 등가**: pricing-dataset.json의 전 벡터(**21+1**, 인원 그리드 47행 포함)에 대해 이식 엔진 산출이 **0원 차이** — Configurator README_코웍이식 합격 기준 그대로. (v2.1: v1.1.0 데이터셋으로 교체)
 2. **Excel 등가**: 동일 입력으로 생성한 .xlsx의 셀 값·수식(NUMBERSTRING 한글금액·O/X 재계산)이 원본과 일치(exportEstimate 테스트 26케이스 통과).
 3. **비노출**: quotes·breakdown·total_amount가 `/c/*` 응답·운영계획서 조립 데이터·activity_log·알림 페이로드 어디에도 없음(테스트로 증명).
+4. **데이터셋 출처(v2.1 신설)**: 골든 데이터셋은 **jsx-easy-shift의 생성기로 만든 산출물만** 인정한다. 커뮤니케이터의 이식 엔진으로 기대값을 만들면 자기 자신과의 비교가 되어 등가 검증이 무의미해진다.
+   - `source.repo`·`source.commit`·`source.engine`은 **생성 시점에 실제로 사용한 커밋**을 적는다. 단가를 바꾼 PR 이후에 재생성했는데 `source.commit`이 그 이전 커밋이면 **그 자체로 검증 실패**로 본다.
+   - 재생성 절차: ① jsx-easy-shift를 해당 커밋으로 체크아웃 → ② 생성기 실행 → ③ 산출 JSON을 그대로 커밋(수기 편집 금지) → ④ `version`·`generated_at`·`source.commit` 갱신 → ⑤ PR 본문에 원본 커밋 해시 명기.
+   - **엔진 상수를 바꾸는 변경은 데이터셋 재생성과 같은 PR에서만** 머지한다(§9 리추얼).
+
+### 17.4 가격 상수 개정 이력 (v2.1 — LED 운용·중계 분리)
+
+2026-08-22 jsx-easy-shift #45 → communicator #19로 이식. **LED 오퍼레이팅과 중계는 완전히 별개 비용**이며, LED 단가에는 어떤 중계 비용도 포함되지 않는다. 중계는 LED를 전제로 하지만, LED가 중계를 강제하지는 않는다(일방 의존).
+
+| 항목 | 정의 (v2.1 확정) | 단가 | 조건 |
+|---|---|---|---|
+| LED 오퍼레이팅 | **V-mix 스위칭 + 전담 엔지니어 일체** (구 '4K 스케일러/KVM' 슬롯 승계 — 단가 동결, 성격만 장비→운영으로 재정의. **사용자 확정 2026-08-23**) | 2,500,000 | 100명 이상 + LED 운용 시 시스템 기본 포함. 100명 미만은 옵션 |
+| 화면중계 | 발표자·무대 실황을 행사장 화면에 실시간 송출 | 2,000,000 | 카메라 최소 2대. LED 선행 필수 |
+| 온라인중계 | 외부 온라인 송출 + 중계녹화 | +1,500,000 (합계 3,500,000) | 카메라 3대. 화면중계 위에 얹히는 **증분** — 단독 선택 시 화면중계가 자동 포함되고, 둘 다 선택해도 이중 과금되지 않는다 |
+| 전체 녹화·편집 | 전 세션 풀 녹화 + 세션별 편집본 | 1,000,000 | 중계 시스템(카메라·스위칭) 선행 필수 |
+
+- 옵션 키: 구 `scaler4k` → 신 `ledOperating`. 엔진은 `normalizeOptions()`로 구 키를 승계하므로 **저장된 옛 견적은 그대로 복원**된다. UI·저장 경로는 신 키 단일로 수렴한다.
+- `relayBreakdown`이 중계 과금의 단일 출처이며 Excel 내보내기도 이 값을 소비한다(게이트 재유도 금지).
+- **PRD·CLAUDE.md의 `system_scaler4k_auto` 키 표기는 `system_led_operating_auto`로 정정**한다(v2.1).
 
 ---
 

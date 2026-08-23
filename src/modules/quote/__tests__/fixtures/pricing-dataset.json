@@ -1,10 +1,10 @@
 {
   "dataset": "remember-mice-pricing",
   "version": "1.1.0",
-  "generated_at": "2026-08-22",
+  "generated_at": "2026-08-23",
   "source": {
     "repo": "JasonCreed-creator/jsx-easy-shift",
-    "commit": "6047834",
+    "commit": "5dafc52",
     "engine": "src/lib/calcEstimate.js",
     "kpi": "src/lib/kpiRules.ts"
   },

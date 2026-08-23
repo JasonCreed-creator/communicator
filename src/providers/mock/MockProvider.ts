@@ -1812,10 +1812,10 @@ export class MockProvider implements DataProvider {
     }
   }
 
-  async listLandingPages(): Promise<LandingPage[]> {
-    const user = this.currentUser()
+  async listLandingPages(projectId: UUID): Promise<LandingPage[]> {
+    // 스코프는 인자로만 정한다 — currentUser()의 멤버십에서 유도하지 않는다(§4-21 R-L1)
     return this.state.landing_pages
-      .filter((l) => l.project_id === user.project_id)
+      .filter((l) => l.project_id === projectId)
       .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
       .map((l) => structuredClone(l))
   }
@@ -1824,22 +1824,24 @@ export class MockProvider implements DataProvider {
     return structuredClone(this.mustFindLanding(landingId))
   }
 
-  async createLandingPage(input: LandingPageInput): Promise<LandingPage> {
+  async createLandingPage(projectId: UUID, input: LandingPageInput): Promise<LandingPage> {
+    // currentUser()는 행위자 신원(활동 로그)에만 쓴다. 쓰기 가드·slug 유일성·소속은
+    // 전부 인자로 받은 projectId로 판정한다(§4-21 R-L1·R-L3·R-L4)
     const user = this.currentUser()
-    this.assertWritable(user.project_id)
+    this.assertWritable(projectId)
     const title = input.title?.trim()
     if (!title) throw new ProviderError('validation', '랜딩 제목은 필수입니다.')
     const slug = input.slug?.trim()
     if (!slug) throw new ProviderError('validation', 'slug는 필수입니다.')
     this.assertSlugShape(slug)
-    this.assertSlugFree(user.project_id, slug)
+    this.assertSlugFree(projectId, slug)
 
     const id = this.nextId('lnd')
     const idFor = (kind: string) => `${id}-${kind}`
     const now = nowIso()
     const landing: LandingPage = {
       id,
-      project_id: user.project_id,
+      project_id: projectId,
       title,
       slug,
       status: 'draft',
@@ -1862,7 +1864,7 @@ export class MockProvider implements DataProvider {
     }
     this.state.landing_pages.push(landing)
     this.state.landing_metrics[id] = []
-    this.log(user.project_id, `user:${user.id}`, 'landing.created', 'landing', id, { title })
+    this.log(projectId, `user:${user.id}`, 'landing.created', 'landing', id, { title })
     return structuredClone(landing)
   }
 

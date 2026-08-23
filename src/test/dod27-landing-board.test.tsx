@@ -8,6 +8,13 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { MockProvider } from '../providers/mock/MockProvider'
 import { createFixtureState } from '../fixtures/sampleProject'
 import { LANDING_ID_SAMPLE, buildLandingMetrics } from '../fixtures/landingFixtures'
+import { PROJECT_ID } from '../fixtures/sampleProject'
+import {
+  LANDING_ID_REBUILD26,
+  LANDING_ID_REBUILD27,
+  PROJECT_ID_REBUILD26,
+  PROJECT_ID_REBUILD27,
+} from '../fixtures/rebuildFixtures'
 import { autofillSection, autofillSections, heroMetaLine } from '../lib/landingAutofill'
 import {
   analyticsSnippet,
@@ -214,16 +221,18 @@ describe('DoD-27 (e) MockProvider — CRUD·발행·리드 유입', () => {
   })
 
   it('픽스처 랜딩 1건과 30일 지표가 시드된다', async () => {
-    const pages = await provider.listLandingPages()
+    const pages = await provider.listLandingPages(PROJECT_ID)
     expect(pages).toHaveLength(1)
     expect(pages[0].id).toBe(LANDING_ID_SAMPLE)
     expect(await provider.listLandingMetrics(LANDING_ID_SAMPLE)).toHaveLength(30)
   })
 
   it('생성 시 slug 형식·중복을 막는다', async () => {
-    await expect(provider.createLandingPage({ title: 'x', slug: '한글' })).rejects.toThrow(/slug/)
     await expect(
-      provider.createLandingPage({ title: 'x', slug: 'sample-tech-2026' }),
+      provider.createLandingPage(PROJECT_ID, { title: 'x', slug: '한글' }),
+    ).rejects.toThrow(/slug/)
+    await expect(
+      provider.createLandingPage(PROJECT_ID, { title: 'x', slug: 'sample-tech-2026' }),
     ).rejects.toThrow(/사용 중/)
   })
 
@@ -296,5 +305,68 @@ describe('DoD-27 (f) 지표 픽스처', () => {
 
   it('결정론적이다 — 같은 기준일이면 같은 수치', () => {
     expect(buildLandingMetrics('2026-08-22')).toEqual(buildLandingMetrics('2026-08-22'))
+  })
+})
+
+// ── H1 (v2.1 §4-21) 랜딩 스코프 계약 ───────────────────────────────
+// 랜딩은 행사에 종속된다. 스코프는 인자로 받은 projectId가 정하며,
+// 사용자의 멤버십 첫 행(currentUser().project_id)에서 유도하지 않는다.
+describe('DoD-27 (g) 랜딩 스코프 계약 (§4-21)', () => {
+  let provider: MockProvider
+
+  beforeEach(() => {
+    provider = new MockProvider(createFixtureState())
+  })
+
+  it('행사 A→B 전환 시 랜딩 목록이 바뀐다 (R-L1)', async () => {
+    const a = await provider.listLandingPages(PROJECT_ID)
+    const b = await provider.listLandingPages(PROJECT_ID_REBUILD27)
+    expect(a.map((l) => l.id)).toEqual([LANDING_ID_SAMPLE])
+    expect(b.map((l) => l.id)).toEqual([LANDING_ID_REBUILD27])
+    // 각 목록은 자기 행사 것만 담는다 — 교차 노출 0건
+    expect(a.every((l) => l.project_id === PROJECT_ID)).toBe(true)
+    expect(b.every((l) => l.project_id === PROJECT_ID_REBUILD27)).toBe(true)
+
+    const closed = await provider.listLandingPages(PROJECT_ID_REBUILD26)
+    expect(closed.map((l) => l.id)).toEqual([LANDING_ID_REBUILD26])
+    expect(closed[0].status).toBe('published')
+  })
+
+  it('종료 행사에서 랜딩 생성은 409다 (R-L3)', async () => {
+    // 결함 재현 방지: 사용자의 첫 멤버십이 진행 중 행사여도 종료 행사 쓰기는 막혀야 한다
+    await expect(
+      provider.createLandingPage(PROJECT_ID_REBUILD26, { title: '재오픈', slug: 'reopen' }),
+    ).rejects.toMatchObject({ code: 'conflict' })
+    expect(await provider.listLandingPages(PROJECT_ID_REBUILD26)).toHaveLength(1)
+  })
+
+  it('같은 slug를 서로 다른 행사에 만들 수 있다 (R-L4)', async () => {
+    // 픽스처가 이미 ⑤·⑥ 두 행사에 slug 'rebuild'를 갖고 있다
+    const created = await provider.createLandingPage(PROJECT_ID, {
+      title: '샘플 행사 2차 랜딩',
+      slug: 'rebuild',
+    })
+    expect(created.slug).toBe('rebuild')
+    expect(created.project_id).toBe(PROJECT_ID)
+    // 같은 행사 안에서의 중복만 막는다
+    await expect(
+      provider.createLandingPage(PROJECT_ID, { title: '또', slug: 'rebuild' }),
+    ).rejects.toThrow(/사용 중/)
+  })
+
+  it('생성된 랜딩은 인자로 받은 행사에 붙는다 — 멤버십 첫 행이 아니다 (R-L1)', async () => {
+    const created = await provider.createLandingPage(PROJECT_ID_REBUILD27, {
+      title: '차기 행사 랜딩',
+      slug: 'next-round',
+    })
+    expect(created.project_id).toBe(PROJECT_ID_REBUILD27)
+    const user = await provider.getCurrentUser()
+    expect(created.project_id).not.toBe(user.project_id)
+    expect((await provider.listLandingPages(PROJECT_ID_REBUILD27)).map((l) => l.id)).toContain(
+      created.id,
+    )
+    expect((await provider.listLandingPages(user.project_id)).map((l) => l.id)).not.toContain(
+      created.id,
+    )
   })
 })

@@ -3,7 +3,15 @@
 > 가변 상태 파일. 매 세션 체크아웃 시 에이전트가 갱신한다 (CLAUDE.md §9 리추얼).
 
 ## 1. 상태 요약
-- **진행 중: Phase 3.12 — 데모 픽스처 리빌드화** (브랜치 `claude/gg-5jaapu`, base=main `bfccb26`).
+- **진행 중: Phase 3.13.1 — 핫픽스 5건** (브랜치 `claude/phase-3-13-1-hotfix-y5hwpx`, base=main `4f5a4e4`).
+  챗 실측 검수(2026-08-23)에서 나온 결함 정정만 — 신기능 0. 정본 문서를 **설계서 v2.1**로 교체.
+  H1 랜딩 스코프(§4-21·**DataProvider v6.1 재동결**) · H2 DoD grep 확대 · H3 dod10/dod20 flake 제거 ·
+  H4 골든 데이터셋 출처 정직화 · H5 jsx-easy-shift 엔진 동결(문서 3건).
+  결과: vitest **376개**(기준 369 + 스코프 4 + 스코프 가드 3) **연속 3회 무실패** · tsc 클린 ·
+  vite build 성공 · `npm run demo` **4단 전부 통과**(정적 · 라우팅 4 · 브라우저 15항목) ·
+  grep 가드 5종 0건(gray/slate · PROJECT_ID · **user.project_id** · 금액 키 · onboarding_completed) ·
+  스크린샷 4장
+- 직전: Phase 3.12 — 데모 픽스처 리빌드화** (브랜치 `claude/gg-5jaapu`, base=main `bfccb26`).
   9/1 합류 팀원이 자기가 운영한 실제 행사(RE:BUILD 26)를 데모에서 그대로 보게 하는 증분.
   스키마·타입·DataProvider 무변경. **사용자 보정 3건 반영(2026-08-22)** — RE:BUILD 27 행사일
   2026-09-10, 견적 인원 480/400(엔진 상한 내), 종료 행사 보드의 생성·지시 폼 숨김(데이터 전용
@@ -13,9 +21,10 @@
 - 현재 Phase: **Phase 0~3.11 완료** — main=`78c8aa9`(PR #14 머지, 챗 실측 검수 통과·사용자 머지 승인
   2026-08-22). 견적(S-2)→행사 설정→운영→결과의 단일 플랫폼 흐름이 mock 기준으로 전부 동작한다.
   다음 = **Phase 4(새 Supabase 이식)** — ★착수 전 사용자 승인 + 새 프로젝트 3키 수령 필요
-- 정본 문서: **`docs/mice-communicator-설계서-v2.0.md`** (스키마·상태 머신·API·WBS §15·핸드오프 §16·
-  이식 인벤토리 §17·인프라 전환 §18 SoT — v1.5 대체) + `docs/mice-communicator-디자인지시서-v1.md`
-  (디자인 토큰·레이아웃 정본) + 루트 `CLAUDE.md` v2.0(작업 순서·규약)
+- 정본 문서: **`docs/mice-communicator-설계서-v2.1.md`** (스키마·상태 머신·API·랜딩 §4-19~§4-22·
+  WBS §15·핸드오프 §16·이식 인벤토리 §17·인프라 전환 §18 SoT — v2.0 대체·삭제) +
+  `docs/mice-communicator-디자인지시서-v1.md`(디자인 토큰·레이아웃 정본) +
+  루트 `CLAUDE.md` v2.1(작업 순서·규약·상시 grep 가드)
 - 브랜치: `main` = 정본. 3.11은 하네스 지정 브랜치 `claude/progress-9jxt7x`(base=main)로 개발·PR #14 —
   브리프의 `claude/phase-3.11-quote-module` 명명 대신 세션 하네스 지정을 따름(§5 결정 로그).
   머지 후 같은 브랜치는 main에서 재분기해 후속 문서 작업에 재사용
@@ -243,7 +252,75 @@
     `demo/verify/routing.check.tsx`는 엔트리와 같은 시드를 적용하고 RE:BUILD 27 컨텐츠를 단언,
     `browser-check.mjs`의 첫 화면 단언도 동일 교체(`/c/demo` 발주처 검증은 prj-stc26 그대로)
 
+- **Phase 3.13.1 — 핫픽스 5건** (2026-08-23, 메인 단독, base=main `4f5a4e4`)
+  - **H1 랜딩 스코프 정정(Major)** — `MockProvider.listLandingPages()`가 인자 없이
+    `currentUser().project_id`(= `members`의 **첫 멤버십 행**)로 필터해, 어떤 행사를 골라도 늘
+    `prj-stc26`의 랜딩이 떴다. `createLandingPage()`도 같은 값을 써서 **종료 행사에서 생성이 409가
+    아니라 성공**했다(`assertWritable`이 엉뚱한 행사를 검사).
+    · `listLandingPages(projectId)` · `createLandingPage(projectId, input)`로 시그니처 정정
+      → **DataProvider v6.1 재동결**(메서드 수 75 불변). 나머지 6메서드는 `landingId`로 대상을 찾고
+      가드를 `landing.project_id`로 판정하고 있어 **시그니처 불변**(§4-21 R-L2 — 코드 확인 완료)
+    · MockProvider: 필터·`assertWritable`·`assertSlugFree`·저장 `project_id`·활동 로그 전부 인자 기준.
+      `currentUser()`는 **행위자 신원(로그)에만** 남김
+    · `LandingBoardPage`가 `useProject()`의 `projectId`를 넘긴다(`useAsync` 의존 배열 유지 — 전환 시 재조회).
+      `LandingEditorPage`는 list/create를 호출하지 않아 무변경
+    · 픽스처: 랜딩을 **행사별로 덧붙이는** 구조로 바꿔(`appendLanding`) ⑤ RE:BUILD 26 발행 완료 1건 ·
+      ⑥ RE:BUILD 27 초안 1건 시드. 둘 다 slug `rebuild` — `(project_id, slug)` 복합 유일이라 정상(R-L4)
+    · **`user.project_id` 전수 확인 결과: 스코프 용도 사용처는 랜딩 5줄이 전부였고, 그 외 0건.**
+      다른 곳은 전부 명시 `projectId` 인자이거나 엔티티 필드(`landing.project_id`·`quote.project_id` 등)
+    · DoD-27 신규 4케이스(지시 3 + 멤버십 대조 1) — 행사 전환 시 목록 교체 / 종료 행사 생성 409 /
+      같은 slug 타 행사 허용 / 생성된 랜딩이 인자 행사에 붙고 `user.project_id`와 다름
+  - **H2 DoD grep 확대(재발 방지)** — `src/test/dod-project-scope-guard.test.ts` 신설(3케이스).
+    프로덕션 소스(`pages·components·providers·context·hooks·lib·modules·fixtures`)를 훑어
+    ① `*.tsx`의 `PROJECT_ID` ② 어디서든 `user.project_id`·`currentUser().project_id` 를 잡는다.
+    · 예외는 **화이트리스트 등록 + 해당 줄의 `scope-exempt:` 주석** 둘 다 있어야 통과 — 무설명 예외 금지.
+      현재 예외 **0건**
+    · glob 오타로 0건 통과하는 것을 막는 "스캔 대상 30개 이상" 가드 동반
+    · **가드가 실제로 잡는지 역검증**: 결함을 되돌려 넣으면 위반 줄을 정확히 지목하며 실패함을 확인
+    · CLAUDE.md §7에 **상시 grep 가드 표 5종** + DoD 28 추가
+  - **H3 dod10 flake 제거(테스트 전용, 제품 코드 무수정)** — 원인은 브리프 진단 그대로:
+    `OnboardingPage`가 자기 `useAsync`로 헤딩을 먼저 그리는데 폼(`ProjectOverviewForm`)이 **별도
+    `useAsync(getProject)`**를 돌려 그 사이 자리표시자를 렌더한다. 헤딩만 `await`하고 폼 요소를
+    동기 `getBy`로 잡으면 깨진다.
+    · 같은 패턴을 전수 훑어 **dod10 3곳 · dod20 3곳 · dod9 1곳**을 `findBy`로 교체.
+      실제로 이번 전체 실행에서 **dod20 (b)가 같은 이유로 실패**하던 것을 함께 잡았다
+    · 검증: `npm test` **연속 3회 전부 376/376 통과**(35파일)
+  - **H4 골든 데이터셋 출처 정직화(Major)** — **사실 확인 결과 = (a)**.
+    jsx-easy-shift `5dafc52`(#45)에서 `scripts/exportPricingDataset.mjs`를 돌린 산출물과 레포의
+    `pricing-dataset.json`이 **`generated_at`·`source.commit` 두 줄 빼고 완전히 동일**했다 —
+    즉 수치는 생성기 산출물이 맞고 **등가 검증이 자기 자신과의 비교가 아니었다**. 메타데이터만
+    #45 **이전** 커밋(`6047834`)으로 찍혀 있었던 것이고, 생성기가 실행 시점의
+    `git rev-parse --short HEAD`를 stamp하므로 **#45 커밋 전에 생성기를 돌린 결과**로 설명된다
+    · 조치: 수기 편집 없이 **생성기 산출물로 파일을 통째 교체** → `source.commit = 5dafc52`,
+      `generated_at = 2026-08-23`. 나머지 바이트는 종전과 동일
+    · **데이터셋 출처 = `5dafc52` · 21+1 벡터 + 47행 그리드 0원 일치**(재확인 완료, 단가·수식 무변경)
+  - **H5 jsx-easy-shift 엔진 동결(문서 3건, 기능 코드 0줄)** — 브랜치
+    `claude/phase-3-13-1-hotfix-y5hwpx`, base=main `5dafc52`
+    · `CLAUDE.md` 최상단 **⛔ 가격 엔진 동결(2026-08-23)** 선언 — `calcEstimate.js`·`kpiRules.ts`·
+      `venuedb.js`·`exportEstimate.js`는 이 레포에서 수정하지 않고, 단가·수식은 communicator의
+      `src/modules/quote`에서만. 생성기는 골든 데이터셋 재생성용으로 남김. Phase 4.6 아카이브 예정
+    · `CLAUDE.md` MiceConfigurator 규칙 정리 — `/quote` 단일화(#45)와 충돌하던 "분해 전 Playwright
+      snapshot 50건" 절을 **"구버전 화면은 이식 대상 아님(설계서 v2.1 §17.2)"**으로 대체.
+      자동 머지 예외 항목·테스트 명령 주석·로드맵 체크박스의 잔재도 함께 정리(엔진 등가 기준은 유지)
+    · PRD `pricing_rules` 키 `system_scaler4k_auto` → **`system_led_operating_auto`**(표시명 동반,
+      금액 2,500,000 불변). 엔진 `normalizeOptions()` 호환 경로는 지시대로 그대로 둠
+
 ## 3. 미결
+- **(열린 질문 — Phase 3.13.1 ①) `전체 녹화·편집` 영문 라벨의 단가가 틀렸다.**
+  `src/components/quote/quoteFormState.ts` OPT_CATALOG의 `fullRecording`은 국문이 `100만원`인데
+  **영문이 `KRW 3,500,000`**으로 남아 있다(엔진 상수 `FULL_RECORDING_PRICE = 1_000_000`,
+  Excel 내보내기·국문 UI는 전부 100만원으로 정상). LED↔중계 분리(#45) 때 국문만 갱신된 잔재로 보인다.
+  **이번 세션 범위(핫픽스 5건) 밖이라 손대지 않았다** — 표시 문자열 1곳이지만 사용자에게 보이는
+  금액이므로 임의 수정 대신 확인을 받는다. 고칠 경우 엔진·데이터셋 무관(라벨 상수만).
+- **(관찰 — Phase 3.13.1 ②) 랜딩 유입 지표가 행사마다 똑같이 보인다.**
+  `buildLandingMetrics(today)`가 기준일만으로 결정론적 수열을 만들어, ⑤·⑥·① 어느 행사를 열어도
+  30일 수치가 동일하다(7,012 / 5,046 / 1,119 / 424). 브리프가 "지표는 기존 방식대로 mock"이라
+  지시해 **현행 유지**했다. Phase 4에서 GA Data API 실연동으로 교체되면 자연 해소되지만,
+  그 전까지 데모에서 어색하면 랜딩 id를 시드에 섞는 1줄 수정으로 갈라놓을 수 있다.
+- **(관찰 — Phase 3.13.1 ③) jsx-easy-shift PRD의 옵션 키 `scaler4k` 표기 잔존.**
+  H5-3은 `pricing_rules` 키(`system_scaler4k_auto`)만 정정 대상이었고, PRD 836·971·1250줄의
+  **옵션 키** `scaler4k`는 엔진 `normalizeOptions()` 호환 경로와 짝이라 브리프 지시대로 두었다.
+  §17.4의 정본 옵션 키는 `ledOperating`이므로, 문서 정합을 더 맞추려면 별건으로 처리한다.
 - **(백로그 — v2.1) 견적 엔진 `TARGET_MAX`(500명)가 리멤버 실제 행사 규모를 못 담는다.**
   RE:BUILD 26 현장 참석이 703명인데 자동 견적 상한이 500명이라, 실제 규모의 행사는 전부
   '별도 협의 모드'(`isCustom` — 전 섹션 0원)로 떨어진다. **v2.1에서 상한 확장 검토** —
@@ -291,6 +368,9 @@
   (설계서 v1.4.1 §4-15·§8·§15 정본화 — 열린 질문 ①~⑤ 전부 종결)
 
 ## 4. 다음 스텝
+- **Phase 3.13.1 PR 챗 실측 검수 → 머지** (오토머지 동선 예외 — 동결 해제·설계서 개정 동반 건).
+  머지 후 데모 아티팩트 재발행
+- 위 열린 질문 ①(영문 라벨 단가) 확인 → 별건 처리 여부 결정
 - **Phase 3.12 PR #16 챗 검수 → 머지** (보정 3건 반영 완료 · 열린 질문 전부 종결) → 머지 후 데모 아티팩트 재발행
 - ~~Phase 3.11 PR 챗 검수 → 머지~~ → **완료** (2026-08-22, PR #14 → main `78c8aa9`)
 - **Phase 4 — 새 Supabase 프로젝트 이식** (★착수 전 사용자 승인 + **새 프로젝트 3키**(URL·anon·
@@ -306,6 +386,21 @@
 - 이후 Phase 5(Drive) → Phase 6(알림·cron)
 
 ## 5. 결정 로그
+- 2026-08-23 (Phase 3.13.1 H1): **DataProvider v6 동결 해제 → v6.1 재동결(75메서드 불변)** —
+  근거: **사용자 승인(2026-08-23) + 설계서 v2.1 §4-21**. `listLandingPages(projectId)` ·
+  `createLandingPage(projectId, input)` 2메서드의 **시그니처만** 변경하고 나머지 6메서드는 불변.
+  **v6은 설계서 선행 없이 코드가 먼저 나간 사례이며, v2.1이 사후 정본화했다**(§2.1 동결 이력에 기록,
+  재발 방지 규칙은 §4-21 말미). 이번 해제는 §9 리추얼대로 설계서 개정이 선행했다
+  · 프로젝트 스코프 규칙을 인터페이스 주석에 못박음 — "프로젝트 단위 조회·생성 메서드는 projectId를
+    인자로 받는다. `currentUser()`는 행위자 신원·권한 판정 전용이며 스코프 유도에 쓰지 않는다"
+  · 재발 방지는 문서만이 아니라 **테스트**로 — `dod-project-scope-guard.test.ts`가 상시 검사하고,
+    결함을 되돌려 넣으면 실제로 실패함을 역검증했다
+- 2026-08-23 (Phase 3.13.1 H4): **골든 데이터셋은 수기 편집하지 않고 생성기 산출물로 교체**한다 —
+  근거: 설계서 v2.1 §17.3-4(원본 생성기 산출물만 인정 · `source.commit`은 실제 생성 커밋).
+  사실 확인 결과 종전 파일도 생성기 산출물이었고(메타 2줄만 상이) **등가 검증은 유효했다**.
+  단가·수식·벡터 값은 한 자리도 바뀌지 않았다
+- 2026-08-23 (Phase 3.13.1 H5): **가격 엔진의 유일한 수정처는 communicator** — 사용자 확정.
+  jsx-easy-shift는 생성기만 남기고 동결하며, 앱 은퇴·도메인 전환은 Phase 4.6 그대로
 - 2026-08-22 (Phase 3.13 — v2.1 랜딩보드): **DataProvider v5 동결 해제 → v6 재동결(75메서드)** —
   근거: **사용자 v2.1 승인(2026-08-22, 범위 4문항 승인)**. listLandingPages·getLandingPage·
   createLandingPage·updateLandingPage·publishLandingPage·deleteLandingPage·listLandingMetrics·
@@ -567,6 +662,14 @@
 - 2026-08-22 세션 #5: Phase 3.13 랜딩보드 신설 — 타입·v6 재동결·MockProvider 8메서드·섹션 템플릿 13종·
   autofill·HTML 내보내기(GA 주입)·빌더/보드 2화면·DoD-27 27케이스. vitest 369(342+27)·tsc·빌드·demo 통과,
   브라우저로 보드·빌더·외부요청 0건 확인.
+
+- 2026-08-23 세션 #7 (Phase 3.13.1 핫픽스, 레포 2개 쓰기): 설계서 v2.1 채택 커밋(v2.0 삭제·코드 무변경) →
+  H1(랜딩 스코프·v6.1 재동결·픽스처·DoD-27 +4) → H2(스코프 가드 테스트 3 + CLAUDE.md 상시 grep 표)·
+  H3(flake 7곳 findBy 교체) → H4(사실 확인 = (a), 생성기 재실행 교체) → H5(jsx-easy-shift 문서 3건) →
+  검증(vitest 376 **연속 3회** · tsc · build · demo 4단 · grep 5종 0건 · 스크린샷 4장) →
+  양 레포 PR 발행(드래프트, **머지는 챗 검수 후**).
+  신규 관찰 3건을 열린 질문에 기록 — 그중 ①(영문 라벨 단가 오기)은 범위 밖이라 **손대지 않고 보고**.
+  **다음 = ① 3.13.1 검수·머지 ② Phase 4 게이트(사용자 승인 + 새 Supabase 3키)**
 
 ## 7. 세션 잠금
 - 잠금 없음 (한 폴더 = 동시 1세션)
