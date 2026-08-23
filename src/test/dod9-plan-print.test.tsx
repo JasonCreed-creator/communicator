@@ -41,7 +41,7 @@ describe('DoD-9 S9 인쇄 미리보기(A4)', () => {
     renderRoute('/plan')
     await screen.findByRole('heading', { name: /행사개요/ })
 
-    const printBtn = screen.getByRole('button', { name: '인쇄' })
+    const printBtn = await screen.findByRole('button', { name: '인쇄' })
     expect(printBtn.className).toContain('plan-print-hidden')
 
     // v1.5: 개요 인라인 편집 제거 — '행사 설정에서 편집' 링크가 인쇄 시 숨겨져야 한다

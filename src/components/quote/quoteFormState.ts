@@ -287,7 +287,7 @@ export const OPT_CATALOG: OptCatalogItem[] = [
     en: { label: 'Online Relay', price: '+KRW 1,500,000', detail: 'External online streaming + relay recording — min. 3 cameras + encoding/streaming\n※ A different deliverable from Live Screen Relay. Builds on it, so it is applied together — KRW 3,500,000 total · LED only' } },
   { id: 'fullRecording', icon: '🎥', group: null, pureOnly: false, relayOnly: true,
     ko: { label: '전체 녹화·편집', price: '100만원', detail: '전 세션 풀 녹화 + 세션별 편집본 (스케치 영상과 별개)\n※ 중계 시스템 선행 필수 — 화면중계 또는 온라인중계' },
-    en: { label: 'Full Recording & Edit', price: 'KRW 3,500,000', detail: 'All sessions recorded + edited per session' } },
+    en: { label: 'Full Recording & Edit', price: 'KRW 1,000,000', detail: 'All sessions recorded + edited per session (separate from the sketch video)\n※ Requires a relay system first — Live Screen Relay or Online Relay' } },
   { id: 'survey', icon: '📊', group: null, pureOnly: false,
     ko: { label: '사후설문조사', price: '100만원', detail: '설문 설계 + 통계분석 보고서 제출' },
     en: { label: 'Post-event Survey', price: 'KRW 1,000,000', detail: 'Survey design + analysis report' } },

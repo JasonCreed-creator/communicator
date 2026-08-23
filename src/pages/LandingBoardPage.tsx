@@ -36,7 +36,7 @@ export default function LandingBoardPage() {
   const navigate = useNavigate()
   const { projectId, summaries } = useProject()
   const currentSummary = summaries.find((x) => x.id === projectId) ?? null
-  const list = useAsync(() => provider.listLandingPages(), [projectId])
+  const list = useAsync(() => provider.listLandingPages(projectId), [projectId])
   const pages = useMemo(() => list.data ?? [], [list.data])
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -58,7 +58,10 @@ export default function LandingBoardPage() {
     setError(null)
     try {
       const title = currentSummary?.name ? `${currentSummary.name} 랜딩` : '새 랜딩'
-      const created = await provider.createLandingPage({ title, slug: slugFrom(currentSummary?.code ?? '') })
+      const created = await provider.createLandingPage(projectId, {
+        title,
+        slug: slugFrom(currentSummary?.code ?? ''),
+      })
       list.reload()
       navigate(`/landing/${created.id}`)
     } catch (e) {

@@ -37,11 +37,11 @@ describe('DoD-20 새 행사 흐름·유도', () => {
 
     // ② 담당자(생성자=pm 자동) → 다음
     await screen.findByRole('heading', { name: '② 담당자' })
-    await userEvent.click(screen.getByRole('button', { name: '다음' }))
+    await userEvent.click(await screen.findByRole('button', { name: '다음' }))
 
     // ③ 유형·확인 — 기본 일반형 유지 → 완료
     await screen.findByRole('heading', { name: '③ 유형·확인' })
-    const generalRadio = screen.getByRole('radio', { name: /일반형/ }) as HTMLInputElement
+    const generalRadio = (await screen.findByRole('radio', { name: /일반형/ })) as HTMLInputElement
     expect(generalRadio.checked).toBe(true)
     await userEvent.click(screen.getByRole('button', { name: '온보딩 완료' }))
     expect(await screen.findByRole('heading', { name: '홈 대시보드' })).toBeTruthy()
@@ -64,7 +64,8 @@ describe('DoD-20 새 행사 흐름·유도', () => {
     expect(screen.queryByRole('heading', { name: '홈 대시보드' })).toBeNull()
 
     // 유도 배너의 '온보딩 이어서 하기' → S0 위저드
-    await userEvent.click(screen.getByRole('button', { name: '온보딩 이어서 하기' }))
+    // 배너는 행사 설정 헤딩과 별개의 useAsync(온보딩 상태)에 달려 있다
+    await userEvent.click(await screen.findByRole('button', { name: '온보딩 이어서 하기' }))
     expect(await screen.findByRole('heading', { name: '온보딩 위저드' })).toBeTruthy()
   })
 })

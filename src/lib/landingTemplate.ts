@@ -85,15 +85,48 @@ const seq = (prefix: string) => {
   return () => `${prefix}-${++n}`
 }
 
-/** 기본 13섹션 — 신규 랜딩 시드 */
+/**
+ * 섹션 스펙 — 행사마다 다른 랜딩을 만들 때 이 형태로 넘긴다.
+ * autofill이 켜진 섹션(hero·speakers·agenda·zones·venue)은 행사 데이터에서 조립되므로
+ * headline/body만 두고 items는 비운다.
+ */
+export type SectionSpec = {
+  type: LandingSectionType
+  headline: string | null
+  body: string | null
+  autofill: boolean
+  items: Array<[string, string | null, string | null]>
+}
+
+/** 스펙 → LandingSection[] — 기본 템플릿과 행사별 랜딩이 같은 빌더를 쓴다 */
+export function sectionsFromSpec(
+  spec: SectionSpec[],
+  idFor: (kind: string) => string,
+): LandingSection[] {
+  const nextSection = seq(idFor('sec'))
+  const nextItem = seq(idFor('item'))
+  return spec.map((sp, i) => ({
+    id: nextSection(),
+    type: sp.type,
+    headline: sp.headline,
+    body: sp.body,
+    visible: true,
+    autofill: sp.autofill,
+    sort_order: i + 1,
+    items: sp.items.map(([label, detail, meta], j) => ({
+      id: nextItem(),
+      label,
+      detail,
+      meta,
+      image_url: null,
+      sort_order: j + 1,
+    })),
+  }))
+}
+
+/** 기본 13섹션 — 신규 랜딩 시드(빈 템플릿). 행사별 내용은 빌더에서 채운다 */
 export function defaultSections(idFor: (kind: string) => string): LandingSection[] {
-  const spec: Array<{
-    type: LandingSectionType
-    headline: string | null
-    body: string | null
-    autofill: boolean
-    items: Array<[string, string | null, string | null]>
-  }> = [
+  const spec: SectionSpec[] = [
     { type: 'hero', headline: null, body: null, autofill: true, items: [] },
     {
       type: 'lead',
@@ -166,25 +199,7 @@ export function defaultSections(idFor: (kind: string) => string): LandingSection
     },
   ]
 
-  const nextSection = seq(idFor('sec'))
-  const nextItem = seq(idFor('item'))
-  return spec.map((sp, i) => ({
-    id: nextSection(),
-    type: sp.type,
-    headline: sp.headline,
-    body: sp.body,
-    visible: true,
-    autofill: sp.autofill,
-    sort_order: i + 1,
-    items: sp.items.map(([label, detail, meta], j) => ({
-      id: nextItem(),
-      label,
-      detail,
-      meta,
-      image_url: null,
-      sort_order: j + 1,
-    })),
-  }))
+  return sectionsFromSpec(spec, idFor)
 }
 
 /** 기본 신청 폼 — 실측 랜딩의 입력 7종을 승계 */

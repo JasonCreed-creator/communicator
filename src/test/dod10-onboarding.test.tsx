@@ -36,19 +36,18 @@ describe('DoD-10 온보딩 위저드·라우트 가드', () => {
 
     // ① 행사개요 — 행사 설정과 동일 폼, 픽스처 값이 이미 채워져 있으므로 저장(다음)만
     await screen.findByRole('heading', { name: '① 행사개요' })
-    // ①의 헤더는 OnboardingPage가, 입력 필드는 ProjectOverviewForm이 각자 async로 로드한다 —
-    // 헤더가 떴다고 필드가 있는 건 아니므로 필드 자체를 기다린다(sync get은 경합).
+    // 헤딩과 폼은 서로 다른 useAsync에 달려 있다 — 폼 요소는 findBy로 기다린다
     const nameInput = (await screen.findByLabelText('행사명')) as HTMLInputElement
     expect(nameInput.value).toBe('샘플 테크 컨퍼런스 2026')
     await userEvent.click(screen.getByRole('button', { name: '다음' }))
 
     // ② 담당자 — 행사 설정 ②와 동일 컴포넌트(선택 입력) → 다음
     await screen.findByRole('heading', { name: '② 담당자' })
-    await userEvent.click(screen.getByRole('button', { name: '다음' }))
+    await userEvent.click(await screen.findByRole('button', { name: '다음' }))
 
     // ③ 유형·확인 — 픽스처 기본값(모객형) 유지, pm이므로 완료 버튼 활성
     await screen.findByRole('heading', { name: '③ 유형·확인' })
-    const recruitingRadio = screen.getByRole('radio', { name: /모객형/ }) as HTMLInputElement
+    const recruitingRadio = (await screen.findByRole('radio', { name: /모객형/ })) as HTMLInputElement
     expect(recruitingRadio.checked).toBe(true)
     const completeButton = screen.getByRole('button', { name: '온보딩 완료' }) as HTMLButtonElement
     expect(completeButton.disabled).toBe(false)
