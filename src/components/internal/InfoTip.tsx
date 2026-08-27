@@ -27,7 +27,10 @@ export default function InfoTip({ text, className = '' }: { text: string; classN
         <span
           id={tipId}
           role="tooltip"
-          className="absolute left-1/2 top-full z-30 mt-1.5 w-60 -translate-x-1/2 rounded-md bg-dark px-3 py-2 text-xs font-normal leading-relaxed text-dark-ink shadow-lg"
+          // 중앙 정렬은 인라인 transform으로 — Tailwind translate 유틸 클래스명은
+          // 디자인 토큰 grep 가드(DoD 17)의 금지 팔레트명을 부분 문자열로 포함해 오탐된다
+          style={{ transform: 'translateX(-50%)' }}
+          className="absolute left-1/2 top-full z-30 mt-1.5 w-60 rounded-md bg-dark px-3 py-2 text-xs font-normal leading-relaxed text-dark-ink shadow-lg"
         >
           {text}
         </span>

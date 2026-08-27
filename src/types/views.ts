@@ -316,6 +316,9 @@ export interface ProjectPatch {
   targeting?: Targeting | null
   /** v2.0 — "견적 연결" 액션 (app_role admin·sales 전용, null = 해제) */
   quote_id?: UUID | null
+  // v2.4.1 §21.1 — 행사 설정 ③ 주최형 블록 (kind='host'에서만 표시, 데이터는 항상 보존)
+  partner_guide_url?: string | null
+  partner_contact_email?: string | null
 }
 
 /** v1.5 — POST /projects 입력(§8): S0 ① 저장 시 개요 필드 일괄 수신, onboarded_at은 null.
@@ -618,6 +621,10 @@ export interface PartnerPortalData {
   /** 마감별 그룹은 화면이 deadline으로 묶는다 — provider는 정렬만 보장 */
   submission_items: PartnerPortalItem[]
   notices: PartnerPortalNotice[]
+  /** v2.4.1 §21.1 — 프로젝트에서 채워진다(값 없으면 null). 금액 키가 아니라 R-H3와 무관하고,
+   *  타 파트너 데이터도 아니므로 격리 위반이 아니다(전 파트너 공통 안내) */
+  guide_url: string | null
+  contact_email: string | null
 }
 
 // ── 견적서 임포트 (v2.4 §22) ───────────────────────────────────────────

@@ -37,6 +37,8 @@
 //   **기존 86메서드 시그니처 불변** 후 재동결. Project.kind·Deliverable.partner_id·
 //   WbsTask.direction/partner_id·Quote.source·QuoteBreakdown.custom_sections(필드 추가만).
 //   `importVendorQuote`(§19.5 협력사 견적서 파싱)는 여전히 **v9 예약 — 지금 만들지 않는다**.
+//   v8.1: 사용자 3.15.1 승인(2026-08-27) + 설계서 v2.4.1(§21.1, v2.5에 승계)를 근거로 동결 해제 →
+//   partner_guide_url·partner_contact_email 필드 추가만, 메서드 수 102 불변(v3.1 전례).
 //
 // 프로젝트 스코프 규칙(설계서 v2.1 §4-21 R-L1): 프로젝트 단위 조회·생성 메서드는 projectId를
 // 인자로 받는다. currentUser()는 행위자 신원·권한 판정 전용이며 스코프 유도에 쓰지 않는다.

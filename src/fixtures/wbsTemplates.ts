@@ -195,6 +195,50 @@ const COMMON_CHARTERS: readonly RoleCharterTemplate[] = [
   },
 ]
 
+// 주최형 R&R 4카드 — 설계서 §15.3b(v2.4.1, DMS 1건 기반 일반화·가정). event_type과 무관하게
+// kind='host' 전 프로젝트에 고정 적용(모객형·일반형이어도 동일 — 파트너 관리 축은 별개).
+// origin_role은 §15.3의 WBS 태스크와 동일하게 null(원본 매핑 없음).
+export const HOST_ROLE_CHARTER_TEMPLATE: readonly RoleCharterTemplate[] = [
+  {
+    role: 'pm',
+    origin_role: null,
+    title: '파트너 총괄 PM',
+    items: [
+      '파트너 제출 독려 및 진행 현황 관리',
+      '주최 검토 회신(HT-6) 총괄, 트랙·부스 배정 확정 통지(HT-2)',
+      '발표자료 검토 조율, 마감 D-1 리마인드 확인',
+    ],
+  },
+  {
+    role: 'design',
+    origin_role: null,
+    title: '부스·비주얼 리드',
+    items: [
+      '부스 그래픽 검토(HT-4) — 규격·재단·해상도 가이드 준수 확인',
+      '키비주얼·현장 사인물 제작',
+    ],
+  },
+  {
+    role: 'ops',
+    origin_role: null,
+    title: '현장 운영 리드',
+    items: [
+      '부스 인력·추가 신청(전력·인터넷·임대) 취합(HT-7)',
+      '설치/리허설 배정·반입 동선 통지(HT-9)',
+      '행사 당일 현장 운영(HT-10)',
+    ],
+  },
+  {
+    role: 'reg',
+    origin_role: null,
+    title: '참관 등록·리드 관리',
+    items: [
+      '참관객 모객·등록·체크인 운영',
+      '리드 데이터 암호화 제공(HT-11, D+7) 및 제공 이력 관리',
+    ],
+  },
+]
+
 export const ROLE_CHARTER_TEMPLATES: Record<EventType, readonly RoleCharterTemplate[]> = {
   recruiting: [
     ...COMMON_CHARTERS,

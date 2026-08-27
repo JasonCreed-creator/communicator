@@ -96,6 +96,10 @@ export interface Project {
   overview_items: OverviewItem[] | null
   /** v1.4.1 — S0 온보딩 완료 시각. null=미완료(본체 라우트 차단 기준). 완료 처리 시 기록, 이후 불변 */
   onboarded_at: IsoDateTime | null
+  /** v2.4.1 §21.1 — 파트너 참가 가이드 링크. `/p` 포털 상단 버튼. 대행형은 null(행사 설정 ③ 주최형 블록에서 pm 편집) */
+  partner_guide_url: string | null
+  /** v2.4.1 §21.1 — 파트너 문의 창구 이메일. `/p` 포털 하단 안내. 대행형은 null */
+  partner_contact_email: string | null
   created_by: UUID | null
   created_at: IsoDateTime
 }

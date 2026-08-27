@@ -9,9 +9,14 @@ import {
 } from '../../lib/statusMachine'
 import { isDelayed, isImminent, offsetToDate, toIsoDate } from '../../lib/wbs'
 import { createFixtureState, type MockState } from '../../fixtures/sampleProject'
-import { COMPLIANCE_CARD_TEMPLATES } from '../../fixtures/complianceTemplates'
+import { COMPLIANCE_CARD_TEMPLATES, HOST_COMPLIANCE_CARD_TEMPLATES } from '../../fixtures/complianceTemplates'
 import { defaultConsents, defaultFormFields, defaultSections } from '../../lib/landingTemplate'
-import { HOST_TEMPLATE, ROLE_CHARTER_TEMPLATES, wbsTemplateFor } from '../../fixtures/wbsTemplates'
+import {
+  HOST_ROLE_CHARTER_TEMPLATE,
+  HOST_TEMPLATE,
+  ROLE_CHARTER_TEMPLATES,
+  wbsTemplateFor,
+} from '../../fixtures/wbsTemplates'
 import { adjustmentDeltas, computeQuoteOutputs, toEngineConfig } from '../../modules/quote/engine/quoteInput'
 import { effectiveAdjust } from '../../modules/quote/engine/quoteMode'
 import { calcEstimate } from '../../modules/quote/engine/calcEstimate'
@@ -413,6 +418,8 @@ export class MockProvider implements DataProvider {
       mc_name: input.mc_name ?? null,
       overview_items: input.overview_items ?? null,
       onboarded_at: null, // §8: S0 완료 전까지 null
+      partner_guide_url: null, // v2.4.1 §21.1 — 기본 null(주최형 전환 후 행사 설정 ③에서 입력)
+      partner_contact_email: null,
       created_by: user.id,
       created_at: nowIso(),
     }
@@ -1236,6 +1243,9 @@ export class MockProvider implements DataProvider {
     if (patch.mc_name !== undefined) project.mc_name = patch.mc_name
     if (patch.target_audience !== undefined) project.target_audience = patch.target_audience
     if (patch.overview_items !== undefined) project.overview_items = patch.overview_items
+    // v2.4.1 §21.1 — 행사 설정 ③ 주최형 블록 (kind 무관하게 저장은 허용, 표시만 host에서 게이트)
+    if (patch.partner_guide_url !== undefined) project.partner_guide_url = patch.partner_guide_url
+    if (patch.partner_contact_email !== undefined) project.partner_contact_email = patch.partner_contact_email
     // v2.0 — 행사 설정 ① 모객형 전용 그룹 (일반형이면 UI 숨김·데이터 보존)
     if (patch.guarantee_pax !== undefined) project.guarantee_pax = patch.guarantee_pax
     if (patch.kpi_show_rate !== undefined) project.kpi_show_rate = patch.kpi_show_rate
@@ -1278,14 +1288,18 @@ export class MockProvider implements DataProvider {
     project.onboarded_at = new Date().toISOString()
     // v1.4 부수 효과: 유형별 WBS 자동 전개 + R&R 카드 시드
     // v2.4 §21 — kind='host'면 파트너별 WBS(HT 템플릿+inbound 자동 생성)로 분기, 대행형 경로는 불변
+    // v2.4.1(3.15.1 폴리시 P4) — host 분기는 R&R·컴플라이언스를 여기서 따로 부르지 않는다:
+    // expandHostWbs 내부의 백필 가드(§15.3b·§15.3c, "비어 있으면 시드")가 이미 채운다 — 신규
+    // 온보딩이면 이 시점에 두 테이블이 비어 있어 백필 가드가 그대로 최초 시드 경로가 된다.
+    // 대행형은 event_type별 템플릿이 필요해 expandWbs가 모르는 정보이므로 여기서 명시 호출한다.
     if (project.kind === 'host') {
       await this.expandHostWbs(projectId)
     } else {
       await this.expandWbs(projectId)
+      this.seedRoleCharters(projectId)
+      // v2.0 부수 효과: 컴플라이언스 카드 시드 (§4-17)
+      this.seedComplianceCards(projectId)
     }
-    this.seedRoleCharters(projectId)
-    // v2.0 부수 효과: 컴플라이언스 카드 2종 시드 (§4-17)
-    this.seedComplianceCards(projectId)
     this.log(projectId, `user:${user.id}`, 'onboarding.completed', 'project', projectId)
   }
 
@@ -1491,7 +1505,9 @@ export class MockProvider implements DataProvider {
           status: old?.status ?? 'todo',
           done_at: old?.done_at ?? null,
           linked_deliverable_id: old?.linked_deliverable_id ?? null,
-          target: null,
+          // v2.4.1(3.15.1 폴리시 P6-①) — S5 '소통 대상' 열 공란 해소: partner_submit 인스턴스는
+          // 해당 파트너명을 target으로 시드한다(host_notice·internal은 파트너 단위가 아니므로 null 유지).
+          target: partner ? partner.name : null,
           direction,
           partner_id: partner?.id ?? null,
           note: old?.note ?? null,
@@ -1532,6 +1548,16 @@ export class MockProvider implements DataProvider {
       }
     }
     this.state.wbs_tasks = [...others, ...expanded]
+    // v2.4.1(3.15.1 폴리시 P4 백필 경로) — expandHostWbs는 completeOnboarding(신규 온보딩)과
+    // S5 '템플릿 재전개' 버튼(기존 host 행사) 양쪽의 유일한 진입점이라, 새 provider 메서드를
+    // 추가하지 않고 여기서 R&R·컴플라이언스 유무를 확인해 없을 때만 §15.3b·§15.3c 세트를
+    // 멱등 시드한다(이미 있으면 손대지 않는다 — 체크 상태 보존, 중복 생성 금지).
+    if (!this.state.role_charters.some((c) => c.project_id === projectId)) {
+      this.seedRoleCharters(projectId)
+    }
+    if (!this.state.compliance_cards.some((c) => c.project_id === projectId)) {
+      this.seedComplianceCards(projectId)
+    }
     this.log(projectId, `user:${user.id}`, 'wbs.expanded_host', 'project', projectId, {
       count: expanded.length,
       partners: activePartners.length,
@@ -1542,7 +1568,9 @@ export class MockProvider implements DataProvider {
   private seedRoleCharters(projectId: UUID): void {
     const project = this.mustFindProject(projectId)
     const others = this.state.role_charters.filter((c) => c.project_id !== projectId)
-    const seeded = ROLE_CHARTER_TEMPLATES[project.event_type].map((tpl) => ({
+    // v2.4.1 §15.3b — kind='host'는 event_type과 무관하게 주최형 4카드로 고정(직교 축)
+    const templates = project.kind === 'host' ? HOST_ROLE_CHARTER_TEMPLATE : ROLE_CHARTER_TEMPLATES[project.event_type]
+    const seeded = templates.map((tpl) => ({
       id: this.nextId('rrc'),
       project_id: projectId,
       role: tpl.role,
@@ -1899,6 +1927,9 @@ export class MockProvider implements DataProvider {
       tier_name: tier?.name ?? null,
       submission_items,
       notices,
+      // v2.4.1 §21.1 — 프로젝트 필드를 그대로 노출(전 파트너 공통 안내, 값 없으면 null)
+      guide_url: project.partner_guide_url,
+      contact_email: project.partner_contact_email,
     }
   }
 
@@ -2196,6 +2227,8 @@ export class MockProvider implements DataProvider {
       mc_name: null,
       overview_items: draft.overview_items,
       onboarded_at: null, // §8: S0 ① 프리필 상태로 진입 — 완료는 S0 위저드에서
+      partner_guide_url: null, // v2.4.1 §21.1
+      partner_contact_email: null,
       created_by: user.id,
       created_at: nowIso(),
     }
@@ -2558,8 +2591,11 @@ export class MockProvider implements DataProvider {
 
   // ── v2.0 컴플라이언스 카드 (§8 /compliance-cards — 체크 멤버·편집 pm) ──
   private seedComplianceCards(projectId: UUID): void {
+    const project = this.mustFindProject(projectId)
     const others = this.state.compliance_cards.filter((c) => c.project_id !== projectId)
-    const seeded: ComplianceCard[] = COMPLIANCE_CARD_TEMPLATES.map((tpl) => ({
+    // v2.4.1 §15.3c — kind='host'는 주최형 3카드(C-H1~C-H3)로 고정
+    const templates = project.kind === 'host' ? HOST_COMPLIANCE_CARD_TEMPLATES : COMPLIANCE_CARD_TEMPLATES
+    const seeded: ComplianceCard[] = templates.map((tpl) => ({
       id: this.nextId('cmp'),
       project_id: projectId,
       kind: tpl.kind,

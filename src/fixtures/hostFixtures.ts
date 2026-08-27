@@ -2,11 +2,22 @@
 // 기존 대행형 픽스처(샘플 테크 컨퍼런스·파트너 데이·리더십 포럼·AI 서밋·RE:BUILD 26·27)는
 // 이 파일이 손대지 않는다 — 이 파일은 행사·파트너·WBS·inbound 산출물을 **추가**만 한다.
 // 주의: 'prj-partner-day'(파트너 데이 2026)는 이름이 비슷하지만 **대행형**이라 이 픽스처와 무관하다.
-import type { Comment, Deliverable, Partner, PartnerTier, PartnerToken, Version, WbsTask } from '../types/entities'
+import type {
+  Comment,
+  ComplianceCard,
+  Deliverable,
+  Partner,
+  PartnerTier,
+  PartnerToken,
+  RoleCharter,
+  Version,
+  WbsTask,
+} from '../types/entities'
 import type { DeliverableArea, MemberRole } from '../types/enums'
 import type { MockState } from './sampleProject'
 import { offsetToDate } from '../lib/wbs'
-import { HOST_TEMPLATE } from './wbsTemplates'
+import { HOST_COMPLIANCE_CARD_TEMPLATES } from './complianceTemplates'
+import { HOST_ROLE_CHARTER_TEMPLATE, HOST_TEMPLATE } from './wbsTemplates'
 
 export const PROJECT_ID_HOST = 'prj-virtual-summit'
 /** 데모 파트너 포털 토큰(§21.3) — 다이아 등급 파트너(가상다이아텍) 소유, `/p/demo-partner` */
@@ -98,6 +109,9 @@ export function seedHostFixtures(state: MockState): void {
     mc_name: null,
     overview_items: null,
     onboarded_at: SEEDED_AT,
+    // v2.4.1 §21.1 — 파트너 참가 가이드·문의 창구(가상, #RULE-NO-COMPANY)
+    partner_guide_url: 'https://guide.example.com/vst26',
+    partner_contact_email: 'partners@example.com',
     created_by: 'usr-pm',
     created_at: '2026-08-15T09:00:00.000Z',
   })
@@ -204,7 +218,8 @@ export function seedHostFixtures(state: MockState): void {
         status: 'todo',
         done_at: null,
         linked_deliverable_id: null,
-        target: null,
+        // v2.4.1(3.15.1 P6-①) — provider의 expandHostWbs와 동일 규칙(파트너명 시드)
+        target: partner ? partner.name : null,
         direction,
         partner_id: partner?.id ?? null,
         note: null,
@@ -278,4 +293,26 @@ export function seedHostFixtures(state: MockState): void {
   state.deliverables.push(...deliverables)
   state.versions.push(...versions)
   state.comments.push(...comments)
+
+  // v2.4.1 §15.3b·§15.3c — 온보딩 완료 픽스처이므로 R&R 4카드·컴플라이언스 3종을 시드된
+  // 상태로 배치한다(provider.completeOnboarding을 거치지 않는 정적 픽스처 관례 — 위 HT 전개와 동일).
+  const roleCharters: RoleCharter[] = HOST_ROLE_CHARTER_TEMPLATE.map((tpl, i) => ({
+    id: `rrc-vst-${String(i + 1).padStart(2, '0')}`,
+    project_id: PROJECT_ID_HOST,
+    role: tpl.role,
+    origin_role: tpl.origin_role,
+    title: tpl.title,
+    items: [...tpl.items],
+  }))
+  state.role_charters.push(...roleCharters)
+
+  const complianceCards: ComplianceCard[] = HOST_COMPLIANCE_CARD_TEMPLATES.map((tpl, i) => ({
+    id: `cmp-vst-${String(i + 1).padStart(2, '0')}`,
+    project_id: PROJECT_ID_HOST,
+    kind: tpl.kind,
+    title: tpl.title,
+    items: tpl.items.map((text) => ({ text, checked: false, checked_at: null })),
+    sort_order: tpl.sort_order,
+  }))
+  state.compliance_cards.push(...complianceCards)
 }
