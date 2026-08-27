@@ -15,10 +15,17 @@ import type {
   LandingStatus,
   LandingSubmitTarget,
   MemberRole,
+  PartnerStatus,
+  ProjectKind,
   ProjectStatus,
+  QuoteImportFormat,
+  QuoteImportStatus,
+  QuoteSource,
   QuoteStatus,
+  WbsDirection,
   WbsStatus,
 } from './enums'
+import type { ParsedQuoteDoc, SectionMapping } from '../modules/quote/import/types'
 
 /** uuid */
 export type UUID = string
@@ -48,6 +55,9 @@ export interface Project {
   name: string
   /** 행사 약칭 — 파일명 규약에 사용, 전역 유일 */
   code: string
+  /** v2.4 §21 — 'agency'(대행형, 기본) | 'host'(주최형). event_type과 직교하는 축이며
+   *  전환은 표시 계층만 바꾼다 — 어떤 행도 삭제되지 않는다(R-H1) */
+  kind: ProjectKind
   /** 시작일 (WBS 전개·D-day 기준) */
   event_date: IsoDate | null
   /** v1.5 — 종료일 (null=당일 행사) */
@@ -160,6 +170,8 @@ export interface Deliverable {
   spec_type: string | null
   /** 항목 본문 (운영사항 등, 마크다운) — 운영계획서 렌더 소스 */
   content: string | null
+  /** v2.4 §21 — inbound 제출물 소유 파트너. 대행형 항목·주최 자체 산출물은 null */
+  partner_id: UUID | null
   created_at: IsoDateTime
   updated_at: IsoDateTime
 }
@@ -326,6 +338,10 @@ export interface WbsTask {
   linked_deliverable_id: UUID | null
   /** v2.0 §4-15b — 소통 대상 (예: '고객사'·'협력사'·'내부', 복수는 '·' 결합). 템플릿 시드 포함 */
   target: string | null
+  /** v2.4 §21 — 'partner_submit'(파트너별 인스턴스) | 'host_notice' | 'internal'(기본) */
+  direction: WbsDirection
+  /** v2.4 §21 — partner_submit 인스턴스만 사용(파트너별 상태 독립, 재전개는 code+partner_id 매칭) */
+  partner_id: UUID | null
   note: string | null
   sort_order: number
 }
@@ -436,6 +452,12 @@ export interface QuoteBreakdown {
   subtotal: number
   vat: number
   total: number
+  /**
+   * v2.4 §22.4 — 임포트 견적 전용. 매핑에서 engine-shape 8키 어디에도 속하지 않는 섹션을
+   * 원본 그대로 보존한다(원본 근거 추적 R-Q2). 엔진 견적(source='engine')은 항상 비어 있거나
+   * 없다 — 골든 벡터 등가 테스트(DoD 21)가 보는 것은 위 8개 필드뿐이라 이 필드는 건드리지 않는다.
+   */
+  custom_sections?: { code: string; label: string; amount: number }[]
 }
 
 export interface Quote {
@@ -453,6 +475,8 @@ export interface Quote {
   breakdown: QuoteBreakdown
   /** 원 단위 (VAT 별도) */
   total_amount: number
+  /** v2.4 §22 — 'engine'(Configurator 산식으로 만든 견적, 기본) | 'imported'(파일 임포트 확정) */
+  source: QuoteSource
   created_by: UUID | null
   created_at: IsoDateTime
   updated_at: IsoDateTime
@@ -677,6 +701,69 @@ export interface SettlementImport {
   parsed: unknown
   questions: unknown
   status: 'parsed' | 'confirmed' | 'discarded'
+  created_by: UUID | null
+  created_at: IsoDateTime
+}
+
+// ── 주최형(파트너) 확장 (v2.4 §21.1) ──────────────────────────────────
+// projects.kind='host'일 때만 의미 있는 부속 테이블. 대행형 행사에도 행은 존재할 수 있으나
+// (스키마상 막지 않음) UI·픽스처는 host 행사에서만 채운다.
+
+/** 등급 체계 — DIAMOND·GOLD·SILVER 등 행사별 자유 정의 (§8.1 등급 CRUD) */
+export interface PartnerTier {
+  id: UUID
+  project_id: UUID
+  /** 'diamond' 등 slug — 행사 안에서 유일 */
+  code: string
+  name: string
+  description: string | null
+  /** 정원 — null=무제한 */
+  capacity: number | null
+  sort: number
+}
+
+export interface Partner {
+  id: UUID
+  project_id: UUID
+  name: string
+  tier_id: UUID | null
+  status: PartnerStatus
+  /** ★ 내부 전용 — 절대 포털(`/p/*`) 응답 타입에 넣지 않는다(§21.2 R-H3) */
+  contract_amount: number | null
+  note: string | null
+  created_at: IsoDateTime
+}
+
+/** client_tokens와 동형(연락처 단위) — 파트너 제출 포털(`/p/{token}`) 접근 토큰 */
+export interface PartnerToken {
+  id: UUID
+  partner_id: UUID
+  contact_name: string
+  contact_email: string
+  /** URL에 그대로 사용 */
+  token: string
+  expires_at: IsoDateTime | null
+  revoked_at: IsoDateTime | null
+  last_seen_at: IsoDateTime | null
+  created_at: IsoDateTime
+}
+
+// ── 견적서 임포트 (v2.4 §22) ──────────────────────────────────────────
+
+/** xlsx 업로드 → 확인 큐 → confirm 경유로만 quotes가 된다(R-Q1). parsed·mapping은 분리 보존(R-Q2) */
+export interface QuoteImport {
+  id: UUID
+  /** distribute의 project_prefill이 채운다 — import 시점엔 항상 null */
+  project_id: UUID | null
+  file_name: string
+  format: QuoteImportFormat
+  /** 파서 원본 스냅숏 — 사람이 수정한 매핑과 분리 저장(R-Q2) */
+  parsed: ParsedQuoteDoc
+  /** 확인 큐에서 사람이 수정한 최종 매핑 */
+  mapping: SectionMapping[]
+  status: QuoteImportStatus
+  /** confirm 시점에 세팅 */
+  quote_id: UUID | null
   created_by: UUID | null
   created_at: IsoDateTime
 }

@@ -1,5 +1,5 @@
 import { useState, type ChangeEvent, type FormEvent } from 'react'
-import { useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import CuesheetEditor from '../components/cue/CuesheetEditor'
 import BriefCard from '../components/internal/BriefCard'
 import Card from '../components/internal/Card'
@@ -8,11 +8,24 @@ import ErrorAlert from '../components/internal/ErrorAlert'
 import StatusBadge from '../components/internal/StatusBadge'
 import { useProject } from '../context/ProjectContext'
 import { useAsync, useMutation } from '../hooks/useAsync'
-import { AREA_LABELS, formatDate, formatDateTime } from '../lib/labels'
+import { AREA_LABELS, HOST_STATUS_LABELS, STATUS_BADGE_CLASSES, formatDate, formatDateTime } from '../lib/labels'
 import { getDataProvider } from '../providers'
 import type { Version } from '../types/entities'
 import type { ApprovalDecision, CommentVisibility, DeliverableStatus } from '../types/enums'
 import NotFoundPage from './NotFoundPage'
+
+// v2.4 §21 — 주최형(파트너) 제출 항목은 발주처 컨펌 어휘 대신 HOST_STATUS_LABELS로 표기한다
+// (§5.1). StatusBadge(내부 공용)를 건드리지 않고 이 화면 전용으로 배지를 다시 그린다.
+function HostStatusBadge({ status }: { status: DeliverableStatus }) {
+  return (
+    <span
+      className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_BADGE_CLASSES[status]}`}
+    >
+      {status === 'pending_approval' && <span aria-hidden className="size-1.5 rounded-full bg-accent" />}
+      {HOST_STATUS_LABELS[status]}
+    </span>
+  )
+}
 
 const provider = getDataProvider()
 
@@ -31,7 +44,10 @@ function ItemDetail({ itemId }: { itemId: string }) {
   const { projectId } = useProject()
   const currentUser = useAsync(() => provider.getCurrentUser(), [])
   const members = useAsync(() => provider.listMembers(projectId), [projectId])
+  const project = useAsync(() => provider.getProject(projectId), [projectId])
   const detail = useAsync(() => provider.getDeliverable(itemId), [itemId])
+  // v2.4 §10.1 — 주최형에서는 발주처 컨펌 발송 UI를 숨긴다(파트너 항목이든 아니든, DoD 31)
+  const isHost = project.data?.kind === 'host'
 
   if (detail.error) {
     return (
@@ -99,6 +115,8 @@ function ItemDetail({ itemId }: { itemId: string }) {
             versions={d.versions}
             isPm={isPm}
             canWriteArea={canWriteArea}
+            isHost={isHost}
+            hasPartner={d.partner_id != null}
             lastChangesRequestedComment={
               d.approvals
                 .slice()
@@ -155,7 +173,7 @@ function ItemDetail({ itemId }: { itemId: string }) {
             <div>
               <p className="t-caption">상태</p>
               <div className="mt-1.5">
-                <StatusBadge status={d.status} />
+                {d.partner_id != null ? <HostStatusBadge status={d.status} /> : <StatusBadge status={d.status} />}
               </div>
             </div>
             <div>
@@ -293,6 +311,8 @@ function StatusActionBar({
   versions,
   isPm,
   canWriteArea,
+  isHost,
+  hasPartner,
   lastChangesRequestedComment,
   onChanged,
 }: {
@@ -303,6 +323,10 @@ function StatusActionBar({
   versions: Version[]
   isPm: boolean
   canWriteArea: boolean
+  /** v2.4 §10.1 — 주최형 행사면 발주처 컨펌 발송 UI를 숨긴다(DoD 31) */
+  isHost: boolean
+  /** partner_id가 있는 항목 — 파트너 보드에서 검토한다는 안내로 대체 */
+  hasPartner: boolean
   lastChangesRequestedComment: string | null
   onChanged: () => void
 }) {
@@ -402,7 +426,12 @@ function StatusActionBar({
             <ErrorAlert message={reject.error} />
           </form>
 
-          {requiresApproval ? (
+          {isHost ? (
+            <p className="border-t border-border pt-4 text-xs text-ink-cap">
+              주최형 행사는 이 화면에서 발주처 컨펌을 발송하지 않습니다
+              {hasPartner ? ' — 파트너 제출 항목은 파트너 보드에서 검토하세요.' : '.'}
+            </p>
+          ) : requiresApproval ? (
             <form onSubmit={handleRequestApproval} className="space-y-2 border-t border-border pt-4">
               <p className="t-caption">컨펌 발송</p>
               <div className="flex flex-wrap items-end gap-2">
@@ -455,7 +484,14 @@ function StatusActionBar({
   if (status === 'pending_approval') {
     return (
       <Card title="상태 액션">
-        <p className="text-sm text-ink-cap">발주처 컨펌 대기 중입니다.</p>
+        <p className="text-sm text-ink-cap">
+          {hasPartner ? '파트너 제출 검토 대기 중입니다 — ' : '발주처 컨펌 대기 중입니다.'}
+          {hasPartner && (
+            <Link to="/partners" className="text-steel hover:underline">
+              파트너 보드에서 검토
+            </Link>
+          )}
+        </p>
       </Card>
     )
   }
@@ -464,9 +500,14 @@ function StatusActionBar({
     return (
       <Card title="상태 액션">
         <p className="text-sm text-ink-sub">
-          발주처가 수정을 요청했습니다{lastChangesRequestedComment ? `: ${lastChangesRequestedComment}` : ''}.
+          {hasPartner ? '수정요청되었습니다' : '발주처가 수정을 요청했습니다'}
+          {lastChangesRequestedComment ? `: ${lastChangesRequestedComment}` : '.'}
         </p>
-        <p className="mt-1 text-xs text-ink-cap">새 버전을 업로드하면 자동으로 초안(draft) 상태로 돌아갑니다.</p>
+        <p className="mt-1 text-xs text-ink-cap">
+          {hasPartner
+            ? '파트너가 재제출하면 자동으로 검토중 상태로 돌아갑니다.'
+            : '새 버전을 업로드하면 자동으로 초안(draft) 상태로 돌아갑니다.'}
+        </p>
       </Card>
     )
   }
@@ -474,7 +515,9 @@ function StatusActionBar({
   if (status === 'approved') {
     return (
       <Card title="상태 액션">
-        <p className="text-sm text-ink-cap">발주처가 승인했습니다 — 확정본으로 전환 중입니다.</p>
+        <p className="text-sm text-ink-cap">
+          {hasPartner ? '승인되었습니다 — 확정본으로 전환 중입니다.' : '발주처가 승인했습니다 — 확정본으로 전환 중입니다.'}
+        </p>
       </Card>
     )
   }

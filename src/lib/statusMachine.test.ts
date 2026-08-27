@@ -3,13 +3,14 @@ import { ProviderError } from './errors'
 import {
   assertTransition,
   buildVersionFileName,
+  findTransitionRule,
   isPreviewFileName,
   TRANSITION_RULES,
 } from './statusMachine'
 
-describe('statusMachine — 설계서 §5 전이표', () => {
-  it('전이표는 8개 규칙과 1:1이다 (v1.2: requested→draft 추가)', () => {
-    expect(TRANSITION_RULES).toHaveLength(8)
+describe('statusMachine — 설계서 §5·§5.1 전이표', () => {
+  it('전이표는 12개 규칙과 1:1이다 (v1.2: requested→draft / v2.4 §5.1: 주최형 inbound 4건 추가)', () => {
+    expect(TRANSITION_RULES).toHaveLength(12)
   })
 
   it('표 안의 전이는 통과한다', () => {
@@ -17,6 +18,19 @@ describe('statusMachine — 설계서 §5 전이표', () => {
     expect(assertTransition('draft', 'internal_review', 'status_patch').from).toBe('draft')
     expect(assertTransition('changes_requested', 'draft', 'version_upload').via).toBe('version_upload')
     expect(assertTransition('approved', 'final', 'system').to).toBe('final')
+  })
+
+  it('v2.4 §5.1 — 주최형 inbound 신규 전이 4건', () => {
+    // 신규 상태쌍은 이 한 줄뿐(파트너 첫 제출)
+    expect(assertTransition('requested', 'pending_approval', 'partner_submit').via).toBe('partner_submit')
+    // 재제출 — 기존 version_upload 전이의 목적지 분기(host_inbound 표시). 기존
+    // changes_requested→draft(version_upload) 규칙과 공존하며 서로 다른 to로 구분된다.
+    const reinbound = findTransitionRule('changes_requested', 'pending_approval', 'version_upload')
+    expect(reinbound?.host_inbound).toBe(true)
+    expect(findTransitionRule('changes_requested', 'draft', 'version_upload')?.host_inbound).toBeUndefined()
+    // 내부 검토(신규 상태쌍이 아니라 기존 pending_approval의 두 목적지를 새 경로로 표기)
+    expect(assertTransition('pending_approval', 'approved', 'partner_review').via).toBe('partner_review')
+    expect(assertTransition('pending_approval', 'changes_requested', 'partner_review').requires_comment).toBe(true)
   })
 
   it('표 밖의 전이는 409 conflict', () => {

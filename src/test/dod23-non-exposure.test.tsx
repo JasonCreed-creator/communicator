@@ -85,11 +85,13 @@ describe('DoD-23 금액 비노출 (런타임 객체)', () => {
 // 식별자를 더한다. `margin`은 **일부러 빼 둔다** — 랜딩 내보내기 HTML의 인라인 CSS에
 // `margin:` 선언이 정상적으로 들어 있어 식별자와 구분되지 않기 때문이다. 정산 값이 실제로
 // 랜딩 산출물에 실리는지는 dod30 테스트가 만들어진 HTML 문자열로 따로 본다.
+// v2.4 DoD-32 — grep 범위를 파트너 경로(pages/Partner*·components/partner·components/partner-portal)
+// 까지 넓히고, 금지 키에 `contract_amount`(파트너 확정 계약액 — §21.2 R-H3)를 더한다.
 const BANNED_SOURCE_RE =
-  /total_amount|quote_amount|breakdown|settlement|ordered_amount|actual_amount|markup|marginBase|finalMargin/
+  /total_amount|quote_amount|breakdown|settlement|ordered_amount|actual_amount|markup|marginBase|finalMargin|contract_amount/
 
-describe('DoD-23·30 금액·정산 비노출 (소스 grep 가드)', () => {
-  it('발주처·plan·랜딩 소스에 금액·정산 식별자가 없다', () => {
+describe('DoD-23·30·32 금액·정산 비노출 (소스 grep 가드)', () => {
+  it('발주처·plan·랜딩·파트너 소스에 금액·정산 식별자가 없다', () => {
     const sources = {
       ...import.meta.glob('../pages/Client*.tsx', { query: '?raw', import: 'default', eager: true }),
       ...import.meta.glob('../components/plan/**/*.{ts,tsx}', { query: '?raw', import: 'default', eager: true }),
@@ -97,11 +99,16 @@ describe('DoD-23·30 금액·정산 비노출 (소스 grep 가드)', () => {
       // v2.2 — 랜딩은 공개 산출물이라 발주처 경로와 같은 등급으로 본다(§19.7)
       ...import.meta.glob('../pages/Landing*.tsx', { query: '?raw', import: 'default', eager: true }),
       ...import.meta.glob('../lib/landing*.ts', { query: '?raw', import: 'default', eager: true }),
+      // v2.4 — 파트너 화면(내부 S-11 포함)과 포털은 계약액·정산·견적 금액을 다루지 않는다(R-H3)
+      ...import.meta.glob('../pages/Partner*.tsx', { query: '?raw', import: 'default', eager: true }),
+      ...import.meta.glob('../components/partner/**/*.{ts,tsx}', { query: '?raw', import: 'default', eager: true }),
+      ...import.meta.glob('../components/partner-portal/**/*.{ts,tsx}', { query: '?raw', import: 'default', eager: true }),
     } as Record<string, string>
     const files = Object.keys(sources)
     expect(files.length).toBeGreaterThan(0)
     // 범위가 실제로 넓어졌는지 — 글롭이 조용히 0건이 되면 가드가 무력해진다
     expect(files.filter((f) => /Landing|landing/.test(f)).length).toBeGreaterThan(0)
+    expect(files.filter((f) => /Partner|partner/.test(f)).length).toBeGreaterThan(5)
     for (const [file, src] of Object.entries(sources)) {
       expect(src, `${file}에 금액·정산 식별자 노출`).not.toMatch(BANNED_SOURCE_RE)
     }

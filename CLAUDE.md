@@ -1,7 +1,7 @@
-# CLAUDE.md — MICE 커뮤니케이터 구현 지침 v2.2 (Claude Code용)
+# CLAUDE.md — MICE 커뮤니케이터 구현 지침 v2.4 (Claude Code용)
 
-> 레포 루트에 이 파일을 두고, `docs/mice-communicator-설계서-v2.2.md`를 함께 배치할 것(v2.1은 대체). `docs/mice-communicator-디자인지시서-v1.md`도 함께 배치(Phase 3.9 정본).
-> **스키마·상태 머신·API 계약·권한 규칙·WBS 템플릿(§15)·핸드오프 계약(§16)·이식 인벤토리(§17)·인프라 전환(§18)의 정본은 설계서 v2.2이다(정산보드는 §19·§4-23·§4-24).** 디자인 토큰·레이아웃·컴포넌트 규격의 정본은 디자인지시서 v1이다. 본 파일은 작업 순서와 규약만 정의한다. 충돌 시 설계서 우선.
+> 레포 루트에 이 파일을 두고, `docs/mice-communicator-설계서-v2.4.md`를 함께 배치할 것(기존 설계서 파일은 버전 무관 전부 대체·삭제 — v2.3은 레포에 커밋된 적 없음, 내용은 v2.4가 승계). `docs/mice-communicator-디자인지시서-v1.md`도 함께 배치(Phase 3.9 정본).
+> **스키마·상태 머신·API 계약·권한 규칙·WBS 템플릿(§15)·핸드오프 계약(§16)·이식 인벤토리(§17)·인프라 전환(§18)·D-Day 런북(§20)·주최형 확장(§21)·견적서 임포트(§22)의 정본은 설계서 v2.4이다(정산보드는 §19·§4-23·§4-24).** 디자인 토큰·레이아웃·컴포넌트 규격의 정본은 디자인지시서 v1이다. 본 파일은 작업 순서와 규약만 정의한다. 충돌 시 설계서 우선.
 > v1.1 변경 핵심: **프론트 우선·서버 후행** — Phase 0~3은 서버 0, Supabase·Drive는 Phase 4~5 이식.
 > v1.2 변경 핵심: **지시(requested)→제작→컨펌→운영계획서(S9) 조립 파이프라인** — Phase 3.5 프론트 증분.
 > v1.3 변경 핵심: **S0 온보딩 → 유형 토글 → 큐시트 에디터** — Phase 3.6 프론트 증분.
@@ -10,6 +10,8 @@
 > v1.5 변경 핵심: **다중 행사(프로젝트 셀렉터·S-1 행사 목록) + 행사 설정 메뉴(개요·담당자 입력) + S0 동일 폼 → Phase 3.10**.
 > v2.1 변경 핵심: **랜딩보드(S-3) 사후 정본화 + 랜딩 스코프 계약(§4-21) + 골든 데이터셋 출처 규약(§17.3-4)·가격 상수 v1.1(§17.4)** — Phase 3.13.1 핫픽스.
 > v2.2 변경 핵심: **정산보드(S-10) 신설 — 확정 견적 버킷 스냅숏·견적/발주/실비 3단·마진 3분할(§19)** — Phase 3.14.
+> v2.4 변경 핵심: **주최형(파트너) 확장 + 견적서 임포트 — Phase 3.15(mock 우선·서버 0)**: projects.kind 축(대행형/주최형), 파트너 등급·`/p/{token}` 제출 포털·검토 루프(§5.1 — 기존 상태머신 재사용), WBS 주최형 템플릿 12건(§15.3), 견적서 xlsx 임포트(§22 — 3형·확인 큐·분배 4종). **DataProvider v8 재동결(16메서드 · 102메서드)**, importVendorQuote는 v9 예약으로 순연. 서버 스프린트(Phase 4~6)는 사용자 지시 대기 — Phase 4 착수 시 §21·§22 스키마 포함.
+> v2.3 변경 핵심: **서버 스프린트 — 키 최후 주입**: Phase 4(Supabase, dev 프로젝트 실검증) → 5(Drive, 코드 완성+스모크 준비) → 6(Slack 알림)을 D-Day(8/31) 전 일괄 구현. 운영 자격증명은 설계서 §20 런북으로 D-Day에 주입 — **"키 교체+setup.sql 1회"를 벗어나는 운영 전환 작업이 남으면 Phase 미완료다.** Phase 4.6의 사용자 게이트 단계는 §20으로 이동.
 > v2.0 변경 핵심: **견적 Configurator(jsx-easy-shift) 흡수 — Phase 3.11 견적 모듈(mock, 프론트 우선) → Phase 4 새 Supabase 이식(Auth·RLS 포함) → Phase 4.6 인프라 전환(Vercel·도메인·1회 임포트·아카이브)**. 이후 Phase 5 Drive · 6 알림.
 
 ## 1. 프로젝트 정의
@@ -17,17 +19,17 @@ MICE 프로젝트 협업 허브 — 역할별(디자인·운영·등록) 산출�
 
 ## 2. 스택 (고정 — 임의 변경 금지)
 - React 18 + Vite + TypeScript + Tailwind (프론트, Vercel 배포)
-- Supabase: Postgres + RLS + Auth(이메일 매직링크) + Edge Functions(Deno) — **Phase 4부터, 새 프로젝트**(옛 Configurator 프로젝트 사용 금지)
+- Supabase: Postgres + RLS + Auth(이메일 매직링크) + Edge Functions(Deno) — **지금(서버 스프린트). 검증 DB = dev 프로젝트 `communicator-dev`**(3키는 사용자가 세션 대화로 제공 — `.env.local`에만, 커밋 금지). 운영 프로젝트는 D-Day §20. 옛 Configurator 프로젝트 사용 금지. **API 키는 신형(sb_publishable/sb_secret)만** — 설계서 §12
 - 견적 모듈 전용 허용 의존: exceljs · file-saver (src/modules/quote 밖에서 import 금지). shadcn/Radix·Tailwind 3 도입 금지
-- Google Drive API v3 (전용 운영 계정 OAuth, Production 게시 — 설계서 §2) — **Phase 5부터**
-- 알림: Slack Incoming Webhook + Resend(이메일) — **Phase 6부터**
+- Google Drive API v3 (전용 운영 계정 OAuth, Production 게시 — 설계서 §2) — **Phase 5(지금): 자격증명 없이 코드 완성, 실계정 검증은 D-Day 스모크(§20)**
+- 알림: Slack Incoming Webhook — **Phase 6(지금): env 부재 시 no-op 폴백**. Resend(이메일)는 **Phase 6b — 이번 스프린트 범위 밖**(첫 발주처 토큰 발송 전 수행, 설계서 §9)
 
 ## 3. 레포 구조 (제안 — 조정 시 사유를 PROGRESS.md에 기록)
 ```
 /                      # Vite 앱 (레포는 사용자가 GitHub에 생성)
 ├ CLAUDE.md            # 본 파일
 ├ PROGRESS.md          # 세션 상태 (체크아웃 시 갱신 — §9)
-├ docs/                # 설계서 v1.4.1 + 감수 리포트 + 디자인지시서 v1
+├ docs/                # 설계서 v2.4 + 감수 리포트 + 디자인지시서 v1
 ├ src/
 │  ├ pages/            # S-1·S0~S9 (설계서 §10)
 │  ├ context/          # ProjectContext — 현재 행사 (v1.5, PROJECT_ID 상수 대체) / AuthContext (Phase 4)
@@ -115,16 +117,24 @@ MICE 프로젝트 협업 허브 — 역할별(디자인·운영·등록) 산출�
   - 금지: 정산 금액을 Project·PlanDoc·ActivityLog·발주처 뷰·랜딩 타입에 추가, 견적 초과를 저장 단계에서 차단,
     `has_cost=false` 버킷에 금액 입력 칸 노출, 마진 식 변형
 
-### 서버 이식 구간 (Phase 3.11 머지 후 — 착수 전 사용자 승인 + 새 Supabase 3키 수령)
-- **Phase 4 — 새 Supabase 프로젝트 이식** (설계서 §4 v2.0 전체 기준)
-  - 4a 마이그레이션+RLS+seed (에이전트 D): §4 순서대로, RLS §6.2(quotes·profiles·compliance_cards 포함), seed = 픽스처 4행사+견적 3버전. **Supabase 3키는 env·Vault만 — 코드·문서·PR 본문 기재 금지**
-  - 4b SupabaseProvider v5 (에이전트 D): 인터페이스 무수정으로 전 메서드 구현, `VITE_DATA_PROVIDER=supabase|mock` 스위치. 견적 저장 시 서버(Edge Function)가 엔진으로 재계산해 저장(클라이언트 값 불신)
-  - 4c 로그인·프로필 (에이전트 D2): 이메일 매직링크 로그인 화면(웜 페이퍼 토큰), AuthContext, profiles 자동 생성 트리거, 허용 도메인 env, app_role 게이트(견적 메뉴·API), 발주처 `/c/*`는 비로그인 유지
-  - 4d 교체 검증: Provider를 supabase로 두고 **DoD 1~25 전부 실DB에서 재현**(DoD 26) + RLS 거부 테스트(staff의 quotes 조회 거부·비멤버 프로젝트 거부·토큰 경로 quotes 불가)
-- **Phase 4.6 — 인프라 전환** (에이전트 Z, 설계서 §18 — ■ 게이트마다 사용자 확인 후 진행): 새 Vercel 프로젝트·env → 프리뷰 확인 → 옛 Configurator DB 1회 임포트(선택, dry-run 출력 후 실행) → 도메인 rmb-mice.com 이전 → 옛 라우트 301 확인 → jsx-easy-shift 아카이브 커밋·옛 Vercel/Supabase 정리
-- **Phase 4.7 — 협력사 견적서 파싱** (설계서 §19.5): 업로드 → 서버 파싱 → 버킷 자동 배정 + **확인 큐**(어느 버킷인지 / 부가세 포함인지). 엑셀 → PDF → 사진 순. **파싱 결과를 직접 커밋하지 않는다** — 항상 담당자 확인을 거쳐 `settlement_items`를 만들고 원본을 근거로 보존. DataProvider v8(`importVendorQuote`) 해제는 이 시점에 사용자 승인 + 설계서 개정 동반
-- **Phase 5 — Drive 이식**: OAuth(운영 계정·Production)·표준 트리(§7.1)·업로드+파일명 규약(§7.2)·프록시 ReadableStream 패스스루+100MB 캡(§7.4)·Changes API 인박스(§7.3)·final 스냅숏 원자성(§7.5) — `supabase/functions/_shared/drive.ts` 모듈화
-- **Phase 6 — 알림·cron**: Slack·이메일 유틸 + 이벤트 훅(§9) + reminders cron
+- **Phase 3.15 — v2.4 주최형 확장 + 견적서 임포트 (서버 0, 시각안 4화면 승인 2026-08-27)**
+  - 3.15a 타입·재동결 v8 (에이전트 AA): `Project.kind`·`PartnerTier`·`Partner`·`PartnerToken`·`Deliverable.partner_id`·`WbsTask.direction/partner_id`·`Quote.source`·`QuoteImport` 타입(§21.1과 1:1) + 전이표에 §5.1 신규 전이 1건(requested→pending_approval via partner_submit, kind='host'의 version_upload 목적지 분기). **DataProvider v8 = 16메서드 추가·102메서드**: listPartnerTiers·upsertPartnerTier·deletePartnerTier·listPartners·createPartner·updatePartner·removePartner·issuePartnerToken·revokePartnerToken·getPartnerPortal·submitPartnerItem·reviewPartnerSubmission·expandHostWbs·importQuoteFile·confirmQuoteImport·distributeQuoteImport. **동결 해제 근거 = 사용자 v2.4 승인(2026-08-27, 시각안 4화면)** — 결정 로그 기록 후 재동결. importVendorQuote는 v9 예약(만들지 말 것). 픽스처: §21.3 주최형 데모 행사 1건 추가(기존 4행사 불변)
+  - 3.15b 성격 축·파트너 보드 (에이전트 AB): 행사 설정 ③ 성격 카드·등급 편집(§10.1) → S-11 파트너 보드(KPI·마감 타임라인·파트너 표·상세 검토 패널 = S3 컴포넌트 재사용) → 홈 미결 위젯에 검토 대기 집계 → 대행형/주최형 표시 규칙(메뉴 단위 — 게이트 뒤 숨김 금지)
+  - 3.15c `/p/{token}` 제출 포털 (에이전트 AC): §10.1 화면 C 명세 그대로 — 마감 체크리스트·제출(파일/텍스트)·수정요청 코멘트·재제출·host_notice 읽기 전용·격리 고지. 데모 라우트 `/p/demo-partner`. 라벨은 labels.ts 주최형 세트(§5.1 표)
+  - 3.15d 견적서 임포트 (에이전트 AD): 파서는 `src/modules/quote/import/`에 구현(**exceljs 재사용 — quote 모듈 전용 허용 의존 규칙 내**). §22.2 인식 규칙·§22.3 원칙·§22.4 분배. 위저드 3단계 UI(§10.1). **골든 테스트는 실서식 구조를 본뜬 가상 픽스처 3종(A·B·C형)** — 실고객 파일 커밋 금지(R-Q4), 실파일 3종은 세션 첨부분으로 로컬 검증만 하고 수치 결과만 보고
+  - 순서: AA → AB·AC·AD 병렬. PR 1개(Phase 3.15), 체크아웃 보고 후 챗 검수
+
+### 서버 스프린트 (v2.3 설계 완료 — **착수 대기: 사용자가 지시할 때 개시**(2026-08-27 우선순위 변경). dev 3키는 착수 시 사용자에게 대화로 요청)
+- **Phase 4 — Supabase 이식** (설계서 v2.3 §4 DDL 전체 기준, 검증 DB = dev 프로젝트)
+  - 4a 마이그레이션+RLS+seed (에이전트 D): §4 순서대로 + **v2.4 스키마(§21.1 — kind·partner_tiers·partners·partner_tokens·quote_imports·확장 컬럼) 포함**, RLS는 §6.2 전체(quotes·profiles·compliance_cards·settlement_*·vendors·landing·partner_* 포함). **산출 규약: `supabase/migrations/*.sql` + 통합 `supabase/setup.sql`(신규 프로젝트 SQL 에디터 1회 실행으로 전체 구축 — 멱등, 2회 실행 무해를 테스트로 증명, 말미에 첫 admin 승격 SQL 1줄 주석 동봉) + `supabase/seed.sql`(데모 픽스처 4행사, 선택 실행)**
+  - 4b SupabaseProvider v7 (에이전트 D): 인터페이스 무수정으로 86메서드 전부 구현, `VITE_DATA_PROVIDER=supabase|mock` 스위치(기본 mock 유지 — 데모·기존 테스트 불파손). 견적 저장은 서버가 엔진으로 재계산(클라이언트 값 불신). 발주처 토큰 경로는 Edge Function(secret key) 화이트리스트 쿼리만(§6.2)
+  - 4c 로그인·프로필 (에이전트 D2): 이메일 매직링크 로그인 화면(웜 페이퍼 토큰), AuthContext, profiles 자동 생성 트리거, 허용 도메인 env, app_role 게이트(견적 메뉴·API), `/c/*`는 비로그인 유지
+  - 4d 교체 검증: dev DB에서 DoD 26 전부. **매직링크 왕복의 CI 대체 허용** — 자동 테스트는 admin generateLink(또는 테스트 전용 password 로그인)로 세션 확보하고, 실제 매직링크 수신 왕복은 §20 D-Day 스모크로 이월(사유를 체크아웃 보고에 기재)
+  - 4e 운영 전환 준비물: `.env.production.example`(전 변수·주석) · `vercel.json`(SPA rewrites+보안 헤더) · §20 런북 대조표(런북의 파일명·명령·경로가 레포 실물과 일치함을 표로 증명)
+- **Phase 5 — Drive 이식: 코드 완성·자격증명 최후** (에이전트 E): OAuth(운영 계정·Production)·표준 트리(§7.1)·업로드+파일명 규약(§7.2)·프록시 ReadableStream 패스스루+100MB 캡(§7.4)·Changes API 인박스(§7.3)·final 스냅숏 원자성(§7.5) — `supabase/functions/_shared/drive.ts` 모듈화. **실계정 없이 검증**: Drive HTTP 호출 계층을 인터페이스로 분리해 모의 서버 계약 테스트로 커버(업로드·copy 실패 재시도·토큰 만료 재발급·100MB 캡 시나리오 포함). 산출 2종: **`scripts/drive-auth.ts`**(최초 1회 동의→refresh token 발급 안내, 한국어) · **`scripts/drive-smoke.ts`**(D-Day 5분 검증: refresh 교환→트리 생성→업로드→copy→스트리밍, 실패 시 어느 단계·무엇을 확인할지 한국어 출력)
+- **Phase 6 — 알림·cron** (에이전트 F): Slack 웹훅 유틸 + §9 매트릭스의 내부 Slack 이벤트 훅 전부 + reminders cron. `SLACK_WEBHOOK_URL` 미설정 = 콘솔 no-op(발송은 fire-and-forget+실패 로그 — 본 동작을 절대 막지 않음). 페이로드 계약 테스트(§19.7 금액 금지 키 5종 부재 포함). **Resend 이메일 = Phase 6b, 이번 범위 밖** — 컨펌 발송 UI에 "이메일 발송은 준비 중 — 링크 복사 전달" 안내 명시(게이트 뒤에 숨기지 않음)
+- **Phase 4.6 — 인프라 전환**: 사용자 게이트 단계(운영 Supabase·Vercel·도메인·임포트·아카이브)는 **§20 D-Day 런북으로 이동 — Code가 수행하지 않는다.** 옛 Configurator DB 1회 임포트 스크립트(`scripts/import-configurator.ts`, dry-run)는 기존 계획대로 Phase 4에서 동봉만
+- **Phase 4.7 — 협력사 견적서 파싱**: 변경 없음(추후 — 사용자 승인+설계서 개정 동반, DataProvider v8)
 
 ## 5. 서브에이전트 병렬 분담 (v1.1)
 | 에이전트 | 담당 | Phase | 권장 모델 |
@@ -154,11 +164,15 @@ MICE 프로젝트 협업 허브 — 역할별(디자인·운영·등록) 산출�
 | W: quote-engine | 3.11a 엔진·데이터 이식·골든 벡터·타입 v5 재동결 | 3.11 | Sonnet |
 | X: quote-ui | 3.11b S-2 견적 UI·사이드바 그룹 | 3.11 | Sonnet |
 | Y: handoff | 3.11c 핸드오프·모객형 필드·컴플라이언스·리다이렉트 | 3.11 | Sonnet |
+| AA: types-v24 | 3.15a 타입·DataProvider v8 재동결·주최형 픽스처 | 3.15 | Sonnet |
+| AB: partner-board | 3.15b 성격 축·S-11 파트너 보드 | 3.15 | Sonnet |
+| AC: partner-portal | 3.15c /p 제출 포털·격리 | 3.15 | Sonnet |
+| AD: quote-import | 3.15d 견적서 파서·위저드·골든 픽스처 | 3.15 | Opus 계열 (서식 추론 난도) |
 | D2: auth | 4c 로그인·프로필·app_role 게이트 | 4 | Fable 5 (보안) |
 | Z: infra | 4.6 Vercel·도메인·임포트·아카이브 | 4.6 | Opus 계열 (사용자 게이트 대화) |
 
-실행 순서: Phase 0(메인 단독) → A → **B·C 병렬** → **G → H·I 병렬** → **J → K·L 병렬** → **M → N·O 병렬**(각 타입 에이전트의 재동결 인터페이스 의존) → **P → Q → R·S 병렬** → (3.9.1 폴리시) → **T → U·V 병렬** → (3.10.1) → **W → X·Y 병렬** → [사용자 승인 + 3키] → **D(4a→4b) → D2 → 4d 검증** → [■ 게이트] → Z → E → F.
-Phase 3.11·4·4.6은 각각 별도 PR. Phase 4는 main에 머지돼도 `VITE_DATA_PROVIDER=mock`이 기본이라 데모가 깨지지 않는다 — 실DB 전환은 4.6에서 env로.
+실행 순서: Phase 0(메인 단독) → A → **B·C 병렬** → **G → H·I 병렬** → **J → K·L 병렬** → **M → N·O 병렬**(각 타입 에이전트의 재동결 인터페이스 의존) → **P → Q → R·S 병렬** → (3.9.1 폴리시) → **T → U·V 병렬** → (3.10.1) → **W → X·Y 병렬** → **AA → AB·AC·AD 병렬**(Phase 3.15, PR 1개) → 챗 검수 → [사용자 지시 대기] → **D(4a→4b) → D2 → 4d → 4e** → **E** → **F** → [D-Day: §20 런북은 사용자가 수행 — Z 에이전트 불요]. 서버 스프린트 **PR은 Phase 4 / 5 / 6 각각 분리**, 각 PR마다 체크아웃 보고 후 챗 실측 검수를 거쳐 다음 Phase 착수.
+Phase 4·5·6은 각각 별도 PR. Phase 4~6이 main에 머지돼도 `VITE_DATA_PROVIDER=mock`이 기본이라 데모가 깨지지 않는다 — 실DB 전환은 D-Day에 배포 env로만(§20).
 Phase 3.8과 3.9는 **별도 커밋·별도 PR**로 분리한다(3.8 = 타입·로직, 3.9 = 스타일만 — 리뷰 diff 분리 목적). 3.9 착수 전 3.8 머지 시점의 테스트 수를 PROGRESS.md에 기준치로 기록한다.
 각 에이전트는 담당 디렉터리 밖 파일 수정 금지. 공유 타입은 A 산출물만 참조. 통합·검수는 메인이 수행.
 
@@ -205,24 +219,32 @@ Phase 3.8과 3.9는 **별도 커밋·별도 PR**로 분리한다(3.8 = 타입·�
 29. (v2.2 §19.1) **정산 마진**: 확정 견적을 불러오면 버킷 9종이 스냅숏되고(`recruit`가 rc/ld로 분리됨), `마진 기준 계약액 − Σ실집행 = 최종 마진` 항등식이 성립하며, `has_cost=false` 버킷에 발주·실비를 넣으면 422; 리드젠 버킷은 마진 기준 계약액에서 빠지되 화면에는 남는다 (테스트로 증명)
 30. (v2.2 §19.4·§19.7) **정산 부가세·비노출**: `vat_included=true` 입력이 `round(v/1.1)`로 저장되고 원본이 보존됨; `settlement`·`ordered_amount`·`actual_amount`·`markup`·`margin` 키가 `/c/*` 응답·운영계획서 조립 데이터·랜딩 내보내기 HTML·activity_log 어디에도 0건 + 소스 grep 범위에 `pages/Landing*`·`lib/landing*` 포함 (테스트로 증명, **역검증 결과를 체크아웃 보고에 기재**)
 
+31. (v2.4 §21) **성격 축**: kind='host' 전환 시 파트너 보드·/p 발급 UI 활성 + 발주처 발송 UI 숨김, 재전환 시 데이터 무손실(R-H1); 주최형 데모 행사에서 HT 템플릿이 파트너 5×partner_submit 인스턴스로 전개 (테스트로 증명)
+32. (v2.4 §21) **파트너 격리**: /p/demo-partner에 자기 파트너 항목만 렌더 — 타 파트너 항목·contract_amount·견적/정산 금액 키가 응답과 화면에 0건(대조군 방식, R-H2·R-H3) (테스트로 증명)
+33. (v2.4 §5.1) **검토 루프**: 제출(requested→pending_approval)→승인(final)|수정요청(코멘트 없으면 422)→재제출(pending_approval 복귀)이 전부 assertTransition 경유, 주최형 라벨 세트 적용 (테스트로 증명)
+34. (v2.4 §22) **임포트**: 가상 픽스처 3종(A·B·C형)이 섹션·항목·헤더·검산 일치로 파싱되고, confirm 없이 quotes가 생성되는 경로 없음(R-Q1); 분배 4종 각 동작(보드 시드는 금액 키 미포함); 임포트 견적 '임포트' 배지 (테스트로 증명)
+
 ### 상시 grep 가드 (매 세션 종료 시 0건 확인 — 위 DoD와 별개로 항상 검사)
 | 가드 | 명령 | 근거 |
 |---|---|---|
 | 디자인 토큰 | `grep -rn "gray-\|slate-" src` | DoD 17 |
 | 행사 ID 상수 | `grep -rn "PROJECT_ID" src --include=*.tsx` | DoD 18 |
 | **행사 스코프 유도** | `grep -rn "user\.project_id\|currentUser()\.project_id" src --include=*.ts --include=*.tsx` | **v2.1 §4-21 — 랜딩 결함 재발 방지. 예외는 `scope-exempt:` 주석 + 테스트의 화이트리스트 둘 다 필요(무설명 예외 금지)** |
-| 금액 비노출 | `grep -rn "total_amount\|breakdown\|ordered_amount\|actual_amount\|markup\|margin\|settlement" src/pages/Client* src/pages/Landing* src/lib/landing* src/components/plan src/components/client` | **DoD 23·30 (v2.2 — 키 5종·랜딩 파일 확대)** |
+| 금액 비노출 | `grep -rn "total_amount\|breakdown\|ordered_amount\|actual_amount\|markup\|margin\|settlement\|contract_amount" src/pages/Client* src/pages/Landing* src/pages/Partner* src/lib/landing* src/components/plan src/components/client src/components/partner` | **DoD 23·30·32 (v2.4 — contract_amount 키·Partner 경로 확대)** |
 | 온보딩 플래그 | `grep -rn "onboarding_completed" src` | DoD 16 |
 
 앞의 3종은 `src/test/dod-project-scope-guard.test.ts`·기존 DoD 테스트가 상시 자동 검증한다 — 셸 grep은 이중 확인용이다.
 
 ## 8. 서버 이식 완료 기준 (Phase 4~6 DoD)
-0. (v2.0) Phase 4 = §7 DoD 26 / Phase 4.6 = 설계서 §18 1~6 전 게이트 통과 + 옛 라우트 301 + 임포트 dry-run 로그 첨부
+0. (v2.3) Phase 4 = §7 DoD 26(매직링크 실수신만 §20 이월 가능) / 인프라 게이트(§18 1~6)는 §20 D-Day 런북 항목 — Code 범위 아님
 1. Provider 교체 후 프론트 무수정으로 §7의 1~6 전부 실DB에서 재현
 2. 토큰: 만료·회수 시 410 / pending·final·shared 코멘트 외 데이터 접근 불가(테스트로 증명)
 3. RLS: reg 역할의 design 항목 쓰기 거부 / 비멤버 프로젝트 조회 거부
 4. Drive: 표준 트리 자동 생성 / 06 스냅숏 원자성(강제 실패 시 approved 유지+재시도) / 인박스가 직접 업로드 감지
-5. OAuth 동의 화면 Production 게시 상태 확인(Testing이면 7일 만료 — 배포 차단 조건)
+5. OAuth 동의 화면 Production 게시 확인은 §20 D-Day 항목 — 코드 게이트는 토큰 응답에서 Testing 징후(7일 만료) 감지 시 경고 로그
+7. (v2.3) `setup.sql` 멱등: 신규 dev 프로젝트에서 2회 연속 실행 무해 + setup.sql→(seed.sql)→앱 접속이 §20 절차 문구 그대로 재현됨 (테스트+체크아웃 보고로 증명)
+8. (v2.3) 알림 no-op 폴백: `SLACK_WEBHOOK_URL` 미설정에서 전이·업로드·컨펌 전부 정상 + 페이로드에 금액 금지 키 5종 0건 (테스트로 증명)
+9. (v2.3) 시크릿 커밋 가드: `grep -rn "sb_secret" src supabase scripts --include=*.ts --include=*.sql` 0건(변수명 참조 제외 — 실키 값 패턴 검사) + `.env.local`이 .gitignore에 있음
 6. 알림: 컨펌 발송 시 Slack+이메일, D-1 리마인드 cron 동작
 
 ## 9. 세션 리추얼 (jc-workspace-ops 세션 규약 준용)
@@ -231,5 +253,6 @@ Phase 3.8과 3.9는 **별도 커밋·별도 PR**로 분리한다(3.8 = 타입·�
 - 설계서와 다르게 구현해야 할 사정이 생기면 임의 진행 금지 — PROGRESS.md '열린 질문'에 기록하고 사용자 확인
 - **DataProvider 인터페이스 동결 후 변경이 필요하면 반드시 사용자 승인 + 설계서 개정을 동반**
 - 디자인 변경(Phase 3.9 이후 포함)은 디자인지시서 개정 없이 토큰 값·레이아웃 구조를 임의로 바꾸지 않는다. 신규 화면도 tokens.css 변수만 사용
-- (v2.0) Supabase service role key·anon key·URL은 env·Vault에만. 코드·PROGRESS.md·PR 본문·체크아웃 보고에 값 기재 금지. 옛 Configurator 레포의 하드코딩 키는 이식 대상에서 제외
+- (v2.3) dev 3키(URL·publishable·secret)는 사용자가 세션 대화로 제공한다 — `.env.local`(gitignore 확인)에만 기록하고 어떤 산출물(코드·PROGRESS·PR·보고)에도 값을 재인쇄하지 않는다. secret 키를 `VITE_*` env에 넣지 않는다
+- (v2.0) Supabase secret(구 service role)·publishable key·URL은 env·Vault에만. 코드·PROGRESS.md·PR 본문·체크아웃 보고에 값 기재 금지. 옛 Configurator 레포의 하드코딩 키는 이식 대상에서 제외
 - (v2.0) 견적 엔진 상수·산식은 "원본과 0원 일치"가 깨지면 어떤 사유로도 머지 금지 — 변경은 설계서 개정+사용자 승인 후 골든 벡터 갱신과 함께

@@ -97,6 +97,12 @@ function QuotesBody() {
                 <td className="px-3 py-2.5 font-semibold text-ink">
                   v{q.version}
                   {q.is_final && <span aria-hidden className="ml-1">🔒</span>}
+                  {/* v2.4 §22.4 — 임포트로 등록된 견적은 목록에서 바로 구분된다(DoD 34) */}
+                  {q.source === 'imported' && (
+                    <span className="ml-1.5 rounded-full bg-steel-tint px-2 py-0.5 text-xs font-medium text-steel">
+                      임포트
+                    </span>
+                  )}
                 </td>
                 <td className="px-3 py-2.5 text-ink">{q.input.headcount}명</td>
                 <td className="max-w-44 truncate px-3 py-2.5 text-ink-sub" title={q.input.selected_venue ? venueDisplayName(q.input.selected_venue) : undefined}>
@@ -134,6 +140,10 @@ function QuotesBody() {
               disabled={!selected}
             >
               {t.listNewVersion}
+            </button>
+            {/* v2.4 §10.1 화면 D — 견적서 가져오기 위저드 진입점(§10 진입점 원칙: 버튼으로 도달) */}
+            <button type="button" className="btn btn-ghost" onClick={() => navigate('/quotes/import')}>
+              견적서 가져오기
             </button>
             <button type="button" className="btn btn-accent" onClick={() => navigate('/quotes/new')}>
               {t.listNewQuote}

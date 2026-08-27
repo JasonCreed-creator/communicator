@@ -2,7 +2,7 @@
 // 모객형 37태스크는 표를 그대로 옮긴 것(코드·기간·역할·origin_role 보존 — Configurator v0.2 호환).
 // 일반형 28태스크: §15가 코드 단위로 명시한 제외 집합(3.1~3.5 + 4.1~4.5·4.7, 4.6 존치)을
 //   제외하고 3G 2건을 추가 — GENERAL_EXCLUDED_CODES·GENERAL_EXTRA_TASKS가 §15의 정본 구현.
-import type { EventType, MemberRole } from '../types/enums'
+import type { EventType, MemberRole, WbsDirection } from '../types/enums'
 
 export interface WbsTemplateTask {
   phase_no: number
@@ -17,6 +17,9 @@ export interface WbsTemplateTask {
   /** v2.0 §4-15b — 소통 대상(고객사·협력사·내부, 복수는 '·' 결합). 원본 event_tasks.target을
    *  §15 역할 매핑 원칙의 3버킷(고객→고객사 / 엠앤씨 계열→협력사 / 리멤버 계열→내부)으로 치환 */
   target: string | null
+  /** v2.4 §21 — 주최형 템플릿(HOST_TEMPLATE) 전용. 대행형 템플릿은 비워 두면 'internal'로
+   *  간주한다(전개 시 provider·픽스처가 `tpl.direction ?? 'internal'`로 읽는다) */
+  direction?: WbsDirection
 }
 
 export interface RoleCharterTemplate {
@@ -111,6 +114,51 @@ export const GENERAL_WBS_TEMPLATE: readonly WbsTemplateTask[] = [
 export function wbsTemplateFor(eventType: EventType): readonly WbsTemplateTask[] {
   return eventType === 'recruiting' ? RECRUITING_WBS_TEMPLATE : GENERAL_WBS_TEMPLATE
 }
+
+// ── v2.4 §21 — 주최형(파트너) WBS 템플릿 HT-1~12 (설계서 §15.3 표 그대로) ─────
+// 출처: DM Summit 2026 파트너사 통합가이드북 v1.5 확정 마감 체계 — 1개 행사 기반 일반화라
+// §15.3 원문이 "구성은 가정"이라 명시한다. D오프셋·명칭은 행사별 편집 가능.
+// phase_no·phase_name은 HT 코드에 없는 개념이라(코드가 'HT-n'이라 기존 t() 헬퍼의
+// code.split('.')[0] 파싱이 통하지 않는다) 기존 1~6단계 이름에 맞춰 여기서만 새로 매핑한다
+// (§15.3이 확정하는 것은 D·direction·역할뿐이라 이 매핑도 가정 — 2번째 주최형 행사에서 검증).
+function ht(
+  code: string,
+  title: string,
+  offset_start: number,
+  offset_end: number,
+  role: MemberRole,
+  direction: WbsDirection,
+  phase_no: number,
+): WbsTemplateTask {
+  return {
+    phase_no,
+    phase_name: PHASE_NAMES[phase_no],
+    code,
+    title,
+    offset_start,
+    offset_end,
+    role,
+    origin_role: null, // §15.3: origin_role은 null
+    target: null, // 주최형은 소통 대상 축 대신 direction으로 그룹화한다
+    direction,
+  }
+}
+
+/** 주최형 12태스크 — partner_submit은 전개 시 파트너 수만큼 인스턴스가 된다(§15.3) */
+export const HOST_TEMPLATE: readonly WbsTemplateTask[] = [
+  ht('HT-1', '파트너 기본 자료 제출 — 로고·회사소개·발표자 프로필·발표 개요', -45, -45, 'pm', 'partner_submit', 1),
+  ht('HT-2', '트랙 배정·부스 배치 확정 통지', -37, -37, 'pm', 'host_notice', 1),
+  ht('HT-3', '참관객 이용권·경품 제안 제출', -30, -30, 'pm', 'partner_submit', 3),
+  ht('HT-4', '부스 그래픽 제출', -27, -27, 'design', 'partner_submit', 2),
+  ht('HT-5', '발표자료 1차 초안 제출', -23, -23, 'pm', 'partner_submit', 2),
+  ht('HT-6', '주최 검토 회신(전 파트너 발표자료)', -16, -16, 'pm', 'internal', 2),
+  ht('HT-7', '부스 인력 명단·추가 신청(전력·인터넷·임대) 제출', -14, -14, 'ops', 'partner_submit', 5),
+  ht('HT-8', '최종 발표자료·물품 반입 신고 제출', -7, -7, 'pm', 'partner_submit', 5),
+  ht('HT-9', '수정 반영 확인·설치/리허설 배정표·반입 동선 통지', -3, -3, 'ops', 'host_notice', 5),
+  ht('HT-10', '설치·리허설·행사 당일 운영', -1, 0, 'ops', 'internal', 5),
+  ht('HT-11', '참관 등록 리드 데이터 제공(암호화)', 7, 7, 'reg', 'host_notice', 6),
+  ht('HT-12', '결과 리포트 발송', 14, 14, 'pm', 'host_notice', 6),
+]
 
 // R&R 카드 템플릿 — §15 역할 매핑 원칙(계약·정산·컨펌 게이트=pm / 랜딩·제작물=design /
 // 현장 운영·리허설·결과보고=ops / 리드젠·모객·RSVP·등록=reg) 기반 서술(가상 명칭, 가정)

@@ -2,6 +2,7 @@
 // 엔티티(§4)와 달리 여기는 조합 형태라 프론트 편의에 맞춰 정의하되, 필드명은 snake_case로 통일한다.
 import type { SettlementBoard, SettlementBucket, SettlementItem } from './entities'
 import type { SettlementTotals } from '../lib/settlement'
+import type { SectionMapping } from '../modules/quote/import/types'
 import type {
   ActivityLogEntry,
   Approval,
@@ -13,6 +14,9 @@ import type {
   IsoDateTime,
   Milestone,
   OverviewItem,
+  Partner,
+  PartnerTier,
+  PartnerToken,
   ProgramSession,
   Project,
   UUID,
@@ -27,6 +31,8 @@ import type {
   DeliverableStatus,
   EventType,
   MemberRole,
+  PartnerStatus,
+  ProjectKind,
   ProjectStatus,
   WbsStatus,
 } from './enums'
@@ -288,6 +294,8 @@ export interface ProjectPatch {
   name?: string
   /** v1.5 — 행사 코드 (전역 유일, 파일명 규약) */
   code?: string
+  /** v2.4 §21 R-H1 — 전환은 표시 계층만 바꾼다(어떤 행도 삭제되지 않는다) */
+  kind?: ProjectKind
   event_date?: IsoDate | null
   event_type?: EventType
   // v1.5 — 행사 설정 ① 개요 전 필드 (§8 PATCH /projects/{id})
@@ -343,6 +351,8 @@ export interface ProjectSummary {
   id: UUID
   name: string
   code: string
+  /** v2.4 §21 — 선택 배지용('agency'|'host') */
+  kind: ProjectKind
   event_type: EventType
   event_date: IsoDate | null
   venue: string | null
@@ -514,4 +524,122 @@ export interface SettlementBoardView {
   quote_label: string | null
   buckets: SettlementBucketView[]
   totals: SettlementTotals
+}
+
+// ── S-11 파트너 (v2.4 §21) ────────────────────────────────────────────
+
+export interface PartnerTierInput {
+  code: string
+  name: string
+  description?: string | null
+  capacity?: number | null
+  sort?: number
+}
+
+export interface PartnerInput {
+  name: string
+  tier_id?: UUID | null
+  status?: PartnerStatus
+  contract_amount?: number | null
+  note?: string | null
+}
+
+/** 다음 마감(오늘 이후 미완료 partner_submit 태스크 중 가장 가까운 것) */
+export interface PartnerNextDeadline {
+  code: string
+  title: string
+  end_date: IsoDate | null
+}
+
+/** S-11 카드용 제출 진행 요약 — linked_deliverable의 상태 분포 */
+export interface PartnerSubmissionCounts {
+  requested: number
+  pending_approval: number
+  changes_requested: number
+  approved_or_final: number
+}
+
+/** listPartners 응답 — 등급·최신 토큰·제출 진행을 한 번에 그릴 수 있는 형태 */
+export interface PartnerWithProgress extends Partner {
+  tier: PartnerTier | null
+  /** 회수되지 않은 것 중 가장 최근 발급분 — 없으면 null */
+  token: PartnerToken | null
+  submission_counts: PartnerSubmissionCounts
+  next_deadline: PartnerNextDeadline | null
+}
+
+export interface PartnerTokenIssueInput {
+  contact_name: string
+  contact_email: string
+  /** 미지정 시 기본 만료 = 행사일+30일 (§6.3과 동일 원칙) */
+  expires_at?: IsoDateTime
+}
+
+/** 파일 제출 또는 텍스트 제출 — 어느 쪽이든 versions 이력으로 통일해 남긴다(설계 결정, 3.15a) */
+export type PartnerSubmissionInput = { file_name: string; note?: string } | { text: string }
+
+export interface PartnerReviewInput {
+  decision: 'approved' | 'changes_requested'
+  /** 수정요청 시 필수(422, R-H4) */
+  comment?: string
+}
+
+/** getPartnerPortal(token) 응답의 제출 항목 카드 — 마감(task.end_date) 기준으로 이미 정렬돼 있다 */
+export interface PartnerPortalItem {
+  task_code: string
+  task_title: string
+  deadline: IsoDate | null
+  deliverable_id: UUID
+  status: DeliverableStatus
+  /** shared만(R-H6 — 발주처 규칙 재사용) */
+  comments: Comment[]
+  versions: Version[]
+}
+
+/** host_notice 태스크 — 파트너에게는 읽기 전용 안내 */
+export interface PartnerPortalNotice {
+  task_code: string
+  task_title: string
+  deadline: IsoDate | null
+  note: string | null
+}
+
+/**
+ * 파트너 제출 포털(`/p/{token}`) 응답. **contract_amount·정산·견적 금액 키, 타 파트너의
+ * 어떤 행도 구조적으로 담을 수 없다** — partner_name·tier_name만 노출하고 Partner·PartnerTier
+ * 엔티티 전체를 스프레드하지 않는다(§21.2 R-H2·R-H3).
+ */
+export interface PartnerPortalData {
+  project_name: string
+  event_date: IsoDate | null
+  venue: string | null
+  partner_name: string
+  tier_name: string | null
+  /** 마감별 그룹은 화면이 deadline으로 묶는다 — provider는 정렬만 보장 */
+  submission_items: PartnerPortalItem[]
+  notices: PartnerPortalNotice[]
+}
+
+// ── 견적서 임포트 (v2.4 §22) ───────────────────────────────────────────
+
+export interface QuoteImportConfirmInput {
+  /** 확인 큐에서 사람이 수정한 최종 매핑 (비우면 기본 매핑을 그대로 확정) */
+  mapping: SectionMapping[]
+}
+
+export interface QuoteImportDistributeInput {
+  /** §16 매핑 재사용 — 새 행사 생성+상호 링크(임포트 견적은 is_final 불요) */
+  project_prefill?: boolean
+  /** 확정 견적만 가능 — 아니면 validation */
+  settlement_base?: boolean
+  /** s2·s3·s4 매핑 항목을 design·ops 보드에 시드(금액 키 없음) */
+  board_seed?: boolean
+}
+
+export interface QuoteImportDistributeResult {
+  quote_id: UUID
+  /** project_prefill을 켜지 않았고 이미 연결된 행사도 없으면 null */
+  project_id: UUID | null
+  settlement_created: boolean
+  deliverables_seeded: number
 }

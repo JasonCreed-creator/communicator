@@ -106,6 +106,7 @@ function buildQuote(
     input,
     breakdown,
     total_amount,
+    source: 'engine', // v2.4 §22 — 픽스처 견적은 전부 엔진 산출(임포트 아님)
     created_by: 'usr-pm',
     created_at: '2026-08-05T09:00:00.000Z',
     updated_at: '2026-08-05T09:00:00.000Z',

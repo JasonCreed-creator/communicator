@@ -29,6 +29,14 @@
 //   **기존 75메서드 시그니처 불변** 후 재동결. v6과 달리 **설계서가 선행했다**.
 //   `importVendorQuote`(업로드 파싱)는 서버 의존이라 **v8 예약 — 지금 만들지 않는다**(§19.5).
 //   경위는 PROGRESS.md 결정 로그 참조.
+//   v8: 사용자 v2.4 승인(2026-08-27, 시각안 4화면) + 설계서 v2.4 §21·§22를 근거로 동결 해제 →
+//   주최형(파트너) 확장 + 견적서 임포트: listPartnerTiers·upsertPartnerTier·deletePartnerTier·
+//   listPartners·createPartner·updatePartner·removePartner·issuePartnerToken·revokePartnerToken·
+//   getPartnerPortal·submitPartnerItem·reviewPartnerSubmission·expandHostWbs·importQuoteFile·
+//   confirmQuoteImport·distributeQuoteImport 16메서드 추가 = 102메서드.
+//   **기존 86메서드 시그니처 불변** 후 재동결. Project.kind·Deliverable.partner_id·
+//   WbsTask.direction/partner_id·Quote.source·QuoteBreakdown.custom_sections(필드 추가만).
+//   `importVendorQuote`(§19.5 협력사 견적서 파싱)는 여전히 **v9 예약 — 지금 만들지 않는다**.
 //
 // 프로젝트 스코프 규칙(설계서 v2.1 §4-21 R-L1): 프로젝트 단위 조회·생성 메서드는 projectId를
 // 인자로 받는다. currentUser()는 행위자 신원·권한 판정 전용이며 스코프 유도에 쓰지 않는다.
@@ -53,6 +61,10 @@ import type {
   Deliverable,
   LandingDailyMetric,
   LandingPage,
+  Partner,
+  PartnerTier,
+  PartnerToken,
+  QuoteImport,
   SettlementBucket,
   SettlementItem,
   SettlementItemStatus,
@@ -92,12 +104,22 @@ import type {
   MemberWithProfile,
   MilestoneInput,
   OnboardingStatus,
+  PartnerInput,
+  PartnerPortalData,
+  PartnerReviewInput,
+  PartnerSubmissionInput,
+  PartnerTierInput,
+  PartnerTokenIssueInput,
+  PartnerWithProgress,
   PlanData,
   ProgramSessionInput,
   ProjectCreateInput,
   ProjectOverviewPatch,
   ProjectPatch,
   ProjectSummary,
+  QuoteImportConfirmInput,
+  QuoteImportDistributeInput,
+  QuoteImportDistributeResult,
   RegistrationStats,
   RequestApprovalInput,
   RsvpContactPatch,
@@ -251,6 +273,48 @@ export interface DataProvider {
   // ── v1.4 R&R (§8 GET /role-charters, 멤버) ────────────────────────
   listRoleCharters(projectId: UUID): Promise<RoleCharter[]>
 
+  // ── v2.4 §21 주최형(파트너) — 등급·파트너·토큰 CRUD는 pm, 열람은 멤버 전원 ────
+  /** sort 순 */
+  listPartnerTiers(projectId: UUID): Promise<PartnerTier[]>
+  /** code가 이미 있으면 갱신, 없으면 생성(§8.1) — 기본 3종(DIAMOND·GOLD·SILVER) 시드는 픽스처 담당 */
+  upsertPartnerTier(projectId: UUID, input: PartnerTierInput): Promise<PartnerTier>
+  /** 이 등급을 쓰는 파트너가 있으면 409 */
+  deletePartnerTier(tierId: UUID): Promise<void>
+  /** 등급·최신 토큰·제출 진행 요약(S-11 카드) 포함 */
+  listPartners(projectId: UUID): Promise<PartnerWithProgress[]>
+  createPartner(projectId: UUID, input: PartnerInput): Promise<Partner>
+  updatePartner(partnerId: UUID, patch: Partial<PartnerInput>): Promise<Partner>
+  /** 제출 이력(WBS 인스턴스·inbound 산출물)이 있으면 409 — 철회(status='withdrawn')로 대신한다 */
+  removePartner(partnerId: UUID): Promise<void>
+  /** 파트너 제출 링크 발급 — 기본 만료 = 행사일+30일(§6.3과 동일 원칙) */
+  issuePartnerToken(partnerId: UUID, input: PartnerTokenIssueInput): Promise<PartnerToken>
+  revokePartnerToken(token: string): Promise<PartnerToken>
+  /**
+   * `/p/{token}` 제출 포털 데이터 — 자기 partner_id 행만(R-H2), contract_amount·정산·견적
+   * 금액 키는 반환 타입 자체에 없다(R-H3). 만료·회수 토큰은 410.
+   */
+  getPartnerPortal(token: string): Promise<PartnerPortalData>
+  /**
+   * 파트너 제출(파일 또는 텍스트) — requested→pending_approval(첫 제출, via partner_submit)
+   * 또는 changes_requested→pending_approval(재제출, via version_upload) 전이(§5.1, R-H4).
+   */
+  submitPartnerItem(
+    token: string,
+    deliverableId: UUID,
+    input: PartnerSubmissionInput,
+  ): Promise<Deliverable>
+  /**
+   * 내부 검토(pm·담당) — approved면 발주처 승인과 동일하게 final까지 마감,
+   * changes_requested면 코멘트 필수(422)이며 shared로 기록한다(파트너가 봐야 하므로).
+   */
+  reviewPartnerSubmission(deliverableId: UUID, input: PartnerReviewInput): Promise<Deliverable>
+  /**
+   * 주최형 WBS 템플릿(§15.3 HT-1~12)을 event_date 기준 전개(pm). partner_submit 방향은
+   * 활성 파트너 수만큼 인스턴스를 만들고 inbound deliverable을 자동 생성한다(§5.1).
+   * 재전개는 code+partner_id 매칭으로 기존 상태를 보존한다(R-H5).
+   */
+  expandHostWbs(projectId: UUID): Promise<WbsTask[]>
+
   // ── v1.2 행사개요 (§8 PATCH /projects/{id}/overview, pm·ops) ──────
   updateProjectOverview(projectId: UUID, patch: ProjectOverviewPatch): Promise<Project>
 
@@ -273,6 +337,20 @@ export interface DataProvider {
   createProjectFromQuote(quoteId: UUID): Promise<Project>
   /** §8 GET /quotes/{id}/export.xlsx — 자동 외부 업로드 없음. 저장은 modules/quote saveQuoteFile */
   exportQuoteXlsx(quoteId: UUID, lang?: 'ko' | 'en'): Promise<QuoteExportResult>
+
+  // ── v2.4 §22 견적서 임포트 (app_role admin·sales) ──────────────────
+  /**
+   * xlsx 업로드 → 서식 감지(A·B·C형)·섹션·항목·검산 결과 반환. **커밋 없음**(R-Q1) —
+   * quotes는 confirmQuoteImport를 거쳐야만 생긴다.
+   */
+  importQuoteFile(fileName: string, data: ArrayBuffer): Promise<QuoteImport>
+  /** 확인 큐에서 수정한 매핑을 확정 → quotes 등록(source='imported', 새 버전) */
+  confirmQuoteImport(importId: UUID, input: QuoteImportConfirmInput): Promise<Quote>
+  /** 분배 실행 — {project_prefill?·settlement_base?·board_seed?}(§22.4). confirmed 전제, 아니면 409 */
+  distributeQuoteImport(
+    importId: UUID,
+    input: QuoteImportDistributeInput,
+  ): Promise<QuoteImportDistributeResult>
 
   // ── v2.0 컴플라이언스 카드 (§8 /compliance-cards — 체크 멤버·편집 pm) ──
   /** sort_order 순 */

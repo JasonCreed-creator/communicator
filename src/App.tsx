@@ -11,8 +11,11 @@ import ItemDetailPage from './pages/ItemDetailPage'
 import LegacyGonePage from './pages/LegacyGonePage'
 import NotFoundPage from './pages/NotFoundPage'
 import OnboardingPage from './pages/OnboardingPage'
+import PartnerBoardPage from './pages/PartnerBoardPage'
+import PartnerPortalPage from './pages/PartnerPortalPage'
 import PlanDocPage from './pages/PlanDocPage'
 import ProjectListPage from './pages/ProjectListPage'
+import QuoteImportWizardPage from './pages/QuoteImportWizardPage'
 import QuoteEditorPage from './pages/QuoteEditorPage'
 import LandingBoardPage from './pages/LandingBoardPage'
 import LandingEditorPage from './pages/LandingEditorPage'
@@ -67,6 +70,8 @@ export function AppRoutes() {
           <Route path="/landing/:landingId" element={<LandingEditorPage />} />
           <Route path="/quotes/new" element={<QuoteEditorPage />} />
           <Route path="/quotes/:quoteId/edit" element={<QuoteEditorPage />} />
+          {/* v2.4 §22 견적서 가져오기 위저드 — S-2와 같은 app_role 게이트를 페이지 내부가 수행 */}
+          <Route path="/quotes/import" element={<QuoteImportWizardPage />} />
 
           {/* 내부 화면 S1~S6 — 온보딩 미완료 시 OnboardingGuard가 /settings로 유도 */}
           <Route element={<OnboardingGuard />}>
@@ -78,6 +83,8 @@ export function AppRoutes() {
             <Route path="/plan" element={<PlanDocPage />} />
             {/* v2.2 S-10 정산보드 — 운영 그룹 마지막. 내부 전용이라 /c/* 밖에만 있다 */}
             <Route path="/settlement" element={<SettlementPage />} />
+            {/* v2.4 S-11 파트너 보드 — 주최형 전용(대행형에서는 메뉴 자체가 없다 §10.1) */}
+            <Route path="/partners" element={<PartnerBoardPage />} />
           </Route>
         </Route>
       </Route>
@@ -87,6 +94,10 @@ export function AppRoutes() {
         <Route index element={<ClientConfirmQueuePage />} />
         <Route path="status" element={<ClientStatusPage />} />
       </Route>
+
+      {/* v2.4 파트너 제출 포털 — 무로그인 파트너 토큰 링크 (/p/demo-partner 데모 포함), ProjectScope 밖.
+          발주처 경로와 독립인 두 번째 외부 경로다(§21.2 R-H7) */}
+      <Route path="/p/:token" element={<PartnerPortalPage />} />
 
       {/* v2.0 §10 — 옛 Configurator 라우트 리다이렉트 (구버전 화면은 이식하지 않음 §17.2) */}
       <Route path="/quote" element={<Navigate to="/quotes" replace />} />

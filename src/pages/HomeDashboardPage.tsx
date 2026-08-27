@@ -22,6 +22,17 @@ export default function HomeDashboardPage() {
   const deliverables = useAsync(() => provider.listDeliverables(projectId), [projectId])
   // v2.2 §19.1 — 견적 초과는 막지 않고 알린다. 홈에서 먼저 눈에 띄어야 대응이 빨라진다.
   const settlement = useAsync(() => provider.getSettlementBoard(projectId), [projectId])
+  // v2.4 §10.1 — 주최형이면 미결 위젯에 파트너 검토 대기를 추가 집계한다(승인 큐와 무관한 경로라
+  // approvals 기반 dashboard.pending_approvals에는 잡히지 않는다).
+  const isHost = dashboard.data?.project.kind === 'host'
+  const partners = useAsync(
+    () => (isHost ? provider.listPartners(projectId) : Promise.resolve([])),
+    [projectId, isHost],
+  )
+  const partnerReviewPending = (partners.data ?? []).reduce(
+    (sum, p) => sum + p.submission_counts.pending_approval,
+    0,
+  )
 
   const reloadAll = () => {
     dashboard.reload()
@@ -56,6 +67,15 @@ export default function HomeDashboardPage() {
             label="행사 D-day"
             value={dashboard.data.project.event_date ? ddayLabel(dashboard.data.project.event_date) : '미정'}
           />
+          {isHost && (
+            <Link to="/partners" className="block">
+              <StatTile
+                label="파트너 검토 대기"
+                value={partnerReviewPending}
+                tone={partnerReviewPending > 0 ? 'accent' : 'default'}
+              />
+            </Link>
+          )}
         </div>
       )}
 

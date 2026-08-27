@@ -83,3 +83,26 @@ export type LandingFieldKind = (typeof LANDING_FIELD_KINDS)[number]
 // v2.1: 폼 제출 대상 — registration이면 등록(S4) Attendee로 유입, external이면 외부 URL로 보냄
 export const LANDING_SUBMIT_TARGETS = ['registration', 'external'] as const
 export type LandingSubmitTarget = (typeof LANDING_SUBMIT_TARGETS)[number]
+
+// v2.4 §21: 주최형(파트너) 확장 — kind는 event_type과 직교하는 축(표시 계층 토글, R-H1)
+export const PROJECT_KINDS = ['agency', 'host'] as const
+export type ProjectKind = (typeof PROJECT_KINDS)[number]
+
+export const PARTNER_STATUSES = ['active', 'withdrawn'] as const
+export type PartnerStatus = (typeof PARTNER_STATUSES)[number]
+
+/** wbs_tasks.direction — partner_submit는 파트너별 인스턴스 전개(§15.3) */
+export const WBS_DIRECTIONS = ['partner_submit', 'host_notice', 'internal'] as const
+export type WbsDirection = (typeof WBS_DIRECTIONS)[number]
+
+// v2.4 §22: 견적서 임포트 — quotes.source
+export const QUOTE_SOURCES = ['engine', 'imported'] as const
+export type QuoteSource = (typeof QUOTE_SOURCES)[number]
+
+/** quote_imports.status — detected(파싱 직후) → confirmed(매핑 확정) → distributed(분배 완료) */
+export const QUOTE_IMPORT_STATUSES = ['detected', 'confirmed', 'distributed'] as const
+export type QuoteImportStatus = (typeof QUOTE_IMPORT_STATUSES)[number]
+
+/** §22.1 지원 서식 3형 — A 단가·수량형 / B 금액 단식 / C 패키지형 */
+export const QUOTE_IMPORT_FORMATS = ['A', 'B', 'C'] as const
+export type QuoteImportFormat = (typeof QUOTE_IMPORT_FORMATS)[number]

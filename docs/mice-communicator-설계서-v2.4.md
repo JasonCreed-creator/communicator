@@ -1,8 +1,8 @@
-# MICE 커뮤니케이터 — 시스템 설계서 v2.2
+# MICE 커뮤니케이터 — 시스템 설계서 v2.4
 
 | 항목 | 내용 |
 |---|---|
-| 문서 상태 | v2.2 확정 — **정산보드(S-10) 신설** (2026-08-23, 내부정산 실물 13건 분석 기반·시각안 승인). 마진 식(항목 마크업 + PCO 기획료 + RSVP 운영비, 리드젠 제외)을 실물 2건에서 원 단위 검산하고 §19에 정본화한다. §4-23 테이블 4종 + §4-24 계약 R-S1~R-S10, DataProvider **v7 재동결(11메서드 · 86메서드)**. 직전 v2.1 — **랜딩보드(S-3) 정본화 + 랜딩 스코프 계약 + 가격 상수 v1.1 정의** (2026-08-23). 코드가 선행한 Phase 3.13 랜딩보드를 §4-19~§4-22·§8·§10에 정본으로 흡수하고, `listLandingPages`·`createLandingPage`가 현재 행사가 아닌 사용자 첫 멤버십으로 스코프되던 결함을 계약으로 못박는다(§4-21). LED 오퍼레이팅·중계 단가 분리(§17.4)와 골든 데이터셋 출처 규약(§17.3)을 확정. 직전 v2.0: **견적 Configurator(jsx-easy-shift) 단일 플랫폼 통합** (2026-08-22, 시각안 3화면 승인 · 읽기 분석 보고 기반): 견적 모듈 S-2 · 견적→행사 핸드오프 · 새 Supabase 프로젝트 · 인프라 전환 절차. 직전 v1.5: **다중 행사(프로젝트 셀렉터·행사 목록) + 행사 설정 메뉴(개요·담당자 입력) 확장** (2026-08-22, 시각안 3화면 승인). 직전 v1.4.1: v1.4(유형별 WBS·R&R, 2026-08-22 시각안 승인)에 **Phase 3.6·3.7 구현 해석 정본화** 패치: projects.onboarded_at 확정(사용자 승인 2026-08-22) · 임박/지연 배타 산식 · 일반형 28건 파생 규칙 · 재전개 보존 규칙 · 큐시트 스냅숏 mock 규약 (Code PROGRESS 열린 질문 ①~⑤ 종결) |
+| 문서 상태 | v2.4 확정 — **주최형(파트너) 확장 + 견적서 임포트** (2026-08-27, 시각안 4화면·구조 결정 7가지 전부 승인). ① 프로젝트 성격 축 `kind`(대행형/주최형) 신설 — 주최형은 파트너 N곳이 무로그인 링크 `/p/{token}`으로 제출하고 우리가 검토(기존 상태머신 방향 반전 재사용), 파트너 간 완전 격리·계약액 비노출(§21) ② 직접 설계한 견적서 xlsx 업로드 → 자동 인식 → 확인 큐 → 요소 분배 4종(§22, 실서식 3형 계약). DataProvider **v8 재동결(16메서드 · 102메서드)**, WBS 3번째 템플릿 "주최형" 12건(§15.3). 구현은 Phase 3.15(mock 우선·서버 0). 직전 v2.3 확정 — **서버 스프린트: 키 최후 주입 실행 개정(기능 무변경)** (2026-08-27, 범위 게이트 승인). Phase 4(Supabase)·5(Drive)·6(알림)을 운영 자격증명 없이 D-Day(8/31 월, 첫 출근일) 전에 전부 구현·검증하고, D-Day에는 §20 런북의 자격증명 주입(서버 3키·Slack 웹훅·Drive OAuth)만으로 실전 투입 가능 상태를 만든다. 사전 검증은 개발용 무료 Supabase 프로젝트, API 키는 신형 체계(sb_publishable/sb_secret — §12, 웹검증 2026-08-27) 채택. 직전 v2.2 확정 — **정산보드(S-10) 신설** (2026-08-23, 내부정산 실물 13건 분석 기반·시각안 승인). 마진 식(항목 마크업 + PCO 기획료 + RSVP 운영비, 리드젠 제외)을 실물 2건에서 원 단위 검산하고 §19에 정본화한다. §4-23 테이블 4종 + §4-24 계약 R-S1~R-S10, DataProvider **v7 재동결(11메서드 · 86메서드)**. 직전 v2.1 — **랜딩보드(S-3) 정본화 + 랜딩 스코프 계약 + 가격 상수 v1.1 정의** (2026-08-23). 코드가 선행한 Phase 3.13 랜딩보드를 §4-19~§4-22·§8·§10에 정본으로 흡수하고, `listLandingPages`·`createLandingPage`가 현재 행사가 아닌 사용자 첫 멤버십으로 스코프되던 결함을 계약으로 못박는다(§4-21). LED 오퍼레이팅·중계 단가 분리(§17.4)와 골든 데이터셋 출처 규약(§17.3)을 확정. 직전 v2.0: **견적 Configurator(jsx-easy-shift) 단일 플랫폼 통합** (2026-08-22, 시각안 3화면 승인 · 읽기 분석 보고 기반): 견적 모듈 S-2 · 견적→행사 핸드오프 · 새 Supabase 프로젝트 · 인프라 전환 절차. 직전 v1.5: **다중 행사(프로젝트 셀렉터·행사 목록) + 행사 설정 메뉴(개요·담당자 입력) 확장** (2026-08-22, 시각안 3화면 승인). 직전 v1.4.1: v1.4(유형별 WBS·R&R, 2026-08-22 시각안 승인)에 **Phase 3.6·3.7 구현 해석 정본화** 패치: projects.onboarded_at 확정(사용자 승인 2026-08-22) · 임박/지연 배타 산식 · 일반형 28건 파생 규칙 · 재전개 보존 규칙 · 큐시트 스냅숏 mock 규약 (Code PROGRESS 열린 질문 ①~⑤ 종결) |
 | 목적 | Claude Code가 본 문서만으로 추가 질문 없이 구현 착수 |
 | 정본 관계 | 스키마·상태 머신·API 계약은 본 문서가 SoT. 구현 지침·작업 순서는 동봉 CLAUDE.md |
 | 확정 결정 | 아키텍처=하이브리드(파일=Drive, 상태=Supabase) / 발주처=무로그인 토큰 링크 / 컨펌 발송=PM 단독 / 업로드=웹앱 경유 원칙+Drive 감지 인박스 / 등록 1차=CSV 임포트 / **구현 순서=프론트 우선·서버 후행 이식(DataProvider 어댑터 계층)** / **v1.2: 지시(requested)→제작→컨펌→운영계획서(S9) 조립 파이프라인 — 웹 문서 우선, PPTX·발주처 뷰는 2차** / **v1.3: S0 온보딩(개요→유형→담당자) → 유형(일반형·모객형) 모듈 토글 → 큐시트 정형 에디터(3채널 콘솔, 컨펌 스냅숏 자동)** / **v1.4: 유형별 WBS 템플릿 자동 전개(Configurator 37태스크 이식·호환 코드 체계) + 역할별 R&R 카드** / **v1.4.1: 온보딩 완료 상태는 projects.onboarded_at 컬럼이 정본(DataProvider v3.1 재동결)** / **v1.5: 다중 행사 — 사이드바 프로젝트 셀렉터+S-1 행사 목록, "행사 설정" 메뉴 상시 노출(①개요 ②담당자 ③유형·연동), S0 위저드=같은 폼의 단계형, 행사개요 단일 원천(S9 ①은 읽기 조립)** / **v2.0: 견적 모듈(S-2) 흡수 — 가격 엔진·베뉴 DB를 `src/modules/quote`로 이식, 견적 확정→행사 생성 프리필, 견적은 로그인 내부 전용(금액은 발주처·운영계획서에 구조적 비노출), 데이터는 새 Supabase 프로젝트(옛 Configurator DB는 1회 임포트 후 폐기), 도메인 rmb-mice.com 재연결·jsx-easy-shift 아카이브** |
@@ -21,6 +21,7 @@ MICE 프로젝트 착수 시 역할별(디자인·운영·등록·발주처) 산
 5. Drive 공유 권한은 앱이 절대 변경하지 않는다. 파일 접근은 항상 앱 프록시 경유.
 6. (v1.2) 커뮤니케이터의 최종 산출물은 운영계획서다 — 지시서·업로드·컨펌·등록의 모든 입력이 문서 섹션으로 실시간 조립된다.
 7. (v2.0) 행사의 생애는 **견적 → 설정 → 운영 → 결과**로 한 앱 안에서 이어진다. 견적(단가·총액)은 내부 로그인 화면과 Excel에만 존재하며, 발주처 토큰 경로·운영계획서·활동 로그 어디에도 금액이 흐르지 않는다(#RULE-NO-PRICE-TO-CLIENT).
+8. (v2.4) 행사에는 **성격(kind)** 이 있다 — **대행형**(수주: 우리가 만들고 발주처가 컨펌)과 **주최형**(자체 주최: 파트너가 제출하고 우리가 검토). 성격은 event_type(일반형·모객형)과 직교 2축이며, 유형 토글과 같은 표시 계층 원칙(전환 시 데이터 손실 없음)을 따른다. 정본은 §21.
 
 ---
 
@@ -87,7 +88,8 @@ MICE 프로젝트 착수 시 역할별(디자인·운영·등록·발주처) 산
 | 5 | 일정·WBS·R&R (v1.4 승격) | 유형별 WBS 템플릿 자동 전개(체크리스트·간트) / 담당별 R&R 카드 / D-day·컨펌 기한 | wbs_tasks·role_charters + approvals.due_at |
 | 6 | 공통 | **행사 목록·프로젝트 셀렉터·행사 설정(v1.5)** / 홈 미결 대시보드 / 기획 문서 / 회의록·의사결정 로그 / 예산·정산 문서함 / 알림 / 미등록 파일 인박스 | 혼합 |
 | 7 | 운영계획서 (v1.2) | S9 웹 문서 — 개요·프로그램·존운영·제작물 리스트·등록 통계·일정 섹션 자동 조립 + 진행률 + 인쇄 CSS | 뷰 + 정형 데이터 |
-| 8 | 견적 (v2.0, S-2) | 5스텝 에디터(규모·유형 → 베뉴 → 옵션 → 확인·확정 → 행사 만들기) / 버전·확정 잠금 / 섹션별 산출(s1 베뉴·s2 시스템·s3 디자인·s4 운영·s5 PCO 기획료·옵션·모객·참관객) / Excel 내보내기 / 확정 견적 → 행사 생성 프리필 | quotes + 코드 상수(단가·베뉴 DB 20곳·옵션 12종) |
+| 9 | 파트너 (v2.4, 주최형 전용) | 파트너 목록·등급(tier)·제출 진행(S-11) / 파트너 제출 뷰(`/p/{token}`) / 제출물 검토 큐 / 마감 타임라인 | partners·partner_tiers·기존 deliverables(inbound) |
+| 8 | 견적 (v2.0, S-2) | 5스텝 에디터(규모·유형 → 베뉴 → 옵션 → 확인·확정 → 행사 만들기) / 버전·확정 잠금 / 섹션별 산출(s1 베뉴·s2 시스템·s3 디자인·s4 운영·s5 PCO 기획료·옵션·모객·참관객) / Excel 내보내기 / 확정 견적 → 행사 생성 프리필 / **(v2.4) 견적서 임포트 — 업로드→확인 큐→분배(§22)** | quotes + 코드 상수(단가·베뉴 DB 20곳·옵션 12종) + quote_imports |
 
 - 회의록·예산 문서는 별도 모듈 UI 없이 deliverables의 area='common' 카테고리로 수용 (컨펌 루프 없이 보관·버전만).
 - (v1.3) 행사 유형 토글: event_type='general'(일반형)이면 등록 모듈이 경량 모드(참관객 명단·체크인만 — RSVP 파이프라인·모객 대시보드·리마인드 숨김), 'recruiting'(모객형)이면 전체 노출. 스키마는 동일하고 표시 계층 토글이라 유형 변경 시 데이터 손실 없음.
@@ -602,6 +604,23 @@ draft ──(담당/PM)──> internal_review ──(PM만)──> pending_appr
 
 ---
 
+### 5.1 (v2.4) 주최형 inbound 매핑 — 새 상태머신을 만들지 않는다
+
+주최형 제출물은 **기존 deliverables·기존 전이표를 그대로 재사용**하고, 라벨 계층(labels.ts 패턴)에서 주최형 문구로 표기만 바꾼다:
+
+| 기존 상태 | 대행형 라벨 | 주최형 라벨 | 전이 주체 |
+|---|---|---|---|
+| requested | 가이드됨 | **제출 요청됨**(마감 전개 시 자동 생성) | 시스템(WBS 전개) |
+| pending_approval | 컨펌요청 | **검토중**(파트너 제출 직후) | 파트너(`/p` 제출) |
+| approved → final | 승인·확정 | **승인됨**(승인 시 final 동일 규칙) | 내부(pm 또는 담당) |
+| changes_requested | 수정요청 | **수정요청**(코멘트 필수) | 내부 |
+| (재제출) | version_upload로 draft 복귀 | version_upload로 **검토중 복귀**(pending_approval 직행) | 파트너 |
+
+- 주최형 신규 전이 1건만 추가: `requested → pending_approval via partner_submit`(파트너 첫 제출). 재제출은 기존 version_upload 전이의 목적지를 kind='host'에서 pending_approval로 분기 — 분기 근거는 전이표에 명기하고 assertTransition 경유는 불변.
+- draft·internal_review는 주최형 inbound 경로에서 쓰지 않는다(내부가 만드는 산출물은 주최형에서도 기존 경로 그대로).
+
+---
+
 ## 6. 권한 모델
 
 ### 6.1 역할 매트릭스 (앱 레벨 + RLS 이중 강제)
@@ -634,6 +653,8 @@ draft ──(담당/PM)──> internal_review ──(PM만)──> pending_appr
 - 쓰기: deliverables/versions는 역할-영역 일치 또는 pm. approvals insert는 pm만.
 - (v2.2) settlement_boards·settlement_buckets·settlement_items·settlement_imports: `select` = 프로젝트 멤버 전원. `insert·update·delete` = 보드·버킷·기준 갱신은 pm만, 항목 금액은 pm 또는 `assignee_id = auth.uid()`. vendors는 조직 단위라 로그인 사용자 전원 `select`, `insert·update`도 전원(중복 등록 방지는 unique 인덱스). **토큰 경로 화이트리스트에 settlement_*·vendors를 추가하지 않는다**(§19.7).
 - (v2.0) quotes: `select` = profiles.app_role in (admin,sales) OR (project_id가 null이 아니고 해당 프로젝트 pm 멤버) / `insert·update` = admin·sales만. compliance_cards·profiles: 멤버 범위.
+- (v2.4) partners·partner_tiers·partner_tokens: `select·insert·update` = 프로젝트 멤버(등급·계약액 열람 포함 — 내부 전용), 파트너 토큰 발급·회수는 pm만. **`partners.contract_amount`는 어떤 외부 경로(`/c/*`·`/p/*`·랜딩·운영계획서·알림)에도 나가지 않는다** — 금액 비노출 가드 대상에 추가(§19.7 확장).
+- (v2.4) 파트너 토큰 경로(`/p/{token}`)는 발주처 토큰과 동일 원칙 — RLS 미통과, Edge Function(service) 화이트리스트 쿼리만. 접근 가능 범위: **자기 partner_id의** 제출 항목·버전·shared 코멘트·방향이 partner_submit/host_notice인 WBS 태스크(자기 전개분)·행사 기본 정보(명칭·일시·장소). **타 파트너의 어떤 행도 쿼리 자체에서 제외**(파트너 간 완전 격리). 만료·회수 = 410.
 - 발주처 토큰 경로는 **RLS를 통과하지 않고** Edge Function(service role)이 토큰 검증 후 화이트리스트 쿼리만 수행 — 토큰으로 접근 가능한 데이터: 자기 프로젝트의 pending_approval 항목 + 그 버전 파일 + final 항목 + 마일스톤 진행률 + **visibility='shared' 코멘트만**(internal 코멘트는 쿼리 자체에서 제외 — v1.1, C-1). 그 외 어떤 테이블도 조회 불가.
 
 ### 6.3 토큰 설계
@@ -738,6 +759,23 @@ draft ──(담당/PM)──> internal_review ──(PM만)──> pending_appr
 
 ---
 
+### 8.1 (v2.4) 추가 API
+
+| Method·Path | 권한 | 동작 |
+|---|---|---|
+| GET·POST·PATCH·DELETE /projects/{id}/partner-tiers | 멤버(쓰기 pm) | 등급 체계 CRUD (기본 3종 시드) |
+| GET·POST·PATCH·DELETE /projects/{id}/partners | 멤버(쓰기 pm) | 파트너 CRUD + 제출 진행 요약(S-11) |
+| POST /partners/{id}/tokens · DELETE | pm | 파트너 제출 링크 발급·회수 |
+| GET /p/{token} | 파트너 토큰 | 제출 포털 데이터 — 자기 체크리스트·제출물 상태·안내(host_notice)·가이드 링크. §6.2 화이트리스트 |
+| POST /p/{token}/submissions | 파트너 토큰 | 항목 제출(파일 업로드 또는 텍스트) → requested→pending_approval 전이(§5.1) |
+| POST /submissions/{id}/review | pm·담당 | {decision: approved|changes_requested, comment} → §5.1 전이. 수정요청 시 comment 필수(422) |
+| POST /projects/{id}/wbs-expand-host | pm | 주최형 템플릿(§15.3)을 event_date 기준 전개 — partner_submit 방향은 **파트너별 인스턴스** 생성 |
+| POST /quote-imports | admin·sales | xlsx 업로드 → 서식 감지(A·B·C형)·섹션·항목·검산 결과 반환. **커밋 없음** |
+| POST /quote-imports/{id}/confirm | admin·sales | 확인 큐에서 수정한 매핑 확정 → quotes 등록(source='imported', 새 버전) |
+| POST /quote-imports/{id}/distribute | admin·sales | 분배 실행: {targets: project_prefill? board_seed? settlement_base?} — §22.4 규칙 |
+
+---
+
 ## 9. 알림 매트릭스
 
 | 이벤트 | 내부 Slack | 발주처 이메일 |
@@ -748,9 +786,13 @@ draft ──(담당/PM)──> internal_review ──(PM만)──> pending_appr
 | 컨펌 기한 D-1 미응답 | ● | ● 리마인드 |
 | 마일스톤 D-1 | ● | — |
 | 미등록 파일 감지 | ●(일 1회 묶음) | — |
+| (v2.4) 파트너 제출 도착 | ● | — |
+| (v2.4) 파트너 마감 D-1 미제출 | ● | ●(해당 파트너에게 리마인드 — Phase 6b 이메일 갖춘 후) |
 
 - Slack: 프로젝트별 Incoming Webhook 1개(설정 화면에서 등록). 메시지 포맷: `[행사코드] 이벤트 — 항목명 (링크)`.
 - 이메일: Resend(무료 티어) 권장. 발신 도메인 미보유 시 MVP는 공용 발신 주소.
+- (v2.3) **구현 시점 분리**: Slack 웹훅 = Phase 6(D-Day 전 구현, URL은 D-Day 주입 — §20). 발주처 이메일(Resend) = **Phase 6b** — 첫 발주처 토큰 발송 전까지만 갖추면 된다(내부 선사용 단계에선 불필요). 컨펌 발송 UI는 "이메일 발송은 준비 중 — 링크를 복사해 직접 전달" 안내를 명시한다(게이트 뒤에 숨기지 않음).
+- (v2.3) **no-op 폴백**: `SLACK_WEBHOOK_URL` 미설정이면 알림 유틸은 콘솔 로그로만 동작한다. 발송은 항상 fire-and-forget + 실패 로그 — 알림 실패가 본 동작(전이·업로드·컨펌)을 절대 막지 않는다.
 
 ---
 
@@ -782,6 +824,14 @@ UI 공통: 한국어, 데스크톱 우선 + 반응형(발주처 화면은 모바
 
 ---
 
+### 10.1 (v2.4) 추가 화면
+
+- **행사 설정 ③ 성격·유형**: 성격 카드 2종(대행형/주최형, 시각안 화면 A) + 기존 유형 칩. 주최형 선택 시 파트너 등급 편집 블록 노출(기본 3종 시드: DIAMOND·GOLD·SILVER — 명칭·설명·정원 편집, 등급 추가 가능). 성격 전환은 확인 다이얼로그(표시 계층 전환·데이터 보존 안내).
+- **S-11 파트너 보드**(`/partners`, 주최형 전용 — 사이드바 운영 그룹, 홈 다음): KPI 4(파트너 수·이번 마감 제출·검토 대기·수정요청 미회신) + 마감 타임라인 스트립(방향 3종 표기: ▲ 파트너 제출 / ▼ 주최 통지 / ■ 내부) + 파트너 표(등급 배지·담당·링크 상태·이번 마감 진행률·상태) + 파트너 상세(제출물 목록·검토 패널 = S3 상세 컴포넌트 재사용·가이드 문서·활동 이력). 검토 대기는 홈(S1) 미결 위젯에 집계.
+- **`/p/{token}` 파트너 제출 포털**(시각안 화면 C): 슬림 다크 상단 바 + 등급 배지. 이번 마감(가장 가까운 미완 마감) 섹션 상단 고정 → 항목 카드(상태 배지·수정요청 코멘트·새 버전 업로드 드롭존·텍스트 항목은 인라인 폼) → 다음 마감(대기) → 주최 측 안내(host_notice 읽기 전용). 하단에 격리 고지 문구. 반응형(데스크톱 중심, 375px 동작 보장).
+- **견적서 가져오기 위저드**(S-2 내 버튼, admin·sales — 시각안 화면 D): 1단계 업로드 → 2단계 인식 결과 확인(KPI 4: 섹션·항목·검산·확인 필요 / 섹션→버킷 매핑 표에서 애매 항목만 노랑 표시·드롭다운 수정 / 인식된 행사 정보 미리보기) → 3단계 분배 선택(견적 등록·행사 프리필·정산 기준·보드 시드 체크박스) → 완료. 임포트 견적은 목록에 '임포트' 배지.
+- **대행형/주최형 표시 규칙**: 주최형에서 숨김 = 발주처 컨펌 큐 발송 UI·발주처 연락처 탭(파트너 탭으로 대체) / 대행형에서 숨김 = 파트너 보드·`/p` 발급 UI. 진입점 원칙(§10) 준수 — 게이트 뒤에 숨은 화면 금지, 성격이 다르면 메뉴 자체가 없어야 한다.
+
 ## 11. 등록 모듈 상세 (MVP)
 
 - **CSV 스키마(임포트)**: `name, org, title, email, phone, group_tag, memo` — 헤더 자동 매핑 UI(열 이름 상이 대응), email 기준 중복 upsert, 1,000행 이상 벌크 처리.
@@ -798,6 +848,7 @@ UI 공통: 한국어, 데스크톱 우선 + 반응형(발주처 화면은 모바
 - 백업: DB는 Supabase 자동 백업, 파일은 Drive 자체가 원본.
 - (v2.0) 금액 비노출 4중 차단 — 분석 보고에서 확인된 Configurator의 노출 경로를 전부 닫는다: ① `/quote` 공개 렌더 → 로그인+app_role 게이트 ② estimates RLS 개방 → quotes RLS(§6.2) + 새 프로젝트 ③ Excel 다운로드 시 외부 Edge Function으로 자동 Drive 업로드 → 제거(Phase 5 Drive 모듈의 명시 버튼만) ④ `?client_view=1` URL 파라미터 공유 → 폐기(발주처는 `/c/{token}`만). 운영계획서·활동 로그·알림 본문에 금액 필드 포함 금지(테스트로 증명).
 - (v2.2) 정산 비노출 — 금지 키에 `settlement`·`ordered_amount`·`actual_amount`·`markup`·`margin`을 추가하고, 검사 범위에 `pages/Landing*`·`lib/landing*`를 추가한다(랜딩은 토큰조차 없는 유일한 완전 공개 지면인데 v2.1까지 검사 밖이었다). 가드는 결함을 되돌려 넣어 **실제로 실패하는지 역검증**한 뒤 통과로 인정한다. 상세는 §19.7.
+- (v2.3) API 키는 Supabase **신형 체계**로 채택: 프론트 = `sb_publishable_…`, 서버(Edge Function·스크립트) = `sb_secret_…` (대시보드 Settings→API Keys). 레거시 anon/service_role JWT 키는 2026년 말 폐기 예정이라 신규 사용 금지(웹검증 2026-08-27). 본 문서의 "3키" = Project URL · publishable key · secret key. secret 키는 `VITE_*` env에 절대 넣지 않는다.
 - (v2.0) 클라이언트 번들에 Supabase URL·anon key 하드코딩 금지 — env만. 베뉴 DB의 `reference_cases`(실고객사명·실거래액)는 이식하지 않는다(#RULE-NO-COMPANY).
 - (v2.0) 내부 로그인 = Supabase Auth 이메일 매직링크, 허용 도메인 화이트리스트(env). profiles.app_role 승격은 admin만.
 
@@ -817,6 +868,7 @@ UI 공통: 한국어, 데스크톱 우선 + 반응형(발주처 화면은 모바
 | (v1.5) 프로젝트 셀렉터·S-1 행사 목록·행사 설정 3탭·S0 동일 폼·담당자 입력·종료/재개 | (v1.5) URL prefix 라우팅(`/p/:id`)·이메일 초대 수락 흐름(Phase 4)·행사 복제 |
 | (v2.0) 견적 모듈 S-2(엔진·베뉴 DB·옵션·버전·확정·Excel)·견적→행사 핸드오프·모객형 필드·컴플라이언스 카드·WBS 소통 대상·새 Supabase·로그인·인프라 전환 | (v2.0) 단가·베뉴·옵션 DB화(pricing_rules)와 관리 화면·견적 PDF·고객용 견적 공유 링크·견적 승인 워크플로우·Configurator 랜딩 아카이브 |
 | (v2.2) 정산보드 S-10(마진 3분할·버킷 9+추가·항목 3단 추적·부가세 자동 분리·협력사 마스터) | (v2.2) 협력사 견적서 업로드 파싱(Phase 4.7)·발주서 발행·협력사 단가 누적 통계 → 견적 단가 DB화 연결 |
+| (v2.4) 주최형: kind 축·파트너 등급·S-11 파트너 보드·`/p` 제출 뷰·검토 루프·주최형 WBS 템플릿 / 견적서 임포트(xlsx 3형·확인 큐·분배 4종) | (v2.4 2차) 임포트 PDF 서식·파트너 초대 이메일·파트너 다국어 / **Claude MCP 연동** — 원격 MCP 서버(Edge Function)로 Claude에서 현황 조회·검토 큐 처리·임포트 실행, DataProvider 비즈니스 계층 경유·내부 인증 필수(v2.5 설계 예정, 서버 가동 후) |
 | — | 현장사진 갤러리·결과보고서 조립 |
 | 등록 CSV 임포트·테이블·체크인 토글·통계 기초 | 통계 대시보드 고도화(mice-dashboard 연동) |
 | Slack·이메일 알림 + D-1 리마인드 | 모바일 앱 수준 최적화, 다국어 |
@@ -824,6 +876,10 @@ UI 공통: 한국어, 데스크톱 우선 + 반응형(발주처 화면은 모바
 ---
 
 ## 14. 개정 이력
+
+- **v2.4** (2026-08-27): **주최형(파트너) 확장 + 견적서 임포트** — 시각안 4화면·구조 결정 7가지 전부 승인. ① `projects.kind`(agency/host) 축 신설 — event_type과 직교, 표시 계층 전환 원칙(§1-8·§21) ② partner_tiers·partners·partner_tokens 신설, 계약액 내부 전용·파트너 간 완전 격리(§6.2·§21) ③ `/p/{token}` 제출 포털 + inbound 상태 매핑(§5.1 — 새 상태머신 없이 기존 전이표 재사용, 신규 전이 1건) ④ S-11 파트너 보드·검토 큐(§10.1) ⑤ WBS 주최형 템플릿 12건(§15.3, DMS 마감 체계 일반화 — 가정) ⑥ 견적서 임포트(§22 — 실서식 3형 계약·확인 큐 필수·분배 4종·자동 커밋 금지) ⑦ **DataProvider v8 재동결(16메서드 · 102메서드)**, importVendorQuote(협력사 견적 파싱)는 v9 예약으로 순연 ⑧ 알림 2행·API 10종·비노출 가드에 `/p`·Partner 경로 추가. 계기 = DMS 2026 파트너사 커뮤니케이션 이식 + 자체 설계 견적서(카페24·TAAS·CATOPIA 서식) 활용
+
+- **v2.3** (2026-08-27): **서버 스프린트 — 키 최후 주입 실행 개정(기능·스키마·화면 무변경)**. 계기 = 8/31(월) 리멤버 첫 출근일에 서버설정·슬랙연동·Drive 연동만으로 즉시 실사용 가능해야 함(첫 투입 후보: DMS 2026 파트너사 커뮤니케이션). ① Phase 4·5·6을 D-Day 전 일괄 구현 — 검증은 개발용 Supabase 프로젝트, 운영 자격증명은 D-Day 주입 ② API 키 신형 체계 채택(§12 — 레거시 2026년 말 폐기, 웹검증 2026-08-27) ③ §9 알림 구현 시점 분리(Slack=6, Resend 이메일=6b·첫 발주처 발송 전) + no-op 폴백 ④ §18 개정(0단계 dev 프로젝트·setup.sql 산출 규약) ⑤ **§20 D-Day 런북 신설**(서버·슬랙·드라이브 3트랙 + 배포) ⑥ Phase 4.6의 사용자 게이트 단계를 §20으로 이동
 
 - **v2.2** (2026-08-23): **정산보드(S-10) 신설** — 내부정산 실물 13건 분석 기반, 시각안 승인. ① **§19 정산보드 정본** — 마진 식(항목 마크업 + PCO 기획료 + RSVP 운영비, 리드젠 제외)을 실물 2건에서 원 단위 검산 ② §4-23 테이블 4종(vendors·settlement_boards·settlement_buckets·settlement_items) + settlement_imports ③ **§4-24 정산 계약 R-S1~R-S10** — 견적 스냅숏 고정·부가세 별도 저장·원가 없음 버킷 입력 차단·리드젠 제외·항목 단위 발주·초과는 경고만 ④ 버킷 기본 9종(견적 `recruit`를 rc/ld로 분리하는 것이 유일한 비자명 매핑) + **행사별 버킷 추가**(실물 섹션 수 5~9 가변) ⑤ §6.1 권한 5행·§6.2 RLS·§10 S-10 화면·사이드바 순서 ⑥ **§19.7 비노출 가드 확장** — 금지 키 5종 추가 + 검사 범위에 랜딩 파일 포함 + 역검증 의무 ⑦ §19.5 협력사 견적서 업로드 파싱(Phase 4.7, 스키마만 선반영). **DataProvider v7 재동결(11메서드 · 86메서드)**
 
@@ -887,6 +943,28 @@ UI 공통: 한국어, 데스크톱 우선 + 반응형(발주처 화면은 모바
 **일반형 템플릿 (가정 유지 — 확정 시 갱신)**: 위 37건에서 리드 마케팅·모객 **11건**을 제외하고 대체 2건을 추가해 총 **28건**. 제외 집합은 v1.4.1에서 코드 단위로 명시 — 3.1~3.5(5건) + 4.1·4.2·4.3·4.4·4.5·4.7(6건). **4.6 데일리 현황 공유(내부)는 존치**(내부 현황 공유는 리드 특화 업무가 아님). 추가 2건 — 3G.1 참석 대상 명단 확정(D-20~15, reg, origin_role null), 3G.2 초청장 발송·회신 관리(D-14~5, reg, origin_role null). 정본 구현 = src/fixtures/wbsTemplates.ts(GENERAL_EXCLUDED_CODES·GENERAL_EXTRA_TASKS). 기획자 확정 전까지 "가정" 표기를 유지하며, 확정 시 본 단락만 갱신한다.
 
 ---
+
+### 15.3 (v2.4) 주최형 WBS 템플릿 — 12태스크 (DM Summit 2026 마감 체계 기반 일반화)
+
+> 출처: DMS 2026 파트너사 통합가이드북 v1.5 확정 마감 체계. **1개 행사 기반 일반화이므로 구성은 가정** — 2번째 주최형 행사에서 검증 후 확정. D오프셋·명칭은 행사별 편집 가능. direction: `partner_submit`(파트너별 인스턴스 전개) / `host_notice` / `internal`.
+
+| 코드 | D | 태스크 | direction | 담당 역할 |
+|---|---|---|---|---|
+| HT-1 | D-45 | 파트너 기본 자료 제출 — 로고·회사소개·발표자 프로필·발표 개요 | partner_submit | pm |
+| HT-2 | D-37 | 트랙 배정·부스 배치 확정 통지 | host_notice | pm |
+| HT-3 | D-30 | 참관객 이용권·경품 제안 제출 | partner_submit | pm |
+| HT-4 | D-27 | 부스 그래픽 제출 | partner_submit | design |
+| HT-5 | D-23 | 발표자료 1차 초안 제출 | partner_submit | pm |
+| HT-6 | D-16 | 주최 검토 회신(전 파트너 발표자료) | internal | pm |
+| HT-7 | D-14 | 부스 인력 명단·추가 신청(전력·인터넷·임대) 제출 | partner_submit | ops |
+| HT-8 | D-7 | 최종 발표자료·물품 반입 신고 제출 | partner_submit | pm |
+| HT-9 | D-3 | 수정 반영 확인·설치/리허설 배정표·반입 동선 통지 | host_notice | ops |
+| HT-10 | D-1~D0 | 설치·리허설·행사 당일 운영 | internal | ops |
+| HT-11 | D+7 | 참관 등록 리드 데이터 제공(암호화) | host_notice | reg |
+| HT-12 | D+14 | 결과 리포트 발송 | host_notice | pm |
+
+- 전개 규칙: partner_submit 태스크는 파트너 수만큼 인스턴스 생성(파트너별 체크·상태 독립). host_notice·internal은 단일 인스턴스. 재전개 보존 규칙(§4-15)은 동일 적용 — code+partner_id 매칭.
+- 기존 모객형 37·일반형 28 템플릿과 병존: 주최형 행사도 event_type이 모객형이면 등록 모듈(참관객 모객)은 그대로 쓴다 — 직교 2축의 의미.
 
 ## 16. 부록 — 견적 → 행사 핸드오프 계약 (v2.0 확정 — jsx-easy-shift main 6047834 분석 기준)
 
@@ -959,11 +1037,12 @@ UI 공통: 한국어, 데스크톱 우선 + 반응형(발주처 화면은 모바
 
 ---
 
-## 18. 부록 — 인프라 전환 절차 (v2.0 → Phase 4·4.6 수행, 사용자 확인 게이트 표시 ■)
+## 18. 부록 — 인프라 전환 절차 (v2.3 개정 — 사전 검증=개발 프로젝트 / 운영 전환=§20 D-Day 런북. 사용자 확인 게이트 표시 ■)
 
+0. **(v2.3) 사전 검증 프로젝트** — Phase 4~6 구현·테스트는 개발용 무료 Supabase 프로젝트(`communicator-dev`, 기획자님 개인 계정) 기준으로 수행·통과시킨다. 운영 프로젝트는 D-Day에 생성하고, 전환은 **"키 교체 + setup.sql 1회 실행"뿐**이어야 한다(코드 변경 0 — 어긋나면 Phase 4 미완료로 본다). dev 프로젝트는 운영 전환 검증 후 Pause.
 1. **새 Supabase 프로젝트** 생성(리전 ap-northeast-2, 이름 예: remember-mice-platform) ■ → URL·anon key·service role key 3종. service role은 Code 세션 env·Supabase Vault에만(챗·문서에 절대 기재 금지).
 2. Auth: 이메일 매직링크 활성, 허용 도메인 env(`AUTH_ALLOWED_DOMAINS`), 첫 admin 계정 승격 SQL 1회 ■.
-3. 마이그레이션: §4 전체를 순서대로(v2.0 DDL). seed = 샘플 행사 픽스처 4건과 동일 데이터(데모 유지).
+3. 마이그레이션: §4 전체를 순서대로(v2.2 DDL). **산출 규약(v2.3)**: `supabase/migrations/*.sql`(개발 이력) + 통합 **`supabase/setup.sql`**(신규 프로젝트의 SQL 에디터에서 1회 실행으로 전체 구축 — 멱등: 2회 실행 무해를 테스트로 증명) + `supabase/seed.sql`(데모 픽스처 4행사, 선택 — 운영 프로젝트엔 실행하지 않아도 된다).
 4. **옛 Configurator DB 1회 임포트**(선택 ■ — 운영 중 견적 행이 있을 때만): events→projects(§16 매핑, onboarded_at=null·status active), estimates→quotes(config→input, total_amount, version·is_final·status 승계, breakdown은 엔진 재계산), event_tasks→wbs_tasks(code 매칭·checked→done·note·target). 스크립트 `scripts/import-configurator.ts`(service role, 1회, dry-run 출력 후 실행).
 5. Vercel: communicator용 새 Vercel 프로젝트 생성 → env 3종(URL·anon·allowed domains) → 프리뷰 배포 확인 ■ → 도메인 `rmb-mice.com`을 옛 프로젝트에서 제거하고 새 프로젝트에 추가(DNS 변경 없음, Vercel 내부 이전) ■ → 옛 라우트 리다이렉트(§10 표) 동작 확인.
 6. 옛 Vercel 프로젝트(jsx-easy-shift)는 도메인 제거 후 1주 유지 → 삭제 ■. GitHub jsx-easy-shift는 README 상단에 "아카이브 — communicator로 통합(2026-xx-xx)" 1줄 커밋 후 Archive ■. 옛 Supabase 프로젝트는 임포트 검증 후 Pause → 30일 뒤 삭제 ■.
@@ -1089,3 +1168,136 @@ PDF·엑셀·사진에서 항목·단가·수량을 읽어 버킷에 배정하�
 - 실측 마진율 밴드는 표본 7건이다. 참고선으로만 쓰고, 20건 이상 쌓이면 규모 구간별 기준선으로 승격을 재검토한다 — **가정**.
 - 협력사 견적서 파싱의 정확도 목표치는 정하지 않았다. Phase 4.7 착수 시 엑셀 10건으로 실측한 뒤 정한다 — **가정**.
 - 발주서 발행(우리 → 협력사) 기능은 이번 범위 밖이다. 정산보드는 **기록**만 하며, 발주 문서 자체는 기존 방식을 유지한다.
+
+---
+
+## 20. 부록 — D-Day 런북 (v2.3 신설 — 2026-08-31 월 첫 출근일, 자격증명 주입만으로 실전 전환)
+
+> 전제: Phase 4·5·6 PR이 전부 main 머지·챗 검수 통과 상태. 아래는 **코드 변경이 0인 작업만** 담는다 — 하나라도 코드 수정이 필요해지면 그 항목은 Phase 미완료였던 것이므로 레포 이슈로 되돌린다.
+> 수행자 = 기획자님(비개발자 기준, 전 단계 클릭 단위). 클릭 단위 상세판은 별도 런북 문서로 제공(스프린트 완료 후 최종본 — 레포 실물과 대조 검증을 거친다). ■ = 진행 전 확인 게이트.
+
+### 20.1 트랙 개요 (총 예상 90분, 순서 고정)
+
+| 순서 | 트랙 | 하는 일 | 예상 | 산출 |
+|---|---|---|---|---|
+| 1 | **서버(Supabase)** | 운영 프로젝트 생성 → setup.sql 1회 실행 → 3키 확보 | 25분 | Project URL · publishable key · secret key |
+| 2 | **배포(Vercel)** | 레포 import → env 입력 → 배포 확인 (■ rmb-mice.com 이전은 별도 결정) | 20분 | 접속 URL |
+| 3 | **슬랙** | 리멤버 워크스페이스에 Incoming Webhook 생성 → 등록 | 15분 | SLACK_WEBHOOK_URL |
+| 4 | **구글드라이브** | 전용 운영 계정 확보(■ 회사 계정 정책 확인) → OAuth 클라이언트 생성·Production 게시 → 최초 1회 동의 → refresh token 저장 | 30분 | Drive OAuth 자격증명 4종 |
+| 5 | **스모크** | `scripts/drive-smoke.ts` 5단계 + 알림 1건 + 로그인 매직링크 왕복 + 데모 시나리오 1개 | 15분 | 전 항목 통과 확인 |
+
+### 20.2 트랙별 정본 절차
+
+**T1 서버**: supabase.com에서 운영 프로젝트 생성(§18-1: ap-northeast-2, 이름 `remember-mice-platform` ■ 조직 계정 여부는 당일 결정 — 개인 계정으로 시작해도 이관 가능) → SQL Editor에서 `supabase/setup.sql` 전문 1회 실행 → (선택) `seed.sql`은 운영엔 실행하지 않음 → Auth 설정: 이메일 매직링크 활성 + 허용 도메인 env(§18-2) → Settings→API Keys에서 3키 복사. 첫 admin 승격 SQL 1회 ■(setup.sql 말미에 주석으로 동봉된 1줄을 본인 이메일로 실행).
+
+**T2 배포**: Vercel 가입(GitHub 로그인) → communicator 레포 import(`vercel.json` 동봉 — 설정 무변경) → 환경 변수 입력: `VITE_SUPABASE_URL`·`VITE_SUPABASE_PUBLISHABLE_KEY`·`VITE_DATA_PROVIDER=supabase` + 서버측 secret은 Supabase Edge Function secrets에만(§12) → Deploy → 접속 URL 확인. ■ rmb-mice.com 도메인 이전(§18-5)과 jsx-easy-shift 아카이브(§18-6)는 사내 협의 후 별도 수행 — 당일 필수 아님.
+
+**T3 슬랙**: 리멤버 워크스페이스에 앱 생성 → Incoming Webhooks 활성 → 알림 채널 지정 → Webhook URL 복사 → Supabase Edge Function secrets에 `SLACK_WEBHOOK_URL` 등록 → 앱 설정 화면(S6 ③연동 탭)에서 프로젝트별 웹훅 확인. ■ 워크스페이스 앱 설치 권한이 관리자 승인제면 당일 요청 발송으로 대체하고, 그동안 no-op 폴백(§9)으로 사용 개시.
+
+**T4 드라이브**: §2 정본 그대로 — 전용 운영 Google 계정(■ 회사 Workspace 계정 발급 가능 여부에 따라 개인 보조 계정으로 임시 시작 가능, 단 실파일 축적 전에 확정) → Google Cloud Console에서 OAuth 클라이언트 생성 → 동의 화면 **Production 게시**(Testing 금지 — 7일 만료) → scope `auth/drive` → 최초 1회 동의로 refresh token 발급(`scripts/drive-auth.ts` 안내 절차) → Supabase secrets에 `GOOGLE_CLIENT_ID`·`GOOGLE_CLIENT_SECRET`·`GOOGLE_REFRESH_TOKEN`·`DRIVE_ROOT_FOLDER_ID` 등록.
+
+**T5 스모크**: ① `drive-smoke` 5단계(refresh 교환→트리 생성→업로드→copy→스트리밍) 전부 통과 ② 아무 항목 상태 전이 1건 → 슬랙 채널에 알림 도착 ③ 본인 이메일 매직링크 로그인 왕복 ④ 데모 시나리오 1개(항목 생성→업로드→컨펌 발송→토큰 링크 열람) 실기 왕복. 전부 통과 시 실전 투입 가능 — 첫 행사 온보딩(후보: DMS 2026)으로 진행.
+
+### 20.3 되돌림
+- T1~T4 중 실패한 트랙은 해당 env만 비우면 즉시 이전 상태(mock 또는 no-op)로 복귀 — 다른 트랙 진행을 막지 않는다.
+- dev 프로젝트(`communicator-dev`)는 T5 통과 확인 후 Pause(§18-0).
+
+
+---
+
+## 21. 부록 — 주최형(파트너) 확장 정본 (v2.4)
+
+### 21.1 스키마 (Postgres DDL 요약 — §4 규약 준용)
+
+```
+projects
+  + kind text not null default 'agency'          -- 'agency' | 'host'
+
+partner_tiers (
+  id uuid pk, project_id fk, code text,           -- 'diamond' 등 slug
+  name text, description text, capacity int null, sort int,
+  unique(project_id, code) )
+
+partners (
+  id uuid pk, project_id fk, name text,
+  tier_id fk partner_tiers, status text default 'active',   -- active | withdrawn
+  contract_amount bigint null,                    -- ★ 내부 전용. 외부 경로 직렬화 금지(§19.7 확장)
+  note text, created_at )
+
+partner_tokens (                                   -- client_tokens와 동형 (연락처 단위)
+  id uuid pk, partner_id fk, contact_name text, contact_email text,
+  token uuid unique, expires_at, revoked_at, last_seen_at )
+
+deliverables
+  + partner_id uuid null fk partners              -- inbound 제출물 소유 파트너 (대행형 항목은 null)
+
+wbs_tasks
+  + direction text not null default 'internal'    -- 'partner_submit' | 'host_notice' | 'internal'
+  + partner_id uuid null fk partners              -- partner_submit 인스턴스만 사용
+
+quotes
+  + source text not null default 'engine'         -- 'engine' | 'imported'
+
+quote_imports (
+  id uuid pk, project_id fk null, file_name text, format text,   -- 'A'|'B'|'C'
+  parsed jsonb,                                   -- 섹션·항목·헤더·검산 스냅숏 (원본 보존)
+  mapping jsonb, status text,                     -- detected → confirmed → distributed
+  quote_id fk null, created_by, created_at )
+```
+
+### 21.2 계약 (R-H1~R-H7)
+
+| # | 계약 |
+|---|---|
+| R-H1 | kind 전환은 표시 계층만 바꾼다 — 어떤 행도 삭제되지 않는다(유형 토글과 동일 원칙, 테스트로 증명) |
+| R-H2 | `/p/{token}` 응답에 타 파트너의 어떤 행도 포함되지 않는다 — 쿼리 자체에서 제외(대조군 테스트) |
+| R-H3 | `contract_amount`·정산·견적 금액 키는 `/p/*` 응답·파트너 화면 소스에 0건 — grep 가드 범위에 `src/pages/Partner*`·`src/components/partner` 추가 |
+| R-H4 | 파트너 제출·재제출·검토 전이는 전부 assertTransition 경유(§5.1) — 수정요청 코멘트 필수(422) |
+| R-H5 | partner_submit 태스크의 파트너별 인스턴스는 재전개 시 code+partner_id 매칭으로 상태 보존(§15.3) |
+| R-H6 | 파트너 제출물의 코멘트 visibility 규칙은 발주처와 동일 — 내부 internal, 파트너 작성분 shared 강제 |
+| R-H7 | 주최형에서도 발주처 경로(`/c/*`)는 유효하다(주최 행사에 별도 발주처가 있는 경우) — 두 외부 경로는 서로 독립 |
+
+### 21.3 데모 픽스처 (Phase 3.15)
+
+주최형 데모 행사 1건 추가: "가상 서밋 2026"(주최형 × 모객형, D-49) — 파트너 5(다이아 1·골드 1·실버 3, 전부 가상 명칭 #RULE-NO-COMPANY), 등급 3종 시드, HT 템플릿 전개, 제출 상태 분포(승인 2·검토중 1·수정요청 1·미제출 1), `/p/demo-partner` 데모 토큰. 기존 대행형 픽스처 4행사는 불변(kind='agency' 기본값).
+
+---
+
+## 22. 부록 — 견적서 임포트 계약 (v2.4)
+
+### 22.1 지원 서식 3형 (실서식 분석 기반, 2026-08-27)
+
+| 형 | 실례 | 열 구조 | 특징 |
+|---|---|---|---|
+| A형 단가·수량형 | 카페24 이커머스서밋 v4.1 | 구분·항목·규격/사양·단가·수량·일수·금액·비고 | 상단 합계 블록(항목합→대행료 %→절사→VAT→총액), 섹션 8± |
+| B형 금액 단식 | TAAS2026 GBR v12·PLZ v10 | ITEM·DESCRIPTION·SPEC·금액·REMARKS | 단가·수량 없음, 섹션 합계(total 행), 최종견적+VAT |
+| C형 패키지형 | CATOPIA 패키지(Remember MICE Package Estimate) | ITEM·DESCRIPTION·SPEC·UNIT PRICE·QTY·AMOUNT(·SELECT) | 엔진과 동일한 6섹션 + Add-ons O/X + PCO 25% |
+
+PDF 서식은 2차(xlsx 우선). 같은 행사의 복수 안(예: TAAS GBR/PLZ 베뉴 2안)은 **한 견적의 버전 2개**로 등록해 비교한다.
+
+### 22.2 인식 규칙 (파서 계약)
+
+1. **헤더 필드**: 라벨 사전 매칭 — 행사명/Project Title, 고객명, 일시/기간, 장소/Venue, 견적일, 담당자, 총액 계열(최종 견적·총 견적·Total). 인식 실패 필드는 빈 값으로 확인 큐에 노출(추정 금지).
+2. **섹션**: "N." 숫자 프리픽스 제목 행(뒤에 소계/total 행 동반) 기준. 섹션 없는 문서는 전체를 1섹션으로.
+3. **항목 행**: 금액 열에 숫자가 있는 행. 열 역할(단가·수량·일수·금액)은 헤더 행 라벨로 추정하고, A형은 단가×수량×일수=금액 검산으로 역확인.
+4. **합계 체계**: 항목합·대행료/기획료(율 % 인식 — 마진 기준과 연결)·절사·부가세(포함/별도 판별)·총액.
+5. **검산**: Σ항목 = 문서 총액(대행료·절사·VAT 반영 후 오차 0원). 불일치는 차액과 함께 경고로 표시하되 진행은 차단하지 않는다(확인 큐에서 사람이 판단).
+6. **버킷 매핑 기본표**: 베뉴·대관·장소 → s1 / 무대·시스템·AV·LED·음향·조명·중계·전기·부스 → s2 / 디자인·브랜딩·콘텐츠·사인 → s3 / 인력·운영·보험·MC → s4 / 대행료·기획료 → s5 / 등록·RSVP·모객 → rc / 기념품·경품·F&B·웰컴·애드온 → custom 버킷. 신뢰도 낮은 항목(키워드 복수 매칭·무매칭)만 확인 필요로 표시.
+
+### 22.3 원칙 (R-Q1~R-Q4)
+
+| # | 계약 |
+|---|---|
+| R-Q1 | **자동 커밋 금지** — 모든 임포트는 확인 큐(2단계)를 거친 confirm 호출로만 quotes가 된다(§19.5와 동일 원칙) |
+| R-Q2 | 원본 보존 — 파싱 스냅숏(parsed)과 사람이 수정한 매핑(mapping)을 분리 저장, 등록 후에도 근거 추적 가능 |
+| R-Q3 | 임포트 견적도 금액 비노출 가드 전 규칙 적용 — 발주처·파트너·랜딩·운영계획서·알림에 0건 |
+| R-Q4 | **실고객 견적서 파일은 레포에 커밋 금지** — 파서 골든 테스트는 실서식 구조를 본뜬 가상 데이터 픽스처 3종(A·B·C형)으로 작성. 실파일 검증은 Code 세션 로컬에서만 수행하고 결과 수치만 보고 |
+
+### 22.4 분배 4종 (3단계)
+
+| 대상 | 동작 | 조건 |
+|---|---|---|
+| 견적 모듈 등록 | quotes(source='imported') 새 버전 생성, S-2 목록에 '임포트' 배지 | 기본 켜짐(필수) |
+| 행사 만들기 프리필 | §16 핸드오프 매핑 재사용 — 인식된 행사명·일시·장소·인원으로 S0 프리필 | 행사 미연결 시 |
+| 정산보드 기준 견적 | 확정(finalize) 후 §19 버킷 스냅숏 — 매핑 확정본이 버킷 배정 근거 | 확정 견적만 |
+| 보드 항목 시드 | 디자인·운영 성격 항목을 해당 보드에 시드 — **금액 제외, 품목·규격·수량만** | 선택(기본 꺼짐) |

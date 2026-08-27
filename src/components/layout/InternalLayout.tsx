@@ -59,6 +59,14 @@ const NAV_PREP = [
   },
 ]
 
+// v2.4 §10.1 — 주최형 전용, 홈 다음. 대행형에서는 메뉴 자체가 없다(게이트 뒤 숨김 금지 원칙 —
+// SidebarContent가 현재 행사 kind로 렌더 여부를 결정할 뿐, 라우트 자체는 항상 열려 있다).
+const NAV_PARTNER_BOARD = {
+  to: '/partners',
+  label: '파트너 보드',
+  icon: 'M17 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2M10 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75',
+}
+
 const NAV_OPS = [
   { to: '/', label: '홈', end: true, icon: 'M3 10.5 12 3l9 7.5M5 9.5V21h14V9.5' },
   { to: '/board/design', label: '디자인 보드', icon: 'M4 4h7v7H4zM13 4h7v4h-7zM13 11h7v9h-7zM4 14h7v6H4z' },
@@ -296,6 +304,10 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   // v2.0 — 견적 메뉴는 app_role admin·sales만 (§10). staff는 메뉴 자체 미표시(DoD 25)
   const me = useAsync(() => provider.getCurrentUser(), [])
   const canQuotes = !!me.data && canUseQuotes(me.data)
+  // v2.4 §10.1 — 파트너 보드는 kind='host'인 현재 행사에서만. 게이트 뒤 숨김이 아니라 메뉴 자체가
+  // 없는 방식(진입점 원칙) — summaries는 이미 로드돼 있는 프로젝트 셀렉터 데이터를 그대로 쓴다.
+  const { projectId, summaries } = useProject()
+  const isHost = summaries.find((s) => s.id === projectId)?.kind === 'host'
 
   return (
     <div className="flex h-full flex-col">
@@ -313,7 +325,9 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           <SidebarLink key={item.to} {...item} onNavigate={onNavigate} />
         ))}
         <NavGroupCaption label="운영" />
-        {NAV_OPS.map((item) => (
+        <SidebarLink {...NAV_OPS[0]} onNavigate={onNavigate} />
+        {isHost && <SidebarLink {...NAV_PARTNER_BOARD} onNavigate={onNavigate} />}
+        {NAV_OPS.slice(1).map((item) => (
           <SidebarLink key={item.to} {...item} onNavigate={onNavigate} />
         ))}
       </nav>
