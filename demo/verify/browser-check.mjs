@@ -47,12 +47,19 @@ const page =
   `<style>:root{color-scheme:light}body{margin:0;padding:0;background:#faf9f5;color:#141413}` +
   `img{max-width:100%}</style></head><body>${body}</body></html>`
 
+// §13b(v2.4.1) no-charset 케이스: 빌드 산출물을 **래퍼 없이** Content-Type에 charset 없이
+// 그대로 서빙한다 — 이때 인코딩은 문서 선두 1,024바이트 프리스캔의 <meta charset>이 전부다.
+// 2026-08-27 감수 실증: 메타가 51KB 지점이면 이 서빙에서 한글 정규식 SyntaxError로 전면 백지.
+const NC_DIR = '/_nc/'
 const served = []
 const server = createServer((req, res) => {
   served.push(req.url)
   if (req.url === DIR) {
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
     res.end(page)
+  } else if (req.url === NC_DIR) {
+    res.writeHead(200, { 'content-type': 'text/html' })
+    res.end(Buffer.from(body, 'utf8'))
   } else {
     res.writeHead(404, { 'content-type': 'text/plain' })
     res.end('not found')
@@ -128,6 +135,22 @@ await tab.screenshot({ path: resolve(SHOTS, '04-quotes.png') })
 
 // 전체 여정 동안 추가 요청이 없었는지 재확인
 check(requests.length <= 3, '여정 전체 네트워크 요청', `${requests.length}건(문서+새로고침만)`)
+
+// ── 9. §13b — charset 미명시 서빙에서도 전 화면이 렌더되는가 ──
+const ncTab = await ctx.newPage()
+const ncErrors = []
+ncTab.on('pageerror', (e) => ncErrors.push(String(e)))
+await ncTab.setViewportSize({ width: 1440, height: 900 })
+await ncTab.goto(`${ORIGIN}${NC_DIR}`, { waitUntil: 'networkidle' })
+await ncTab.getByText('외관 대형 현수막').first().waitFor({ timeout: 10_000 })
+check(true, 'no-charset 서빙: 홈(S1) 렌더', '프리스캔 1KB 안의 <meta charset>이 인코딩을 확정')
+await ncTab.goto(`${ORIGIN}${NC_DIR}#/schedule`, { waitUntil: 'networkidle' })
+await ncTab.getByText(/컴플라이언스|R&R|체크리스트/).first().waitFor({ timeout: 10_000 })
+check(true, 'no-charset 서빙: 일정(S5) 렌더', '해시 라우팅 정상')
+await ncTab.goto(`${ORIGIN}${NC_DIR}#/p/demo-partner`, { waitUntil: 'networkidle' })
+await ncTab.getByText('제출 현황').first().waitFor({ timeout: 10_000 })
+check(true, 'no-charset 서빙: 파트너 포털 렌더', '한글 정규식 포함 번들 파싱 정상')
+check(ncErrors.length === 0, 'no-charset 서빙: 미처리 예외', ncErrors.slice(0, 3).join(' | ') || '0건')
 
 await browser.close()
 server.close()

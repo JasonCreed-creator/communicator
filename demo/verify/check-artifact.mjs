@@ -31,8 +31,16 @@ for (const [needle, want, mode] of structure) {
   const pass = mode === 'exact' ? got === want : got >= want
   ;(pass ? ok : bad)(`구조 ${needle}`, `${got}개 (기대 ${mode === 'exact' ? '=' : '>='}${want})`)
 }
-if (/^\s*<title>/.test(html)) ok('제목 위치', '파일 첫 요소 (8KB 스캔 안전)')
-else bad('제목 위치', '<title>이 파일 맨 앞이 아니다')
+// §13b(v2.4.1): charset 메타가 문서 선두 1,024바이트 안에 있어야 한다(브라우저 프리스캔 규칙).
+// 2026-08-27 감수 실증 — 메타가 51KB 지점이면 charset 미선언 서빙에서 한글 정규식이 깨져 전면 백지.
+const charsetIdx = html.indexOf('<meta charset="utf-8">')
+if (charsetIdx === 0) ok('charset 위치 (§13b)', '파일 선두 0바이트 지점')
+else if (charsetIdx > -1 && charsetIdx < 1024) ok('charset 위치 (§13b)', `${charsetIdx}바이트 지점 (<1,024)`)
+else bad('charset 위치 (§13b)', charsetIdx === -1 ? 'charset 메타 없음' : `${charsetIdx}바이트 — 프리스캔(1,024) 밖`)
+
+const titleIdx = html.indexOf('<title>')
+if (titleIdx > -1 && titleIdx < 8192) ok('제목 위치', `${titleIdx}바이트 지점 (8KB 스캔 안전)`)
+else bad('제목 위치', '<title>이 8KB 스캔 범위 안에 없다')
 
 for (const tag of ['<!doctype', '<html', '<head', '<body']) {
   // 문서 셸은 마크업으로 존재하면 안 된다. JS 문자열 안(큐시트 인쇄 blob)에 있는 것은 무해하므로
