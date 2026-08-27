@@ -10,6 +10,8 @@ export type TransitionVia =
   | 'client_decision' // POST /c/{token}/decisions
   | 'version_upload' // 새 버전 업로드 부수 효과
   | 'system' // approved → final 자동 전이
+  | 'partner_submit' // v2.4 §21 — POST /p/{token}/submissions (파트너 첫 제출)
+  | 'partner_review' // v2.4 §21 — POST /submissions/{id}/review (내부 검토)
 
 export interface TransitionRule {
   from: DeliverableStatus
@@ -19,9 +21,17 @@ export interface TransitionRule {
   roles?: MemberRole[]
   /** true면 코멘트 필수 (§5: PM 반려, 발주처 수정요청) */
   requires_comment?: boolean
+  /**
+   * v2.4 §5.1 — changes_requested→draft(version_upload) 규칙과 같은 (from,via)를 쓰는
+   * changes_requested→pending_approval(version_upload) 규칙을 구분하는 표시일 뿐, assertTransition
+   * 자체는 이 필드를 보지 않는다. 목적지(to) 분기는 provider(MockProvider.submitPartnerItem)가
+   * `deliverable.partner_id != null`(kind='host' 행사의 inbound 항목에만 존재)로 판정하고,
+   * 그 결과로 정해진 (from,to)를 assertTransition에 넘긴다 — 경유는 여전히 단일 함수다.
+   */
+  host_inbound?: boolean
 }
 
-/** 설계서 §5 전이표와 1:1 */
+/** 설계서 §5·§5.1 전이표와 1:1. 기존 8건은 v2.4에서도 변경하지 않는다 */
 export const TRANSITION_RULES: readonly TransitionRule[] = [
   // v1.2: PM 가이드 발행(requested) → 첫 버전 업로드·인박스 연결 시 자동 draft
   { from: 'requested', to: 'draft', via: 'version_upload' },
@@ -32,6 +42,17 @@ export const TRANSITION_RULES: readonly TransitionRule[] = [
   { from: 'pending_approval', to: 'changes_requested', via: 'client_decision', requires_comment: true },
   { from: 'approved', to: 'final', via: 'system' },
   { from: 'changes_requested', to: 'draft', via: 'version_upload' },
+
+  // v2.4 §5.1 — 주최형 inbound. 새 상태머신을 만들지 않고 기존 전이표를 확장만 한다.
+  // 신규 상태쌍은 이 한 줄뿐이다: 파트너 첫 제출(requested→pending_approval).
+  { from: 'requested', to: 'pending_approval', via: 'partner_submit' },
+  // 재제출 — 기존 version_upload 전이의 목적지 분기(신규 상태쌍이 아니라 기존 전이의 kind='host'
+  // 갈래다). host_inbound=true로 표시.
+  { from: 'changes_requested', to: 'pending_approval', via: 'version_upload', host_inbound: true },
+  // 내부 검토(§5.1 "검토 주체=내부") — pending_approval의 기존 두 목적지(approved/changes_requested)를
+  // 파트너 제출 경로에서 내부 인원이 처리하는 것뿐, 신규 상태쌍이 아니다.
+  { from: 'pending_approval', to: 'approved', via: 'partner_review', roles: ['pm', 'design', 'ops'] },
+  { from: 'pending_approval', to: 'changes_requested', via: 'partner_review', requires_comment: true },
 ]
 
 export function findTransitionRule(

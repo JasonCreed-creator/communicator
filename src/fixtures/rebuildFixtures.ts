@@ -60,6 +60,7 @@ const NO_BRIEF = {
   spec_location: null,
   spec_type: null,
   content: null,
+  partner_id: null, // v2.4 §21 — 이 레포의 대행형 픽스처는 파트너 제출물이 없다
 }
 
 /** 두 행사의 타겟팅은 동일 — 기업규모·직급(대리 이상)·IT/통신·마케팅/영업·서울 */
@@ -80,6 +81,7 @@ const REBUILD26_PROJECT: Project = {
   id: RB26,
   name: '리멤버 RE:BUILD 26',
   code: 'RB26',
+  kind: 'agency',
   event_date: '2026-05-07',
   event_end_date: '2026-05-07',
   start_time: '10:30',
@@ -119,6 +121,7 @@ const REBUILD27_PROJECT: Project = {
   id: RB27,
   name: 'RE:BUILD 27',
   code: 'RB27',
+  kind: 'agency',
   event_date: '2026-09-10',
   event_end_date: '2026-09-10',
   start_time: '10:30',
@@ -692,6 +695,8 @@ function buildWbs(projectId: string, prefix: string, eventDate: string): WbsTask
     done_at: null,
     linked_deliverable_id: null,
     target: tpl.target,
+    direction: 'internal' as const, // v2.4 §21 — 이 레포의 대행형 픽스처는 항상 내부 태스크
+    partner_id: null,
     note: null,
     sort_order: i + 1,
   }))
@@ -1257,6 +1262,7 @@ function buildQuote(
     input,
     breakdown,
     total_amount,
+    source: 'engine',
     created_by: 'usr-pm',
     created_at: `${date}T09:00:00.000Z`,
     updated_at: `${date}T09:00:00.000Z`,

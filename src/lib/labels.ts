@@ -7,6 +7,9 @@ import type {
   EventType,
   InviteStatus,
   MemberRole,
+  PartnerStatus,
+  ProjectKind,
+  WbsDirection,
 } from '../types/enums'
 
 export const STATUS_LABELS: Record<DeliverableStatus, string> = {
@@ -89,6 +92,34 @@ export const INVITE_STATUS_LABELS: Record<InviteStatus, string> = {
   sent: '발송됨',
   accepted: '참석',
   declined: '불참',
+}
+
+/** v2.4 §21 §5.1 — 주최형 화면에서 쓰는 상태 표기(기존 STATUS_LABELS와 값·전이는 동일, 문구만 다름) */
+export const HOST_STATUS_LABELS: Record<DeliverableStatus, string> = {
+  requested: '제출 요청됨',
+  draft: '초안',
+  internal_review: '내부검토',
+  pending_approval: '검토중',
+  changes_requested: '수정요청',
+  approved: '승인됨',
+  final: '승인됨',
+}
+
+/** v2.4 §15.3 — WBS 태스크 방향 뱃지 문구 */
+export const WBS_DIRECTION_LABELS: Record<WbsDirection, string> = {
+  partner_submit: '▲ 파트너 제출',
+  host_notice: '▼ 주최 통지',
+  internal: '■ 내부',
+}
+
+export const PROJECT_KIND_LABELS: Record<ProjectKind, string> = {
+  agency: '대행형',
+  host: '주최형',
+}
+
+export const PARTNER_STATUS_LABELS: Record<PartnerStatus, string> = {
+  active: '참여 중',
+  withdrawn: '철회',
 }
 
 /** YYYY-MM-DD → 'M월 D일' */

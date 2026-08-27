@@ -11,11 +11,15 @@ import type {
   Cue,
   Deliverable,
   Milestone,
+  Partner,
+  PartnerTier,
+  PartnerToken,
   Profile,
   ProgramSession,
   Project,
   ProjectMember,
   Quote,
+  QuoteImport,
   RoleCharter,
   RsvpContact,
   UnregisteredFile,
@@ -42,6 +46,13 @@ import {
 } from './rebuildFixtures'
 import { seedLandingFixtures } from './landingFixtures'
 import { seedSettlementFixtures } from './settlementFixtures'
+import {
+  PARTNER_DEMO_TOKEN,
+  PARTNER_EXPIRED_TOKEN,
+  PARTNER_REVOKED_TOKEN,
+  PROJECT_ID_HOST,
+  seedHostFixtures,
+} from './hostFixtures'
 
 /** `/c/demo` 데모 라우트용 토큰 값 (CLAUDE.md §4 Phase 3) */
 export const DEMO_TOKEN = 'demo'
@@ -59,6 +70,8 @@ export const PROJECT_ID_DRAFT = 'prj-forum-h2'
 export const PROJECT_ID_CLOSED = 'prj-ai-summit'
 // v2.0 Phase 3.12 — 실제 운영 행사 2건(⑤ 종료 · ⑥ 진행 중·데모 기본). 정의는 rebuildFixtures.ts
 export { PROJECT_ID_REBUILD26, PROJECT_ID_REBUILD27, REBUILD27_TOKEN }
+// v2.4 §21.3 — 주최형(파트너) 데모 행사. 정의는 hostFixtures.ts
+export { PROJECT_ID_HOST, PARTNER_DEMO_TOKEN, PARTNER_REVOKED_TOKEN, PARTNER_EXPIRED_TOKEN }
 
 export interface MockState {
   users: UserRef[]
@@ -95,6 +108,12 @@ export interface MockState {
   settlement_boards: SettlementBoard[]
   settlement_buckets: SettlementBucket[]
   settlement_items: SettlementItem[]
+  // v2.4 §21 — 주최형(파트너)
+  partner_tiers: PartnerTier[]
+  partners: Partner[]
+  partner_tokens: PartnerToken[]
+  // v2.4 §22 — 견적서 임포트
+  quote_imports: QuoteImport[]
 }
 
 /** v1.2 가이드 문서·스펙·본문 필드 기본값 — 가이드 없이 만든 항목은 전부 null (§4) */
@@ -106,6 +125,7 @@ const NO_BRIEF = {
   spec_location: null,
   spec_type: null,
   content: null,
+  partner_id: null, // v2.4 §21 — 이 파일의 기존 4행사는 전부 대행형(파트너 제출물 없음)
 }
 
 const FIXTURE: MockState = {
@@ -129,6 +149,7 @@ const FIXTURE: MockState = {
     id: PROJECT_ID,
     name: '샘플 테크 컨퍼런스 2026',
     code: 'STC26',
+    kind: 'agency',
     event_date: '2026-10-22',
     // v1.5 개요 확장 필드
     event_end_date: '2026-10-22',
@@ -346,6 +367,7 @@ const FIXTURE: MockState = {
       spec_location: '메인 게이트 외벽',
       spec_type: '현수막',
       content: null,
+      partner_id: null,
       created_at: '2026-08-18T09:00:00.000Z',
       updated_at: '2026-08-18T09:00:00.000Z',
     },
@@ -577,6 +599,12 @@ const FIXTURE: MockState = {
   settlement_buckets: [],
   settlement_items: [],
 
+  // v2.4 파트너·임포트 — createFixtureState()에서 hostFixtures 시드로 채움
+  partner_tiers: [],
+  partners: [],
+  partner_tokens: [],
+  quote_imports: [],
+
   unregistered_files: [
     {
       id: 'inb-001',
@@ -622,6 +650,8 @@ export function createFixtureState(): MockState {
     done_at: null,
     linked_deliverable_id: null,
     target: tpl.target,
+    direction: 'internal' as const, // v2.4 §21 — 대행형 템플릿은 항상 내부 태스크
+    partner_id: null,
     note: null,
     sort_order: i + 1,
   }))
@@ -650,6 +680,7 @@ export function createFixtureState(): MockState {
       id: PROJECT_ID_PARTNER,
       name: '파트너 데이 2026',
       code: 'PTD26',
+      kind: 'agency',
       event_date: partnerDate,
       event_end_date: partnerDate,
       start_time: '13:00',
@@ -680,6 +711,7 @@ export function createFixtureState(): MockState {
       id: PROJECT_ID_DRAFT,
       name: '리더십 포럼 하반기',
       code: 'LSF26',
+      kind: 'agency',
       event_date: addDays(today, 95),
       event_end_date: null,
       start_time: null,
@@ -709,6 +741,7 @@ export function createFixtureState(): MockState {
       id: PROJECT_ID_CLOSED,
       name: 'AI 서밋 2026',
       code: 'AIS26',
+      kind: 'agency',
       event_date: addDays(today, -38),
       event_end_date: addDays(today, -38),
       start_time: '09:00',
@@ -812,6 +845,8 @@ export function createFixtureState(): MockState {
     done_at: null,
     linked_deliverable_id: null,
     target: tpl.target,
+    direction: 'internal' as const, // v2.4 §21 — 대행형 템플릿은 항상 내부 태스크
+    partner_id: null,
     note: null,
     sort_order: i + 1,
   }))
@@ -859,6 +894,9 @@ export function createFixtureState(): MockState {
   // RE:BUILD 27에는 일부러 만들지 않는다 → "확정 견적에서 시작" 빈 상태가 데모에 보인다
   const finalQuote = state.quotes.find((q) => q.id === FINAL_QUOTE_ID)
   if (finalQuote) seedSettlementFixtures(state, PROJECT_ID, finalQuote, today)
+
+  // ── v2.4 §21.3 — 주최형(파트너) 데모 행사 ──
+  seedHostFixtures(state)
 
   return state
 }

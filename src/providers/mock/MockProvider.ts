@@ -11,12 +11,14 @@ import { isDelayed, isImminent, offsetToDate, toIsoDate } from '../../lib/wbs'
 import { createFixtureState, type MockState } from '../../fixtures/sampleProject'
 import { COMPLIANCE_CARD_TEMPLATES } from '../../fixtures/complianceTemplates'
 import { defaultConsents, defaultFormFields, defaultSections } from '../../lib/landingTemplate'
-import { ROLE_CHARTER_TEMPLATES, wbsTemplateFor } from '../../fixtures/wbsTemplates'
+import { HOST_TEMPLATE, ROLE_CHARTER_TEMPLATES, wbsTemplateFor } from '../../fixtures/wbsTemplates'
 import { adjustmentDeltas, computeQuoteOutputs, toEngineConfig } from '../../modules/quote/engine/quoteInput'
 import { effectiveAdjust } from '../../modules/quote/engine/quoteMode'
 import { calcEstimate } from '../../modules/quote/engine/calcEstimate'
 import { exportEstimate } from '../../modules/quote/export/exportEstimate'
 import { quoteToProjectDraft } from '../../modules/quote/handoff'
+import { parseQuoteWorkbook } from '../../modules/quote/import/parser'
+import type { ParsedQuoteDoc, SectionMapping } from '../../modules/quote/import/types'
 import type {
   ActivityLogEntry,
   Approval,
@@ -29,6 +31,11 @@ import type {
   Deliverable,
   LandingDailyMetric,
   LandingPage,
+  Partner,
+  PartnerTier,
+  PartnerToken,
+  QuoteBreakdown,
+  QuoteImport,
   SettlementBoard,
   SettlementBucket,
   SettlementItem,
@@ -46,7 +53,13 @@ import type {
   Version,
   WbsTask,
 } from '../../types/entities'
-import type { AppRole, DeliverableArea, DeliverableStatus, MemberRole } from '../../types/enums'
+import type {
+  AppRole,
+  DeliverableArea,
+  DeliverableStatus,
+  MemberRole,
+  QuoteImportFormat,
+} from '../../types/enums'
 import type {
   AddCommentInput,
   AttendeeWithRsvp,
@@ -69,6 +82,17 @@ import type {
   MemberWithProfile,
   MilestoneInput,
   OnboardingStatus,
+  PartnerInput,
+  PartnerNextDeadline,
+  PartnerPortalData,
+  PartnerPortalItem,
+  PartnerPortalNotice,
+  PartnerReviewInput,
+  PartnerSubmissionCounts,
+  PartnerSubmissionInput,
+  PartnerTierInput,
+  PartnerTokenIssueInput,
+  PartnerWithProgress,
   PlanData,
   PlanVersionRef,
   ProgramSessionInput,
@@ -76,6 +100,9 @@ import type {
   ProjectOverviewPatch,
   ProjectPatch,
   ProjectSummary,
+  QuoteImportConfirmInput,
+  QuoteImportDistributeInput,
+  QuoteImportDistributeResult,
   RegistrationStats,
   RequestApprovalInput,
   RsvpContactPatch,
@@ -327,6 +354,7 @@ export class MockProvider implements DataProvider {
         id: p.id,
         name: p.name,
         code: p.code,
+        kind: p.kind,
         event_type: p.event_type,
         event_date: p.event_date,
         venue: p.venue,
@@ -362,6 +390,7 @@ export class MockProvider implements DataProvider {
       id: this.nextId('prj'),
       name: input.name?.trim() || '새 행사',
       code,
+      kind: 'agency', // v2.4 §21 — S0 위저드로 만드는 행사는 기본 대행형(행사 설정에서 전환 가능)
       event_date: input.event_date ?? null,
       event_end_date: input.event_end_date ?? null,
       start_time: input.start_time ?? null,
@@ -573,6 +602,7 @@ export class MockProvider implements DataProvider {
       spec_location: input.spec_location ?? null,
       spec_type: input.spec_type ?? null,
       content: input.content ?? null,
+      partner_id: null, // v2.4 §21 — 이 경로(내부 수동 생성)는 파트너 제출물을 만들지 않는다(전개 전용)
       created_at: nowIso(),
       updated_at: nowIso(),
     }
@@ -1179,6 +1209,9 @@ export class MockProvider implements DataProvider {
       }
       project.code = code
     }
+    // v2.4 §21 R-H1 — kind 전환은 표시 계층만 바꾼다. 파트너·WBS·산출물 등 어떤 행도 지우지
+    // 않는다(지울 행이 없다 — 그냥 필드 하나를 바꿀 뿐이다).
+    if (patch.kind !== undefined) project.kind = patch.kind
     if (patch.event_date !== undefined) project.event_date = patch.event_date
     if (patch.event_type !== undefined) project.event_type = patch.event_type
     if (patch.event_end_date !== undefined) project.event_end_date = patch.event_end_date
@@ -1233,7 +1266,12 @@ export class MockProvider implements DataProvider {
     }
     project.onboarded_at = new Date().toISOString()
     // v1.4 부수 효과: 유형별 WBS 자동 전개 + R&R 카드 시드
-    await this.expandWbs(projectId)
+    // v2.4 §21 — kind='host'면 파트너별 WBS(HT 템플릿+inbound 자동 생성)로 분기, 대행형 경로는 불변
+    if (project.kind === 'host') {
+      await this.expandHostWbs(projectId)
+    } else {
+      await this.expandWbs(projectId)
+    }
     this.seedRoleCharters(projectId)
     // v2.0 부수 효과: 컴플라이언스 카드 2종 시드 (§4-17)
     this.seedComplianceCards(projectId)
@@ -1378,6 +1416,8 @@ export class MockProvider implements DataProvider {
         done_at: old?.done_at ?? null,
         linked_deliverable_id: old?.linked_deliverable_id ?? null,
         target: tpl.target, // v2.0 §4-15b — 소통 대상은 템플릿 정본에서 재시드
+        direction: 'internal' as const, // v2.4 §21 — 대행형 템플릿(모객형·일반형)은 항상 내부 태스크
+        partner_id: null,
         note: old?.note ?? null,
         sort_order: i + 1,
       }
@@ -1386,6 +1426,104 @@ export class MockProvider implements DataProvider {
     this.log(projectId, `user:${user.id}`, 'wbs.expanded', 'project', projectId, {
       event_type: project.event_type,
       count: expanded.length,
+    })
+    return [...expanded]
+  }
+
+  /**
+   * v2.4 §21·§15.3 — 주최형 WBS 전개. HT-1~12를 event_date 기준으로 펼치되,
+   * partner_submit 방향은 활성 파트너 수만큼 인스턴스를 만들고(파트너별 상태 독립),
+   * host_notice·internal은 단일 인스턴스로 둔다. partner_submit 인스턴스는 전개와 동시에
+   * inbound deliverable(status='requested')을 자동 생성해 linked_deliverable_id로 연결한다(§5.1).
+   * 재전개는 code+partner_id 매칭으로 기존 상태·연결·메모를 보존한다(R-H5).
+   */
+  async expandHostWbs(projectId: UUID): Promise<WbsTask[]> {
+    const user = this.assertPm()
+    const project = this.assertWritable(projectId)
+    if (!project.event_date) {
+      throw new ProviderError('validation', '행사일이 있어야 WBS를 전개할 수 있습니다.')
+    }
+    const activePartners = this.state.partners.filter(
+      (p) => p.project_id === projectId && p.status === 'active',
+    )
+    const mine = this.state.wbs_tasks.filter((task) => task.project_id === projectId)
+    const others = this.state.wbs_tasks.filter((task) => task.project_id !== projectId)
+    // R-H5: code+partner_id 매칭으로 재전개 보존 ('' = partner_id 없음, host_notice·internal용)
+    const prevByKey = new Map(mine.map((task) => [`${task.code}:${task.partner_id ?? ''}`, task]))
+    const areaByRole: Record<MemberRole, DeliverableArea> = {
+      design: 'design',
+      ops: 'ops',
+      pm: 'common',
+      reg: 'common',
+    }
+
+    const expanded: WbsTask[] = []
+    let sortOrder = 1
+    for (const tpl of HOST_TEMPLATE) {
+      const direction = tpl.direction ?? 'internal'
+      const instances: (Partner | null)[] = direction === 'partner_submit' ? activePartners : [null]
+      for (const partner of instances) {
+        const old = prevByKey.get(`${tpl.code}:${partner?.id ?? ''}`)
+        const task: WbsTask = {
+          id: old?.id ?? this.nextId('wbs'),
+          project_id: projectId,
+          phase_no: tpl.phase_no,
+          phase_name: tpl.phase_name,
+          code: tpl.code,
+          title: partner ? `${tpl.title} — ${partner.name}` : tpl.title,
+          offset_start: tpl.offset_start,
+          offset_end: tpl.offset_end,
+          start_date: offsetToDate(project.event_date!, tpl.offset_start),
+          end_date: offsetToDate(project.event_date!, tpl.offset_end),
+          role: tpl.role,
+          origin_role: null,
+          status: old?.status ?? 'todo',
+          done_at: old?.done_at ?? null,
+          linked_deliverable_id: old?.linked_deliverable_id ?? null,
+          target: null,
+          direction,
+          partner_id: partner?.id ?? null,
+          note: old?.note ?? null,
+          sort_order: sortOrder++,
+        }
+        expanded.push(task)
+
+        if (direction === 'partner_submit' && partner && !task.linked_deliverable_id) {
+          const deliverable: Deliverable = {
+            id: this.nextId('dlv'),
+            project_id: projectId,
+            area: areaByRole[tpl.role],
+            category: '파트너 제출',
+            title: `${tpl.title} — ${partner.name}`,
+            status: 'requested',
+            assignee_id: null,
+            due_date: task.end_date,
+            drive_folder_id: null,
+            requires_approval: true,
+            brief: null,
+            brief_refs: null,
+            spec_size: null,
+            spec_qty: null,
+            spec_location: null,
+            spec_type: null,
+            content: null,
+            partner_id: partner.id,
+            created_at: nowIso(),
+            updated_at: nowIso(),
+          }
+          this.state.deliverables.push(deliverable)
+          task.linked_deliverable_id = deliverable.id
+          this.log(projectId, `user:${user.id}`, 'deliverable.requested', 'deliverable', deliverable.id, {
+            partner_id: partner.id,
+            wbs_code: tpl.code,
+          })
+        }
+      }
+    }
+    this.state.wbs_tasks = [...others, ...expanded]
+    this.log(projectId, `user:${user.id}`, 'wbs.expanded_host', 'project', projectId, {
+      count: expanded.length,
+      partners: activePartners.length,
     })
     return [...expanded]
   }
@@ -1457,6 +1595,427 @@ export class MockProvider implements DataProvider {
     return this.state.role_charters.filter((c) => c.project_id === projectId)
   }
 
+  // ── v2.4 §21 주최형(파트너) — 등급·파트너·토큰 CRUD는 pm, 열람은 멤버 전원 ───
+  private mustFindPartner(partnerId: UUID): Partner {
+    const p = this.state.partners.find((x) => x.id === partnerId)
+    if (!p) throw new ProviderError('not_found', '파트너를 찾을 수 없습니다.')
+    return p
+  }
+
+  async listPartnerTiers(projectId: UUID): Promise<PartnerTier[]> {
+    this.currentUser()
+    this.mustFindProject(projectId)
+    return this.state.partner_tiers
+      .filter((t) => t.project_id === projectId)
+      .sort((a, b) => a.sort - b.sort)
+  }
+
+  async upsertPartnerTier(projectId: UUID, input: PartnerTierInput): Promise<PartnerTier> {
+    this.assertPm()
+    this.assertWritable(projectId)
+    const code = input.code?.trim()
+    if (!code) throw new ProviderError('validation', '등급 코드는 필수입니다.')
+    if (!input.name?.trim()) throw new ProviderError('validation', '등급명은 필수입니다.')
+    const existing = this.state.partner_tiers.find(
+      (t) => t.project_id === projectId && t.code === code,
+    )
+    if (existing) {
+      existing.name = input.name.trim()
+      existing.description = input.description ?? null
+      existing.capacity = input.capacity ?? null
+      if (input.sort !== undefined) existing.sort = input.sort
+      return { ...existing }
+    }
+    const tier: PartnerTier = {
+      id: this.nextId('tier'),
+      project_id: projectId,
+      code,
+      name: input.name.trim(),
+      description: input.description ?? null,
+      capacity: input.capacity ?? null,
+      sort:
+        input.sort ?? this.state.partner_tiers.filter((t) => t.project_id === projectId).length + 1,
+    }
+    this.state.partner_tiers.push(tier)
+    return { ...tier }
+  }
+
+  async deletePartnerTier(tierId: UUID): Promise<void> {
+    this.assertPm()
+    const tier = this.state.partner_tiers.find((t) => t.id === tierId)
+    if (!tier) throw new ProviderError('not_found', '등급을 찾을 수 없습니다.')
+    this.assertWritable(tier.project_id)
+    if (this.state.partners.some((p) => p.tier_id === tierId)) {
+      throw new ProviderError('conflict', '이 등급을 쓰는 파트너가 있어 삭제할 수 없습니다.')
+    }
+    this.state.partner_tiers = this.state.partner_tiers.filter((t) => t.id !== tierId)
+  }
+
+  /** 오늘 이후 미완료 partner_submit 태스크 중 가장 가까운 마감 — S-11 카드용 */
+  private partnerNextDeadline(partnerId: UUID, today: string): PartnerNextDeadline | null {
+    const next = this.state.wbs_tasks
+      .filter(
+        (t) =>
+          t.partner_id === partnerId &&
+          t.direction === 'partner_submit' &&
+          t.status !== 'done' &&
+          t.end_date &&
+          t.end_date >= today,
+      )
+      .sort((a, b) => (a.end_date ?? '9999').localeCompare(b.end_date ?? '9999'))[0]
+    return next ? { code: next.code, title: next.title, end_date: next.end_date } : null
+  }
+
+  private partnerWithProgress(partner: Partner, today: string): PartnerWithProgress {
+    const tier = partner.tier_id
+      ? this.state.partner_tiers.find((t) => t.id === partner.tier_id) ?? null
+      : null
+    const token =
+      this.state.partner_tokens
+        .filter((t) => t.partner_id === partner.id && !t.revoked_at)
+        .sort((a, b) => b.created_at.localeCompare(a.created_at))[0] ?? null
+
+    const counts: PartnerSubmissionCounts = {
+      requested: 0,
+      pending_approval: 0,
+      changes_requested: 0,
+      approved_or_final: 0,
+    }
+    for (const task of this.state.wbs_tasks) {
+      if (task.partner_id !== partner.id || task.direction !== 'partner_submit') continue
+      if (!task.linked_deliverable_id) continue
+      const d = this.state.deliverables.find((x) => x.id === task.linked_deliverable_id)
+      if (!d) continue
+      if (d.status === 'requested') counts.requested++
+      else if (d.status === 'pending_approval') counts.pending_approval++
+      else if (d.status === 'changes_requested') counts.changes_requested++
+      else if (d.status === 'approved' || d.status === 'final') counts.approved_or_final++
+    }
+
+    return {
+      ...partner,
+      tier,
+      token,
+      submission_counts: counts,
+      next_deadline: this.partnerNextDeadline(partner.id, today),
+    }
+  }
+
+  async listPartners(projectId: UUID): Promise<PartnerWithProgress[]> {
+    this.currentUser()
+    this.mustFindProject(projectId)
+    const today = toIsoDate(new Date())
+    return this.state.partners
+      .filter((p) => p.project_id === projectId)
+      .map((p) => this.partnerWithProgress(p, today))
+  }
+
+  async createPartner(projectId: UUID, input: PartnerInput): Promise<Partner> {
+    const user = this.assertPm()
+    this.assertWritable(projectId)
+    const name = input.name?.trim()
+    if (!name) throw new ProviderError('validation', '파트너명은 필수입니다.')
+    if (input.tier_id) {
+      const tier = this.state.partner_tiers.find(
+        (t) => t.id === input.tier_id && t.project_id === projectId,
+      )
+      if (!tier) throw new ProviderError('validation', '이 행사의 등급이 아닙니다.')
+    }
+    const partner: Partner = {
+      id: this.nextId('ptn'),
+      project_id: projectId,
+      name,
+      tier_id: input.tier_id ?? null,
+      status: input.status ?? 'active',
+      contract_amount: input.contract_amount ?? null,
+      note: input.note ?? null,
+      created_at: nowIso(),
+    }
+    this.state.partners.push(partner)
+    this.log(projectId, `user:${user.id}`, 'partner.created', 'partner', partner.id)
+    return { ...partner }
+  }
+
+  async updatePartner(partnerId: UUID, patch: Partial<PartnerInput>): Promise<Partner> {
+    this.assertPm()
+    const partner = this.mustFindPartner(partnerId)
+    this.assertWritable(partner.project_id)
+    if (patch.name !== undefined) {
+      if (!patch.name.trim()) throw new ProviderError('validation', '파트너명은 필수입니다.')
+      partner.name = patch.name.trim()
+    }
+    if (patch.tier_id !== undefined) {
+      if (patch.tier_id) {
+        const tier = this.state.partner_tiers.find(
+          (t) => t.id === patch.tier_id && t.project_id === partner.project_id,
+        )
+        if (!tier) throw new ProviderError('validation', '이 행사의 등급이 아닙니다.')
+      }
+      partner.tier_id = patch.tier_id
+    }
+    if (patch.status !== undefined) partner.status = patch.status
+    if (patch.contract_amount !== undefined) partner.contract_amount = patch.contract_amount
+    if (patch.note !== undefined) partner.note = patch.note
+    return { ...partner }
+  }
+
+  async removePartner(partnerId: UUID): Promise<void> {
+    const user = this.assertPm()
+    const partner = this.mustFindPartner(partnerId)
+    this.assertWritable(partner.project_id)
+    // 이미 제출 이력(WBS 인스턴스·inbound 산출물)이 있는 파트너는 하드 삭제하지 않는다 —
+    // 재전개 매칭(code+partner_id)이 깨지고 이력이 사라진다. status='withdrawn'으로 대신한다
+    // (설계 결정, 3.15a — §21.2에 하드 삭제 금지가 명문화돼 있지 않아 안전한 쪽을 택했다).
+    const hasWork =
+      this.state.wbs_tasks.some((t) => t.partner_id === partnerId) ||
+      this.state.deliverables.some((d) => d.partner_id === partnerId)
+    if (hasWork) {
+      throw new ProviderError(
+        'conflict',
+        '이미 제출 이력이 있는 파트너는 삭제할 수 없습니다 — 상태를 철회로 변경하세요.',
+      )
+    }
+    this.state.partner_tokens = this.state.partner_tokens.filter((t) => t.partner_id !== partnerId)
+    this.state.partners = this.state.partners.filter((p) => p.id !== partnerId)
+    this.log(partner.project_id, `user:${user.id}`, 'partner.removed', 'partner', partnerId)
+  }
+
+  async issuePartnerToken(partnerId: UUID, input: PartnerTokenIssueInput): Promise<PartnerToken> {
+    const user = this.assertPm()
+    const partner = this.mustFindPartner(partnerId)
+    const project = this.assertWritable(partner.project_id)
+    const name = input.contact_name?.trim()
+    const email = input.contact_email?.trim()
+    if (!name || !email) throw new ProviderError('validation', '담당자명과 이메일은 필수입니다.')
+    let expires = input.expires_at ?? null
+    if (!expires && project.event_date) {
+      // §6.3과 동일 원칙 — 기본 만료 = 행사일+30일
+      const d = new Date(`${project.event_date}T00:00:00.000Z`)
+      d.setUTCDate(d.getUTCDate() + 30)
+      expires = d.toISOString()
+    }
+    const token: PartnerToken = {
+      id: this.nextId('ptok'),
+      partner_id: partnerId,
+      contact_name: name,
+      contact_email: email,
+      token: this.nextId('ptk'),
+      expires_at: expires,
+      revoked_at: null,
+      last_seen_at: null,
+      created_at: nowIso(),
+    }
+    this.state.partner_tokens.push(token)
+    this.log(partner.project_id, `user:${user.id}`, 'partner_token.issued', 'partner_token', token.id)
+    return { ...token }
+  }
+
+  async revokePartnerToken(token: string): Promise<PartnerToken> {
+    const user = this.assertPm()
+    const t = this.state.partner_tokens.find((x) => x.token === token)
+    if (!t) throw new ProviderError('not_found', '토큰을 찾을 수 없습니다.')
+    if (!t.revoked_at) t.revoked_at = nowIso()
+    const partner = this.mustFindPartner(t.partner_id)
+    this.log(partner.project_id, `user:${user.id}`, 'partner_token.revoked', 'partner_token', t.id)
+    return { ...t }
+  }
+
+  /** 파트너 토큰 검증 (§6.2 R-H2 승계) — 미존재=404, 회수·만료=410. 접근 시 last_seen_at 갱신 */
+  private resolvePartnerToken(token: string): PartnerToken {
+    const t = this.state.partner_tokens.find((x) => x.token === token)
+    if (!t) throw new ProviderError('not_found', '유효하지 않은 링크입니다.')
+    if (t.revoked_at || (t.expires_at && new Date(t.expires_at).getTime() < Date.now())) {
+      throw new ProviderError('gone', '링크가 만료되었습니다. 담당자에게 새 링크를 요청하세요.')
+    }
+    t.last_seen_at = nowIso()
+    return t
+  }
+
+  /**
+   * §6.2 R-H2 — `/p/{token}` 응답에 타 파트너의 어떤 행도 포함되지 않는다: 쿼리 자체에서
+   * `task.partner_id === partner.id`로 걸러 다른 파트너 인스턴스를 애초에 후보에 넣지 않는다.
+   * §21.2 R-H3 — 반환 타입(PartnerPortalData)이 partner_name·tier_name만 노출하고 Partner
+   * 엔티티를 통째로 스프레드하지 않으므로 contract_amount는 구조적으로 여기 들어올 수 없다.
+   */
+  async getPartnerPortal(token: string): Promise<PartnerPortalData> {
+    const t = this.resolvePartnerToken(token)
+    const partner = this.mustFindPartner(t.partner_id)
+    const project = this.mustFindProject(partner.project_id)
+    const tier = partner.tier_id
+      ? this.state.partner_tiers.find((x) => x.id === partner.tier_id)
+      : undefined
+
+    const submission_items: PartnerPortalItem[] = this.state.wbs_tasks
+      .filter(
+        (task) =>
+          task.project_id === partner.project_id &&
+          task.partner_id === partner.id &&
+          task.direction === 'partner_submit' &&
+          task.linked_deliverable_id,
+      )
+      .sort((a, b) => (a.end_date ?? '9999').localeCompare(b.end_date ?? '9999'))
+      .map((task) => {
+        const d = this.mustFindDeliverable(task.linked_deliverable_id!)
+        return {
+          task_code: task.code,
+          task_title: task.title,
+          deadline: task.end_date,
+          deliverable_id: d.id,
+          status: d.status,
+          // R-H6: 발주처 코멘트 규칙과 동일 — shared만
+          comments: this.state.comments
+            .filter((c) => c.deliverable_id === d.id && c.visibility === 'shared')
+            .sort((a, b) => a.created_at.localeCompare(b.created_at)),
+          versions: this.versionsOf(d.id),
+        }
+      })
+
+    const notices: PartnerPortalNotice[] = this.state.wbs_tasks
+      .filter((task) => task.project_id === partner.project_id && task.direction === 'host_notice')
+      .sort((a, b) => (a.end_date ?? '9999').localeCompare(b.end_date ?? '9999'))
+      .map((task) => ({
+        task_code: task.code,
+        task_title: task.title,
+        deadline: task.end_date,
+        note: task.note,
+      }))
+
+    return {
+      project_name: project.name,
+      event_date: project.event_date,
+      venue: project.venue,
+      partner_name: partner.name,
+      tier_name: tier?.name ?? null,
+      submission_items,
+      notices,
+    }
+  }
+
+  /**
+   * 파트너 제출 — 파일이면 blob 버전으로 기존 uploadVersion 관례를 재사용하고, 텍스트도
+   * 근거가 남아야 하므로 동일하게 versions 이력(텍스트를 담은 blob)으로 통일한다(설계 결정,
+   * 3.15a — 파일·텍스트 두 경로가 갈리면 재제출·컨펌 규칙을 두 벌 유지해야 한다).
+   * 상태 전이: requested→pending_approval(via partner_submit, 첫 제출) 또는
+   * changes_requested→pending_approval(via version_upload, host_inbound 분기 — 재제출).
+   * 두 경로 모두 assertTransition을 경유한다(R-H4).
+   */
+  async submitPartnerItem(
+    token: string,
+    deliverableId: UUID,
+    input: PartnerSubmissionInput,
+  ): Promise<Deliverable> {
+    const t = this.resolvePartnerToken(token)
+    const partner = this.mustFindPartner(t.partner_id)
+    const d = this.mustFindDeliverable(deliverableId)
+    if (d.partner_id !== partner.id) {
+      throw new ProviderError('forbidden', '이 파트너가 제출할 수 있는 항목이 아닙니다.')
+    }
+    this.assertWritable(d.project_id)
+    if (d.status !== 'requested' && d.status !== 'changes_requested') {
+      throw new ProviderError('conflict', `현재 상태(${d.status})에서는 제출할 수 없습니다.`)
+    }
+
+    const isFirstSubmission = d.status === 'requested'
+    const via = isFirstSubmission ? 'partner_submit' : 'version_upload'
+    assertTransition(d.status, 'pending_approval', via)
+
+    const versionNo = (this.versionsOf(deliverableId)[0]?.version_no ?? 0) + 1
+    const isText = 'text' in input
+    const originalFileName = isText ? `${d.title}_텍스트제출.txt` : input.file_name
+    if (isText) d.content = input.text
+
+    const version: Version = {
+      id: this.nextId('ver'),
+      deliverable_id: deliverableId,
+      version_no: versionNo,
+      drive_file_id: this.nextId('drv-f'),
+      file_name: buildVersionFileName({
+        date: new Date(),
+        project_code: this.projectOf(d).code,
+        category: d.category,
+        title: d.title,
+        version_no: versionNo,
+        original_file_name: originalFileName,
+      }),
+      note: isText ? '파트너 텍스트 제출' : input.note ?? null,
+      uploaded_by: null, // 파트너는 내부 사용자가 아니다 — 토큰 경로는 activity_log의 actor로 식별
+      created_at: nowIso(),
+    }
+    this.state.versions.push(version)
+
+    const canBlob =
+      typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function' && typeof Blob !== 'undefined'
+    this.uploadedFileUrls.set(
+      version.id,
+      isText && canBlob
+        ? URL.createObjectURL(new Blob([input.text], { type: 'text/plain' }))
+        : `mock://files/${version.id}`,
+    )
+
+    d.status = 'pending_approval'
+    d.updated_at = nowIso()
+    this.log(d.project_id, `partner:${t.token}`, 'partner.submitted', 'deliverable', d.id, {
+      partner_id: partner.id,
+      version_no: versionNo,
+    })
+    return { ...d }
+  }
+
+  /**
+   * approved → assertTransition(partner_review)으로 승인 후, 발주처 승인 처리와 동일한
+   * system 전이로 final까지 마감한다(§5.1 "승인 시 final 동일 규칙"). changes_requested는
+   * 코멘트가 없으면 422 — 코멘트는 파트너가 봐야 하므로 shared로 기록한다(R-H4·§10.1 화면 C).
+   */
+  async reviewPartnerSubmission(deliverableId: UUID, input: PartnerReviewInput): Promise<Deliverable> {
+    const user = this.currentUser()
+    const d = this.mustFindDeliverable(deliverableId)
+    if (d.partner_id === null) {
+      throw new ProviderError('conflict', '파트너 제출 항목이 아닙니다.')
+    }
+    this.assertWritable(d.project_id)
+    // §8.1 "pm·담당" — 기존 역할-영역 일치 원칙 재사용(pm은 항상, design·ops는 자기 영역만, reg 제외)
+    this.assertAreaRole(d.area, user.role)
+
+    if (input.decision === 'approved') {
+      assertTransition(d.status, 'approved', 'partner_review')
+      d.status = 'approved'
+      d.updated_at = nowIso()
+      this.log(d.project_id, `user:${user.id}`, 'partner.reviewed', 'deliverable', d.id, {
+        decision: 'approved',
+      })
+      assertTransition(d.status, 'final', 'system')
+      d.status = 'final'
+      this.log(d.project_id, 'system', 'deliverable.finalized', 'deliverable', d.id)
+      for (const task of this.state.wbs_tasks) {
+        if (task.linked_deliverable_id === d.id && task.status !== 'done') {
+          task.status = 'done'
+          task.done_at = nowIso()
+          this.log(d.project_id, 'system', 'wbs.auto_done', 'wbs_task', task.id, { deliverable_id: d.id })
+        }
+      }
+    } else {
+      if (!input.comment?.trim()) {
+        throw new ProviderError('validation', '수정요청 시 코멘트는 필수입니다.')
+      }
+      assertTransition(d.status, 'changes_requested', 'partner_review')
+      d.status = 'changes_requested'
+      d.updated_at = nowIso()
+      this.state.comments.push({
+        id: this.nextId('cmt'),
+        deliverable_id: d.id,
+        author_user_id: user.id,
+        author_token: null,
+        visibility: 'shared', // 파트너가 봐야 하는 검토 코멘트 — internal이면 전달되지 않는다
+        body: input.comment,
+        created_at: nowIso(),
+      })
+      this.log(d.project_id, `user:${user.id}`, 'partner.reviewed', 'deliverable', d.id, {
+        decision: 'changes_requested',
+      })
+    }
+    return { ...d }
+  }
+
   // ── v2.0 견적 S-2 (§8 /quotes — app_role 게이트, 금액은 이 경로에만) ──
   /** §6.1: 견적 생성·버전·확정·Excel = app_role admin·sales만 (프로젝트 역할과 무관) */
   private assertQuoteRole(): CurrentUser {
@@ -1512,6 +2071,7 @@ export class MockProvider implements DataProvider {
       input: structuredClone(input),
       breakdown,
       total_amount,
+      source: 'engine', // v2.4 §22 — 견적 모듈 에디터로 만든 견적은 항상 엔진 산출
       created_by: user.id,
       created_at: nowIso(),
       updated_at: nowIso(),
@@ -1539,6 +2099,7 @@ export class MockProvider implements DataProvider {
       input: structuredClone(input),
       breakdown,
       total_amount,
+      source: 'engine',
       created_by: user.id,
       created_at: nowIso(),
       updated_at: nowIso(),
@@ -1581,16 +2142,16 @@ export class MockProvider implements DataProvider {
     return quote
   }
 
-  async createProjectFromQuote(quoteId: UUID): Promise<Project> {
-    const user = this.assertQuoteRole()
-    const quote = this.mustFindQuote(quoteId)
-    if (!quote.is_final) {
-      throw new ProviderError('conflict', '확정된 견적에서만 행사를 만들 수 있습니다.')
-    }
+  /**
+   * §16 매핑 실행 — 견적을 행사로 굳힌다(금액·섹션 산출은 어떤 키로도 넘기지 않는다).
+   * is_final 여부는 호출자가 판정한다: createProjectFromQuote는 확정 견적만 허용하고,
+   * distributeQuoteImport의 project_prefill은 임포트 견적에 그 제약을 적용하지 않는다
+   * (§22.4 — 프리필 목적이라 is_final 불요).
+   */
+  private materializeProjectFromQuote(quote: Quote, user: CurrentUser): Project {
     if (quote.project_id) {
       throw new ProviderError('conflict', '이미 행사가 연결된 견적입니다.')
     }
-    // §16 매핑 — 금액·섹션 산출은 어떤 키로도 넘기지 않는다
     const draft = quoteToProjectDraft(quote)
     let code = draft.code_suggestion
     let suffix = 2
@@ -1601,6 +2162,7 @@ export class MockProvider implements DataProvider {
       id: this.nextId('prj'),
       name: draft.name,
       code,
+      kind: 'agency', // v2.4 §21 — 핸드오프로 만든 행사는 기본 대행형(행사 설정에서 전환 가능)
       event_date: draft.event_date,
       event_end_date: draft.event_end_date,
       start_time: draft.start_time,
@@ -1631,6 +2193,16 @@ export class MockProvider implements DataProvider {
     // 상호 링크 (§16 — 한 트랜잭션)
     quote.project_id = project.id
     quote.updated_at = nowIso()
+    return project
+  }
+
+  async createProjectFromQuote(quoteId: UUID): Promise<Project> {
+    const user = this.assertQuoteRole()
+    const quote = this.mustFindQuote(quoteId)
+    if (!quote.is_final) {
+      throw new ProviderError('conflict', '확정된 견적에서만 행사를 만들 수 있습니다.')
+    }
+    const project = this.materializeProjectFromQuote(quote, user)
     this.log(project.id, `user:${user.id}`, 'project.created_from_quote', 'project', project.id, {
       quote_id: quote.id,
     })
@@ -1655,6 +2227,322 @@ export class MockProvider implements DataProvider {
       adjustments,
     })
     return { file_name: fn, blob }
+  }
+
+  // ── v2.4 §22 견적서 임포트 (app_role admin·sales — R-Q1~R-Q4) ──────
+  private mustFindQuoteImport(importId: UUID): QuoteImport {
+    const imp = this.state.quote_imports.find((x) => x.id === importId)
+    if (!imp) throw new ProviderError('not_found', '임포트를 찾을 수 없습니다.')
+    return imp
+  }
+
+  /**
+   * §22.2-6 기본 매핑표 — 신뢰도 낮은 항목(키워드 무매칭·복수매칭)만 확인 필요로 표시한다.
+   * `recruit`는 매핑 결과에서 곧바로 breakdown 필드명으로 쓴다(§22.2-6 원문의 'rc' 표기를
+   * 여기서는 엔진 breakdown 키와 맞춘 것 — 설계 결정, 3.15a).
+   */
+  private defaultSectionMapping(parsed: ParsedQuoteDoc): SectionMapping[] {
+    const RULES: { bucket: string; keywords: string[] }[] = [
+      { bucket: 's1', keywords: ['베뉴', '대관', '장소'] },
+      { bucket: 's2', keywords: ['무대', '시스템', 'av', 'led', '음향', '조명', '중계', '전기', '부스'] },
+      { bucket: 's3', keywords: ['디자인', '브랜딩', '콘텐츠', '사인'] },
+      { bucket: 's4', keywords: ['인력', '운영', '보험', 'mc'] },
+      { bucket: 's5', keywords: ['대행료', '기획료'] },
+      { bucket: 'recruit', keywords: ['등록', 'rsvp', '모객'] },
+      { bucket: 'custom', keywords: ['기념품', '경품', 'f&b', '웰컴', '애드온'] },
+    ]
+    return parsed.sections.map((section) => {
+      const name = section.name.toLowerCase()
+      const matched = RULES.filter((r) => r.keywords.some((k) => name.includes(k.toLowerCase())))
+      // 무매칭·복수매칭은 custom으로 잠정 배정 + 확인 필요(낮은 신뢰도) — §22.2-6 말미
+      if (matched.length === 1) {
+        return { section: section.name, bucket: matched[0].bucket, confidence: 'high' as const }
+      }
+      return { section: section.name, bucket: 'custom', confidence: 'low' as const }
+    })
+  }
+
+  async importQuoteFile(fileName: string, data: ArrayBuffer): Promise<QuoteImport> {
+    const user = this.assertQuoteRole()
+    // 서식 감지·파싱은 3.15d(에이전트 AD) 담당 — 지금은 스텁이 항상 던진다(R-Q4, 의도된 동작).
+    // 배선(호출 자체)은 여기서 갖추고, 실제 파싱이 열리면 아래 로직이 그대로 작동한다.
+    const parsed = parseQuoteWorkbook(data, fileName)
+    const imp: QuoteImport = {
+      id: this.nextId('qim'),
+      project_id: null,
+      file_name: fileName,
+      format: parsed.format,
+      parsed,
+      mapping: this.defaultSectionMapping(parsed),
+      status: 'detected',
+      quote_id: null,
+      created_by: user.id,
+      created_at: nowIso(),
+    }
+    this.state.quote_imports.push(imp)
+    return { ...imp }
+  }
+
+  /**
+   * 확인된 매핑으로 버킷별 합산 — engine-shape 8키(s1~s5·options·recruit·attendee) +
+   * custom_sections(§22.4). 부가세 별도 총액은 grand_total에서 vat를 뺀 값을 우선하고,
+   * vat 자체가 없으면 §19.4와 동일한 round(v/1.1)로 역산한다(설계 결정, 3.15a).
+   */
+  private buildImportedBreakdown(
+    parsed: ParsedQuoteDoc,
+    mapping: SectionMapping[],
+  ): { breakdown: QuoteBreakdown; total_amount: number } {
+    const STANDARD = ['s1', 's2', 's3', 's4', 's5', 'options', 'recruit', 'attendee'] as const
+    const sums: Record<(typeof STANDARD)[number], number> = {
+      s1: 0, s2: 0, s3: 0, s4: 0, s5: 0, options: 0, recruit: 0, attendee: 0,
+    }
+    const customByCode = new Map<string, { code: string; label: string; amount: number }>()
+
+    for (const row of mapping) {
+      const section = parsed.sections.find((s) => s.name === row.section)
+      if (!section) continue
+      const amount = section.subtotal ?? section.items.reduce((s, it) => s + (it.amount || 0), 0)
+      if ((STANDARD as readonly string[]).includes(row.bucket)) {
+        sums[row.bucket as (typeof STANDARD)[number]] += amount
+      } else {
+        // 'custom' 자체는 여러 섹션이 공유하는 잠정 배정일 수 있어 섹션별로 분리 보존한다
+        const code = row.bucket === 'custom' ? `custom:${section.name}` : row.bucket
+        const prev = customByCode.get(code)
+        customByCode.set(code, { code, label: section.name, amount: (prev?.amount ?? 0) + amount })
+      }
+    }
+
+    const mappedTotal =
+      Object.values(sums).reduce((s, v) => s + v, 0) +
+      [...customByCode.values()].reduce((s, v) => s + v.amount, 0)
+    const totals = parsed.totals
+    const subtotal =
+      totals.grand_total != null
+        ? totals.vat != null
+          ? totals.grand_total - totals.vat
+          : toVatExcluded(totals.grand_total, true)
+        : totals.items_sum ?? mappedTotal
+    const vat = Math.round(subtotal * 0.1)
+
+    const breakdown: QuoteBreakdown = {
+      s1: sums.s1,
+      s2: sums.s2,
+      s3: sums.s3,
+      s4: sums.s4,
+      s5: sums.s5,
+      options: sums.options,
+      recruit: sums.recruit,
+      attendee: sums.attendee,
+      subtotal,
+      vat,
+      total: subtotal + vat,
+      custom_sections: [...customByCode.values()],
+    }
+    return { breakdown, total_amount: subtotal }
+  }
+
+  /** 파싱 헤더 요약을 QuoteInput 형태로 옮긴다 — §16 핸드오프가 그대로 읽을 수 있게 하기 위함 */
+  private buildImportedQuoteInput(imp: QuoteImport): QuoteInput {
+    const header = imp.parsed.header
+    const venueName = header.venue?.trim() || null
+    return {
+      event_name: header.event_name?.trim() || imp.file_name,
+      event_date: null, // date_range는 자유 텍스트 — 이 단계에서 파싱하지 않는다(확인 큐 영역)
+      event_end_date: null,
+      start_time: null,
+      end_time: null,
+      event_type: null,
+      include_leads: false,
+      headcount: 0,
+      guarantee: 0,
+      venues: venueName ? [{ venue_id: null, name: venueName, hall: null, date: null, rental: 0 }] : [],
+      selected_venue: venueName
+        ? { venue_id: null, name: venueName, hall: null, date: null, rental: 0, index: 0 }
+        : null,
+      options: {},
+      display_type: 'led',
+      targeting: null,
+      client_company: header.client?.trim() || null,
+      contact: null,
+      manager: header.manager?.trim() || null,
+      notes: `임포트(${imp.format}형) — ${imp.file_name}`,
+      adjustments: [],
+    }
+  }
+
+  /** R-Q1: confirm 경유 없이 quotes가 생기는 경로는 없다 — 이 메서드만 quotes를 만든다 */
+  async confirmQuoteImport(importId: UUID, input: QuoteImportConfirmInput): Promise<Quote> {
+    const user = this.assertQuoteRole()
+    const imp = this.mustFindQuoteImport(importId)
+    if (imp.status !== 'detected') {
+      throw new ProviderError('conflict', '이미 확정되었거나 배포된 임포트입니다.')
+    }
+    const mapping = input.mapping?.length ? input.mapping : imp.mapping
+    const { breakdown, total_amount } = this.buildImportedBreakdown(imp.parsed, mapping)
+    const quote: Quote = {
+      id: this.nextId('quo'),
+      project_id: null,
+      title: imp.parsed.header.event_name?.trim() || imp.file_name,
+      version: 1,
+      status: 'draft',
+      is_final: false,
+      locked_at: null,
+      superseded_by: null,
+      input: this.buildImportedQuoteInput(imp),
+      breakdown,
+      total_amount,
+      source: 'imported',
+      created_by: user.id,
+      created_at: nowIso(),
+      updated_at: nowIso(),
+    }
+    this.state.quotes.push(quote)
+    imp.mapping = mapping
+    imp.status = 'confirmed'
+    imp.quote_id = quote.id
+    return quote
+  }
+
+  /**
+   * §22.4 분배 3종. project_prefill은 §16 매핑을 재사용하되 임포트 견적은 is_final을
+   * 요구하지 않는다(프리필 목적). settlement_base·board_seed는 행사가 있어야 하고,
+   * settlement_base는 확정 견적일 때만 허용한다(정산 스냅숏 규칙 §19.2 그대로).
+   */
+  async distributeQuoteImport(
+    importId: UUID,
+    input: QuoteImportDistributeInput,
+  ): Promise<QuoteImportDistributeResult> {
+    const user = this.assertQuoteRole()
+    const imp = this.mustFindQuoteImport(importId)
+    if (imp.status !== 'confirmed') {
+      throw new ProviderError('conflict', '확인 큐를 거쳐 확정된 임포트만 배포할 수 있습니다.')
+    }
+    if (!imp.quote_id) throw new ProviderError('not_found', '연결된 견적이 없습니다.')
+    const quote = this.mustFindQuote(imp.quote_id)
+
+    let project: Project | undefined = quote.project_id
+      ? this.mustFindProject(quote.project_id)
+      : undefined
+
+    if (input.project_prefill && !project) {
+      project = this.materializeProjectFromQuote(quote, user)
+      imp.project_id = project.id
+      this.log(project.id, `user:${user.id}`, 'project.created_from_quote_import', 'project', project.id, {
+        quote_id: quote.id,
+        import_id: imp.id,
+      })
+    }
+
+    let settlementCreated = false
+    if (input.settlement_base) {
+      if (!quote.is_final) {
+        throw new ProviderError(
+          'validation',
+          '정산 기준은 확정된 견적만 가능합니다 — 먼저 이 견적을 확정하세요.',
+        )
+      }
+      if (!project) {
+        throw new ProviderError(
+          'validation',
+          '정산 기준을 적용할 행사가 없습니다 — 프리필을 함께 켜거나 먼저 행사를 연결하세요.',
+        )
+      }
+      await this.createSettlementBoard(project.id, quote.id)
+      settlementCreated = true
+    }
+
+    let seeded = 0
+    if (input.board_seed) {
+      if (!project) {
+        throw new ProviderError(
+          'validation',
+          '보드 시드를 적용할 행사가 없습니다 — 프리필을 함께 켜거나 먼저 행사를 연결하세요.',
+        )
+      }
+      seeded = this.seedBoardFromImport(project.id, imp)
+    }
+
+    imp.status = 'distributed'
+    if (project) {
+      this.log(project.id, `user:${user.id}`, 'quote_import.distributed', 'quote_import', imp.id, {
+        settlement_base: settlementCreated,
+        board_seed: seeded,
+      })
+    }
+    return {
+      quote_id: quote.id,
+      project_id: project?.id ?? null,
+      settlement_created: settlementCreated,
+      deliverables_seeded: seeded,
+    }
+  }
+
+  /**
+   * board_seed(§22.4) — s3 매핑은 design 보드, s2·s4 매핑은 ops 보드에 항목 단위로 시드한다.
+   * **금액 키는 절대 넣지 않는다** — 품목(title)·규격(spec)·수량(qty)만 brief/spec_* 필드로 옮긴다.
+   */
+  private seedBoardFromImport(projectId: UUID, imp: QuoteImport): number {
+    const areaByBucket: Record<string, DeliverableArea> = { s3: 'design', s2: 'ops', s4: 'ops' }
+    let count = 0
+    const now = nowIso()
+    for (const row of imp.mapping) {
+      const area = areaByBucket[row.bucket]
+      if (!area) continue
+      const section = imp.parsed.sections.find((s) => s.name === row.section)
+      if (!section) continue
+      for (const item of section.items) {
+        count++
+        this.state.deliverables.push({
+          id: this.nextId('dlv'),
+          project_id: projectId,
+          area,
+          category: '견적 임포트',
+          title: item.title,
+          status: 'draft',
+          assignee_id: null,
+          due_date: null,
+          drive_folder_id: null,
+          requires_approval: true,
+          brief: `임포트(${imp.file_name}) — ${section.name}`,
+          brief_refs: null,
+          spec_size: item.spec ?? null,
+          spec_qty: item.qty ?? null,
+          spec_location: null,
+          spec_type: null,
+          content: null,
+          partner_id: null,
+          created_at: now,
+          updated_at: now,
+        })
+      }
+    }
+    return count
+  }
+
+  /**
+   * Mock 전용(인터페이스 외) — 파서(3.15d)가 아직 스텁이라 importQuoteFile은 항상 던진다.
+   * confirm·distribute 흐름을 독립적으로 테스트하기 위해 'detected' 임포트를 직접 시딩한다.
+   */
+  seedQuoteImportForTest(input: {
+    file_name: string
+    format: QuoteImportFormat
+    parsed: ParsedQuoteDoc
+    mapping?: SectionMapping[]
+  }): QuoteImport {
+    const imp: QuoteImport = {
+      id: this.nextId('qim'),
+      project_id: null,
+      file_name: input.file_name,
+      format: input.format,
+      parsed: input.parsed,
+      mapping: input.mapping ?? this.defaultSectionMapping(input.parsed),
+      status: 'detected',
+      quote_id: null,
+      created_by: this.state.current_user_id,
+      created_at: nowIso(),
+    }
+    this.state.quote_imports.push(imp)
+    return imp
   }
 
   // ── v2.0 컴플라이언스 카드 (§8 /compliance-cards — 체크 멤버·편집 pm) ──
