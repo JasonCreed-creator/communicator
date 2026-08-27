@@ -18,6 +18,7 @@ import HomeDashboardPage from '../pages/HomeDashboardPage'
 import ItemDetailPage from '../pages/ItemDetailPage'
 import NotFoundPage from '../pages/NotFoundPage'
 import OnboardingPage from '../pages/OnboardingPage'
+import PartnerBoardPage from '../pages/PartnerBoardPage'
 import PlanDocPage from '../pages/PlanDocPage'
 import LegacyGonePage from '../pages/LegacyGonePage'
 import ProjectListPage from '../pages/ProjectListPage'
@@ -78,6 +79,8 @@ export function renderRoute(path: string) {
               <Route path="/plan" element={<PlanDocPage />} />
               {/* v2.2 S-10 정산보드 */}
               <Route path="/settlement" element={<SettlementPage />} />
+              {/* v2.4 S-11 파트너 보드 — 주최형 전용(App.tsx와 동일 구성) */}
+              <Route path="/partners" element={<PartnerBoardPage />} />
             </Route>
           </Route>
         </Route>

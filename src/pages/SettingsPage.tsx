@@ -6,8 +6,11 @@ import { useNavigate } from 'react-router-dom'
 import Card from '../components/internal/Card'
 import ErrorAlert from '../components/internal/ErrorAlert'
 import PageHeader from '../components/internal/PageHeader'
+import PartnerRosterEditor from '../components/partner/PartnerRosterEditor'
 import ClientContactsEditor from '../components/settings/ClientContactsEditor'
 import MembersEditor from '../components/settings/MembersEditor'
+import PartnerTierEditor from '../components/settings/PartnerTierEditor'
+import ProjectKindCards from '../components/settings/ProjectKindCards'
 import ProjectOverviewForm from '../components/settings/ProjectOverviewForm'
 import { useProject } from '../context/ProjectContext'
 import { useAsync } from '../hooks/useAsync'
@@ -123,9 +126,16 @@ export default function SettingsPage() {
                 <MembersEditor projectId={projectId} onChanged={handleSaved} readOnly={!isPm} />
               </Card>
               <div className="space-y-6">
-                <Card title="발주처 연락처·토큰">
-                  <ClientContactsEditor projectId={projectId} readOnly={!isPm} />
-                </Card>
+                {/* v2.4 §10.1 표시 규칙 — 주최형은 발주처 연락처·토큰 표 대신 파트너 탭을 쓴다 */}
+                {project.data.kind === 'host' ? (
+                  <Card title="파트너">
+                    <PartnerRosterEditor projectId={projectId} readOnly={!isPm} />
+                  </Card>
+                ) : (
+                  <Card title="발주처 연락처·토큰">
+                    <ClientContactsEditor projectId={projectId} readOnly={!isPm} />
+                  </Card>
+                )}
                 <Card title="R&R 미리보기">
                   <ul className="space-y-2 text-sm">
                     {ROLE_PREVIEW.map((r) => (
@@ -148,6 +158,21 @@ export default function SettingsPage() {
 
           {tab === 'integration' && (
             <div className="space-y-6">
+              <Card title="행사 성격">
+                <ProjectKindCards
+                  projectId={projectId}
+                  kind={project.data.kind}
+                  onChanged={handleSaved}
+                  readOnly={!isPm}
+                />
+              </Card>
+
+              {project.data.kind === 'host' && (
+                <Card title="파트너 등급">
+                  <PartnerTierEditor projectId={projectId} readOnly={!isPm} />
+                </Card>
+              )}
+
               <Card title="행사 유형">
                 <p className="text-sm text-ink">
                   현재 유형: <strong>{EVENT_TYPE_LABELS[project.data.event_type]}</strong>

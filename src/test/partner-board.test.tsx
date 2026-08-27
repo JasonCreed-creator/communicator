@@ -1,0 +1,110 @@
+/** @vitest-environment jsdom */
+// Phase 3.15b — S-11 파트너 보드(§10.1) + 설정 ②담당자 탭 파트너 스왑.
+// 데모 행사 '가상 서밋 2026'(PROJECT_ID_HOST) 픽스처(§21.3) 기준: 파트너 5(다이아1·골드1·실버3),
+// HT-1 제출 상태 분포 = 승인 2(final)·검토중 1(pending_approval)·수정요청 1(changes_requested)·
+// 미제출 1(requested).
+import { cleanup, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { afterEach, describe, expect, it } from 'vitest'
+import { PROJECT_ID_HOST } from '../fixtures/sampleProject'
+import { renderRoute } from './testUtils'
+
+afterEach(cleanup)
+
+describe('S-11 파트너 보드', () => {
+  it('KPI 4·파트너 5행·검토 대기 1건이 렌더된다', async () => {
+    localStorage.setItem('communicator.currentProjectId', PROJECT_ID_HOST)
+    renderRoute('/partners')
+
+    expect(await screen.findByRole('heading', { name: '파트너 보드' })).toBeTruthy()
+
+    // KPI: 파트너 수 5 · 이번 마감 제출 4/5(HT-1) · 검토 대기 1 · 수정요청 미회신 1
+    expect(await screen.findByText('파트너 수')).toBeTruthy()
+    const partnerCountTile = screen.getByText('파트너 수').closest('.ui-card') as HTMLElement
+    expect(within(partnerCountTile).getByText('5')).toBeTruthy()
+
+    const currentDeadlineTile = screen.getByText('이번 마감 제출').closest('.ui-card') as HTMLElement
+    expect(within(currentDeadlineTile).getByText('4/5')).toBeTruthy()
+
+    const reviewPendingTile = screen.getByText('검토 대기').closest('.ui-card') as HTMLElement
+    expect(within(reviewPendingTile).getByText('1')).toBeTruthy()
+
+    const unresolvedTile = screen.getByText('수정요청 미회신').closest('.ui-card') as HTMLElement
+    expect(within(unresolvedTile).getByText('1')).toBeTruthy()
+
+    // 파트너 표 5행 — 등급 배지·참여 상태(PARTNER_STATUS_LABELS)
+    expect(await screen.findByText('가상다이아텍')).toBeTruthy()
+    expect(screen.getByText('가상골드플랫폼')).toBeTruthy()
+    expect(screen.getByText('가상실버클라우드')).toBeTruthy()
+    expect(screen.getByText('가상실버네트웍스')).toBeTruthy()
+    expect(screen.getByText('가상실버랩스')).toBeTruthy()
+    expect(screen.getAllByText('참여 중').length).toBe(5)
+
+    // 마감 타임라인 — 방향 뱃지(WBS_DIRECTION_LABELS, 코드마다 1행)와 '이번 마감' 강조가 렌더
+    expect(screen.getAllByText('▲ 파트너 제출').length).toBeGreaterThan(0)
+    // '이번 마감'은 타임라인 강조 뱃지와 파트너 표 열 헤더 둘 다에 쓰인다 — 존재만 확인한다.
+    expect(screen.getAllByText('이번 마감').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('▼ 주최 통지').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('■ 내부').length).toBeGreaterThan(0)
+  })
+
+  it('금액 키(계약액 등)는 어디에도 렌더되지 않는다(§21.2 R-H3)', async () => {
+    localStorage.setItem('communicator.currentProjectId', PROJECT_ID_HOST)
+    renderRoute('/partners')
+    const heading = await screen.findByRole('heading', { name: '파트너 보드' })
+    // 사이드바(다른 화면의 /settlement 링크 등)는 이 화면 소관이 아니므로 본문(<main>)만 스코프한다.
+    const main = heading.closest('main') as HTMLElement
+    await screen.findByText('가상다이아텍') // 파트너 표까지 로드된 뒤 스냅숏
+    const html = main.innerHTML
+    for (const key of ['contract_amount', 'total_amount', 'breakdown', 'settlement', 'margin', 'markup', 'ordered_amount', 'actual_amount']) {
+      expect(html).not.toContain(key)
+    }
+  })
+
+  it('파트너 클릭 시 상세 패널이 열리고, 검토중 파트너는 수정요청에 코멘트가 필수다', async () => {
+    localStorage.setItem('communicator.currentProjectId', PROJECT_ID_HOST)
+    renderRoute('/partners')
+    await screen.findByRole('heading', { name: '파트너 보드' })
+
+    // ptn-003(가상실버클라우드) — HT-1이 검토중(pending_approval)
+    await userEvent.click(await screen.findByText('가상실버클라우드'))
+    expect(await screen.findByRole('heading', { name: /파트너 상세 — 가상실버클라우드/ })).toBeTruthy()
+
+    // 제출물 목록에서 HT-1 항목이 '검토중' 배지로 뜬다(HOST_STATUS_LABELS) — 타임라인에도
+    // 같은 코드가 나오므로(*AllBy*) 존재만 확인한다.
+    expect(screen.getAllByText('HT-1').length).toBeGreaterThan(0)
+    expect(await screen.findByRole('button', { name: '승인' })).toBeTruthy()
+
+    // 코멘트 없이 수정요청 제출 → 클라이언트 가드가 막고 provider 호출 없이 에러만 뜬다
+    await userEvent.click(screen.getByRole('button', { name: '수정요청' }))
+    expect(await screen.findByText('수정요청은 코멘트가 필수입니다.')).toBeTruthy()
+    // 여전히 검토 대기 상태 — 승인 버튼이 그대로 남아 있다(전이가 일어나지 않았다는 증거)
+    expect(screen.getByRole('button', { name: '승인' })).toBeTruthy()
+  })
+
+  it('대행형 행사에서는 사이드바에 파트너 보드 메뉴가 없다', async () => {
+    localStorage.setItem('communicator.currentProjectId', 'prj-stc26')
+    renderRoute('/')
+    await screen.findByRole('heading', { name: '홈 대시보드' })
+    expect(screen.queryByRole('link', { name: '파트너 보드' })).toBeNull()
+  })
+})
+
+describe('행사 설정 ②담당자 — 주최형은 파트너 탭으로 대체', () => {
+  it('주최형 행사는 파트너 카드, 대행형은 발주처 연락처 카드가 뜬다', async () => {
+    localStorage.setItem('communicator.currentProjectId', PROJECT_ID_HOST)
+    renderRoute('/settings')
+    await screen.findByRole('heading', { name: '행사 설정' })
+    await userEvent.click(await screen.findByRole('button', { name: '② 담당자' }))
+    expect(await screen.findByRole('heading', { name: '파트너' })).toBeTruthy()
+    expect(screen.queryByRole('heading', { name: '발주처 연락처·토큰' })).toBeNull()
+    cleanup()
+
+    localStorage.setItem('communicator.currentProjectId', 'prj-stc26')
+    renderRoute('/settings')
+    await screen.findByRole('heading', { name: '행사 설정' })
+    await userEvent.click(await screen.findByRole('button', { name: '② 담당자' }))
+    expect(await screen.findByRole('heading', { name: '발주처 연락처·토큰' })).toBeTruthy()
+    expect(screen.queryByRole('heading', { name: '파트너' })).toBeNull()
+  })
+})
