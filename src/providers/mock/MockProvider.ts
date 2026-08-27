@@ -679,10 +679,21 @@ export class MockProvider implements DataProvider {
       input.file && canBlob ? URL.createObjectURL(input.file) : `mock://files/${version.id}`,
     )
 
-    // §5: requested(v1.2 첫 업로드)·changes_requested 상태에서 새 버전 업로드 시 draft 자동 전이
+    // §5: requested(v1.2 첫 업로드)·changes_requested 상태에서 새 버전 업로드 시 draft 자동 전이.
+    // v2.4 §5.1: 주최형 inbound(partner_id 보유) 항목은 version_upload의 목적지가 분기된다 —
+    // 수정요청 상태의 내부 업로드(파트너 파일 대리 등록)도 재제출과 같이 pending_approval로
+    // 복귀하고, 아직 제출 전(requested)인 항목은 파트너 제출(partner_submit) 경로만 있으므로
+    // 내부 업로드를 409로 막는다(전이표에 requested→draft(inbound) 갈래를 쓰지 않는다).
+    if (d.partner_id !== null && d.status === 'requested') {
+      throw new ProviderError(
+        'conflict',
+        '파트너 제출 항목은 파트너가 제출 링크로 첫 제출을 해야 합니다.',
+      )
+    }
     if (d.status === 'requested' || d.status === 'changes_requested') {
-      assertTransition(d.status, 'draft', 'version_upload')
-      d.status = 'draft'
+      const to = d.partner_id !== null ? 'pending_approval' : 'draft'
+      assertTransition(d.status, to, 'version_upload')
+      d.status = to
     }
     d.updated_at = nowIso()
     this.log(d.project_id, `user:${user.id}`, 'version.uploaded', 'version', version.id, {

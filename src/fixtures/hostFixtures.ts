@@ -11,6 +11,8 @@ import { HOST_TEMPLATE } from './wbsTemplates'
 export const PROJECT_ID_HOST = 'prj-virtual-summit'
 /** 데모 파트너 포털 토큰(§21.3) — 다이아 등급 파트너(가상다이아텍) 소유, `/p/demo-partner` */
 export const PARTNER_DEMO_TOKEN = 'demo-partner'
+/** 수정요청 상태 파트너(가상실버네트웍스)의 데모 토큰 — 포털의 수정요청 카드·재제출 흐름 시연용 */
+export const PARTNER_CHANGES_TOKEN = 'demo-partner-cr'
 /** 회수된 파트너 토큰 (410 검증) */
 export const PARTNER_REVOKED_TOKEN = 'demo-partner-revoked'
 /** 만료된 파트너 토큰 (410 검증) */
@@ -152,6 +154,17 @@ export function seedHostFixtures(state: MockState): void {
       contact_email: 'partner-expired@example.com',
       token: PARTNER_EXPIRED_TOKEN,
       expires_at: '2026-08-01T00:00:00.000Z',
+      revoked_at: null,
+      last_seen_at: null,
+      created_at: SEEDED_AT,
+    },
+    {
+      id: 'ptok-004',
+      partner_id: 'ptn-004',
+      contact_name: '남수정',
+      contact_email: 'partner-cr@example.com',
+      token: PARTNER_CHANGES_TOKEN,
+      expires_at: '2026-11-14T00:00:00.000Z',
       revoked_at: null,
       last_seen_at: null,
       created_at: SEEDED_AT,
