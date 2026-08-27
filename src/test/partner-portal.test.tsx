@@ -7,11 +7,15 @@ import { cleanup, render, screen, waitFor, within } from '@testing-library/react
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, describe, expect, it } from 'vitest'
-import { PARTNER_DEMO_TOKEN, PARTNER_EXPIRED_TOKEN, PARTNER_REVOKED_TOKEN } from '../fixtures/hostFixtures'
+import { PARTNER_DEMO_TOKEN, PARTNER_EXPIRED_TOKEN, PARTNER_REVOKED_TOKEN, PROJECT_ID_HOST } from '../fixtures/hostFixtures'
+import type { DeadlineGroup } from '../components/partner-portal/deadlineGroups'
+import PartnerPortalGroupList from '../components/partner-portal/PartnerPortalGroupList'
+import PartnerPortalNoticeList from '../components/partner-portal/PartnerPortalNoticeList'
 import { formatDate } from '../lib/labels'
 import PartnerPortalPage from '../pages/PartnerPortalPage'
 import { getDataProvider } from '../providers'
 import type { MockProvider } from '../providers'
+import type { PartnerPortalItem, PartnerPortalNotice } from '../types'
 
 afterEach(cleanup)
 
@@ -179,5 +183,121 @@ describe('이번 마감 그룹핑', () => {
     const sectionTitle = await screen.findByText('이번 마감')
     const section = sectionTitle.closest('section')!
     expect(within(section).getByText(formatDate(firstIncomplete!.deadline!))).toBeTruthy()
+  })
+})
+
+describe('P2(3.15.1, 감수 M2) — 참가 가이드 버튼·문의 안내', () => {
+  it('가이드 링크·문의 이메일이 있으면(픽스처 기본값) 버튼과 안내가 렌더된다', async () => {
+    renderPortal(PARTNER_DEMO_TOKEN)
+    const guideLink = (await screen.findByRole('link', {
+      name: /참가 가이드 보기/,
+    })) as HTMLAnchorElement
+    expect(guideLink.getAttribute('href')).toBe('https://example.com/vst26-guide')
+    expect(guideLink.getAttribute('target')).toBe('_blank')
+    expect(guideLink.getAttribute('rel')).toBe('noreferrer')
+    expect(await screen.findByText('문의: partners@example.com')).toBeTruthy()
+  })
+
+  it('값이 없으면 버튼·문의 안내 둘 다 렌더되지 않는다', async () => {
+    const provider = mockProvider()
+    await provider.updateProject(PROJECT_ID_HOST, { partner_guide_url: null, partner_contact_email: null })
+
+    renderPortal(PARTNER_DEMO_TOKEN)
+    await screen.findAllByText('가상다이아텍')
+    expect(screen.queryByRole('link', { name: /참가 가이드 보기/ })).toBeNull()
+    expect(screen.queryByText(/^문의:/)).toBeNull()
+
+    // 뒤처리 — 이 파일의 다른 테스트가 픽스처 기본값을 기대한다
+    await provider.updateProject(PROJECT_ID_HOST, {
+      partner_guide_url: 'https://example.com/vst26-guide',
+      partner_contact_email: 'partners@example.com',
+    })
+  })
+})
+
+// P6-③은 데모 픽스처(§21.3)의 HT 코드가 전부 서로 다른 D오프셋이라(실제 마감이 겹치는 예가 없다)
+// 다건 그룹을 만들 수 없다 — PartnerPortalGroupList를 합성 데이터로 직접 렌더해 순수하게 검증한다.
+function makePortalItem(overrides: Partial<PartnerPortalItem>): PartnerPortalItem {
+  return {
+    task_code: 'HT-X',
+    task_title: '샘플 항목',
+    deadline: '2026-09-01',
+    deliverable_id: 'dlv-x',
+    status: 'requested',
+    comments: [],
+    versions: [],
+    ...overrides,
+  }
+}
+
+describe('P6-③(3.15.1) — "다음 마감" 접힘 행 항목 요약', () => {
+  it('그룹 항목이 1건이어도 접힘 요약에 제목이 보인다 — "제출:" 접두로 정확 일치 중복 방지', () => {
+    const group: DeadlineGroup = {
+      deadline: '2026-09-01',
+      items: [makePortalItem({ deliverable_id: 'dlv-1', task_title: '부스 그래픽 제출 — 가상다이아텍' })],
+    }
+    const { container } = render(
+      <PartnerPortalGroupList title="다음 마감 (대기)" groups={[group]} token="tok" onSubmitted={() => {}} />,
+    )
+    const summary = container.querySelector('summary')!
+    expect(within(summary).getByText('1건')).toBeTruthy()
+    // P6-③: 접힌 행에서도 뭘 내야 하는지 보인다. '제출:' 접두 덕에 펼친 카드의 <h3> 제목과
+    // 완전히 같은 문자열이 아니므로 기존 정확 일치 쿼리(findByText(제목))는 깨지지 않는다.
+    expect(within(summary).getByText('제출: 부스 그래픽 제출 — 가상다이아텍')).toBeTruthy()
+    expect(within(summary).queryByText('부스 그래픽 제출 — 가상다이아텍')).toBeNull()
+  })
+
+  it('그룹 항목이 여럿이면 접힌 상태에서도 "제목 외 N건"으로 요약된다', () => {
+    const group: DeadlineGroup = {
+      deadline: '2026-09-01',
+      items: [
+        makePortalItem({ deliverable_id: 'dlv-1', task_title: '부스 그래픽 제출 — 가상다이아텍' }),
+        makePortalItem({ deliverable_id: 'dlv-2', task_title: '발표자료 1차 초안 제출 — 가상다이아텍' }),
+      ],
+    }
+    const { container } = render(
+      <PartnerPortalGroupList title="다음 마감 (대기)" groups={[group]} token="tok" onSubmitted={() => {}} />,
+    )
+    const details = container.querySelector('details')!
+    // 접힌 상태(펼치지 않은 상태)에서도 DOM에 요약이 이미 들어있다는 것이 "보인다"는 증거.
+    expect(details.open).toBe(false)
+    expect(within(details).getByText('제출: 부스 그래픽 제출 — 가상다이아텍 외 1건')).toBeTruthy()
+  })
+})
+
+describe('P6-④(3.15.1) — 주최 측 안내 완료/예정 분리', () => {
+  it('마감이 지난 안내는 완료 그룹(흐리게), 남은 안내는 예정 그룹으로 나뉜다', () => {
+    // 실제 데모 픽스처는 오늘(테스트 실행일) 기준 전부 미래라 완료 그룹이 비므로, 날짜에 무관하게
+    // 항상 성립하는 합성 데이터로 컴포넌트 렌더링만 독립 검증한다.
+    const past: PartnerPortalNotice = {
+      task_code: 'HT-X1',
+      task_title: '지난 안내',
+      deadline: '2020-01-01',
+      note: null,
+    }
+    const future: PartnerPortalNotice = {
+      task_code: 'HT-X2',
+      task_title: '다가올 안내',
+      deadline: '2099-01-01',
+      note: null,
+    }
+
+    const { container } = render(<PartnerPortalNoticeList notices={[past, future]} />)
+
+    expect(within(container).getByText('완료')).toBeTruthy()
+    expect(within(container).getByText('예정')).toBeTruthy()
+    expect(within(container).getByText('지난 안내')).toBeTruthy()
+    expect(within(container).getByText('다가올 안내')).toBeTruthy()
+
+    // 완료 그룹은 흐리게(opacity) 표시된다.
+    const doneHeading = within(container).getByText('완료')
+    const doneList = doneHeading.nextElementSibling as HTMLElement
+    expect(doneList.className).toMatch(/opacity-60/)
+  })
+
+  it('전부 예정이면(픽스처 기본) "완료" 라벨 자체가 렌더되지 않는다(기존 화면 무변화 회귀)', async () => {
+    renderPortal(PARTNER_DEMO_TOKEN)
+    await screen.findByText('주최 측 안내')
+    expect(screen.queryByText('완료')).toBeNull()
   })
 })

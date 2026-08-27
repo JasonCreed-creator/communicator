@@ -9,6 +9,7 @@ import PageHeader from '../components/internal/PageHeader'
 import PartnerRosterEditor from '../components/partner/PartnerRosterEditor'
 import ClientContactsEditor from '../components/settings/ClientContactsEditor'
 import MembersEditor from '../components/settings/MembersEditor'
+import PartnerGuideEditor from '../components/settings/PartnerGuideEditor'
 import PartnerTierEditor from '../components/settings/PartnerTierEditor'
 import ProjectKindCards from '../components/settings/ProjectKindCards'
 import ProjectOverviewForm from '../components/settings/ProjectOverviewForm'
@@ -170,6 +171,17 @@ export default function SettingsPage() {
               {project.data.kind === 'host' && (
                 <Card title="파트너 등급">
                   <PartnerTierEditor projectId={projectId} readOnly={!isPm} />
+                </Card>
+              )}
+
+              {project.data.kind === 'host' && (
+                <Card title="파트너 안내 창구">
+                  <PartnerGuideEditor
+                    projectId={projectId}
+                    project={project.data}
+                    onSaved={handleSaved}
+                    readOnly={!isPm}
+                  />
                 </Card>
               )}
 

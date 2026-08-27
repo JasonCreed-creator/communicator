@@ -433,6 +433,20 @@ export function areaPreset(area: DeliverableArea): AreaPreset {
   return PRESETS[area]
 }
 
+// P6-⑥(3.15.1) — 보드 그룹 헤딩 표시 라벨 전용 치환.
+// AreaBoardPage는 Deliverable.category 원문을 그룹 헤딩으로 그대로 렌더한다. 실측 이식
+// 픽스처(rebuildFixtures.ts)가 category='발주 제작물'로 저장한 항목들이 그 원문 그대로
+// 화면에 떴는데, 발주처 컨펌 대상이라는 의미가 잘 안 읽혀 '컨펌 대상 제작물'로 바꾼다.
+// **데이터(Deliverable.category 값)는 그대로 둔다** — 화면 표시 문구만 이 맵을 거친다.
+const CATEGORY_GROUP_DISPLAY: Record<string, string> = {
+  '발주 제작물': '컨펌 대상 제작물',
+}
+
+/** 보드 그룹 헤딩에 쓸 표시 라벨. 매핑이 없으면 카테고리 원문을 그대로 반환한다 */
+export function categoryGroupLabel(category: string): string {
+  return CATEGORY_GROUP_DISPLAY[category] ?? category
+}
+
 export function categoryPreset(
   area: DeliverableArea,
   category: string,

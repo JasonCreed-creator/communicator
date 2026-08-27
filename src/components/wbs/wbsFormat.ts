@@ -3,7 +3,15 @@
 import { formatDate } from '../../lib/labels'
 import type { IsoDate } from '../../types/entities'
 import type { WbsTask } from '../../types/entities'
-import type { WbsStatus } from '../../types/enums'
+import type { WbsDirection, WbsStatus } from '../../types/enums'
+
+/** P6-② — host 행사 태스크 행의 방향 뱃지 톤(라벨 문구는 lib/labels.ts WBS_DIRECTION_LABELS 재사용,
+ *  파트너 보드 타임라인 점 색과 동일 매핑). 대행형 행사에는 렌더하지 않는다(호출부에서 게이트). */
+export const WBS_DIRECTION_BADGE_CLASSES: Record<WbsDirection, string> = {
+  partner_submit: 'bg-accent-tint text-accent-deep',
+  host_notice: 'bg-steel-tint text-steel',
+  internal: 'bg-track text-ink-sub',
+}
 
 export const WBS_STATUS_LABELS: Record<WbsStatus, string> = {
   todo: '예정',

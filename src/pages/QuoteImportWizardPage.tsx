@@ -4,10 +4,12 @@
 // 금액은 내부 화면인 여기까지만 — 발주처·랜딩·운영계획서로 나가는 경로는 §22 R-Q3 가드가 막는다.
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import InfoTip from '../components/internal/InfoTip'
 import PageHeader from '../components/internal/PageHeader'
 import QuoteGate from '../components/quote/QuoteGate'
 import { fmtWon } from '../components/quote/quoteFormState'
 import { useProject } from '../context/ProjectContext'
+import { IMPORT_STEP_HELP } from '../lib/helpTexts'
 import { QUOTE_IMPORT_BUCKETS, bucketLabel } from '../modules/quote/import/buckets'
 import { getDataProvider } from '../providers'
 import type { Quote, QuoteImport } from '../types/entities'
@@ -178,7 +180,10 @@ function WizardBody() {
       {/* ── ① 업로드 ── */}
       {step === 1 && (
         <section className="ui-card max-w-2xl p-5">
-          <p className="t-card-title">엑셀 견적서 올리기</p>
+          <p className="t-card-title inline-flex items-center gap-1.5">
+            엑셀 견적서 올리기
+            <InfoTip text={IMPORT_STEP_HELP.upload} />
+          </p>
           <p className="mt-1 text-sm text-ink-sub">
             파일을 읽어 서식·섹션·항목·검산 결과만 보여 줍니다. 이 단계에서는 아무것도 저장되지 않습니다.
           </p>
@@ -224,7 +229,10 @@ function WizardBody() {
 
           <section className="ui-card p-5">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="t-card-title">인식된 행사 정보</p>
+              <p className="t-card-title inline-flex items-center gap-1.5">
+                인식된 행사 정보
+                <InfoTip text={IMPORT_STEP_HELP.confirm} />
+              </p>
               <span className="rounded-full bg-steel-tint px-2.5 py-0.5 text-xs font-medium text-steel">
                 {parsed.format}형 · {imp?.file_name}
               </span>
@@ -353,7 +361,10 @@ function WizardBody() {
       {/* ── ③ 분배 선택 ── */}
       {step === 3 && quote && (
         <section className="ui-card max-w-2xl p-5">
-          <p className="t-card-title">어디까지 반영할까요?</p>
+          <p className="t-card-title inline-flex items-center gap-1.5">
+            어디까지 반영할까요?
+            <InfoTip text={IMPORT_STEP_HELP.distribute} />
+          </p>
           <p className="mt-1 text-sm text-ink-sub">
             견적은 이미 등록되었습니다 — 나머지는 선택입니다.
           </p>

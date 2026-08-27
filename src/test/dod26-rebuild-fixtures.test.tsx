@@ -58,21 +58,21 @@ describe('DoD-26 (a) RE:BUILD 26 — 종료 행사', () => {
     expect((await p.listWbsTasks(RB26)).length).toBe(37)
   })
 
-  it('종료 행사의 S2 보드에는 생성·가이드 발행 폼이 뜨지 않고 열람 안내만 뜬다', async () => {
+  it('종료 행사의 S2 보드에는 항목 추가 카드가 뜨지 않고 열람 안내만 뜬다', async () => {
+    // P7(3.15.1) — 옛 '새 항목 생성'·'가이드 발행' 두 폼은 통합 "항목 추가" 카드 1개로 바뀌었다.
+    // 종료 행사는 canWrite=false라 그 카드의 진입점 버튼조차 뜨지 않는다.
     localStorage.setItem('communicator.currentProjectId', RB26)
     renderRoute('/board/design')
     // 실적 제작물은 그대로 읽힌다
     expect(await screen.findByText('외관 대형 현수막')).toBeTruthy()
     expect(screen.getByText('종료된 행사입니다 — 열람만 가능합니다.')).toBeTruthy()
-    expect(screen.queryByRole('heading', { name: '새 항목 생성' })).toBeNull()
-    expect(screen.queryByRole('heading', { name: '가이드 발행' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '＋ 항목 추가' })).toBeNull()
     cleanup()
 
-    // 대조군: 진행 중 행사(RE:BUILD 27)에서는 두 폼이 정상 노출된다 (현재 사용자 = PM)
+    // 대조군: 진행 중 행사(RE:BUILD 27)에서는 항목 추가 카드가 정상 노출된다 (현재 사용자 = PM)
     localStorage.setItem('communicator.currentProjectId', RB27)
     renderRoute('/board/design')
-    expect(await screen.findByRole('heading', { name: '새 항목 생성' })).toBeTruthy()
-    expect(screen.getByRole('heading', { name: '가이드 발행' })).toBeTruthy()
+    expect(await screen.findByRole('button', { name: '＋ 항목 추가' })).toBeTruthy()
     expect(screen.queryByText('종료된 행사입니다 — 열람만 가능합니다.')).toBeNull()
   })
 })

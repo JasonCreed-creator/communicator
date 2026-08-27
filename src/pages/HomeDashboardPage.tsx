@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import Card from '../components/internal/Card'
 import DdayBadge from '../components/internal/DdayBadge'
@@ -33,6 +33,19 @@ export default function HomeDashboardPage() {
     (sum, p) => sum + p.submission_counts.pending_approval,
     0,
   )
+  // v2.4.1 감수 M3 — 홈 미결 위젯을 '파트너 검토 대기' 목록으로 대체할 재료(파트너명·항목명·마감).
+  // deliverables는 이미 이 화면이 인박스용으로 불러오던 목록이라 추가 호출 없이 파생한다.
+  const partnerNameById = useMemo(
+    () => new Map((partners.data ?? []).map((p) => [p.id, p.name])),
+    [partners.data],
+  )
+  const partnerPendingItems = useMemo(() => {
+    if (!isHost) return []
+    return (deliverables.data ?? [])
+      .filter((d) => d.partner_id && d.status === 'pending_approval')
+      .map((d) => ({ deliverable: d, partnerId: d.partner_id as string }))
+      .sort((a, b) => (a.deliverable.due_date ?? '9999').localeCompare(b.deliverable.due_date ?? '9999'))
+  }, [isHost, deliverables.data])
 
   const reloadAll = () => {
     dashboard.reload()
@@ -60,7 +73,9 @@ export default function HomeDashboardPage() {
 
       {dashboard.data && (
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <StatTile label="미결 컨펌" value={dashboard.data.pending_approvals.length} />
+          {/* v2.4.1 감수 M3 — 주최형은 '미결 컨펌'(발주처 큐 전용 개념) 대신 '파트너 검토 대기'를
+              쓴다. 5타일 어색 배치 해소 — 대행형/주최형 둘 다 항상 4타일. */}
+          {!isHost && <StatTile label="미결 컨펌" value={dashboard.data.pending_approvals.length} />}
           <StatTile label="지연 태스크" value={dashboard.data.wbs_delayed.length} tone="negative" />
           <StatTile label="임박" value={dashboard.data.wbs_imminent.length} tone="accent" />
           <StatTile
@@ -135,34 +150,69 @@ export default function HomeDashboardPage() {
             </Card>
           )}
 
-          <Card title="미결 컨펌 (기한순)">
-            {dashboard.loading && <p className="text-sm text-ink-cap">불러오는 중…</p>}
-            {dashboard.data && dashboard.data.pending_approvals.length === 0 && (
-              <p className="text-sm text-ink-cap">대기 중인 컨펌이 없습니다.</p>
-            )}
-            <ul className="divide-y divide-border">
-              {dashboard.data?.pending_approvals.map(({ approval, deliverable }) => (
-                <li key={approval.id} className="py-2.5 first:pt-0 last:pb-0">
-                  <Link
-                    to={`/items/${deliverable.id}`}
-                    className="flex items-center justify-between gap-3 hover:opacity-70"
-                  >
-                    <span className="min-w-0">
-                      <span className="block truncate text-sm font-medium text-ink">
-                        {deliverable.title}
+          {!isHost && (
+            <Card title="미결 컨펌 (기한순)">
+              {dashboard.loading && <p className="text-sm text-ink-cap">불러오는 중…</p>}
+              {dashboard.data && dashboard.data.pending_approvals.length === 0 && (
+                <p className="text-sm text-ink-cap">대기 중인 컨펌이 없습니다.</p>
+              )}
+              <ul className="divide-y divide-border">
+                {dashboard.data?.pending_approvals.map(({ approval, deliverable }) => (
+                  <li key={approval.id} className="py-2.5 first:pt-0 last:pb-0">
+                    <Link
+                      to={`/items/${deliverable.id}`}
+                      className="flex items-center justify-between gap-3 hover:opacity-70"
+                    >
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-medium text-ink">
+                          {deliverable.title}
+                        </span>
+                        <span className="text-xs text-ink-cap">{deliverable.category}</span>
                       </span>
-                      <span className="text-xs text-ink-cap">{deliverable.category}</span>
-                    </span>
-                    {approval.due_at ? (
-                      <DdayBadge isoDate={approval.due_at} />
-                    ) : (
-                      <span className="text-xs text-ink-cap">기한 미정</span>
-                    )}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </Card>
+                      {approval.due_at ? (
+                        <DdayBadge isoDate={approval.due_at} />
+                      ) : (
+                        <span className="text-xs text-ink-cap">기한 미정</span>
+                      )}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
+
+          {isHost && (
+            <Card title="파트너 검토 대기">
+              {partners.loading && <p className="text-sm text-ink-cap">불러오는 중…</p>}
+              {!partners.loading && partnerPendingItems.length === 0 && (
+                <p className="text-sm text-ink-cap">검토 대기 중인 파트너 제출이 없습니다.</p>
+              )}
+              <ul className="divide-y divide-border">
+                {partnerPendingItems.map(({ deliverable, partnerId }) => (
+                  <li key={deliverable.id} className="py-2.5 first:pt-0 last:pb-0">
+                    {/* P3(3.15.1) — 항목 클릭 시 /partners로 이동하며 해당 파트너 상세가 자동
+                        선택되도록 ?partner={id} 쿼리로 전달한다(PartnerBoardPage가 읽어 선택·스크롤). */}
+                    <Link
+                      to={`/partners?partner=${partnerId}`}
+                      className="flex items-center justify-between gap-3 hover:opacity-70"
+                    >
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-medium text-ink">
+                          {partnerNameById.get(partnerId) ?? '알 수 없음'}
+                        </span>
+                        <span className="block truncate text-xs text-ink-cap">{deliverable.title}</span>
+                      </span>
+                      {deliverable.due_date ? (
+                        <DdayBadge isoDate={deliverable.due_date} />
+                      ) : (
+                        <span className="text-xs text-ink-cap">마감 미정</span>
+                      )}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
 
           <Card title="다가오는 마일스톤">
             {dashboard.data && dashboard.data.upcoming_milestones.length === 0 && (

@@ -9,12 +9,14 @@
 import { useMemo, useState } from 'react'
 import EmptyState from '../components/internal/EmptyState'
 import ErrorAlert from '../components/internal/ErrorAlert'
+import InfoTip from '../components/internal/InfoTip'
 import PageHeader from '../components/internal/PageHeader'
 import MarginBar from '../components/settlement/MarginBar'
 import SettlementItems from '../components/settlement/SettlementItems'
 import { canUseQuotes } from '../components/quote/QuoteGate'
 import { useProject } from '../context/ProjectContext'
 import { useAsync, useMutation } from '../hooks/useAsync'
+import { SETTLEMENT_KPI_HELP } from '../lib/helpTexts'
 import { quoteBucketSpec } from '../lib/settlement'
 import { computeQuoteOutputs } from '../modules/quote/engine/quoteInput'
 import { getDataProvider } from '../providers'
@@ -61,10 +63,12 @@ function MoneyTile({
   label,
   amount,
   tone = 'default',
+  help,
 }: {
   label: string
   amount: number
   tone?: 'default' | 'accent' | 'negative'
+  help?: string
 }) {
   const color = tone === 'negative' ? 'text-negative' : tone === 'accent' ? 'text-accent-deep' : 'text-ink'
   return (
@@ -73,7 +77,10 @@ function MoneyTile({
         {amount.toLocaleString('ko-KR')}
         <span className="ml-1 text-sm font-medium text-ink-sub">원</span>
       </div>
-      <div className="t-caption mt-1.5">{label}</div>
+      <div className="t-caption mt-1.5 inline-flex items-center gap-1">
+        {label}
+        {help && <InfoTip text={help} />}
+      </div>
     </div>
   )
 }
@@ -295,16 +302,20 @@ export default function SettlementPage() {
 
       {/* KPI 4 (§19.1) */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <MoneyTile label="마진 기준 계약액" amount={totals.marginBase} />
-        <MoneyTile label="실집행" amount={totals.totalActual} />
+        <MoneyTile label="마진 기준 계약액" amount={totals.marginBase} help={SETTLEMENT_KPI_HELP.contract} />
+        <MoneyTile label="실집행" amount={totals.totalActual} help={SETTLEMENT_KPI_HELP.spent} />
         <MoneyTile
           label="최종 마진"
           amount={totals.finalMargin}
           tone={totals.finalMargin < 0 ? 'negative' : 'accent'}
+          help={SETTLEMENT_KPI_HELP.margin}
         />
         <div className="ui-card p-5">
           <div className="kpi-num text-[24px] tabular-nums">{pct(totals.marginRate)}</div>
-          <div className="t-caption mt-1.5">마진율</div>
+          <div className="t-caption mt-1.5 inline-flex items-center gap-1">
+            마진율
+            <InfoTip text={SETTLEMENT_KPI_HELP.marginRate} />
+          </div>
           {/* 실측 밴드는 참고선이다 — 밴드 밖이라고 판정·경고하지 않는다(§19.1) */}
           <div className="mt-2 h-1.5 w-full rounded-full bg-track">
             <div
@@ -323,7 +334,11 @@ export default function SettlementPage() {
 
       {/* 검산 — 항등식이 깨지면 버킷 플래그가 잘못된 것이다(§19.1) */}
       <section className={`ui-card p-5 ${totals.identityOk ? '' : 'border-negative'}`}>
-        <h2 className="t-section-title">검산</h2>
+        {/* h2 자체의 접근성 이름에 "도움말"이 섞이지 않도록 InfoTip은 h2의 형제로 둔다 */}
+        <div className="flex items-center gap-1.5">
+          <h2 className="t-section-title">검산</h2>
+          <InfoTip text={SETTLEMENT_KPI_HELP.identity} />
+        </div>
         <p className="mt-2 text-sm tabular-nums text-ink-sub">
           계약 {krw(contractTotal)} − 리드젠 {krw(excludedTotal)} − 실집행 {krw(totals.totalActual)} ={' '}
           <span className="font-semibold text-ink">{krw(totals.finalMargin)}</span>

@@ -150,7 +150,12 @@ export function singleFileArtifact(options: { fileName?: string } = {}): Plugin 
           .replace(/<\/script/gi, '<\\/script')
           .replace(/�/g, '\\uFFFD')
 
+        // §13b(v2.4.1): charset 메타는 문서 선두 — 브라우저 프리스캔(첫 1,024바이트) 안에 있어야
+        // charset 미선언 서빙에서도 UTF-8로 해석된다. 스타일이 앞서면 메타가 51KB 지점으로 밀려
+        // `[가-힣]` 정규식이 SyntaxError로 터지며 전면 백지가 된다(2026-08-27 감수 실증).
+        // 퍼블리셔 래퍼가 자체 <head>에 charset을 갖고 있어도 본문 조각의 중복 메타는 무해하다.
         const html =
+          `<meta charset="utf-8">\n` +
           `<title>${title}</title>\n` +
           `<style>\n${styleText}\n</style>\n` +
           `<div id="root"></div>\n` +

@@ -1,15 +1,19 @@
-import { useState, type FormEvent, type MouseEvent } from 'react'
+import { useMemo, useState, type MouseEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import Card from '../components/internal/Card'
 import DdayBadge from '../components/internal/DdayBadge'
 import EmptyState from '../components/internal/EmptyState'
 import ErrorAlert from '../components/internal/ErrorAlert'
+import InfoTip from '../components/internal/InfoTip'
 import PageHeader from '../components/internal/PageHeader'
 import StatusBadge from '../components/internal/StatusBadge'
+import DeliverableAddForm from '../components/board/DeliverableAddForm'
+import CuesheetEditor from '../components/cue/CuesheetEditor'
 import { useProject } from '../context/ProjectContext'
 import { useAsync, useMutation } from '../hooks/useAsync'
-import { AREA_LABELS, STATUS_LABELS, STATUS_STRIP_CLASSES, formatDate } from '../lib/labels'
-import { areaPreset, categoryPreset } from '../lib/boardPresets'
+import { AREA_LABELS, STATUS_BADGE_CLASSES, STATUS_LABELS, STATUS_STRIP_CLASSES, formatDate } from '../lib/labels'
+import { categoryGroupLabel } from '../lib/boardPresets'
+import { BOARD_HELP, STATUS_HELP } from '../lib/helpTexts'
 import { getDataProvider } from '../providers'
 import type { Deliverable } from '../types/entities'
 import type { DeliverableArea, DeliverableStatus } from '../types/enums'
@@ -33,6 +37,11 @@ function AreaBoard({ area }: { area: DeliverableArea }) {
   const { projectId, summaries } = useProject()
   const [statusFilter, setStatusFilter] = useState<DeliverableStatus | ''>('')
   const [assigneeFilter, setAssigneeFilter] = useState('')
+  // P5-③(3.15.1) — 제목 검색. 목록 조회 자체는 그대로 두고 클라이언트에서 부분 일치로 거른다
+  // (provider 필터 계약을 넓히지 않기 위함 — 이 화면 밖 다른 소비자에겐 영향 없음).
+  const [titleQuery, setTitleQuery] = useState('')
+  // P7(3.15.1) "카테고리가 빌더를 결정한다" — 방금 만든 항목이 큐시트면 인라인 에디터를 바로 연다
+  const [justCreatedCue, setJustCreatedCue] = useState<Deliverable | null>(null)
 
   const currentUser = useAsync(() => provider.getCurrentUser(), [])
   const members = useAsync(() => provider.listMembers(projectId), [projectId])
@@ -60,9 +69,17 @@ function AreaBoard({ area }: { area: DeliverableArea }) {
   const canWrite =
     !isClosed && currentUser.data && (currentUser.data.role === 'pm' || currentUser.data.role === area)
   const isPm = !isClosed && currentUser.data?.role === 'pm'
+  // ItemDetailPage와 동일 기준(§6.1) — 큐시트 편집은 pm·ops만
+  const canEditCue = currentUser.data?.role === 'pm' || currentUser.data?.role === 'ops'
+
+  const visibleRows = useMemo(() => {
+    const q = titleQuery.trim().toLowerCase()
+    const rows = board.data ?? []
+    return q === '' ? rows : rows.filter((r) => r.deliverable.title.toLowerCase().includes(q))
+  }, [board.data, titleQuery])
 
   const grouped = new Map<string, BoardRow[]>()
-  for (const row of board.data ?? []) {
+  for (const row of visibleRows) {
     const list = grouped.get(row.deliverable.category) ?? []
     list.push(row)
     grouped.set(row.deliverable.category, list)
@@ -70,7 +87,14 @@ function AreaBoard({ area }: { area: DeliverableArea }) {
 
   return (
     <section className="space-y-6 p-6">
-      <PageHeader caption={`S2 · ${AREA_LABELS[area]} 보드`} title={`${AREA_LABELS[area]} 보드`} />
+      <PageHeader
+        caption={`S2 · ${AREA_LABELS[area]} 보드`}
+        title={`${AREA_LABELS[area]} 보드`}
+        // 페이지 타이틀(h1) 자체의 접근성 이름에 "도움말"이 섞이지 않도록, InfoTip은
+        // h1 안이 아니라 PageHeader의 action 슬롯(형제 엘리먼트)에 둔다.
+        // BOARD_AREAS(design·ops)만 이 화면에 도달하므로 좁혀서 인덱싱한다(BOARD_HELP엔 common이 없다).
+        action={<InfoTip text={BOARD_HELP[area as 'design' | 'ops']} />}
+      />
 
       <ErrorAlert message={board.error} />
 
@@ -105,16 +129,28 @@ function AreaBoard({ area }: { area: DeliverableArea }) {
             ))}
           </select>
         </label>
+        <label className="flex items-center gap-2 text-sm text-ink-sub">
+          제목 검색
+          <input
+            type="search"
+            value={titleQuery}
+            onChange={(e) => setTitleQuery(e.target.value)}
+            placeholder="제목으로 찾기"
+            className="ui-input w-48"
+          />
+        </label>
       </div>
 
+      <StatusLegend />
+
       {board.loading && <p className="text-sm text-ink-cap">불러오는 중…</p>}
-      {board.data && board.data.length === 0 && <EmptyState message="조건에 맞는 항목이 없습니다." />}
+      {board.data && visibleRows.length === 0 && <EmptyState message="조건에 맞는 항목이 없습니다." />}
 
       <div className="space-y-6">
         {[...grouped.entries()].map(([category, rows]) => (
           <div key={category} className="space-y-3">
             <div className="flex items-baseline gap-2 px-1">
-              <span className="text-xs font-medium tracking-wide text-brown">{category}</span>
+              <span className="text-xs font-medium tracking-wide text-brown">{categoryGroupLabel(category)}</span>
               <span className="text-xs text-ink-cap">{rows.length}건</span>
             </div>
             <ul className="space-y-2">
@@ -134,15 +170,58 @@ function AreaBoard({ area }: { area: DeliverableArea }) {
       </div>
 
       {canWrite ? (
-        <CreateDeliverableForm area={area} onCreated={board.reload} />
+        <DeliverableAddForm
+          area={area}
+          projectId={projectId}
+          isPm={!!isPm}
+          onCreated={(created) => {
+            board.reload()
+            setJustCreatedCue(created.category === '큐시트' ? created : null)
+          }}
+        />
       ) : isClosed ? (
         <p className="text-sm text-ink-cap">종료된 행사입니다 — 열람만 가능합니다.</p>
       ) : currentUser.data ? (
         <p className="text-sm text-ink-cap">이 영역에는 쓰기 권한이 없습니다(열람만 가능).</p>
       ) : null}
 
-      {isPm && <IssueBriefForm area={area} onCreated={board.reload} />}
+      {/* P7 "카테고리가 빌더를 결정한다" 채택안 — 보드 화면 안 인라인 패널(기존 CuesheetEditor 재사용).
+          생성 직후 바로 편집을 이어갈 수 있게 항목 추가 카드 바로 아래에 연다. */}
+      {justCreatedCue && (
+        <Card
+          title={`큐시트 바로 편집 — ${justCreatedCue.title}`}
+          action={
+            <button type="button" onClick={() => setJustCreatedCue(null)} className="btn btn-ghost btn-sm">
+              닫기
+            </button>
+          }
+        >
+          <CuesheetEditor deliverableId={justCreatedCue.id} canEdit={canEditCue} />
+          <Link to={`/items/${justCreatedCue.id}`} className="mt-3 inline-block text-sm text-steel hover:underline">
+            상세 화면으로 이동
+          </Link>
+        </Card>
+      )}
     </section>
+  )
+}
+
+/** 상태 뱃지 범례 — P8(3.15.1). 뱃지가 행마다 많이 뜨므로 항목별 InfoTip 대신
+ * 필터 바로 아래 한 곳에 전 상태를 모아 title 속성으로 설명한다(과밀 금지). */
+function StatusLegend() {
+  return (
+    <div className="flex flex-wrap items-center gap-1.5" aria-label="상태 범례">
+      <span className="t-caption">상태 범례</span>
+      {(Object.keys(STATUS_LABELS) as DeliverableStatus[]).map((s) => (
+        <span
+          key={s}
+          title={STATUS_HELP[s]}
+          className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_BADGE_CLASSES[s]}`}
+        >
+          {STATUS_LABELS[s]}
+        </span>
+      ))}
+    </div>
   )
 }
 
@@ -201,353 +280,5 @@ function BoardRowItem({
         </div>
       )}
     </li>
-  )
-}
-
-/**
- * 영역별 카테고리 선택 — 프리셋 목록 + '직접 입력'.
- * 자유 입력을 막지 않되, 기본값은 그 보드에 맞는 항목만 보이게 한다(src/lib/boardPresets.ts 정본).
- */
-function CategoryPicker({
-  area,
-  value,
-  onChange,
-  id,
-}: {
-  area: DeliverableArea
-  value: string
-  onChange: (next: string) => void
-  id: string
-}) {
-  const preset = areaPreset(area)
-  const known = preset.categories.some((c) => c.name === value)
-  // 값이 비었거나 프리셋에 있으면 select 모드, 사용자가 직접 입력을 고르면 자유 입력 모드
-  const [freeform, setFreeform] = useState(false)
-  const asSelect = !freeform && (value === '' || known)
-
-  if (asSelect) {
-    return (
-      <select
-        id={id}
-        value={value}
-        onChange={(e) => {
-          if (e.target.value === '__custom__') {
-            setFreeform(true)
-            onChange('')
-            return
-          }
-          onChange(e.target.value)
-        }}
-        required
-        className="ui-input w-40"
-      >
-        <option value="">항목 선택…</option>
-        {[...new Set(preset.categories.map((c) => c.phase))].map((phase) => (
-          <optgroup key={phase} label={phase}>
-            {preset.categories
-              .filter((c) => c.phase === phase)
-              .map((c) => (
-                <option key={c.name} value={c.name}>
-                  {c.name}
-                </option>
-              ))}
-          </optgroup>
-        ))}
-        <option value="__custom__">직접 입력…</option>
-      </select>
-    )
-  }
-  return (
-    <span className="flex items-center gap-1.5">
-      <input
-        id={id}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        required
-        placeholder="항목명"
-        className="ui-input w-28"
-      />
-      <button
-        type="button"
-        onClick={() => {
-          setFreeform(false)
-          onChange('')
-        }}
-        className="text-xs text-steel hover:underline"
-      >
-        목록
-      </button>
-    </span>
-  )
-}
-
-function CreateDeliverableForm({ area, onCreated }: { area: DeliverableArea; onCreated: () => void }) {
-  const { projectId } = useProject()
-  const members = useAsync(() => provider.listMembers(projectId), [projectId])
-  const [category, setCategory] = useState('')
-  const [title, setTitle] = useState('')
-  const [assigneeId, setAssigneeId] = useState('')
-  const [dueDate, setDueDate] = useState('')
-  const create = useMutation(() =>
-    provider.createDeliverable({
-      project_id: projectId,
-      area,
-      category,
-      title,
-      assignee_id: assigneeId || undefined,
-      due_date: dueDate || undefined,
-    }),
-  )
-
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault()
-    const result = await create.run()
-    if (result) {
-      setCategory('')
-      setTitle('')
-      setAssigneeId('')
-      setDueDate('')
-      onCreated()
-    }
-  }
-
-  return (
-    <Card title="새 항목 생성">
-      <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-3">
-        <label className="flex flex-col gap-1 t-caption" htmlFor="create-category">
-          카테고리
-          <CategoryPicker area={area} value={category} onChange={setCategory} id="create-category" />
-        </label>
-        <label className="flex flex-col gap-1 t-caption">
-          제목
-          <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            required
-            placeholder="항목 제목"
-            className="ui-input w-48"
-          />
-        </label>
-        <label className="flex flex-col gap-1 t-caption">
-          담당
-          <select
-            value={assigneeId}
-            onChange={(e) => setAssigneeId(e.target.value)}
-            className="ui-input w-36"
-          >
-            <option value="">미배정</option>
-            {members.data?.map((m) => (
-              <option key={m.user_id} value={m.user_id}>
-                {m.profile.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="flex flex-col gap-1 t-caption">
-          마감
-          <input
-            type="date"
-            value={dueDate}
-            onChange={(e) => setDueDate(e.target.value)}
-            className="ui-input"
-          />
-        </label>
-        <button type="submit" disabled={create.pending} className="btn btn-primary">
-          생성
-        </button>
-      </form>
-      <ErrorAlert message={create.error} />
-    </Card>
-  )
-}
-
-// ── (v1.2) PM 전용 가이드 발행 폼 ────────────────────────────────────────
-// 가이드 내용 textarea는 12줄 — 프리셋 초안이 체크리스트라 3줄로는 읽히지 않는다.
-// 기존 CreateDeliverableForm(항목 셀프 생성, status='draft')과는 별도 폼 —
-// brief·스펙을 넣어 provider.createDeliverable을 호출하면 status='requested'로 발행된다.
-function IssueBriefForm({ area, onCreated }: { area: DeliverableArea; onCreated: () => void }) {
-  const { projectId } = useProject()
-  const members = useAsync(() => provider.listMembers(projectId), [projectId])
-  const [category, setCategory] = useState('')
-  const [title, setTitle] = useState('')
-  const [assigneeId, setAssigneeId] = useState('')
-  const [dueDate, setDueDate] = useState('')
-  const [brief, setBrief] = useState('')
-  const [briefRefsText, setBriefRefsText] = useState('')
-  const [specSize, setSpecSize] = useState('')
-  const [specQty, setSpecQty] = useState('')
-  const [specLocation, setSpecLocation] = useState('')
-  const [specType, setSpecType] = useState('')
-
-  const preset = areaPreset(area)
-  const hints = categoryPreset(area, category)?.specHints ?? {}
-
-  /**
-   * 카테고리를 고르면 그 항목의 가이드 초안을 채운다.
-   * 사용자가 이미 쓴 내용은 덮지 않는다 — 비어 있거나 직전 템플릿 그대로일 때만 교체한다.
-   */
-  const pickCategory = (next: string) => {
-    const prevTemplate = categoryPreset(area, category)?.briefTemplate ?? ''
-    const nextTemplate = categoryPreset(area, next)?.briefTemplate ?? ''
-    setCategory(next)
-    setBrief((cur) => (cur.trim() === '' || cur === prevTemplate ? nextTemplate : cur))
-  }
-
-  const issue = useMutation(() => {
-    if (!assigneeId) throw new Error('가이드에는 담당자 지정이 필요합니다.')
-    if (!brief.trim()) throw new Error('가이드 내용을 입력하세요.')
-    const brief_refs = briefRefsText
-      .split('\n')
-      .map((s) => s.trim())
-      .filter(Boolean)
-    return provider.createDeliverable({
-      project_id: projectId,
-      area,
-      category,
-      title,
-      assignee_id: assigneeId,
-      due_date: dueDate || undefined,
-      brief,
-      brief_refs: brief_refs.length > 0 ? brief_refs : undefined,
-      spec_size: specSize || undefined,
-      spec_qty: specQty ? Number(specQty) : undefined,
-      spec_location: specLocation || undefined,
-      spec_type: specType || undefined,
-    })
-  })
-
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault()
-    const result = await issue.run()
-    if (result) {
-      setCategory('')
-      setTitle('')
-      setAssigneeId('')
-      setDueDate('')
-      setBrief('')
-      setBriefRefsText('')
-      setSpecSize('')
-      setSpecQty('')
-      setSpecLocation('')
-      setSpecType('')
-      onCreated()
-    }
-  }
-
-  return (
-    <Card title="가이드 발행">
-      <form onSubmit={handleSubmit} className="space-y-3">
-        <div className="flex flex-wrap items-end gap-3">
-          <label className="flex flex-col gap-1 t-caption" htmlFor="brief-category">
-            카테고리
-            <CategoryPicker area={area} value={category} onChange={pickCategory} id="brief-category" />
-          </label>
-          <label className="flex flex-col gap-1 t-caption">
-            제목
-            <input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              required
-              placeholder="항목 제목"
-              className="ui-input w-48"
-            />
-          </label>
-          <label className="flex flex-col gap-1 t-caption">
-            담당자
-            <select
-              value={assigneeId}
-              onChange={(e) => setAssigneeId(e.target.value)}
-              required
-              className="ui-input w-36"
-            >
-              <option value="">담당자 선택…</option>
-              {members.data?.map((m) => (
-                <option key={m.user_id} value={m.user_id}>
-                  {m.profile.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="flex flex-col gap-1 t-caption">
-            마감일
-            <input
-              type="date"
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
-              className="ui-input"
-            />
-          </label>
-        </div>
-
-        <label className="flex flex-col gap-1 t-caption">
-          가이드 내용
-          <textarea
-            value={brief}
-            onChange={(e) => setBrief(e.target.value)}
-            required
-            rows={12}
-            placeholder="담당자에게 전달할 가이드 내용을 입력하세요"
-            className="ui-input w-full"
-          />
-        </label>
-
-        <label className="flex flex-col gap-1 t-caption">
-          참고 링크 (선택, 한 줄에 하나씩)
-          <textarea
-            value={briefRefsText}
-            onChange={(e) => setBriefRefsText(e.target.value)}
-            rows={2}
-            placeholder={'https://…'}
-            className="ui-input w-full"
-          />
-        </label>
-
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <label className="flex flex-col gap-1 t-caption">
-            {preset.specLabels.size} (선택)
-            <input
-              value={specSize}
-              onChange={(e) => setSpecSize(e.target.value)}
-              placeholder={hints.size ? `예: ${hints.size}` : ''}
-              className="ui-input"
-            />
-          </label>
-          <label className="flex flex-col gap-1 t-caption">
-            {preset.specLabels.qty} (선택)
-            <input
-              type="number"
-              min="0"
-              placeholder={hints.qty ?? ''}
-              value={specQty}
-              onChange={(e) => setSpecQty(e.target.value)}
-              className="ui-input"
-            />
-          </label>
-          <label className="flex flex-col gap-1 t-caption">
-            {preset.specLabels.location} (선택)
-            <input
-              value={specLocation}
-              onChange={(e) => setSpecLocation(e.target.value)}
-              placeholder={hints.location ? `예: ${hints.location}` : ''}
-              className="ui-input"
-            />
-          </label>
-          <label className="flex flex-col gap-1 t-caption">
-            {preset.specLabels.type} (선택)
-            <input
-              value={specType}
-              onChange={(e) => setSpecType(e.target.value)}
-              placeholder={hints.type ? `예: ${hints.type}` : ''}
-              className="ui-input"
-            />
-          </label>
-        </div>
-
-        <button type="submit" disabled={issue.pending} className="btn btn-accent">
-          가이드 발행
-        </button>
-      </form>
-      <ErrorAlert message={issue.error} />
-    </Card>
   )
 }

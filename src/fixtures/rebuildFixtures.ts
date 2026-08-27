@@ -111,6 +111,8 @@ const REBUILD26_PROJECT: Project = {
     { label: '주차·교통', value: '주차 지원 불가(대중교통 권장) · 어린이대공원역 7호선 2번 출구 도보 5분' },
   ],
   onboarded_at: '2026-03-20T09:00:00.000Z',
+  partner_guide_url: null,
+  partner_contact_email: null,
   created_by: 'usr-pm',
   created_at: '2026-03-05T09:00:00.000Z',
 }
@@ -149,6 +151,8 @@ const REBUILD27_PROJECT: Project = {
     { label: '목표', value: '사전신청 1,400명 · 현장참석 800명' },
   ],
   onboarded_at: '2026-08-11T09:00:00.000Z',
+  partner_guide_url: null,
+  partner_contact_email: null,
   created_by: 'usr-pm',
   created_at: '2026-07-28T09:00:00.000Z',
 }

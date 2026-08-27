@@ -42,3 +42,38 @@ export const COMPLIANCE_CARD_TEMPLATES: readonly ComplianceCardTemplate[] = [
     ],
   },
 ]
+
+// 주최형 컴플라이언스 카드 3종 — 설계서 §15.3c(v2.4.1, 가정). ComplianceKind는 'internal'|'client'
+// 2종만 정의돼 있고(§4-17) 카드 렌더(ComplianceCards.tsx)가 그 2키로 고정 매핑되므로 신규 kind는
+// 추가하지 않는다 — 셋 다 파트너 관리에 관한 내부 운영 규약이라 kind='internal'로 분류한다.
+export const HOST_COMPLIANCE_CARD_TEMPLATES: readonly ComplianceCardTemplate[] = [
+  {
+    kind: 'internal',
+    title: 'C-H1 · 리드 데이터 취급',
+    sort_order: 1,
+    items: [
+      '참관 등록 리드는 종료 후 기한 내 암호화 제공',
+      '파트너의 목적 외 이용·재제공 금지 고지',
+      '보존 기한 경과 시 파기 확인',
+    ],
+  },
+  {
+    kind: 'internal',
+    title: 'C-H2 · 파트너 제출물 권리·발표 가이드',
+    sort_order: 2,
+    items: [
+      '로고·발표자료 사용 범위 확인',
+      '발표 내 노골적 세일즈 피치 금지 가이드 준수 확인',
+    ],
+  },
+  {
+    kind: 'internal',
+    title: 'C-H3 · 부스 안전·시공 규정',
+    sort_order: 3,
+    items: [
+      '행사장 규정(방염·전력·반입 동선) 준수',
+      '설치·철거 시간 엄수',
+      '규격 외 반입물 사전 신고',
+    ],
+  },
+]

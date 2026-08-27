@@ -5,7 +5,7 @@
 // 미제출 1(requested).
 import { cleanup, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PROJECT_ID_HOST } from '../fixtures/sampleProject'
 import { renderRoute } from './testUtils'
 
@@ -87,6 +87,61 @@ describe('S-11 파트너 보드', () => {
     renderRoute('/')
     await screen.findByRole('heading', { name: '홈 대시보드' })
     expect(screen.queryByRole('link', { name: '파트너 보드' })).toBeNull()
+  })
+})
+
+describe('S-11 파트너 보드 — 도움말(P8)', () => {
+  it('KPI 4타일+헤더에 InfoTip이 있고 화면당 5개를 넘지 않는다', async () => {
+    localStorage.setItem('communicator.currentProjectId', PROJECT_ID_HOST)
+    renderRoute('/partners')
+    await screen.findByRole('heading', { name: '파트너 보드' })
+    await screen.findByText('가상다이아텍')
+
+    expect(screen.getAllByRole('button', { name: '도움말' }).length).toBe(5)
+  })
+})
+
+describe('S-11 파트너 보드 — 표 행 클릭 어포던스(P3)', () => {
+  it('행마다 우측 화살표(›) 표시가 있다', async () => {
+    localStorage.setItem('communicator.currentProjectId', PROJECT_ID_HOST)
+    renderRoute('/partners')
+    await screen.findByRole('heading', { name: '파트너 보드' })
+    await screen.findByText('가상다이아텍')
+
+    expect(screen.getAllByText('›').length).toBe(5)
+  })
+})
+
+describe('S-11 파트너 보드 — 검토 대기 자동 선택·스크롤(P3)', () => {
+  beforeEach(() => {
+    // jsdom(30)엔 scrollIntoView가 없다 — 호출 여부를 검증하려면 최소 구현을 채워야 한다.
+    Element.prototype.scrollIntoView = vi.fn()
+  })
+
+  it('KPI "검토 대기" 타일 클릭 시 검토 대기 항목이 있는 첫 파트너가 선택되고 스크롤된다', async () => {
+    localStorage.setItem('communicator.currentProjectId', PROJECT_ID_HOST)
+    renderRoute('/partners')
+    await screen.findByRole('heading', { name: '파트너 보드' })
+    await screen.findByText('가상다이아텍')
+    expect(screen.queryByRole('heading', { name: /파트너 상세/ })).toBeNull()
+
+    await userEvent.click(screen.getByRole('button', { name: /검토 대기/ }))
+
+    expect(
+      await screen.findByRole('heading', { name: /파트너 상세 — 가상실버클라우드/ }),
+    ).toBeTruthy()
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalled()
+  })
+
+  it('?partner= 쿼리로 진입하면 해당 파트너가 자동 선택되고 스크롤된다(홈 위젯 진입 경로)', async () => {
+    localStorage.setItem('communicator.currentProjectId', PROJECT_ID_HOST)
+    renderRoute('/partners?partner=ptn-004')
+    await screen.findByRole('heading', { name: '파트너 보드' })
+
+    expect(
+      await screen.findByRole('heading', { name: /파트너 상세 — 가상실버네트웍스/ }),
+    ).toBeTruthy()
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalled()
   })
 })
 

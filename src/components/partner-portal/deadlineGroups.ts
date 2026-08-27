@@ -1,6 +1,7 @@
 // `/p/{token}` 포털 전용 — 마감(deadline)별 그룹핑 순수 함수. provider가 이미 task.end_date
 // 오름차순(null은 맨 뒤)으로 정렬해 내려주므로, 여기서는 정렬하지 않고 연속 구간만 묶는다.
-import type { PartnerPortalItem } from '../../types'
+import { toIsoDate } from '../../lib/wbs'
+import type { PartnerPortalItem, PartnerPortalNotice } from '../../types'
 
 export interface DeadlineGroup {
   deadline: string | null
@@ -47,4 +48,24 @@ export function splitGroups(groups: DeadlineGroup[]): SplitGroups {
     }
   }
   return { current, upcoming, done }
+}
+
+// P6-④(3.15.1) — '주최 측 안내'(host_notice)를 날짜 경과 기준으로 완료/예정으로 나눈다.
+// 마감이 없는 안내는(deadline=null) 항상 예정 취급(경과를 판단할 기준이 없다).
+export interface NoticeTimingGroups {
+  upcoming: PartnerPortalNotice[]
+  done: PartnerPortalNotice[]
+}
+
+export function splitNoticesByTiming(
+  notices: PartnerPortalNotice[],
+  today = toIsoDate(new Date()),
+): NoticeTimingGroups {
+  const upcoming: PartnerPortalNotice[] = []
+  const done: PartnerPortalNotice[] = []
+  for (const notice of notices) {
+    if (notice.deadline && notice.deadline < today) done.push(notice)
+    else upcoming.push(notice)
+  }
+  return { upcoming, done }
 }

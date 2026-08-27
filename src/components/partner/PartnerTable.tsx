@@ -66,6 +66,8 @@ export default function PartnerTable({
             <th className="ui-th">링크 상태</th>
             <th className="ui-th">이번 마감</th>
             <th className="ui-th">참여 상태</th>
+            {/* P3(3.15.1) — 클릭 가능한 행이라는 것을 알리는 우측 표시(›) 전용 빈 헤더 */}
+            <th className="ui-th w-6" aria-hidden="true" />
           </tr>
         </thead>
         <tbody className="divide-y divide-border">
@@ -95,6 +97,9 @@ export default function PartnerTable({
                   >
                     {PARTNER_STATUS_LABELS[p.status]}
                   </span>
+                </td>
+                <td className="w-6 py-2 text-right text-ink-cap" aria-hidden="true">
+                  ›
                 </td>
               </tr>
             )
