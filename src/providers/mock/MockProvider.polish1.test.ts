@@ -23,14 +23,14 @@ describe('P2 — partner_guide_url·partner_contact_email 왕복 (§21.1)', () =
 
   it('updateProject로 저장하면 getProject로 그대로 조회된다', async () => {
     const updated = await p.updateProject(PROJECT_ID, {
-      partner_guide_url: 'https://guide.example.com/stc26',
+      partner_guide_url: 'https://example.com/stc26-guide',
       partner_contact_email: 'partners-stc@example.com',
     })
-    expect(updated.partner_guide_url).toBe('https://guide.example.com/stc26')
+    expect(updated.partner_guide_url).toBe('https://example.com/stc26-guide')
     expect(updated.partner_contact_email).toBe('partners-stc@example.com')
 
     const reloaded = await p.getProject(PROJECT_ID)
-    expect(reloaded.partner_guide_url).toBe('https://guide.example.com/stc26')
+    expect(reloaded.partner_guide_url).toBe('https://example.com/stc26-guide')
     expect(reloaded.partner_contact_email).toBe('partners-stc@example.com')
   })
 
@@ -48,7 +48,7 @@ describe('P2 — partner_guide_url·partner_contact_email 왕복 (§21.1)', () =
 describe('P2 — getPartnerPortal의 guide_url·contact_email (§21.1)', () => {
   it('주최형 데모 픽스처(가상 서밋 2026)의 값이 포털에 그대로 노출된다', async () => {
     const portal = await p.getPartnerPortal(PARTNER_DEMO_TOKEN)
-    expect(portal.guide_url).toBe('https://guide.example.com/vst26')
+    expect(portal.guide_url).toBe('https://example.com/vst26-guide')
     expect(portal.contact_email).toBe('partners@example.com')
   })
 

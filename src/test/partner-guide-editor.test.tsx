@@ -29,7 +29,7 @@ describe('행사 설정 ③ — 파트너 안내 창구', () => {
     await openIntegrationTab()
 
     expect((screen.getByLabelText('참가 가이드 링크') as HTMLInputElement).value).toBe(
-      'https://guide.example.com/vst26',
+      'https://example.com/vst26-guide',
     )
     expect((screen.getByLabelText('문의 창구 이메일') as HTMLInputElement).value).toBe(
       'partners@example.com',
@@ -43,18 +43,18 @@ describe('행사 설정 ③ — 파트너 안내 창구', () => {
     const guideInput = screen.getByLabelText('참가 가이드 링크')
     const emailInput = screen.getByLabelText('문의 창구 이메일')
     await userEvent.clear(guideInput)
-    await userEvent.type(guideInput, 'https://guide.example.com/vst26-v2')
+    await userEvent.type(guideInput, 'https://example.com/vst26-guide-v2')
     await userEvent.clear(emailInput)
     await userEvent.type(emailInput, 'partners-v2@example.com')
     await userEvent.click(screen.getByRole('button', { name: '저장' }))
 
     const saved = await mockProvider().getProject(PROJECT_ID_HOST)
-    expect(saved.partner_guide_url).toBe('https://guide.example.com/vst26-v2')
+    expect(saved.partner_guide_url).toBe('https://example.com/vst26-guide-v2')
     expect(saved.partner_contact_email).toBe('partners-v2@example.com')
 
     // 뒤처리 — 포털 가이드 버튼 테스트(partner-portal.test.tsx)가 기대하는 픽스처 원본값으로 복원
     await mockProvider().updateProject(PROJECT_ID_HOST, {
-      partner_guide_url: 'https://guide.example.com/vst26',
+      partner_guide_url: 'https://example.com/vst26-guide',
       partner_contact_email: 'partners@example.com',
     })
   })
@@ -73,7 +73,7 @@ describe('행사 설정 ③ — 파트너 안내 창구', () => {
 
     // 뒤처리 — 원본값 복원
     await mockProvider().updateProject(PROJECT_ID_HOST, {
-      partner_guide_url: 'https://guide.example.com/vst26',
+      partner_guide_url: 'https://example.com/vst26-guide',
       partner_contact_email: 'partners@example.com',
     })
   })

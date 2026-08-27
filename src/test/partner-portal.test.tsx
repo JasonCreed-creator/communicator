@@ -192,7 +192,7 @@ describe('P2(3.15.1, 감수 M2) — 참가 가이드 버튼·문의 안내', () 
     const guideLink = (await screen.findByRole('link', {
       name: /참가 가이드 보기/,
     })) as HTMLAnchorElement
-    expect(guideLink.getAttribute('href')).toBe('https://guide.example.com/vst26')
+    expect(guideLink.getAttribute('href')).toBe('https://example.com/vst26-guide')
     expect(guideLink.getAttribute('target')).toBe('_blank')
     expect(guideLink.getAttribute('rel')).toBe('noreferrer')
     expect(await screen.findByText('문의: partners@example.com')).toBeTruthy()
@@ -209,7 +209,7 @@ describe('P2(3.15.1, 감수 M2) — 참가 가이드 버튼·문의 안내', () 
 
     // 뒤처리 — 이 파일의 다른 테스트가 픽스처 기본값을 기대한다
     await provider.updateProject(PROJECT_ID_HOST, {
-      partner_guide_url: 'https://guide.example.com/vst26',
+      partner_guide_url: 'https://example.com/vst26-guide',
       partner_contact_email: 'partners@example.com',
     })
   })

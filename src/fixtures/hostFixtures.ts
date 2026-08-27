@@ -110,7 +110,7 @@ export function seedHostFixtures(state: MockState): void {
     overview_items: null,
     onboarded_at: SEEDED_AT,
     // v2.4.1 §21.1 — 파트너 참가 가이드·문의 창구(가상, #RULE-NO-COMPANY)
-    partner_guide_url: 'https://guide.example.com/vst26',
+    partner_guide_url: 'https://example.com/vst26-guide',
     partner_contact_email: 'partners@example.com',
     created_by: 'usr-pm',
     created_at: '2026-08-15T09:00:00.000Z',

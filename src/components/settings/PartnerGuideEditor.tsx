@@ -64,7 +64,7 @@ export default function PartnerGuideEditor({
           type="url"
           value={guideUrl}
           onChange={(e) => setGuideUrl(e.target.value)}
-          placeholder="https://guide.example.com/..."
+          placeholder="https://example.com/..."
           className="ui-input w-full max-w-md"
         />
       </label>
