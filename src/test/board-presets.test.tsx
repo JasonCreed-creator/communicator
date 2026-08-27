@@ -15,10 +15,17 @@ import { DELIVERABLE_AREAS } from '../types/enums'
 
 afterEach(cleanup)
 
-/** '가이드 발행' 카드의 폼 루트 */
+/**
+ * P7(3.15.1) — 통합 "항목 추가" 카드를 펼치고, pm 전용 "제작 가이드 포함" 토글을 켠 뒤
+ * 폼 루트를 반환한다. 이 파일의 검사 대상(카테고리 프리셋·스펙 라벨·가이드 초안)은 전부
+ * 옛 '가이드 발행' 경로(가이드 모드 on)에 해당하므로 매 테스트에서 토글까지 켜서 돌려준다.
+ */
 async function briefForm() {
-  const heading = await screen.findByRole('heading', { name: '가이드 발행' })
-  return heading.closest('div')!.parentElement!
+  await userEvent.click(await screen.findByRole('button', { name: '＋ 항목 추가' }))
+  const heading = await screen.findByRole('heading', { name: '항목 추가' })
+  const form = heading.closest('div')!.parentElement!
+  await userEvent.click(within(form).getByLabelText(/제작 가이드 포함/))
+  return form
 }
 
 describe('보드 프리셋 (a) 데이터 정합', () => {

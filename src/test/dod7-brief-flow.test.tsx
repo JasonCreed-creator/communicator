@@ -14,11 +14,17 @@ afterEach(cleanup)
 let issuedItemId = ''
 
 describe('DoD-7 가이드 발행 흐름', () => {
-  it('(a) pm이 보드에서 가이드 발행 폼으로 발행하면 보드에 가이드됨 뱃지로 나타난다', async () => {
+  it('(a) pm이 보드의 통합 "항목 추가" 카드에서 가이드 포함 토글을 켜고 발행하면 보드에 가이드됨 뱃지로 나타난다', async () => {
     renderRoute('/board/design')
 
-    const heading = await screen.findByRole('heading', { name: '가이드 발행' })
+    // P7(3.15.1) — 옛 '새 항목 생성'·'가이드 발행' 두 폼이 통합 "항목 추가" 카드 1개로 바뀌었다.
+    // 기본 접힘 — 버튼을 눌러야 펼쳐진다.
+    await userEvent.click(await screen.findByRole('button', { name: '＋ 항목 추가' }))
+    const heading = await screen.findByRole('heading', { name: '항목 추가' })
     const form = heading.closest('div')!.parentElement!
+
+    // pm 전용 "제작 가이드 포함" 토글을 켜야 가이드 필드(내용·참고 링크·스펙 4)가 펼쳐진다
+    await userEvent.click(within(form).getByLabelText(/제작 가이드 포함/))
 
     // 카테고리는 영역별 프리셋 선택이 기본이고, 목록에 없는 항목은 '직접 입력'으로 만든다.
     // '사이니지'는 프리셋에 없는 값이라 자유 입력 경로까지 함께 검증된다.
@@ -91,11 +97,14 @@ describe('DoD-7 가이드 발행 흐름', () => {
     expect(d.versions[0].version_no).toBe(1)
   })
 
-  it('(e) pm이 아닌 사용자에게는 가이드 발행 UI가 노출되지 않는다', async () => {
+  it('(e) pm이 아닌 사용자에게는 "제작 가이드 포함" 토글이 노출되지 않는다', async () => {
     // usr-design으로 전환된 상태가 (b)부터 유지된다.
     renderRoute('/board/design')
 
-    await screen.findByText('새 항목 생성')
+    // 담당(area) 역할도 통합 카드로 셀프 생성은 여전히 할 수 있다 — 토글만 pm 전용이다.
+    await userEvent.click(await screen.findByRole('button', { name: '＋ 항목 추가' }))
+    await screen.findByRole('heading', { name: '항목 추가' })
+    expect(screen.queryByLabelText(/제작 가이드 포함/)).toBeNull()
     expect(screen.queryByText('가이드 발행')).toBeNull()
   })
 })
