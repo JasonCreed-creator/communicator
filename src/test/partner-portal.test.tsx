@@ -231,7 +231,7 @@ function makePortalItem(overrides: Partial<PartnerPortalItem>): PartnerPortalIte
 }
 
 describe('P6-③(3.15.1) — "다음 마감" 접힘 행 항목 요약', () => {
-  it('그룹 항목이 1건이면 요약 줄을 따로 렌더하지 않는다(제목 중복 방지 — DoD-33 회귀 실측)', () => {
+  it('그룹 항목이 1건이어도 접힘 요약에 제목이 보인다 — "제출:" 접두로 정확 일치 중복 방지', () => {
     const group: DeadlineGroup = {
       deadline: '2026-09-01',
       items: [makePortalItem({ deliverable_id: 'dlv-1', task_title: '부스 그래픽 제출 — 가상다이아텍' })],
@@ -241,9 +241,10 @@ describe('P6-③(3.15.1) — "다음 마감" 접힘 행 항목 요약', () => {
     )
     const summary = container.querySelector('summary')!
     expect(within(summary).getByText('1건')).toBeTruthy()
-    // 요약 줄(.truncate) 자체가 없다 — 아래 카드의 <h3> 제목과 정확히 같은 문자열이 중복 렌더되면
-    // 기존 findByText(정확한 제목) 단정들이 "여러 요소 일치"로 깨지기 때문이다.
-    expect(summary.querySelector('.truncate')).toBeNull()
+    // P6-③: 접힌 행에서도 뭘 내야 하는지 보인다. '제출:' 접두 덕에 펼친 카드의 <h3> 제목과
+    // 완전히 같은 문자열이 아니므로 기존 정확 일치 쿼리(findByText(제목))는 깨지지 않는다.
+    expect(within(summary).getByText('제출: 부스 그래픽 제출 — 가상다이아텍')).toBeTruthy()
+    expect(within(summary).queryByText('부스 그래픽 제출 — 가상다이아텍')).toBeNull()
   })
 
   it('그룹 항목이 여럿이면 접힌 상태에서도 "제목 외 N건"으로 요약된다', () => {
@@ -260,7 +261,7 @@ describe('P6-③(3.15.1) — "다음 마감" 접힘 행 항목 요약', () => {
     const details = container.querySelector('details')!
     // 접힌 상태(펼치지 않은 상태)에서도 DOM에 요약이 이미 들어있다는 것이 "보인다"는 증거.
     expect(details.open).toBe(false)
-    expect(within(details).getByText('부스 그래픽 제출 — 가상다이아텍 외 1건')).toBeTruthy()
+    expect(within(details).getByText('제출: 부스 그래픽 제출 — 가상다이아텍 외 1건')).toBeTruthy()
   })
 })
 

@@ -14,14 +14,13 @@ interface PartnerPortalGroupListProps {
 }
 
 /** P6-③(3.15.1) — 접힌 행에서도 뭘 내야 하는지 보이도록 항목 제목을 한 줄로 요약한다.
- *  예: "부스 그래픽 제출 외 1건". 1건이면 상단 줄의 "N건" 표시로 이미 충분하고 — 무엇보다
- *  제목을 그대로 한 번 더 찍으면 펼친 카드 제목(h3)과 완전히 같은 문자열이 중복 렌더돼
- *  기존 findByText(정확한 제목) 단정들이 "여러 요소 일치"로 깨진다(DoD-33 회귀 실측) —
- *  그래서 2건 이상일 때만 요약 줄을 렌더한다. */
+ *  1건이어도 렌더한다(데모 픽스처는 마감별 1건이 대부분 — 요약이 빠지면 지시 취지가 사라진다).
+ *  단, 펼친 카드 제목과 완전히 같은 문자열이 중복되지 않게 앞에 '제출:' 라벨을 붙인다 —
+ *  정확 일치 쿼리(findByText(제목))가 "여러 요소 일치"로 깨지는 회귀를 피하기 위함. */
 function itemsSummary(items: PartnerPortalItem[]): string {
-  if (items.length <= 1) return ''
+  if (items.length === 0) return ''
   const [first, ...rest] = items
-  return `${first.task_title} 외 ${rest.length}건`
+  return rest.length > 0 ? `제출: ${first.task_title} 외 ${rest.length}건` : `제출: ${first.task_title}`
 }
 
 export default function PartnerPortalGroupList({ title, groups, token, onSubmitted }: PartnerPortalGroupListProps) {
@@ -44,7 +43,7 @@ export default function PartnerPortalGroupList({ title, groups, token, onSubmitt
                     {group.deadline && <DdayBadge dueAt={group.deadline} />}
                   </span>
                 </span>
-                {group.items.length > 1 && (
+                {group.items.length > 0 && (
                   <span className="truncate text-xs text-ink-cap">{itemsSummary(group.items)}</span>
                 )}
               </summary>
