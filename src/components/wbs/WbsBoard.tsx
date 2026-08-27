@@ -29,6 +29,8 @@ export default function WbsBoard() {
   const currentUser = useAsync(() => provider.getCurrentUser(), [])
   const isPm = currentUser.data?.role === 'pm'
   const reexpand = useMutation(() => provider.expandWbs(projectId))
+  // P6-② — 주최형만 방향 뱃지(▲▼■) 표기, 대행형은 미표기
+  const isHost = project.data?.kind === 'host'
 
   const allTasks = wbsTasks.data ?? []
   const phases = phaseOptionsFrom(allTasks)
@@ -102,6 +104,7 @@ export default function WbsBoard() {
               deliverables={deliverables.data ?? []}
               isPm={!!isPm}
               onChanged={wbsTasks.reload}
+              isHost={isHost}
             />
           ) : (
             <WbsGantt tasks={filteredTasks} eventDate={project.data?.event_date ?? null} />

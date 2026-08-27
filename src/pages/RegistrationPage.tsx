@@ -4,6 +4,17 @@ import ErrorAlert from '../components/internal/ErrorAlert'
 import PageHeader from '../components/internal/PageHeader'
 import StatTile from '../components/internal/StatTile'
 import { downloadCsv, parseCsv, toCsv } from '../components/internal/csvUtils'
+import GoogleSheetsButton from '../components/registration/GoogleSheetsButton'
+import PaginationBar from '../components/registration/PaginationBar'
+import RegistrationSearchBar from '../components/registration/RegistrationSearchBar'
+import { xlsxToTable } from '../components/registration/registrationXlsx'
+import {
+  filterAttendees,
+  filterRsvps,
+  paginate,
+  type CheckinFilter,
+  type RsvpStatusFilter,
+} from '../components/registration/registrationFilters'
 import { useProject } from '../context/ProjectContext'
 import { useAsync, useMutation } from '../hooks/useAsync'
 import { INVITE_STATUS_LABELS, formatDateTime } from '../lib/labels'
@@ -85,10 +96,33 @@ export default function RegistrationPage() {
   )
 }
 
+const RSVP_STATUS_OPTIONS: { value: RsvpStatusFilter; label: string }[] = [
+  { value: 'all', label: '전체 상태' },
+  ...(Object.keys(INVITE_STATUS_LABELS) as InviteStatus[]).map((s) => ({
+    value: s as RsvpStatusFilter,
+    label: INVITE_STATUS_LABELS[s],
+  })),
+]
+
 // ── RSVP 탭 ───────────────────────────────────────────────────────────
 function RsvpTab() {
   const { projectId } = useProject()
   const rsvps = useAsync(() => provider.listRsvpContacts(projectId), [projectId])
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState<RsvpStatusFilter>('all')
+  const [page, setPage] = useState(1)
+
+  const handleSearchChange = (v: string) => {
+    setSearch(v)
+    setPage(1)
+  }
+  const handleStatusChange = (v: RsvpStatusFilter) => {
+    setStatusFilter(v)
+    setPage(1)
+  }
+
+  const filtered = filterRsvps(rsvps.data ?? [], search, statusFilter)
+  const paged = paginate(filtered, page)
 
   const handleExport = () => {
     const headers = ['이름', '소속', '직함', '이메일', '전화', '그룹', '상태', '메모']
@@ -109,16 +143,31 @@ function RsvpTab() {
     <div className="space-y-6">
       <ErrorAlert message={rsvps.error} />
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <CsvImportPanel target="rsvp" onImported={rsvps.reload} />
+        <div className="flex flex-wrap items-center gap-2">
+          <CsvImportPanel target="rsvp" onImported={rsvps.reload} />
+          <GoogleSheetsButton />
+        </div>
         <button type="button" onClick={handleExport} className="btn btn-ghost shrink-0">
           내보내기
         </button>
       </div>
 
+      <RegistrationSearchBar
+        search={search}
+        onSearchChange={handleSearchChange}
+        statusValue={statusFilter}
+        onStatusChange={handleStatusChange}
+        statusOptions={RSVP_STATUS_OPTIONS}
+        statusLabel="RSVP 상태 필터"
+      />
+
       <Card title="RSVP 리스트">
         {rsvps.loading && <p className="text-sm text-ink-cap">불러오는 중…</p>}
         {rsvps.data && rsvps.data.length === 0 && <p className="text-sm text-ink-cap">등록된 대상이 없습니다.</p>}
-        {rsvps.data && rsvps.data.length > 0 && (
+        {rsvps.data && rsvps.data.length > 0 && filtered.length === 0 && (
+          <p className="text-sm text-ink-cap">검색·필터 조건에 맞는 대상이 없습니다.</p>
+        )}
+        {paged.items.length > 0 && (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead>
@@ -134,13 +183,19 @@ function RsvpTab() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {rsvps.data.map((r) => (
+                {paged.items.map((r) => (
                   <RsvpRow key={r.id} rsvp={r} onChanged={rsvps.reload} />
                 ))}
               </tbody>
             </table>
           </div>
         )}
+        <PaginationBar
+          page={paged.page}
+          totalPages={paged.totalPages}
+          totalCount={paged.totalCount}
+          onPageChange={setPage}
+        />
       </Card>
     </div>
   )
@@ -194,10 +249,33 @@ function RsvpRow({ rsvp, onChanged }: { rsvp: RsvpContact; onChanged: () => void
   )
 }
 
+// 라벨은 AttendeeRow 토글 버튼의 '체크인 완료 (...)' 문구와 겹치지 않게 고른다 — 검색으로 텍스트를
+// 매칭하는 테스트(예: dod4)가 select 옵션까지 함께 집어 오탐하지 않도록.
+const CHECKIN_FILTER_OPTIONS: { value: CheckinFilter; label: string }[] = [
+  { value: 'all', label: '전체' },
+  { value: 'checked', label: '체크인됨' },
+  { value: 'not_checked', label: '미체크인' },
+]
+
 // ── 참관객 탭 ─────────────────────────────────────────────────────────
 function AttendeesTab() {
   const { projectId } = useProject()
   const attendees = useAsync(() => provider.listAttendees(projectId), [projectId])
+  const [search, setSearch] = useState('')
+  const [checkinFilter, setCheckinFilter] = useState<CheckinFilter>('all')
+  const [page, setPage] = useState(1)
+
+  const handleSearchChange = (v: string) => {
+    setSearch(v)
+    setPage(1)
+  }
+  const handleCheckinFilterChange = (v: CheckinFilter) => {
+    setCheckinFilter(v)
+    setPage(1)
+  }
+
+  const filtered = filterAttendees(attendees.data ?? [], search, checkinFilter)
+  const paged = paginate(filtered, page)
 
   const handleExport = () => {
     const headers = ['이름', '소속', '채널', '등록일', '뱃지번호', '체크인']
@@ -216,18 +294,33 @@ function AttendeesTab() {
     <div className="space-y-6">
       <ErrorAlert message={attendees.error} />
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <CsvImportPanel target="attendees" onImported={attendees.reload} />
+        <div className="flex flex-wrap items-center gap-2">
+          <CsvImportPanel target="attendees" onImported={attendees.reload} />
+          <GoogleSheetsButton />
+        </div>
         <button type="button" onClick={handleExport} className="btn btn-ghost shrink-0">
           내보내기
         </button>
       </div>
+
+      <RegistrationSearchBar
+        search={search}
+        onSearchChange={handleSearchChange}
+        statusValue={checkinFilter}
+        onStatusChange={handleCheckinFilterChange}
+        statusOptions={CHECKIN_FILTER_OPTIONS}
+        statusLabel="체크인 여부 필터"
+      />
 
       <Card title="참관객">
         {attendees.loading && <p className="text-sm text-ink-cap">불러오는 중…</p>}
         {attendees.data && attendees.data.length === 0 && (
           <p className="text-sm text-ink-cap">등록된 참관객이 없습니다.</p>
         )}
-        {attendees.data && attendees.data.length > 0 && (
+        {attendees.data && attendees.data.length > 0 && filtered.length === 0 && (
+          <p className="text-sm text-ink-cap">검색·필터 조건에 맞는 참관객이 없습니다.</p>
+        )}
+        {paged.items.length > 0 && (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead>
@@ -241,13 +334,19 @@ function AttendeesTab() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {attendees.data.map((a) => (
+                {paged.items.map((a) => (
                   <AttendeeRow key={a.id} attendee={a} onChanged={attendees.reload} />
                 ))}
               </tbody>
             </table>
           </div>
         )}
+        <PaginationBar
+          page={paged.page}
+          totalPages={paged.totalPages}
+          totalCount={paged.totalCount}
+          onPageChange={setPage}
+        />
       </Card>
     </div>
   )
@@ -364,6 +463,15 @@ function guessField(header: string): keyof CsvImportRow | 'ignore' {
   return HEADER_GUESSES[header.trim().toLowerCase()] ?? 'ignore'
 }
 
+/** parseCsv(csvUtils.ts)를 xlsxToTable과 동일한 {headers, rows} 모양으로 맞춘다 — 이후 헤더 매핑·
+ *  임포트 경로는 두 형식이 완전히 같은 코드를 탄다(등가 보장의 핵심). */
+function csvToTable(text: string): { headers: string[]; rows: string[][] } {
+  const table = parseCsv(text)
+  if (table.length === 0) return { headers: [], rows: [] }
+  const [headers, ...rows] = table
+  return { headers, rows }
+}
+
 function CsvImportPanel({ target, onImported }: { target: 'rsvp' | 'attendees'; onImported: () => void }) {
   const { projectId } = useProject()
   const [parsed, setParsed] = useState<{ headers: string[]; rows: string[][] } | null>(null)
@@ -374,25 +482,38 @@ function CsvImportPanel({ target, onImported }: { target: 'rsvp' | 'attendees'; 
     provider.importRegistrationCsv(projectId, target, rows),
   )
 
+  // P9 — xlsx도 같은 파이프라인(파일 선택→헤더 매핑 UI→importRegistrationCsv)을 탄다. 판별은
+  // 확장자·MIME 우선, 나머지는 CSV로 취급(기존 동작 그대로 회귀 없음).
+  const isXlsxFile = (file: File): boolean =>
+    /\.xlsx$/i.test(file.name) || file.type.includes('spreadsheetml')
+
   const handleFile = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     e.target.value = ''
     if (!file) return
     setResult(null)
     setValidationError(null)
+    const xlsx = isXlsxFile(file)
     const reader = new FileReader()
+    reader.onerror = () => setValidationError('파일을 읽지 못했습니다.')
     reader.onload = () => {
-      const table = parseCsv(String(reader.result ?? ''))
-      if (table.length === 0) return
-      const [headers, ...rows] = table
-      setParsed({ headers, rows })
-      const guess: Record<number, keyof CsvImportRow | 'ignore'> = {}
-      headers.forEach((h, i) => {
-        guess[i] = guessField(h)
-      })
-      setMapping(guess)
+      try {
+        const { headers, rows } = xlsx
+          ? xlsxToTable(reader.result as ArrayBuffer)
+          : csvToTable(String(reader.result ?? ''))
+        if (headers.length === 0 && rows.length === 0) return
+        setParsed({ headers, rows })
+        const guess: Record<number, keyof CsvImportRow | 'ignore'> = {}
+        headers.forEach((h, i) => {
+          guess[i] = guessField(h)
+        })
+        setMapping(guess)
+      } catch (err) {
+        setValidationError(err instanceof Error ? err.message : '파일을 읽지 못했습니다.')
+      }
     }
-    reader.readAsText(file)
+    if (xlsx) reader.readAsArrayBuffer(file)
+    else reader.readAsText(file)
   }
 
   const handleImport = async () => {
@@ -429,8 +550,14 @@ function CsvImportPanel({ target, onImported }: { target: 'rsvp' | 'attendees'; 
     <div className="min-w-0">
       <label className="btn btn-ghost inline-flex cursor-pointer">
         CSV 임포트 ({targetLabel})
-        <input type="file" accept=".csv,text/csv" onChange={handleFile} className="hidden" />
+        <input
+          type="file"
+          accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          onChange={handleFile}
+          className="hidden"
+        />
       </label>
+      <p className="mt-1 text-[11px] text-ink-cap">.csv 또는 .xlsx 파일을 선택하세요.</p>
       {result && (
         <p className="mt-2 text-sm text-ink-sub">
           신규 {result.inserted}건 · 갱신 {result.updated}건 반영되었습니다.
@@ -448,7 +575,7 @@ function CsvImportPanel({ target, onImported }: { target: 'rsvp' | 'attendees'; 
             <table className="w-full text-left text-sm">
               <thead>
                 <tr>
-                  <th className="ui-th">CSV 헤더</th>
+                  <th className="ui-th">헤더</th>
                   <th className="ui-th">매핑 필드</th>
                 </tr>
               </thead>
