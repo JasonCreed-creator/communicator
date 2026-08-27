@@ -34,6 +34,22 @@ export default function PartnerPortalPage() {
         partnerName={data?.partner_name ?? null}
       />
 
+      {/* P2(3.15.1, 감수 M2) — 헤더 바로 아래, 가이드 링크가 있을 때만 노출 */}
+      {data?.guide_url && (
+        <div className="border-b border-border bg-canvas">
+          <div className="mx-auto max-w-3xl px-4 py-2.5">
+            <a
+              href={data.guide_url}
+              target="_blank"
+              rel="noreferrer"
+              className="btn btn-ghost btn-sm"
+            >
+              참가 가이드 보기 ↗
+            </a>
+          </div>
+        </div>
+      )}
+
       <main className="mx-auto max-w-3xl px-4 py-6">
         {errorKind === 'gone' && (
           <ClientMessage tone="gone" title="링크가 만료되었습니다" body="담당자에게 새 링크를 요청하세요." />
@@ -76,9 +92,14 @@ export default function PartnerPortalPage() {
 
             <PartnerPortalNoticeList notices={data.notices} />
 
-            <p className="border-t border-border pt-4 text-xs text-ink-cap">
-              이 링크는 귀사의 제출 현황만 표시합니다. 다른 파트너사의 정보는 이 화면에 포함되지 않습니다.
-            </p>
+            <div className="space-y-1 border-t border-border pt-4 text-xs text-ink-cap">
+              <p>
+                이 링크는 귀사의 제출 현황만 표시합니다. 다른 파트너사의 정보는 이 화면에 포함되지
+                않습니다.
+              </p>
+              {/* P2(3.15.1, 감수 M2) — 값이 없으면 미노출 */}
+              {data.contact_email && <p>문의: {data.contact_email}</p>}
+            </div>
           </div>
         )}
       </main>
