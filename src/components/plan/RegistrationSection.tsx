@@ -2,7 +2,7 @@ import PlanSection from './PlanSection'
 import { PLAN_SECTION_META, type SectionProgressData } from './planSections'
 import type { RegistrationStats } from '../../types/views'
 
-/** ⑤등록 통계 — 응답률·등록수·체크인율 3종 타일 */
+/** 06 등록 통계 — 응답률·등록수·체크인율 3종 타일 */
 export default function RegistrationSection({
   stats,
   progress,

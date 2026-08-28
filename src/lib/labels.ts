@@ -1,6 +1,7 @@
 // UI 공용 어휘 — 상태·영역·역할의 한국어 라벨과 상태 뱃지 색.
 // 내부(B)·발주처(C) 화면이 동일 매핑을 쓰도록 여기서만 정의한다.
 // 상태 색은 시맨틱 고정: 색만으로 구분하지 않도록 항상 라벨 텍스트와 함께 쓴다.
+import { DELIVERABLE_STATUSES } from '../types/enums'
 import type {
   DeliverableArea,
   DeliverableStatus,
@@ -14,6 +15,67 @@ import type {
   WbsDirection,
 } from '../types/enums'
 
+/** 패턴 기준 시트 §03 — 상태 배지를 **의미 4단계 + 중립**으로 통합한 정본.
+ *  색은 의미만 나타내고, 계열(컨펌·WBS·파트너·정산·시트)은 색이 아니라 배지 앞 접두 라벨로 구분한다.
+ *  - 중립(미착수): 아직 시작 안 함 — 초안·미배정·미연결
+ *  - 진행: 움직이는 중, 개입 불필요
+ *  - 주의: **내 행동을 기다림**
+ *  - 정상: 끝남 — 승인·확정·완료
+ *  - 차단: 막힘·지연 — 수정요청·초과·실패 */
+export const STATUS_LEVELS = ['neutral', 'progress', 'attention', 'positive', 'blocked'] as const
+export type StatusLevel = (typeof STATUS_LEVELS)[number]
+
+export const STATUS_LEVEL_LABELS: Record<StatusLevel, string> = {
+  neutral: '중립',
+  progress: '진행',
+  attention: '주의',
+  positive: '정상',
+  blocked: '차단',
+}
+
+/** 배지 면 — 틴트 배경 / 텍스트 (§03 표) */
+export const STATUS_LEVEL_CLASSES: Record<StatusLevel, string> = {
+  neutral: 'bg-track text-ink-sub',
+  progress: 'bg-steel-tint text-steel',
+  attention: 'bg-accent-tint text-accent-deep',
+  positive: 'bg-positive-tint text-positive',
+  blocked: 'bg-negative-tint text-negative',
+}
+
+/** 카드 좌측 3px 상태 스트립 — 배지의 원색 계열 그대로, 중립만 --border-strong (§03) */
+export const STATUS_LEVEL_STRIP_CLASSES: Record<StatusLevel, string> = {
+  neutral: 'bg-border-strong',
+  progress: 'bg-steel',
+  attention: 'bg-accent',
+  positive: 'bg-positive',
+  blocked: 'bg-negative',
+}
+
+/** 인쇄 변형 선행 글리프 — tint 배경 대신 1px 보더 + 잉크 텍스트 + 글리프 (§03 인쇄 변형) */
+export const STATUS_LEVEL_PRINT_GLYPHS: Record<StatusLevel, string> = {
+  neutral: '○',
+  progress: '◐',
+  attention: '●',
+  positive: '✓',
+  blocked: '▲',
+}
+
+/** 컨펌 계열 — 초안=중립 · 내부검토=진행 · 컨펌대기=주의 · 승인/확정=정상 · 수정요청=차단.
+ *  requested(가이드됨)는 담당자의 착수를 기다리는 상태라 주의로 둔다(도트는 없음 — 아래 참조). */
+export const DELIVERABLE_STATUS_LEVEL: Record<DeliverableStatus, StatusLevel> = {
+  requested: 'attention',
+  draft: 'neutral',
+  internal_review: 'progress',
+  pending_approval: 'attention',
+  changes_requested: 'blocked',
+  approved: 'positive',
+  final: 'positive',
+}
+
+/** 좌측 6px 도트는 **'내 행동을 기다리는' 상태 하나에만** 붙는다 (§03 규칙).
+ *  주의 단계 전부에 붙이면 신호가 죽는다 — 컨펌 계열은 pending_approval, 시트 계열은 '갱신 있음'. */
+export const STATUS_DOT_STATUSES: readonly DeliverableStatus[] = ['pending_approval']
+
 export const STATUS_LABELS: Record<DeliverableStatus, string> = {
   requested: '가이드됨',
   draft: '초안',
@@ -26,27 +88,15 @@ export const STATUS_LABELS: Record<DeliverableStatus, string> = {
 
 /** 뱃지용 Tailwind 클래스 — 디자인지시서 v1 §3 (틴트 bg / 텍스트). pending_approval의 좌측
  *  도트는 StatusBadge·StatusPill 컴포넌트가 렌더한다(클래스만으로 표현 불가). */
-export const STATUS_BADGE_CLASSES: Record<DeliverableStatus, string> = {
-  requested: 'bg-accent-tint text-accent-deep',
-  draft: 'bg-track text-ink-sub',
-  internal_review: 'bg-steel-tint text-steel',
-  pending_approval: 'bg-accent-tint text-accent-deep',
-  changes_requested: 'bg-negative-tint text-negative',
-  approved: 'bg-positive-tint text-positive',
-  final: 'bg-positive-tint text-positive',
-}
+export const STATUS_BADGE_CLASSES: Record<DeliverableStatus, string> = Object.fromEntries(
+  DELIVERABLE_STATUSES.map((s) => [s, STATUS_LEVEL_CLASSES[DELIVERABLE_STATUS_LEVEL[s]]]),
+) as Record<DeliverableStatus, string>
 
 /** S2 보드 항목 카드 좌측 상태 스트립(3px) — §6 S2: 목록만 봐도 상태 분포가 보이게.
  *  뱃지 틴트의 원색 계열을 쓰되 draft만 중립(웜 보더 진한 값)으로 가라앉힌다. */
-export const STATUS_STRIP_CLASSES: Record<DeliverableStatus, string> = {
-  requested: 'bg-accent',
-  draft: 'bg-border-strong',
-  internal_review: 'bg-steel',
-  pending_approval: 'bg-accent',
-  changes_requested: 'bg-negative',
-  approved: 'bg-positive',
-  final: 'bg-positive',
-}
+export const STATUS_STRIP_CLASSES: Record<DeliverableStatus, string> = Object.fromEntries(
+  DELIVERABLE_STATUSES.map((s) => [s, STATUS_LEVEL_STRIP_CLASSES[DELIVERABLE_STATUS_LEVEL[s]]]),
+) as Record<DeliverableStatus, string>
 
 /** §3 간트·담당 역할 컬러 — pm #4A463F(brown) · design #EB6F2A(accent) · ops #476580(steel) ·
  *  reg #F3B48A(role-reg). R&R 카드 좌측 보더·간트 바에 동일 적용. */

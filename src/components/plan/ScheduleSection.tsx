@@ -3,7 +3,7 @@ import { PLAN_SECTION_META, type SectionProgressData } from './planSections'
 import { AREA_LABELS, formatDate } from '../../lib/labels'
 import type { Milestone } from '../../types/entities'
 
-/** ⑥일정 — 마일스톤 목록(기한·완료 여부·영역) */
+/** 08 일정 — 마일스톤 목록(기한·완료 여부·영역) */
 export default function ScheduleSection({
   milestones,
   progress,
