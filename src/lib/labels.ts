@@ -150,6 +150,21 @@ export const OPS_DOC_CARD_LABELS = {
   other: '기타 제작물',
 } as const
 
+/** P11(3.16.2) 유형 카드 아이콘·설명 — 시각 정본 = 목업 화면 A(문구 그대로) */
+export const OPS_DOC_CARD_ICONS = {
+  cuesheet: '🎛',
+  scenario: '🎤',
+  guide: '📒',
+  other: '📁',
+} as const
+
+export const OPS_DOC_CARD_BLURBS = {
+  cuesheet: '콘솔 오퍼용 3채널 큐 (음향·조명·영상)',
+  scenario: 'MC·진행 대본 — 프로그램표에서 자동 뼈대',
+  guide: '존·역할별 지침 + 비상 대응 (스태프 배포용)',
+  other: '파일 업로드형 항목 (기존 방식)',
+} as const
+
 /** YYYY-MM-DD → 'M월 D일' */
 export function formatDate(isoDate: string): string {
   const [, m, d] = isoDate.split('-')

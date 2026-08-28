@@ -131,6 +131,82 @@ describe('DoD 35 — 유형 우선 보드 (RE:BUILD 27)', () => {
     expect(select.value).toBe('운영가이드')
   })
 
+  // ── P11 (3.16.2 시각 정합) — 목업 화면 A 구조 계약 ──────────────────────────
+  it('(P11-a) 카드는 아이콘·설명·"n건 · 대표 상태" 요약을 갖는다(목업 문구 그대로)', async () => {
+    renderRoute('/board/ops')
+    await screen.findByText('개막 세션 큐시트')
+
+    const cuesheetCard = screen.getByTestId('ops-doc-card-cuesheet')
+    expect(within(cuesheetCard).getByText('🎛')).toBeTruthy()
+    expect(within(cuesheetCard).getByText('콘솔 오퍼용 3채널 큐 (음향·조명·영상)')).toBeTruthy()
+    expect(within(cuesheetCard).getByText('1건')).toBeTruthy()
+    // 대표 상태 = 가장 최근 수정 항목의 상태 라벨(RB27 큐시트는 가이드됨)
+    expect(within(cuesheetCard).getByText('가이드됨')).toBeTruthy()
+
+    const guideCard = screen.getByTestId('ops-doc-card-guide')
+    expect(within(guideCard).getByText('📒')).toBeTruthy()
+    expect(within(guideCard).getByText('존·역할별 지침 + 비상 대응 (스태프 배포용)')).toBeTruthy()
+  })
+
+  it('(P11-b) 유형 선택 시 통합 카드 1개 안에 목록·필터·항목 추가가 들어가고, 빌더는 그 행 아래에서 펼쳐진다', async () => {
+    renderRoute('/board/ops')
+    await screen.findByText('개막 세션 큐시트')
+
+    await userEvent.click(
+      within(screen.getByTestId('ops-doc-card-cuesheet')).getByRole('button', { name: '큐시트' }),
+    )
+
+    // 통합 카드 헤더 = "[유형명] — 문서 목록"
+    const cardHeading = screen.getByRole('heading', { name: '큐시트 — 문서 목록' })
+    const unified = cardHeading.closest('div')!.parentElement as HTMLElement
+    // 필터·항목 추가가 같은 카드 안에 있다
+    expect(within(unified).getByLabelText('제목 검색')).toBeTruthy()
+    expect(within(unified).getByRole('button', { name: '＋ 항목 추가' })).toBeTruthy()
+
+    // 빌더는 그 행(li) 안에서 펼쳐진다 — 페이지 하단 분리 패널이 아니다
+    const row = within(unified).getByText('개막 세션 큐시트').closest('li')!
+    await userEvent.click(within(row).getByRole('button', { name: '빌더 열기' }))
+    const panel = await screen.findByTestId('builder-panel-cuesheet')
+    expect(row.contains(panel)).toBe(true)
+    // 펼침 헤더 우측에 상세 링크
+    expect(within(row).getByRole('link', { name: '상세 화면으로 이동' })).toBeTruthy()
+  })
+
+  it('(P11-c) 상태 범례 행은 운영보드에서 사라지고 헤더 도움말이 그 내용을 담는다', async () => {
+    renderRoute('/board/ops')
+    await screen.findByText('개막 세션 큐시트')
+
+    expect(screen.queryByLabelText('상태 범례')).toBeNull()
+
+    // 헤더 InfoTip — PageHeader의 h1과 같은 컨테이너 안에 있다(카드 InfoTip과 구분)
+    const header = screen.getByRole('heading', { name: '운영 보드' }).closest('div')!
+      .parentElement as HTMLElement
+    // InfoTip은 hover/focus로 열린다(클릭은 토글이라 hover로 이미 열린 것을 도로 닫는다)
+    await userEvent.hover(within(header).getByRole('button', { name: '도움말' }))
+    expect(screen.getByRole('tooltip').textContent).toContain('상태 흐름')
+  })
+
+  it('(P11-d) 전체 보기 그룹 헤더가 카드 명칭과 일치하고, 원시 카테고리는 기타 제작물 안 소제목이다', async () => {
+    renderRoute('/board/ops')
+    await screen.findByText('개막 세션 큐시트')
+
+    // 그룹 헤더(카드 명칭) — 카드 안 라벨과 구분해 카드 밖에서 찾는다
+    const cards = screen.getByTestId('ops-doc-card-cuesheet').parentElement as HTMLElement
+    const groupLabels = screen
+      .getAllByText(/^(큐시트|시나리오|운영가이드|기타 제작물)$/)
+      .filter((el) => !cards.contains(el))
+      .map((el) => el.textContent)
+    expect(groupLabels).toContain('큐시트')
+    expect(groupLabels).toContain('기타 제작물')
+
+    // 원시 카테고리(존운영)는 그룹 헤더가 아니라 기타 제작물 그룹 안 소제목으로 남는다
+    const otherHeading = screen
+      .getAllByText('기타 제작물')
+      .filter((el) => !cards.contains(el))[0]
+    const otherGroup = otherHeading.closest('div')!.parentElement as HTMLElement
+    expect(within(otherGroup).getByText('존운영')).toBeTruthy()
+  })
+
   it('(c) 정형 카테고리("운영가이드")로 생성하면 해당 빌더가 인라인으로 열린다', async () => {
     renderRoute('/board/ops')
     await screen.findByTestId('ops-doc-card-guide')
