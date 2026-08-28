@@ -106,7 +106,7 @@ describe('DoD 37 (c·d) — R-O6·인쇄 구조 (라우트 싱글턴)', () => {
     renderRoute(`/items/${GUIDE_ID}`)
 
     // v2.5 통합 배선 — category='운영가이드'(빌더 데이터 보유) 항목은 파일 폼 대신 빌더
-    const contactsCard = (await screen.findByRole('heading', { name: '연락망/비품' })).closest(
+    const contactsCard = (await screen.findByRole('heading', { name: /연락망\/비품/ })).closest(
       'article',
     )!
     expect(contactsCard.className).toContain('plan-print-hidden')

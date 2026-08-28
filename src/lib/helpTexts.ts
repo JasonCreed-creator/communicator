@@ -84,6 +84,12 @@ export const GUIDE_STALE_HELP =
   '존별 운영·R&R 원본이 바뀌면 이 섹션에 "갱신 있음"이 표시됩니다. 자동으로 덮어쓰지 않으니 ' +
   '차이를 확인한 뒤 반영해 주세요(기준 견적 갱신과 같은 방식).'
 
+/** 3.16.4 — 정형 문서(시나리오·운영가이드) 헤더 [컨펌 발송] 버튼의 disabled 사유(목업 화면 B·C) */
+export const DOC_SEND_NEEDS_REVIEW_HELP =
+  '내부검토 상태에서만 발송할 수 있습니다 — 초안이면 아래 상태 액션에서 내부검토 요청부터 진행하세요.'
+export const DOC_SEND_PM_ONLY_HELP = '컨펌 발송은 PM만 할 수 있습니다.'
+export const DOC_SEND_NO_APPROVAL_HELP = '이 문서는 컨펌 루프를 사용하지 않습니다(공통 문서).'
+
 /** 견적서 임포트 위저드 단계 제목 */
 export const IMPORT_STEP_HELP = {
   upload: '엑셀 견적서를 올려 서식(A·B·C형)·섹션·항목·검산 결과를 인식합니다. 이 단계에서는 아무것도 저장되지 않습니다.',

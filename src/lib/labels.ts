@@ -133,6 +133,18 @@ export const SCENARIO_KIND_LABELS: Record<ScenarioBlockKind, string> = {
   custom: '커스텀',
 }
 
+/** 3.16.4 화면 B — 구분 배지 컬러(tokens.css 토큰 조합만 — 임의 팔레트 금지).
+ *  mc=steel 틴트(목업 파랑 그대로), video=steel 솔리드(목업 보라 — 토큰에 보라가 없어 같은
+ *  한색 계열의 진한 단계로 구분), transition=accent 틴트(목업 앰버 — 앱의 대기/주의 관례),
+ *  protocol·custom=중립(목업 기본 칩). */
+export const SCENARIO_KIND_CHIP_CLASSES: Record<ScenarioBlockKind, string> = {
+  mc: 'bg-steel-tint text-steel',
+  video: 'bg-steel text-card',
+  protocol: 'bg-track text-ink-sub',
+  transition: 'bg-accent-tint text-accent-deep',
+  custom: 'bg-track text-ink-sub',
+}
+
 /** v2.5 §23 — 운영가이드 빌더 섹션 카드 4종 라벨 */
 export const GUIDE_KIND_LABELS: Record<GuideSectionKind, string> = {
   zone: '존별 운영',

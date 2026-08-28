@@ -32,23 +32,23 @@ describe('운영가이드 빌더 — RE:BUILD 27 픽스처', () => {
   it('(a) 4섹션이 kind 라벨과 함께 렌더되고, zone 섹션에만 "갱신 있음" 배지가 붙는다', async () => {
     renderBuilder(true)
 
-    expect(await screen.findByRole('heading', { name: '존별 운영' })).toBeTruthy()
-    expect(screen.getByRole('heading', { name: '역할별 체크리스트' })).toBeTruthy()
-    expect(screen.getByRole('heading', { name: '비상 대응' })).toBeTruthy()
-    expect(screen.getByRole('heading', { name: '연락망/비품' })).toBeTruthy()
+    expect(await screen.findByRole('heading', { name: /존별 운영$/ })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: /역할별 체크리스트/ })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: /비상 대응/ })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: /연락망\/비품/ })).toBeTruthy()
 
     expect(screen.getAllByText('갱신 있음')).toHaveLength(1)
-    const zoneCard = screen.getByRole('heading', { name: '존별 운영' }).closest('article')!
+    const zoneCard = screen.getByRole('heading', { name: /존별 운영$/ }).closest('article')!
     expect(within(zoneCard).getByText('갱신 있음')).toBeTruthy()
 
     // 역할별 체크리스트는 R&R 카드에서 조립된 내용이 보인다(assembleRoleSectionContent 결과)
-    const roleCard = screen.getByRole('heading', { name: '역할별 체크리스트' }).closest('article')!
+    const roleCard = screen.getByRole('heading', { name: /역할별 체크리스트/ }).closest('article')!
     expect(within(roleCard).getByText(/책임|담당|PM/)).toBeTruthy()
   })
 
   it('(b) 연락망/비품 섹션은 개인 연락처 경고 문구를 보여주고, 인쇄 기본 제외 클래스를 갖는다', async () => {
     renderBuilder(true)
-    const contactsCard = (await screen.findByRole('heading', { name: '연락망/비품' })).closest('article')!
+    const contactsCard = (await screen.findByRole('heading', { name: /연락망\/비품/ })).closest('article')!
     expect(within(contactsCard).getByText(/개인 연락처.*넣지 마세요/)).toBeTruthy()
     // 기본값(연락망 포함 체크 해제)에서는 인쇄 제외 클래스가 붙는다(R-O6)
     expect(contactsCard.className).toContain('plan-print-hidden')
@@ -62,7 +62,7 @@ describe('운영가이드 빌더 — RE:BUILD 27 픽스처', () => {
 
   it('(c) 차이 확인 → 반영 전에는 자동으로 저장되지 않는다(원본 조회만)', async () => {
     renderBuilder(true)
-    const zoneCard = (await screen.findByRole('heading', { name: '존별 운영' })).closest('article')!
+    const zoneCard = (await screen.findByRole('heading', { name: /존별 운영$/ })).closest('article')!
 
     await userEvent.click(within(zoneCard).getByRole('button', { name: '차이 확인' }))
 
@@ -82,7 +82,7 @@ describe('운영가이드 빌더 — RE:BUILD 27 픽스처', () => {
 
   it('(d) "반영"을 누르면 stale이 해제되고 표시 내용이 원본과 같아진다', async () => {
     renderBuilder(true)
-    const zoneCard = (await screen.findByRole('heading', { name: '존별 운영' })).closest('article')!
+    const zoneCard = (await screen.findByRole('heading', { name: /존별 운영$/ })).closest('article')!
 
     await userEvent.click(within(zoneCard).getByRole('button', { name: '차이 확인' }))
     await within(zoneCard).findByText(/애프터파티 정원 150명 유지 여부/)
@@ -104,7 +104,7 @@ describe('운영가이드 빌더 — RE:BUILD 27 픽스처', () => {
   it('(e) 빈 문서에서는 "기본 4섹션 만들기" 시드 버튼이 보이고, 섹션이 있으면 보이지 않는다', async () => {
     // RB27 가이드(GUIDE_ID)는 이미 섹션이 있으므로 시드 버튼이 없다
     renderBuilder(true)
-    await screen.findByRole('heading', { name: '존별 운영' })
+    await screen.findByRole('heading', { name: /존별 운영$/ })
     expect(screen.queryByRole('button', { name: '기본 4섹션 만들기' })).toBeNull()
     cleanup()
 
@@ -122,10 +122,10 @@ describe('운영가이드 빌더 — RE:BUILD 27 픽스처', () => {
     const seedBtn = await screen.findByRole('button', { name: '기본 4섹션 만들기' })
     await userEvent.click(seedBtn)
 
-    await screen.findByRole('heading', { name: '존별 운영' })
-    expect(screen.getByRole('heading', { name: '역할별 체크리스트' })).toBeTruthy()
-    expect(screen.getByRole('heading', { name: '비상 대응' })).toBeTruthy()
-    expect(screen.getByRole('heading', { name: '연락망/비품' })).toBeTruthy()
+    await screen.findByRole('heading', { name: /존별 운영$/ })
+    expect(screen.getByRole('heading', { name: /역할별 체크리스트/ })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: /비상 대응/ })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: /연락망\/비품/ })).toBeTruthy()
     expect(screen.queryByRole('button', { name: '기본 4섹션 만들기' })).toBeNull()
 
     const built = await provider.listGuideSections(fresh.id)
@@ -142,7 +142,7 @@ describe('운영가이드 빌더 — RE:BUILD 27 픽스처', () => {
       title: '읽기 전용 테스트용 신규 존',
     })
     renderBuilder(false)
-    await screen.findByRole('heading', { name: '존별 운영' })
+    await screen.findByRole('heading', { name: /존별 운영$/ })
 
     expect(screen.queryByRole('button', { name: '수정' })).toBeNull()
     expect(screen.queryByRole('button', { name: '위로' })).toBeNull()
@@ -156,7 +156,7 @@ describe('운영가이드 빌더 — RE:BUILD 27 픽스처', () => {
     expect(screen.getByRole('checkbox', { name: /연락망 포함/ })).toBeTruthy()
 
     // 차이 확인은 볼 수 있지만(저장된 내용·현재 원본 나란히) "반영" 버튼은 없다
-    const zoneCard = screen.getByRole('heading', { name: '존별 운영' }).closest('article')!
+    const zoneCard = screen.getByRole('heading', { name: /존별 운영$/ }).closest('article')!
     expect(within(zoneCard).getByText('갱신 있음')).toBeTruthy()
     await userEvent.click(within(zoneCard).getByRole('button', { name: '차이 확인' }))
     await within(zoneCard).findByText('현재 원본')
