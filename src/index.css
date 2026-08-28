@@ -236,9 +236,15 @@
     font-variant-numeric: tabular-nums;
   }
 
-  /* 08 그룹 헤더행 — canvas 면 + 12/600 + 건수 */
-  .ui-table-group > td {
+  /* 08 그룹 헤더행 — canvas 면 + 12/600 + 건수.
+     면은 tr에 건다 — 스티키 첫 열이 background:inherit로 같은 면을 이어받아야 하고,
+     td에 걸면 그 규칙(:first-child)이 특이도로 이겨 첫 칸만 면이 빠진다.
+     zebra(tr:nth-child(even))와 특이도가 같으므로 반드시 그 뒤에 온다. */
+  .ui-table tbody tr.ui-table-group {
     background: var(--canvas);
+  }
+
+  .ui-table tbody tr.ui-table-group > td {
     font-size: 12px;
     font-weight: 600;
     letter-spacing: 0.02em;
@@ -246,11 +252,22 @@
   }
 
   /* 09 합계·소계는 고정 하단행 + --border-strong 상단선 */
-  .ui-table-total > td {
+  .ui-table tbody tr.ui-table-total {
     background: var(--card);
+  }
+
+  .ui-table tbody tr.ui-table-total > td {
     border-top: 1px solid var(--border-strong);
     border-bottom: none;
     font-weight: 600;
+  }
+
+  /* 07의 예외 — 인라인 편집 폼처럼 셀 안에서 줄바꿈·오버플로가 필요한 칸.
+     .ui-table :is(th,td) 규칙과 같은 위치에서 이기도록 같은 형태로 선언한다. */
+  .ui-table :is(th, td).ui-cell-wrap {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
   }
 }
 
