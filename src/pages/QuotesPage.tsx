@@ -1,11 +1,25 @@
 // S-2 견적 목록 (§10) — 좌: 견적 버전 표(버전·인원·베뉴·모객·총액·상태) / 우: 선택 버전 요약.
 // 상단: Excel 내려받기 · ＋ 새 버전 · ＋ 새 견적. 금액은 이 화면(와 Excel)에만 — 접근 = admin·sales.
+//
+// 3.17b 시안 정렬('랜딩보드 · 견적.dc.html'):
+//  · 버전 표를 **표 정본**(.ui-table + .ui-th)으로 — 44 고정·zebra·스티키 첫 열,
+//    총액 열은 .ui-num(우측정렬 tabular)로 세워 버전 간 금액 비교가 세로로 되게 한다.
+//  · 상태 pill을 **배지 정본**(LevelBadge · rounded-full · 12/500)으로 통일.
+//  · 요약 8행 **위에 구성 스택 막대**, 아래에 **'이전 버전 대비'** 블록.
+// ⚠ 엔진 상수·산식은 손대지 않는다 — 이 화면은 표시 계층만 바꾼다(DoD 21·22).
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import EmptyState from '../components/internal/EmptyState'
+import LoadFailedState from '../components/internal/LoadFailedState'
 import PageHeader from '../components/internal/PageHeader'
+import SortableTh, { type SortDirection } from '../components/internal/SortableTh'
+import { LevelBadge } from '../components/internal/StatusBadge'
+import TableSkeleton from '../components/internal/TableSkeleton'
+import QuoteComposition from '../components/quote/QuoteComposition'
 import QuoteGate from '../components/quote/QuoteGate'
+import QuoteVersionDelta, { previousVersion } from '../components/quote/QuoteVersionDelta'
 import { fmtWon } from '../components/quote/quoteFormState'
+import { QUOTE_STATUS_LEVEL } from '../components/quote/quoteStatus'
 import QUOTE_STR from '../components/quote/quoteStrings'
 import { useProject } from '../context/ProjectContext'
 import { useAsync } from '../hooks/useAsync'
@@ -16,13 +30,7 @@ import type { Quote } from '../types/entities'
 
 const provider = getDataProvider()
 
-const STATUS_PILL: Record<string, string> = {
-  draft: 'bg-track text-ink-sub',
-  proposed: 'bg-steel-tint text-steel',
-  accepted: 'bg-positive-tint text-positive',
-  archived: 'bg-track text-ink-cap',
-  superseded: 'bg-track text-ink-cap',
-}
+type SortKey = 'version' | 'total'
 
 function QuotesBody() {
   const t = QUOTE_STR.ko
@@ -34,6 +42,17 @@ function QuotesBody() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [downloading, setDownloading] = useState(false)
+  // 기본 정렬 = 최신 버전 위로(시안의 활성 화살표 ↓)
+  const [sortKey, setSortKey] = useState<SortKey>('version')
+  const [sortDir, setSortDir] = useState<SortDirection>('desc')
+
+  const toggleSort = (key: SortKey) => {
+    if (key === sortKey) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    else {
+      setSortKey(key)
+      setSortDir('desc')
+    }
+  }
 
   const selected: Quote | null = useMemo(() => {
     if (quotes.length === 0) return null
@@ -72,48 +91,77 @@ function QuotesBody() {
     }
   }
 
+  const sortRows = (rows: Quote[]): Quote[] => {
+    const sign = sortDir === 'asc' ? 1 : -1
+    return [...rows].sort((a, b) =>
+      sortKey === 'version'
+        ? (a.version - b.version) * sign
+        : (a.total_amount - b.total_amount) * sign || (a.version - b.version) * sign,
+    )
+  }
+
   const QuoteTable = ({ rows }: { rows: Quote[] }) => (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[560px] border-collapse text-sm">
+      <table className="ui-table min-w-[640px] text-sm">
         <thead>
           <tr>
-            <th className="ui-th">{t.listColVersion}</th>
-            <th className="ui-th">{t.listColHeadcount}</th>
+            <SortableTh
+              active={sortKey === 'version'}
+              direction={sortDir}
+              onSort={() => toggleSort('version')}
+              className="w-[132px]"
+            >
+              {t.listColVersion}
+            </SortableTh>
+            <th className="ui-th w-[84px]">{t.listColHeadcount}</th>
             <th className="ui-th">{t.listColVenue}</th>
-            <th className="ui-th">{t.listColLeads}</th>
-            <th className="ui-th text-right">{t.listColTotal}</th>
-            <th className="ui-th">{t.listColStatus}</th>
+            <th className="ui-th w-[76px]">{t.listColLeads}</th>
+            {/* 03 금액 열 — 우측정렬 tabular(.ui-num) */}
+            <SortableTh
+              numeric
+              active={sortKey === 'total'}
+              direction={sortDir}
+              onSort={() => toggleSort('total')}
+              className="w-[168px]"
+            >
+              {t.listColTotal}
+            </SortableTh>
+            <th className="ui-th w-[92px]">{t.listColStatus}</th>
           </tr>
         </thead>
         <tbody>
-          {rows.map((q) => {
+          {sortRows(rows).map((q) => {
             const isSel = selected?.id === q.id
+            const venue = q.input.selected_venue ? venueDisplayName(q.input.selected_venue) : t.tbd
             return (
               <tr
                 key={q.id}
+                data-testid={`quote-row-${q.id}`}
                 onClick={() => setSelectedId(q.id)}
-                className={`cursor-pointer border-b border-border ${isSel ? 'bg-accent-tint' : 'hover:bg-track'}`}
+                className="cursor-pointer"
+                // 선택 행은 accent-tint 면 — 스티키 첫 열이 background:inherit라 tr에 인라인으로 건다
+                style={isSel ? { background: 'var(--accent-tint)' } : undefined}
               >
-                <td className="px-3 py-2.5 font-semibold text-ink">
+                <td className="text-ink">
                   v{q.version}
                   {q.is_final && <span aria-hidden className="ml-1">🔒</span>}
                   {/* v2.4 §22.4 — 임포트로 등록된 견적은 목록에서 바로 구분된다(DoD 34) */}
                   {q.source === 'imported' && (
-                    <span className="ml-1.5 rounded-full bg-steel-tint px-2 py-0.5 text-xs font-medium text-steel">
-                      임포트
-                    </span>
+                    <LevelBadge level="progress" label="임포트" className="ml-1.5 font-medium" />
                   )}
                 </td>
-                <td className="px-3 py-2.5 text-ink">{q.input.headcount}명</td>
-                <td className="max-w-44 truncate px-3 py-2.5 text-ink-sub" title={q.input.selected_venue ? venueDisplayName(q.input.selected_venue) : undefined}>
-                  {q.input.selected_venue ? venueDisplayName(q.input.selected_venue) : t.tbd}
+                <td className="text-ink">{q.input.headcount}명</td>
+                {/* 07 …처리 — 잘린 값은 title 툴팁으로 전체 확인 가능(§05 조건 2) */}
+                <td className="max-w-44 text-ink-sub" title={venue}>
+                  {venue}
                 </td>
-                <td className="px-3 py-2.5 text-ink-sub">{q.input.include_leads ? t.listLeadsOn : t.listLeadsOff}</td>
-                <td className="px-3 py-2.5 text-right font-semibold text-ink">{fmtWon(q.total_amount, false)}</td>
-                <td className="px-3 py-2.5">
-                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_PILL[q.status] ?? 'bg-track text-ink-sub'}`}>
-                    {t.statusLabels[q.status] ?? q.status}
-                  </span>
+                <td className="text-ink-sub">{q.input.include_leads ? t.listLeadsOn : t.listLeadsOff}</td>
+                <td className="ui-num font-semibold text-ink">{fmtWon(q.total_amount, false)}</td>
+                <td>
+                  <LevelBadge
+                    level={QUOTE_STATUS_LEVEL[q.status] ?? 'neutral'}
+                    label={t.statusLabels[q.status] ?? q.status}
+                  />
                 </td>
               </tr>
             )
@@ -159,9 +207,11 @@ function QuotesBody() {
       )}
 
       {list.loading ? (
-        <p className="text-sm text-ink-cap">불러오는 중…</p>
+        // ① 로딩 — 실제 행 구조와 같은 스켈레톤(스피너 금지)
+        <TableSkeleton rows={4} columns={6} />
       ) : list.error ? (
-        <p className="text-sm text-negative">{list.error}</p>
+        // ⑤ 로드 실패 — 원문 그대로 + 재시도
+        <LoadFailedState message={list.error} onRetry={list.reload} />
       ) : quotes.length === 0 ? (
         <div className="ui-card">
           <EmptyState
@@ -214,10 +264,14 @@ function QuotesBody() {
                       {selected.title} · v{selected.version}
                     </p>
                   </div>
-                  <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_PILL[selected.status]}`}>
-                    {selected.is_final ? '🔒 ' : ''}
-                    {t.statusLabels[selected.status] ?? selected.status}
-                  </span>
+                  <LevelBadge
+                    level={QUOTE_STATUS_LEVEL[selected.status] ?? 'neutral'}
+                    label={`${selected.is_final ? '🔒 ' : ''}${t.statusLabels[selected.status] ?? selected.status}`}
+                  />
+                </div>
+                {/* 구성 스택 막대 — 8행 금액 나열보다 먼저 '어디서 비용이 났는가'를 보여준다 */}
+                <div className="mt-4">
+                  <QuoteComposition breakdown={selected.breakdown} />
                 </div>
                 <dl className="mt-4 space-y-1.5 text-sm">
                   {[
@@ -252,6 +306,10 @@ function QuotesBody() {
                     <dd className="font-semibold text-ink">{fmtWon(selected.breakdown.total, false)}</dd>
                   </div>
                 </dl>
+                {/* 이전 버전 대비 — 증감액·증감률·사유(사유는 스키마에 없어 '미기재') */}
+                <div className="mt-4">
+                  <QuoteVersionDelta current={selected} previous={previousVersion(quotes, selected)} />
+                </div>
                 <div className="mt-4 flex flex-wrap gap-2">
                   <button type="button" className="btn btn-ghost btn-sm" onClick={() => navigate(`/quotes/${selected.id}/edit`)}>
                     {selected.is_final ? t.summaryEdit : t.summaryEditDraft}
