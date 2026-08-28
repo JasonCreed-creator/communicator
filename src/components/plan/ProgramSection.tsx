@@ -2,9 +2,10 @@ import { useState, type FormEvent } from 'react'
 import ErrorAlert from '../internal/ErrorAlert'
 import { useProject } from '../../context/ProjectContext'
 import { useMutation } from '../../hooks/useAsync'
+import { SCENARIO_KIND_LABELS } from '../../lib/labels'
 import { getDataProvider } from '../../providers'
-import type { ProgramSession } from '../../types/entities'
-import type { ProgramSessionInput } from '../../types/views'
+import type { ProgramSession, ScenarioBlock } from '../../types/entities'
+import type { PlanScenarioSection, ProgramSessionInput } from '../../types/views'
 import PlanSection from './PlanSection'
 import { PLAN_SECTION_META, type SectionProgressData } from './planSections'
 
@@ -16,6 +17,8 @@ interface ProgramSectionProps {
   /** pm·ops만 true — §6.1 프로그램표 편집 권한 */
   canEdit: boolean
   onChanged: () => void
+  /** v2.5 §23 — 첫 시나리오 항목(없으면 세션별 펼침을 렌더하지 않는다 — 회귀 없음) */
+  scenario: PlanScenarioSection | null
 }
 
 function groupBySection(sessions: ProgramSession[]): [string, ProgramSession[]][] {
@@ -26,6 +29,18 @@ function groupBySection(sessions: ProgramSession[]): [string, ProgramSession[]][
     map.get(key)!.push(s)
   }
   return [...map.entries()]
+}
+
+/** scenario.blocks를 session_id 기준으로 묶는다 — session_id가 없는 블록(수동 블록)은 제외 */
+function groupBlocksBySession(scenario: PlanScenarioSection | null): Map<string, ScenarioBlock[]> {
+  const map = new Map<string, ScenarioBlock[]>()
+  if (!scenario) return map
+  for (const b of scenario.blocks) {
+    if (!b.session_id) continue
+    if (!map.has(b.session_id)) map.set(b.session_id, [])
+    map.get(b.session_id)!.push(b)
+  }
+  return map
 }
 
 function timeRangeLabel(s: ProgramSession): string {
@@ -39,8 +54,9 @@ function speakerLabel(s: ProgramSession): string {
   return meta ? `${s.speaker_name} (${meta})` : s.speaker_name
 }
 
-export default function ProgramSection({ sessions, progress, canEdit, onChanged }: ProgramSectionProps) {
+export default function ProgramSection({ sessions, progress, canEdit, onChanged, scenario }: ProgramSectionProps) {
   const grouped = groupBySection(sessions)
+  const blocksBySession = groupBlocksBySession(scenario)
 
   return (
     <PlanSection number={PLAN_SECTION_META.program.number} title={PLAN_SECTION_META.program.title} progress={progress}>
@@ -62,7 +78,13 @@ export default function ProgramSection({ sessions, progress, canEdit, onChanged 
                 </thead>
                 <tbody className="divide-y divide-border">
                   {rows.map((s) => (
-                    <ProgramRow key={s.id} session={s} canEdit={canEdit} onChanged={onChanged} />
+                    <ProgramRow
+                      key={s.id}
+                      session={s}
+                      canEdit={canEdit}
+                      onChanged={onChanged}
+                      blocks={blocksBySession.get(s.id) ?? []}
+                    />
                   ))}
                 </tbody>
               </table>
@@ -216,15 +238,20 @@ function ProgramRow({
   session,
   canEdit,
   onChanged,
+  blocks,
 }: {
   session: ProgramSession
   canEdit: boolean
   onChanged: () => void
+  /** v2.5 §23 — 이 세션에 연결된 시나리오 진행 블록(sort_order 순). 비어 있으면 펼침 토글 미노출 */
+  blocks: ScenarioBlock[]
 }) {
   const [editing, setEditing] = useState(false)
+  const [scenarioOpen, setScenarioOpen] = useState(false)
   const [values, setValues] = useState<ProgramFormValues>(() => toFormValues(session))
   const update = useMutation((input: ProgramSessionInput) => provider.updateProgramSession(session.id, input))
   const remove = useMutation(() => provider.deleteProgramSession(session.id))
+  const colSpan = canEdit ? 5 : 4
 
   const handleEdit = () => {
     setValues(toFormValues(session))
@@ -249,7 +276,7 @@ function ProgramRow({
   if (editing) {
     return (
       <tr className="plan-print-hidden">
-        <td colSpan={canEdit ? 5 : 4} className="py-2">
+        <td colSpan={colSpan} className="py-2">
           <ProgramFieldsForm
             values={values}
             onChange={(p) => setValues((v) => ({ ...v, ...p }))}
@@ -265,32 +292,64 @@ function ProgramRow({
   }
 
   return (
-    <tr>
-      <td className="py-2 pr-3 align-top text-ink-sub">{timeRangeLabel(session)}</td>
-      <td className="py-2 pr-3 align-top font-medium text-ink">{session.title}</td>
-      <td className="py-2 pr-3 align-top text-ink-sub">{speakerLabel(session)}</td>
-      <td className="py-2 pr-3 align-top text-ink-cap">
-        {session.note && <span className="rounded-full bg-track px-2 py-0.5 text-xs text-ink-sub">{session.note}</span>}
-      </td>
-      {canEdit && (
-        <td className="plan-print-hidden py-2 pr-3 align-top">
-          <div className="flex gap-2">
-            <button type="button" onClick={handleEdit} className="text-xs text-ink-sub underline">
-              수정
-            </button>
+    <>
+      <tr>
+        <td className="py-2 pr-3 align-top text-ink-sub">{timeRangeLabel(session)}</td>
+        <td className="py-2 pr-3 align-top font-medium text-ink">{session.title}</td>
+        <td className="py-2 pr-3 align-top text-ink-sub">{speakerLabel(session)}</td>
+        <td className="py-2 pr-3 align-top text-ink-cap">
+          {session.note && <span className="rounded-full bg-track px-2 py-0.5 text-xs text-ink-sub">{session.note}</span>}
+          {blocks.length > 0 && (
             <button
               type="button"
-              onClick={handleDelete}
-              disabled={remove.pending}
-              className="text-xs text-negative underline disabled:opacity-50"
+              onClick={() => setScenarioOpen((v) => !v)}
+              className="plan-print-hidden mt-1 block text-xs text-steel underline"
             >
-              삭제
+              {scenarioOpen ? '진행 시나리오 접기' : '진행 시나리오 펼침'}
             </button>
-          </div>
-          <ErrorAlert message={remove.error} />
+          )}
         </td>
+        {canEdit && (
+          <td className="plan-print-hidden py-2 pr-3 align-top">
+            <div className="flex gap-2">
+              <button type="button" onClick={handleEdit} className="text-xs text-ink-sub underline">
+                수정
+              </button>
+              <button
+                type="button"
+                onClick={handleDelete}
+                disabled={remove.pending}
+                className="text-xs text-negative underline disabled:opacity-50"
+              >
+                삭제
+              </button>
+            </div>
+            <ErrorAlert message={remove.error} />
+          </td>
+        )}
+      </tr>
+      {blocks.length > 0 && scenarioOpen && (
+        <tr>
+          <td colSpan={colSpan} className="bg-canvas px-3 py-3">
+            <ul className="space-y-1.5">
+              {blocks.map((b) => (
+                <li key={b.id} className="flex flex-wrap items-start gap-2 text-xs text-ink-sub">
+                  <span className="w-12 shrink-0 text-ink-cap">{b.time ?? '—'}</span>
+                  <span className="inline-flex shrink-0 items-center rounded-full bg-track px-2 py-0.5 font-medium text-ink-sub">
+                    {SCENARIO_KIND_LABELS[b.kind]}
+                  </span>
+                  <span className="min-w-0 flex-1 space-y-0.5">
+                    {b.script && <span className="block text-ink">{b.script}</span>}
+                    {b.note && <span className="block text-ink-cap">{b.note}</span>}
+                    {!b.script && !b.note && <span className="block text-ink-cap">—</span>}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </td>
+        </tr>
       )}
-    </tr>
+    </>
   )
 }
 

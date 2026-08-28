@@ -1,8 +1,9 @@
 /** @vitest-environment jsdom */
 // DoD-9: S9 인쇄 미리보기(A4) — jsdom은 실제 인쇄 레이아웃·페이지 분할을 계산하지 못하므로
 // (a) src/index.css의 인쇄 CSS 규칙 원문 존재를, (b)(c) 렌더 결과에 인쇄 시 숨겨야 할 UI의
-// plan-print-hidden 클래스와 7개 섹션(v1.3부터 ③큐시트 추가) 컨테이너의 plan-section(page-break
-// 회피) 클래스가 부여됐는지를 구조 계약 가드로 증명한다 (CLAUDE.md v1.4 §7 DoD-9, DoD-6 선례 방식 준용).
+// plan-print-hidden 클래스와 8개 섹션(v1.3 ③큐시트 추가 + v2.5 ⑦비상 대응 신설, Phase 3.16d)
+// 컨테이너의 plan-section(page-break 회피) 클래스가 부여됐는지를 구조 계약 가드로 증명한다
+// (CLAUDE.md v1.4 §7 DoD-9, DoD-6 선례 방식 준용).
 import { cleanup, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { renderRoute } from './testUtils'
@@ -53,8 +54,10 @@ describe('DoD-9 S9 인쇄 미리보기(A4)', () => {
     expect(manageHeaders.length).toBeGreaterThan(0)
     manageHeaders.forEach((el) => expect(el.className).toContain('plan-print-hidden'))
 
+    // v2.5(Phase 3.16d) — ⑦비상 대응 섹션이 신설되어 7 → 8로 늘었다(의미 유지 갱신:
+    // "정형 섹션 컨테이너 전부가 plan-section 계약을 지킨다"는 계약 자체는 그대로다).
     const sections = document.querySelectorAll('.plan-section')
-    expect(sections.length).toBe(7)
+    expect(sections.length).toBe(8)
   })
 
   it('(c) 인쇄 버튼이 렌더되고 window.print를 호출한다', async () => {

@@ -7,9 +7,8 @@ export interface PlanSectionMeta {
 }
 
 // v1.3: 큐시트 섹션은 프로그램 다음 배치(설계서 §10 S9) — 이하 섹션 번호가 한 칸씩 밀린다
-// v2.5(3.16a, AE — 최소 컴파일 호환 패치): §23이 PlanSectionKey에 'emergency'를 추가해
-// 이 Record가 그 키를 요구하게 됐다. 번호·타이틀만 채워 빌드를 지키는 자리표시이고,
-// 실제 ⑦비상 대응 섹션 렌더(§9 확장)·정확한 위치·인쇄 규약은 Phase 3.16d(AH)가 완성한다.
+// v2.5(3.16a AE가 번호·순서를 자리표시로 예약 → 3.16d AH가 렌더를 완성): ⑦비상 대응은
+// EmergencySection.tsx가 렌더하고, 등록 통계(⑥) 다음·일정(⑧) 앞에 배치된다(PlanDocPage.tsx).
 export const PLAN_SECTION_META: Record<PlanSectionKey, PlanSectionMeta> = {
   overview: { number: '①', title: '행사개요' },
   program: { number: '②', title: '프로그램' },
