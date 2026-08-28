@@ -35,7 +35,9 @@ describe('DoD-2 수정요청 루프 (dlv-001 메인 키비주얼, pending_approv
     await userEvent.upload(fileInput, new File(['fake'], '수정본.png', { type: 'image/png' }))
     await userEvent.click(screen.getByRole('button', { name: '업로드' }))
 
-    expect(await screen.findByText('초안')).toBeTruthy()
+    // 3.17b — 6단계 진행 레일이 '초안'을 라벨로도 그린다. 의미 유지: 상태 배지(.ui-badge) 확인.
+    const badges = await screen.findAllByText('초안')
+    expect(badges.some((el) => el.classList.contains('ui-badge'))).toBe(true)
     const d = await mockProvider().getDeliverable('dlv-001')
     expect(d.status).toBe('draft')
     expect(d.versions[0]?.version_no).toBe(3)
