@@ -14,11 +14,12 @@ export default function ClientLayout() {
   const fetcher = useCallback(() => provider.getClientQueue(token ?? ''), [token])
   const queue = useClientData(fetcher)
 
+  // 3.16.3 T2 — 사이드바와 동일하게 비활성 탭에도 hover 배경 하이라이트(라이트 면 토큰)
   const tabClass = ({ isActive }: { isActive: boolean }) =>
-    `flex h-11 items-center whitespace-nowrap border-b-2 px-3 text-sm font-medium ${
+    `flex h-11 items-center whitespace-nowrap border-b-2 px-3 text-sm font-medium transition-colors ${
       isActive
         ? 'border-accent text-ink'
-        : 'border-transparent text-ink-sub hover:text-ink'
+        : 'border-transparent text-ink-sub hover:bg-track hover:text-ink'
     }`
 
   return (
