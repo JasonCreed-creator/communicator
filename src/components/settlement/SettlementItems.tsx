@@ -213,16 +213,10 @@ export default function SettlementItems({
     }
   }
 
-  // 3.17b: 이 패널은 버킷 표(.ui-table)의 펼침 행 **안쪽**에 들어간다.
-  // 표 정본의 셀 규칙(nowrap·…처리 · 첫 열 스티키 · 첫 열 600 · 행 면)은 한 줄 요약 표를 위한 것이라
-  // 중첩된 항목 표에는 맞지 않는다 — 자손 선택자로 흘러든 규칙을 여기서만 되돌린다(유틸리티 레이어가 이긴다).
-  const RESET_INHERITED_TABLE =
-    '[&_th]:whitespace-normal [&_td]:whitespace-normal [&_th]:overflow-visible [&_td]:overflow-visible ' +
-    '[&_th:first-child]:static [&_td:first-child]:static [&_th:first-child]:border-r-0 [&_td:first-child]:border-r-0 ' +
-    '[&_td:first-child]:font-normal [&_tbody_tr]:bg-transparent'
-
+  // 이 패널은 버킷 표(.ui-table)의 펼침 행 안쪽에 들어가지만, 표 정본 선택자가 직계 자식으로
+  // 좁혀져 있어 중첩된 항목 표에는 규칙이 흘러들지 않는다(되돌리는 유틸리티가 필요 없다).
   return (
-    <div className={`bg-canvas px-4 py-3 ${RESET_INHERITED_TABLE}`}>
+    <div className="bg-canvas px-4 py-3">
       {!hasCost && (
         <p className="mb-2 text-sm text-ink-sub">
           원가가 없는 버킷입니다 — 견적액 전체가 마진으로 잡히므로 발주·실비를 넣지 않습니다.

@@ -110,7 +110,7 @@ export default function WbsChecklist({
               <Fragment key={g.phase_no}>
                 {/* 그룹 헤더행 — canvas 면(§05 규칙 08). 스티키 첫 열 규칙이 background:inherit로
                     행 배경을 덮어써서, 면은 tr 인라인 배경으로 고정한다(토큰 값만 사용). */}
-                <tr className="ui-table-group" style={{ background: 'var(--canvas)' }}>
+                <tr className="ui-table-group">
                   <td colSpan={colCount}>
                     <span className="inline-flex flex-wrap items-center gap-2">
                       <span>
@@ -346,7 +346,7 @@ function WbsTaskRow({
         <tr>
           {/* 편집 폼 행 — 표 정본의 nowrap·ellipsis(§05 규칙 07)는 한 줄 셀용이라 이 행에서만 해제한다
               (클래스는 .ui-table 셀 규칙에 특이도로 밀려 인라인으로 지정) */}
-          <td colSpan={colCount} className="py-3" style={{ whiteSpace: 'normal', overflow: 'visible' }}>
+          <td colSpan={colCount} className="ui-cell-wrap py-3">
             <WbsTaskEditForm
               task={task}
               deliverables={deliverables}
