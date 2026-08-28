@@ -1457,8 +1457,17 @@ reauthorizeSheet(projectId)                      -> SheetConnection      -- revo
 checkSheetUpdates(projectId)                     -> SheetConnection      -- 감지만(R-S2)
 getSheetDiff(projectId)                          -> SheetDiff
 applySheetDiff(projectId, snapshotVersion)       -> SheetApplyResult     -- 버전 불일치 409(R-S1)
-getSheetRegistrationStats(projectId)             -> SheetRegistrationStats
+getSheetRegistrationStats(projectId)             -> SheetRegistrationStats | null   -- 미연결이면 null
 ```
+
+> **null 반환 사유(구현 확정)**: 연결 카드는 상시 노출이므로 미연결 행사에서 404를 던지면 KPI가 오류 화면으로 보인다.
+> 화면은 null일 때 기존 `getRegistrationStats`로 폴백한다.
+>
+> **`auto_check_minutes` 저장 경로는 v10에 없다.** 자동 확인 주기는 화면이 뷰어 단위로 보관하며,
+> 행사 단위로 공유 저장하려면 사용자 승인 + 설계서 개정이 따라야 한다 — Phase 4 열린 질문.
+>
+> **열린 질문(Phase 4)**: 신청 상태(`sheet_status`)는 시트 소유 값이지만 매핑 필드 7종에 없다.
+> mock은 원본 행의 상태를 그대로 따라간다 — 상태 컬럼을 매핑 대상에 넣을지 확정할 것.
 
 ### 24.5 화면 계약 (S4)
 
