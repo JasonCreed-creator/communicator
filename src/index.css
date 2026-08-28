@@ -168,6 +168,8 @@
   }
 
   /* ── 표 정본 — 패턴 기준 시트 §05 (규칙 10 + 조건 4) ──
+     선택자는 전부 **직계 자식**으로 좁힌다 — 후손 선택자를 쓰면 셀 안에 중첩된 표까지
+     규칙을 물려받아 호출부가 인라인 스타일로 되돌려야 한다.
      표를 .ui-table로 감싸면 행 높이·zebra·hover·스티키 첫 열·…처리가 한 벌로 적용된다.
      헤더 셀은 .ui-th 유지. 조건 1: .ui-table-dense(36)는 내부 관리 화면 전용 —
      현장 체크인·발주처(/c)·파트너 포털(/p)에는 쓰지 않는다(터치 타깃 44 미만 불가). */
@@ -178,43 +180,43 @@
   }
 
   /* 01 행 높이 44 고정 + 짝수행 zebra(canvas) */
-  .ui-table tbody tr {
+  .ui-table > tbody > tr {
     height: 44px;
     background: var(--card);
   }
 
-  .ui-table tbody tr:nth-child(even) {
+  .ui-table > tbody > tr:nth-child(even) {
     background: var(--canvas);
   }
 
   /* 06 행 hover — accent-tint 30%를 불투명 색으로 합성(스티키 첫 열이 background:inherit로
      같은 면을 이어받아야 하므로 반투명 값을 쓰지 않는다) */
-  .ui-table tbody tr:hover {
+  .ui-table > tbody > tr:hover {
     background: color-mix(in srgb, var(--accent-tint) 30%, var(--card));
   }
 
   /* 02 밀집 모드 36 */
-  .ui-table-dense tbody tr {
+  .ui-table-dense > tbody > tr {
     height: 36px;
   }
 
-  .ui-table :is(th, td) {
+  .ui-table > * > tr > :is(th, td) {
     padding-inline: 12px;
   }
 
-  .ui-table td {
+  .ui-table > tbody > tr > td {
     border-bottom: 1px solid var(--border);
   }
 
   /* 07 줄바꿈 금지 + …처리 (조건 2: 잘린 값은 InfoTip으로 전체 확인 가능해야 한다) */
-  .ui-table :is(th, td) {
+  .ui-table > * > tr > :is(th, td) {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
   /* 04 첫 열(이름) 스티키 고정 + 우측 1px 경계선. 첫 열은 600 */
-  .ui-table :is(th, td):first-child {
+  .ui-table > * > tr > :is(th, td):first-child {
     position: sticky;
     left: 0;
     z-index: 1;
@@ -222,11 +224,11 @@
     border-right: 1px solid var(--border);
   }
 
-  .ui-table td:first-child {
+  .ui-table > tbody > tr > td:first-child {
     font-weight: 600;
   }
 
-  .ui-table thead th:first-child {
+  .ui-table > thead > tr > th:first-child {
     z-index: 2;
   }
 
@@ -240,11 +242,11 @@
      면은 tr에 건다 — 스티키 첫 열이 background:inherit로 같은 면을 이어받아야 하고,
      td에 걸면 그 규칙(:first-child)이 특이도로 이겨 첫 칸만 면이 빠진다.
      zebra(tr:nth-child(even))와 특이도가 같으므로 반드시 그 뒤에 온다. */
-  .ui-table tbody tr.ui-table-group {
+  .ui-table > tbody > tr.ui-table-group {
     background: var(--canvas);
   }
 
-  .ui-table tbody tr.ui-table-group > td {
+  .ui-table > tbody > tr.ui-table-group > td {
     font-size: 12px;
     font-weight: 600;
     letter-spacing: 0.02em;
@@ -252,11 +254,11 @@
   }
 
   /* 09 합계·소계는 고정 하단행 + --border-strong 상단선 */
-  .ui-table tbody tr.ui-table-total {
+  .ui-table > tbody > tr.ui-table-total {
     background: var(--card);
   }
 
-  .ui-table tbody tr.ui-table-total > td {
+  .ui-table > tbody > tr.ui-table-total > td {
     border-top: 1px solid var(--border-strong);
     border-bottom: none;
     font-weight: 600;
@@ -264,7 +266,7 @@
 
   /* 07의 예외 — 인라인 편집 폼처럼 셀 안에서 줄바꿈·오버플로가 필요한 칸.
      .ui-table :is(th,td) 규칙과 같은 위치에서 이기도록 같은 형태로 선언한다. */
-  .ui-table :is(th, td).ui-cell-wrap {
+  .ui-table > * > tr > :is(th, td).ui-cell-wrap {
     white-space: normal;
     overflow: visible;
     text-overflow: clip;
@@ -296,30 +298,30 @@
     background: transparent;
   }
 
-  .ui-table thead {
+  .ui-table > thead {
     display: table-header-group;
   }
 
-  .ui-table tbody tr {
+  .ui-table > tbody > tr {
     break-inside: avoid;
     page-break-inside: avoid;
     background: transparent;
   }
 
-  .ui-table tbody tr:nth-child(even) {
+  .ui-table > tbody > tr:nth-child(even) {
     background: color-mix(in srgb, var(--ink) 3%, #fff);
   }
 
-  .ui-table-dense tbody tr {
+  .ui-table-dense > tbody > tr {
     height: 44px;
   }
 
-  .ui-table :is(th, td):first-child {
+  .ui-table > * > tr > :is(th, td):first-child {
     position: static;
     background: transparent;
   }
 
-  .ui-table-total > td {
+  .ui-table > tbody > tr.ui-table-total > td {
     border-top: 1px solid var(--ink-sub);
   }
 
