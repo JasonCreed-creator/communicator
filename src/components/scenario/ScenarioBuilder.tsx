@@ -39,7 +39,6 @@ export default function ScenarioBuilder({
 
   const blocks = blocksAsync.data ?? []
   const sessions = sessionsAsync.data ?? []
-  console.log('DEBUG render', { projectId, sessionsLoading: sessionsAsync.loading, sessionsLen: sessions.length, blocksLen: blocks.length, sessionsErr: sessionsAsync.error })
   const groups = useMemo(() => groupScenarioBlocks(blocks, sessions), [blocks, sessions])
 
   // 세션 접기/펼치기(§10.2) — 순수 표시 상태, 저장하지 않는다
