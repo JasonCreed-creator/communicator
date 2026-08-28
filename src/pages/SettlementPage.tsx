@@ -1,4 +1,4 @@
-// S-10 정산보드 (설계서 v2.2 §19 · §10) — Phase 3.14b·3.14c
+// S-10 정산보드 (설계서 v2.2 §19 · §10) — Phase 3.14b·3.14c / 3.17b 시안 정렬
 //
 // **내부 전용 화면이다.** 발주처 토큰 경로(/c/*)·운영계획서·랜딩·알림 어디에도
 // 이 화면의 숫자는 나가지 않는다(§4-24 R-S9).
@@ -6,12 +6,20 @@
 // 화면이 답해야 하는 질문은 하나다: "지금까지 쓴 돈이 최초 계약 견적 대비 ±얼마인가."
 // 그래서 상단은 마진(계약 − 리드젠 − 실집행)이고, 하단은 그 마진이 버킷별로 어디서
 // 났는지·어디서 깨졌는지다.
+//
+// 3.17b(시안 '정산보드.dc.html') 정렬:
+//   · KPI 4장에 **보조 수치 1줄**(구분선 위 — 패턴 §07 KPI 카드 규격)
+//   · 마진율 밴드를 **막대 위 마커**로. 밴드 밖이어도 **경고하지 않고 위치만** 표시(§19.1 유지)
+//   · 마진 구성 막대 + 검산을 **한 카드로 통합**(MarginSummaryCard), 초과 경보는 그 카드 하단 바
+//   · 버킷 표는 표 정본(.ui-table) — 초과 행 배경 제거, 집행률 열에만 셀 내 막대, 고정 합계행
+// **마진 식은 lib/settlement 정본 그대로다 — 표시만 바꾼다.**
 import { useMemo, useState } from 'react'
 import EmptyState from '../components/internal/EmptyState'
 import ErrorAlert from '../components/internal/ErrorAlert'
 import InfoTip from '../components/internal/InfoTip'
 import PageHeader from '../components/internal/PageHeader'
-import MarginBar from '../components/settlement/MarginBar'
+import MarginSummaryCard from '../components/settlement/MarginSummaryCard'
+import SettlementBucketTable from '../components/settlement/SettlementBucketTable'
 import SettlementItems from '../components/settlement/SettlementItems'
 import { canUseQuotes } from '../components/quote/QuoteGate'
 import { useProject } from '../context/ProjectContext'
@@ -22,6 +30,7 @@ import { computeQuoteOutputs } from '../modules/quote/engine/quoteInput'
 import { getDataProvider } from '../providers'
 import type { SettlementItemInput } from '../providers/DataProvider'
 import type { Quote } from '../types/entities'
+import type { ReactNode } from 'react'
 
 const provider = getDataProvider()
 
@@ -30,6 +39,10 @@ const MARGIN_BAND = { low: 0.275, high: 0.69 }
 
 function krw(n: number): string {
   return `${n.toLocaleString('ko-KR')}원`
+}
+
+function num(n: number): string {
+  return n.toLocaleString('ko-KR')
 }
 
 function pct(rate: number | null): string {
@@ -57,18 +70,22 @@ function rebaseDiff(
 
 /**
  * 금액 KPI 타일 — 억 단위 숫자가 kpi-num(31px)에서는 두 줄로 깨져 읽히지 않는다.
- * StatTile과 같은 구조를 쓰되 숫자만 한 단계 줄이고 단위를 접미로 뺀다(§5 카드 규격 유지).
+ * StatTile과 같은 구조(캡션 + 구분선 위 보조 수치 1줄)를 쓰되 숫자만 한 단계 줄이고
+ * 단위를 접미로 뺀다(패턴 §07 KPI 카드 규격 · 시안도 24px).
  */
 function MoneyTile({
   label,
   amount,
   tone = 'default',
   help,
+  support,
 }: {
   label: string
   amount: number
   tone?: 'default' | 'accent' | 'negative'
   help?: string
+  /** 보조 수치 1줄 — 산식·대비율·분해값. StatTile.support와 같은 규격 */
+  support?: ReactNode
 }) {
   const color = tone === 'negative' ? 'text-negative' : tone === 'accent' ? 'text-accent-deep' : 'text-ink'
   return (
@@ -81,6 +98,9 @@ function MoneyTile({
         {label}
         {help && <InfoTip text={help} />}
       </div>
+      {support != null && (
+        <div className="mt-3 border-t border-border pt-2.5 text-xs text-ink-sub">{support}</div>
+      )}
     </div>
   )
 }
@@ -112,6 +132,7 @@ export default function SettlementPage() {
   const [expanded, setExpanded] = useState<string | null>(null)
   const [addingBucket, setAddingBucket] = useState(false)
   const [bucketDraft, setBucketDraft] = useState({ code: '', label: '' })
+  const [overOnly, setOverOnly] = useState(false)
 
   const createBoard = useMutation((quoteId: string) => provider.createSettlementBoard(projectId, quoteId))
   const rebase = useMutation((quoteId: string) => provider.rebaseSettlementBoard(projectId, quoteId))
@@ -198,6 +219,10 @@ export default function SettlementPage() {
 
   const excludedTotal = totals.excluded.reduce((s, e) => s + e.amount, 0)
   const contractTotal = totals.marginBase + excludedTotal
+  const fixedTotal = totals.fixedByBucket.reduce((s, f) => s + f.amount, 0)
+  const spendVsOrdered = totals.totalOrdered === 0 ? null : totals.totalActual / totals.totalOrdered
+  // 마커 위치 — 밴드 밖이어도 경고하지 않고 위치만 찍는다(§19.1). 0~100%로만 클램프한다
+  const markerLeft = Math.min(100, Math.max(0, (totals.marginRate ?? 0) * 100))
   const diff = rebasing && pickedQuote ? rebaseDiff(finalQuotes.find((q) => q.id === pickedQuote)!, view.buckets.map((b) => b.bucket)) : []
 
   return (
@@ -265,33 +290,35 @@ export default function SettlementPage() {
                   <p className="text-sm text-ink-sub">
                     아래 {diff.length}개 버킷의 기준 금액이 바뀝니다. 입력된 발주 항목은 그대로 유지됩니다.
                   </p>
-                  <table className="mt-2 w-full text-sm">
-                    <thead>
-                      <tr>
-                        <th className="ui-th">버킷</th>
-                        <th className="ui-th text-right">현재</th>
-                        <th className="ui-th text-right">변경</th>
-                        <th className="ui-th text-right">차이</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {diff.map((d) => (
-                        <tr key={d.code} className="border-t border-border">
-                          <td className="px-3 py-2">{d.label}</td>
-                          <td className="px-3 py-2 text-right tabular-nums text-ink-sub">{krw(d.before)}</td>
-                          <td className="px-3 py-2 text-right tabular-nums">{krw(d.after)}</td>
-                          <td
-                            className={`px-3 py-2 text-right tabular-nums font-medium ${
-                              d.after - d.before < 0 ? 'text-negative' : 'text-positive'
-                            }`}
-                          >
-                            {d.after - d.before > 0 ? '+' : ''}
-                            {krw(d.after - d.before)}
-                          </td>
+                  <div className="mt-2 overflow-x-auto">
+                    <table className="ui-table min-w-[560px] text-sm">
+                      <thead>
+                        <tr>
+                          <th className="ui-th">버킷</th>
+                          <th className="ui-th ui-num">현재</th>
+                          <th className="ui-th ui-num">변경</th>
+                          <th className="ui-th ui-num">차이</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {diff.map((d) => (
+                          <tr key={d.code}>
+                            <td>{d.label}</td>
+                            <td className="ui-num text-ink-sub">{krw(d.before)}</td>
+                            <td className="ui-num">{krw(d.after)}</td>
+                            <td
+                              className={`ui-num font-medium ${
+                                d.after - d.before < 0 ? 'text-negative' : 'text-positive'
+                              }`}
+                            >
+                              {d.after - d.before > 0 ? '+' : ''}
+                              {krw(d.after - d.before)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </>
               )}
             </div>
@@ -300,15 +327,38 @@ export default function SettlementPage() {
         </section>
       )}
 
-      {/* KPI 4 (§19.1) */}
+      {/* KPI 4 (§19.1) — 각 장에 보조 수치 1줄(패턴 §07) */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <MoneyTile label="마진 기준 계약액" amount={totals.marginBase} help={SETTLEMENT_KPI_HELP.contract} />
-        <MoneyTile label="실집행" amount={totals.totalActual} help={SETTLEMENT_KPI_HELP.spent} />
+        <MoneyTile
+          label="마진 기준 계약액"
+          amount={totals.marginBase}
+          help={SETTLEMENT_KPI_HELP.contract}
+          support={
+            <span data-testid="kpi-support-contract">
+              계약 {num(contractTotal)} − 마진 밖 {num(excludedTotal)}
+            </span>
+          }
+        />
+        <MoneyTile
+          label="실집행"
+          amount={totals.totalActual}
+          help={SETTLEMENT_KPI_HELP.spent}
+          support={
+            <span data-testid="kpi-support-spent">
+              발주 {num(totals.totalOrdered)} 대비 {pct(spendVsOrdered)}
+            </span>
+          }
+        />
         <MoneyTile
           label="최종 마진"
           amount={totals.finalMargin}
           tone={totals.finalMargin < 0 ? 'negative' : 'accent'}
           help={SETTLEMENT_KPI_HELP.margin}
+          support={
+            <span data-testid="kpi-support-margin">
+              변동 {num(totals.variableMarkup)} + 고정 {num(fixedTotal)}
+            </span>
+          }
         />
         <div className="ui-card p-5">
           <div className="kpi-num text-[24px] tabular-nums">{pct(totals.marginRate)}</div>
@@ -316,164 +366,92 @@ export default function SettlementPage() {
             마진율
             <InfoTip text={SETTLEMENT_KPI_HELP.marginRate} />
           </div>
-          {/* 실측 밴드는 참고선이다 — 밴드 밖이라고 판정·경고하지 않는다(§19.1) */}
-          <div className="mt-2 h-1.5 w-full rounded-full bg-track">
+          {/* 실측 밴드는 참고선이다 — 밴드 밖이라고 판정·경고하지 않는다(§19.1).
+              현재 마진율은 막대 위 마커로 위치만 찍는다. */}
+          <div className="relative mt-2.5 h-1.5 w-full rounded-[3px] bg-track">
             <div
-              className="h-full rounded-full bg-accent-tint"
+              className="absolute inset-y-0 rounded-[3px] bg-accent-tint"
               style={{
-                marginLeft: `${MARGIN_BAND.low * 100}%`,
+                left: `${MARGIN_BAND.low * 100}%`,
                 width: `${(MARGIN_BAND.high - MARGIN_BAND.low) * 100}%`,
               }}
             />
+            <span
+              data-testid="margin-rate-marker"
+              aria-hidden
+              className="absolute -top-[3px] h-3 w-0.5 rounded-[1px] bg-ink"
+              style={{ left: `${markerLeft}%` }}
+            />
           </div>
-          <p className="mt-1.5 text-xs text-ink-cap">참고: 사내 실측 27.5~69.0%</p>
+          <div className="mt-3 border-t border-border pt-2.5 text-xs text-ink-sub">
+            참고: 사내 실측 27.5~69.0% · 판정 아님
+          </div>
         </div>
       </div>
 
-      <MarginBar totals={totals} />
-
-      {/* 검산 — 항등식이 깨지면 버킷 플래그가 잘못된 것이다(§19.1) */}
-      <section className={`ui-card p-5 ${totals.identityOk ? '' : 'border-negative'}`}>
-        {/* h2 자체의 접근성 이름에 "도움말"이 섞이지 않도록 InfoTip은 h2의 형제로 둔다 */}
-        <div className="flex items-center gap-1.5">
-          <h2 className="t-section-title">검산</h2>
-          <InfoTip text={SETTLEMENT_KPI_HELP.identity} />
-        </div>
-        <p className="mt-2 text-sm tabular-nums text-ink-sub">
-          계약 {krw(contractTotal)} − 리드젠 {krw(excludedTotal)} − 실집행 {krw(totals.totalActual)} ={' '}
-          <span className="font-semibold text-ink">{krw(totals.finalMargin)}</span>
-        </p>
-        {totals.identityOk ? (
-          <p className="mt-1 text-xs text-positive">항등식이 성립합니다.</p>
-        ) : (
-          <p className="mt-1 text-sm font-medium text-negative" role="alert">
-            항등식이 어긋납니다 — 버킷의 원가·마진 기준 설정을 확인하세요.
-          </p>
-        )}
-        {totals.overBudgetCount > 0 && (
-          <p className="mt-2 text-sm font-medium text-negative" role="alert">
-            견적 초과 버킷 {totals.overBudgetCount}건 — 초과는 막지 않으니 사유를 남겨 주세요.
-          </p>
-        )}
-      </section>
+      {/* 마진 구성 + 검산 한 카드 — 초과 경보는 그 카드 하단 바(시안) */}
+      <MarginSummaryCard
+        totals={totals}
+        contractTotal={contractTotal}
+        excludedTotal={excludedTotal}
+        overOnly={overOnly}
+        onToggleOverOnly={() => setOverOnly((v) => !v)}
+      />
 
       <ErrorAlert message={mutationError} />
 
-      {/* 버킷 표 — 원가 없음·마진 밖 버킷도 회색으로 남긴다(숨기지 않는다) */}
-      <section className="ui-card overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr>
-              <th className="ui-th">버킷</th>
-              <th className="ui-th text-right">견적</th>
-              <th className="ui-th text-right">발주</th>
-              <th className="ui-th text-right">실집행</th>
-              <th className="ui-th text-right">마크업</th>
-              <th className="ui-th text-right">마크업률</th>
-            </tr>
-          </thead>
-          <tbody>
-            {view.buckets.map((b) => {
-              const muted = !b.bucket.has_cost
-              const open = expanded === b.bucket.id
-              return [
-                <tr
-                  key={b.bucket.id}
-                  data-testid={`bucket-row-${b.bucket.code}`}
-                  onClick={() => setExpanded(open ? null : b.bucket.id)}
-                  className={`cursor-pointer border-t border-border ${
-                    b.over_budget ? 'bg-negative-tint' : open ? 'bg-track' : 'hover:bg-track'
-                  }`}
-                >
-                  <td className="px-3 py-2.5">
-                    <span className={`font-medium ${muted ? 'text-ink-sub' : 'text-ink'}`}>
-                      {b.bucket.label}
-                    </span>
-                    {b.over_budget && (
-                      <span className="ml-2 rounded-full bg-negative px-2 py-0.5 text-xs text-white">
-                        견적 초과
-                      </span>
-                    )}
-                    {!b.bucket.has_cost && (
-                      <span className="ml-2 rounded-full bg-track px-2 py-0.5 text-xs text-ink-cap">
-                        원가 없음
-                      </span>
-                    )}
-                    {!b.bucket.is_margin_base && (
-                      <span className="ml-2 rounded-full bg-track px-2 py-0.5 text-xs text-ink-cap">
-                        마진 계산 밖
-                      </span>
-                    )}
-                    {b.bucket.source === 'custom' && (
-                      <span className="ml-2 rounded-full bg-accent-tint px-2 py-0.5 text-xs text-accent-deep">
-                        추가 버킷
-                      </span>
-                    )}
-                  </td>
-                  <td className={`px-3 py-2.5 text-right tabular-nums ${muted ? 'text-ink-cap' : 'text-ink-sub'}`}>
-                    {krw(b.bucket.quote_amount)}
-                  </td>
-                  <td className={`px-3 py-2.5 text-right tabular-nums ${muted ? 'text-ink-cap' : 'text-ink-sub'}`}>
-                    {b.bucket.has_cost ? krw(b.ordered) : '—'}
-                  </td>
-                  <td className={`px-3 py-2.5 text-right tabular-nums ${muted ? 'text-ink-cap' : 'font-medium text-ink'}`}>
-                    {b.bucket.has_cost ? krw(b.actual) : '—'}
-                  </td>
-                  <td
-                    className={`px-3 py-2.5 text-right tabular-nums font-medium ${
-                      b.markup < 0 ? 'text-negative' : muted ? 'text-ink-cap' : 'text-ink'
-                    }`}
-                  >
-                    {krw(b.markup)}
-                  </td>
-                  <td className={`px-3 py-2.5 text-right tabular-nums ${muted ? 'text-ink-cap' : 'text-ink-sub'}`}>
-                    {pct(b.markup_rate)}
-                  </td>
-                </tr>,
-                open ? (
-                  <tr key={`${b.bucket.id}-items`}>
-                    <td colSpan={6} className="p-0">
-                      <SettlementItems
-                        view={b}
-                        vendors={vendors.data ?? []}
-                        members={members.data ?? []}
-                        isPm={isPm}
-                        currentUserId={me.data?.id ?? ''}
-                        readOnly={!!readOnly}
-                        onCreate={async (input) => {
-                          const ok = await createItem.run(b.bucket.id, input)
-                          if (ok) board.reload()
-                          return ok
-                        }}
-                        onUpdate={async (itemId, patch) => {
-                          const ok = await updateItem.run(itemId, patch)
-                          if (ok) board.reload()
-                          return ok
-                        }}
-                        onDelete={async (itemId) => {
-                          const ok = await deleteItem.run(itemId)
-                          if (ok !== undefined) board.reload()
-                          return ok
-                        }}
-                        onPromoteVendor={async (name) => {
-                          const created = await promoteVendor.run(name)
-                          if (created) vendors.reload()
-                          return created?.id ?? null
-                        }}
-                      />
-                    </td>
-                  </tr>
-                ) : null,
-              ]
-            })}
-          </tbody>
-        </table>
-      </section>
+      {/* 버킷 표 — 원가 없음·마진 밖 버킷도 canvas 면으로 남긴다(숨기지 않는다) */}
+      <SettlementBucketTable
+        buckets={view.buckets}
+        totals={totals}
+        contractTotal={contractTotal}
+        expandedId={expanded}
+        onToggleExpand={(id) => setExpanded(expanded === id ? null : id)}
+        overOnly={overOnly}
+        onClearOverOnly={() => setOverOnly(false)}
+        action={
+          isPm && !readOnly ? (
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setAddingBucket((v) => !v)}>
+              {addingBucket ? '닫기' : '＋ 버킷 추가'}
+            </button>
+          ) : undefined
+        }
+        renderExpanded={(b) => (
+          <SettlementItems
+            view={b}
+            vendors={vendors.data ?? []}
+            members={members.data ?? []}
+            isPm={isPm}
+            currentUserId={me.data?.id ?? ''}
+            readOnly={!!readOnly}
+            onCreate={async (input) => {
+              const ok = await createItem.run(b.bucket.id, input)
+              if (ok) board.reload()
+              return ok
+            }}
+            onUpdate={async (itemId, patch) => {
+              const ok = await updateItem.run(itemId, patch)
+              if (ok) board.reload()
+              return ok
+            }}
+            onDelete={async (itemId) => {
+              const ok = await deleteItem.run(itemId)
+              if (ok !== undefined) board.reload()
+              return ok
+            }}
+            onPromoteVendor={async (name) => {
+              const created = await promoteVendor.run(name)
+              if (created) vendors.reload()
+              return created?.id ?? null
+            }}
+          />
+        )}
+      />
 
       {/* 행사별 추가 버킷 (pm) — 견적에 없던 비용은 0원에서 시작한다(§19.2) */}
       {isPm && !readOnly && (
         <section className="flex flex-wrap items-center gap-2">
-          {addingBucket ? (
+          {addingBucket && (
             <>
               <input
                 aria-label="버킷 코드"
@@ -508,10 +486,6 @@ export default function SettlementPage() {
                 취소
               </button>
             </>
-          ) : (
-            <button type="button" className="btn btn-ghost" onClick={() => setAddingBucket(true)}>
-              ＋ 버킷 추가
-            </button>
           )}
 
           {/* 업로드 파싱은 서버 의존이라 v8 예약이다(§19.5) — 자리만 두고 시점을 밝힌다 */}
