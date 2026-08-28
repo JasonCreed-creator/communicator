@@ -35,6 +35,14 @@ function classifyOpsCard(category: string): OpsDocCardKey {
   return 'other'
 }
 
+/** P10 — 유형 카드가 선택된 상태에서 "+ 항목 추가"에 프리셀렉트할 카테고리(기타는 없음) */
+const CARD_PRESET_CATEGORY: Record<OpsDocCardKey, string | undefined> = {
+  cuesheet: '큐시트',
+  scenario: '시나리오',
+  guide: '운영가이드',
+  other: undefined,
+}
+
 interface BoardRow {
   deliverable: Deliverable
   latestVersionNo: number
@@ -147,6 +155,15 @@ function AreaBoard({ area }: { area: DeliverableArea }) {
     setExpandedDoc((cur) => (cur?.id === deliverable.id ? null : deliverable))
   }
 
+  // P10(챗 검수 후속) — 카드 선택 시 아래 영역은 "그 유형의 목록 + 인라인 빌더만" 남는다:
+  // 다른 유형의 빌더 패널이 열려 있었다면 닫아 표시 정합을 맞춘다(해제(null)면 그대로 둔다).
+  const handleSelectCard = (key: OpsDocCardKey | null) => {
+    setSelectedCard(key)
+    if (key) {
+      setExpandedDoc((cur) => (cur && classifyOpsCard(cur.category) !== key ? null : cur))
+    }
+  }
+
   return (
     <section className="space-y-6 p-6">
       <PageHeader
@@ -162,7 +179,7 @@ function AreaBoard({ area }: { area: DeliverableArea }) {
 
       {/* v2.5 §10.2 — 유형 우선 보드 홈. design 보드는 렌더 무변경(카드 자체가 없다). */}
       {area === 'ops' && (
-        <OpsDocCardGrid summaries={opsCardSummaries} selected={selectedCard} onSelect={setSelectedCard} />
+        <OpsDocCardGrid summaries={opsCardSummaries} selected={selectedCard} onSelect={handleSelectCard} />
       )}
 
       <div className="flex flex-wrap items-center gap-3">
@@ -242,6 +259,9 @@ function AreaBoard({ area }: { area: DeliverableArea }) {
           area={area}
           projectId={projectId}
           isPm={!!isPm}
+          presetCategory={
+            area === 'ops' && selectedCard ? CARD_PRESET_CATEGORY[selectedCard] : undefined
+          }
           onCreated={(created) => {
             board.reload()
             // v2.5 §10.2 — P7의 완성형: 큐시트뿐 아니라 정형 3종 전부에서 생성 직후 빌더가 열린다.
@@ -306,8 +326,11 @@ function OpsDocCardGrid({
           <div
             key={key}
             data-testid={`ops-doc-card-${key}`}
+            // P10 — 선택 스타일은 시각안(v2.5 화면 A) 그대로: 주황 테두리 + 틴트 링
             className={`relative rounded-[10px] border p-4 transition-colors ${
-              active ? 'border-accent bg-accent-tint' : 'border-border bg-card hover:bg-track'
+              active
+                ? 'border-accent bg-accent-tint ring-2 ring-accent-tint'
+                : 'border-border bg-card hover:bg-track'
             }`}
           >
             <button
@@ -317,7 +340,7 @@ function OpsDocCardGrid({
               // (시각 텍스트는 아래 t-card-title 그대로 — 스크린리더·테스트만 이 이름을 쓴다).
               aria-label={OPS_DOC_CARD_LABELS[key]}
               onClick={() => onSelect(active ? null : key)}
-              className="block w-full text-left"
+              className="block w-full cursor-pointer text-left"
             >
               <span className="t-card-title block pr-5">{OPS_DOC_CARD_LABELS[key]}</span>
               <span className="mt-1.5 block text-2xl font-semibold text-ink">{count}건</span>
