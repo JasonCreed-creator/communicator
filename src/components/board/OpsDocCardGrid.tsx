@@ -1,7 +1,10 @@
-// P11(3.16.2) 운영보드 유형 카드 4종 — 시각 정본 = v2.5 목업 화면 A.
-// 카드 구조: 아이콘+이름 → 한 줄 설명(ink-cap·12px, min-h로 4카드 정렬) → 하단 요약(건수 · 대표 상태).
+// P11(3.16.2) 운영보드 유형 카드 4종 — 시각 정본 = v2.5 목업 화면 A + 시안 `디자인 · 운영 보드`.
+// 카드 구조: 아이콘+이름 → 한 줄 설명(ink-cap·12px, min-h로 4카드 정렬) →
+//   **진행 막대**(3.17b 정렬) → 하단 요약(건수 · 대표 상태 · 확정 n/m).
+// 진행 막대는 "3건"이 "3건 중 확정 2"로 읽히게 하려고 넣는다 — 건수만으로는 진척이 안 보였다.
 // 클릭 = 그 유형 선택(재클릭 해제). 선택 스타일은 P10 그대로(주황 테두리 + 틴트 링).
 import InfoTip from '../internal/InfoTip'
+import ProgressBar from '../internal/ProgressBar'
 import { OPS_DOC_CARD_HELP } from '../../lib/helpTexts'
 import {
   OPS_DOC_CARD_BLURBS,
@@ -17,6 +20,8 @@ export interface OpsDocCardSummary {
   count: number
   /** 가장 최근 수정된 항목의 상태 — 카드 하단 "n건 · 대표 상태"의 뒷부분 */
   latestStatus: DeliverableStatus | null
+  /** 확정(final) 건수 — 진행 막대와 "확정 n/m" 캡션의 분자 */
+  doneCount: number
 }
 
 export default function OpsDocCardGrid({
@@ -33,7 +38,7 @@ export default function OpsDocCardGrid({
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
       {OPS_DOC_CARD_ORDER.map((key) => {
-        const summary = byKey.get(key) ?? { key, count: 0, latestStatus: null }
+        const summary = byKey.get(key) ?? { key, count: 0, latestStatus: null, doneCount: 0 }
         const active = selected === key
         return (
           // InfoTip은 자체 <button>이라 카드 전체를 <button>으로 감싸면 버튼 중첩(무효 HTML)이
@@ -64,22 +69,28 @@ export default function OpsDocCardGrid({
               <span className="mt-1 block min-h-[32px] text-xs leading-snug text-ink-cap">
                 {OPS_DOC_CARD_BLURBS[key]}
               </span>
+              {/* 진행 막대 — 패턴 §07(6px · r3 · track/accent, 100%는 positive).
+                  수치는 아래 요약 줄이 담으므로 바 자체의 수치 라벨은 끈다. */}
+              <span data-testid={`ops-doc-card-progress-${key}`} className="mt-2.5 block">
+                <ProgressBar done={summary.doneCount} total={summary.count} hideValue />
+              </span>
               <span className="mt-2 flex flex-wrap items-center gap-1.5">
                 {/* 건수는 단독 텍스트 노드로 둔다 — 카드 요약 계약(건수)을 그대로 읽을 수 있게 */}
                 <span className="text-sm font-semibold text-ink">{summary.count}건</span>
-                {summary.latestStatus ? (
+                <span aria-hidden className="text-xs text-ink-cap">
+                  ·
+                </span>
+                <span className="t-caption">
+                  {summary.latestStatus ? STATUS_LABELS[summary.latestStatus] : '항목 없음'}
+                </span>
+                {summary.count > 0 && (
                   <>
                     <span aria-hidden className="text-xs text-ink-cap">
                       ·
                     </span>
-                    <span className="t-caption">{STATUS_LABELS[summary.latestStatus]}</span>
-                  </>
-                ) : (
-                  <>
-                    <span aria-hidden className="text-xs text-ink-cap">
-                      ·
+                    <span className="t-caption">
+                      확정 {summary.doneCount}/{summary.count}
                     </span>
-                    <span className="t-caption">항목 없음</span>
                   </>
                 )}
               </span>
