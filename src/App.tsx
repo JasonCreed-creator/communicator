@@ -5,6 +5,7 @@ import OnboardingGuard from './components/onboarding/OnboardingGuard'
 import { ProjectProvider } from './context/ProjectContext'
 import AreaBoardPage from './pages/AreaBoardPage'
 import ClientConfirmQueuePage from './pages/ClientConfirmQueuePage'
+import ClientMaterialsPage from './pages/ClientMaterialsPage'
 import ClientStatusPage from './pages/ClientStatusPage'
 import HomeDashboardPage from './pages/HomeDashboardPage'
 import ItemDetailPage from './pages/ItemDetailPage'
@@ -93,6 +94,8 @@ export function AppRoutes() {
       <Route path="/c/:token" element={<ClientLayout />}>
         <Route index element={<ClientConfirmQueuePage />} />
         <Route path="status" element={<ClientStatusPage />} />
+        {/* 시안 「발주처 보드」 3번째 탭 — 고객사가 보내주셔야 할 자료 */}
+        <Route path="materials" element={<ClientMaterialsPage />} />
       </Route>
 
       {/* v2.4 파트너 제출 포털 — 무로그인 파트너 토큰 링크 (/p/demo-partner 데모 포함), ProjectScope 밖.
