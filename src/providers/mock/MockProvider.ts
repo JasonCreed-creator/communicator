@@ -34,6 +34,7 @@ import type {
   ComplianceCard,
   Cue,
   Deliverable,
+  GuideSection,
   LandingDailyMetric,
   LandingPage,
   Partner,
@@ -41,6 +42,7 @@ import type {
   PartnerToken,
   QuoteBreakdown,
   QuoteImport,
+  ScenarioBlock,
   SettlementBoard,
   SettlementBucket,
   SettlementItem,
@@ -65,6 +67,7 @@ import type {
   MemberRole,
   QuoteImportFormat,
 } from '../../types/enums'
+import { isStructuredDocCategory } from '../../types/enums'
 import type {
   AddCommentInput,
   AttendeeWithRsvp,
@@ -82,6 +85,7 @@ import type {
   DashboardData,
   DeliverableDetail,
   DeliverableFilter,
+  GuideSectionInput,
   IssueTokenInput,
   MemberInput,
   MemberWithProfile,
@@ -111,6 +115,7 @@ import type {
   RegistrationStats,
   RequestApprovalInput,
   RsvpContactPatch,
+  ScenarioBlockInput,
   UploadVersionInput,
   UserRef,
   WbsTaskFilter,
@@ -135,6 +140,9 @@ import {
   quoteBucketSpec,
   toVatExcluded,
 } from '../../lib/settlement'
+import { buildGuideSeedSections } from '../../lib/guideAssembly'
+import { buildCuesFromScenario, scenarioCueCandidates } from '../../lib/scenario'
+import { SCENARIO_KIND_LABELS } from '../../lib/labels'
 
 const UPLOADABLE_STATUSES: readonly DeliverableStatus[] = [
   'requested', // v1.2: 첫 버전 업로드 시 draft 자동 전이
@@ -172,6 +180,30 @@ function renderCueSnapshotHtml(deliverable: Deliverable, cues: Cue[]): string {
     `<tr><th>큐</th><th>시간</th><th>구분</th><th>내용·대본</th><th>음향</th><th>조명</th><th>스크린</th></tr>` +
     `${rows}</table>`
   )
+}
+
+/** v2.5 §23 — 시나리오 스냅숏 본문(doc-snapshot의 정형 3종 공통 규약, R-O2 일반화) */
+function renderScenarioSnapshotHtml(deliverable: Deliverable, blocks: ScenarioBlock[]): string {
+  const rows = blocks
+    .map(
+      (b) =>
+        `<tr><td>${escapeHtml(b.time ?? '')}</td><td>${escapeHtml(SCENARIO_KIND_LABELS[b.kind])}</td>` +
+        `<td>${escapeHtml(b.script ?? '')}</td><td>${escapeHtml(b.note ?? '')}</td></tr>`,
+    )
+    .join('')
+  return (
+    `<!doctype html><meta charset="utf-8"><title>${escapeHtml(deliverable.title)}</title>` +
+    `<table border="1" cellspacing="0" cellpadding="6">` +
+    `<tr><th>시각</th><th>구분</th><th>대본</th><th>비고</th></tr>${rows}</table>`
+  )
+}
+
+/** v2.5 §23 — 운영가이드 스냅숏 본문. contacts 섹션 포함 여부는 호출부가 걸러 넘긴다(R-O6) */
+function renderGuideSnapshotHtml(deliverable: Deliverable, sections: GuideSection[]): string {
+  const body = sections
+    .map((s) => `<h2>${escapeHtml(s.title)}</h2><pre>${escapeHtml(s.content ?? '')}</pre>`)
+    .join('')
+  return `<!doctype html><meta charset="utf-8"><title>${escapeHtml(deliverable.title)}</title>${body}`
 }
 
 /** 미리보기 자리표시 이미지 — 픽스처 버전 파일용 (실파일은 Phase 5 Drive 이식에서) */
@@ -276,6 +308,21 @@ export class MockProvider implements DataProvider {
     if (role === 'pm') return
     if ((role === 'design' || role === 'ops') && area === role) return
     throw new ProviderError('forbidden', '해당 영역에 대한 쓰기 권한이 없습니다.')
+  }
+
+  /**
+   * v2.5 §23 — "실제로 빌더 데이터를 가진" 시나리오 항목인지. category 문자열만으로 판정하지
+   * 않는 이유: 이 레포의 기존 샘플 픽스처(prj-stc26)의 dlv-005는 v2.5 이전부터 자유 카테고리로
+   * '시나리오'를 썼고 scenario_blocks가 없다 — 그런 레거시 항목은 종전처럼 일반 ops 항목·수동
+   * 버전 컨펌 흐름으로 남아야 한다(DoD-1). 실제 빌더를 거쳐 블록이 있는 항목만 정형 취급한다.
+   */
+  private hasScenarioBuilderData(d: Deliverable): boolean {
+    return d.category === '시나리오' && this.state.scenario_blocks.some((b) => b.deliverable_id === d.id)
+  }
+
+  /** v2.5 §23 — 위와 같은 이유로, 운영가이드도 실제 guide_sections 행이 있어야 정형 취급한다 */
+  private hasGuideBuilderData(d: Deliverable): boolean {
+    return d.category === '운영가이드' && this.state.guide_sections.some((s) => s.deliverable_id === d.id)
   }
 
   private log(
@@ -622,7 +669,27 @@ export class MockProvider implements DataProvider {
     } else {
       this.log(deliverable.project_id, `user:${user.id}`, 'deliverable.created', 'deliverable', deliverable.id)
     }
+    // v2.5 §23 R-O4 — 존별 운영 원본(ops 비정형 항목) 추가는 이 행사 운영가이드의 zone 섹션을
+    // stale 표시한다. 자동 반영은 하지 않는다 — 사람이 차이를 확인하고 saveGuideSections로 반영.
+    if (deliverable.area === 'ops' && !isStructuredDocCategory(deliverable.category)) {
+      this.markGuideZoneStale(deliverable.project_id)
+    }
     return deliverable
+  }
+
+  /** v2.5 §23 R-O4 — 이 프로젝트의 운영가이드 문서(들)의 zone 섹션에 stale=true를 마킹한다 */
+  private markGuideZoneStale(projectId: UUID): void {
+    const guideIds = new Set(
+      this.state.deliverables
+        .filter((d) => d.project_id === projectId && d.category === '운영가이드')
+        .map((d) => d.id),
+    )
+    if (guideIds.size === 0) return
+    for (const section of this.state.guide_sections) {
+      if (guideIds.has(section.deliverable_id) && section.kind === 'zone') {
+        section.source_stale = true
+      }
+    }
   }
 
   async transitionStatus(
@@ -721,13 +788,17 @@ export class MockProvider implements DataProvider {
       throw new ProviderError('conflict', '컨펌 루프를 사용하지 않는 항목입니다.')
     }
     assertTransition(d.status, 'pending_approval', 'approval_request')
-    // v1.3: 큐시트 항목은 발송 시 표의 스냅숏 버전이 자동 등록되어 발송 조건 충족 (§5)
-    const version =
-      d.category === '큐시트'
-        ? await this.createCueSnapshot(deliverableId)
-        : this.state.versions.find(
-            (v) => v.id === input.version_id && v.deliverable_id === deliverableId,
-          )
+    // v1.3→v2.5: 정형 문서(큐시트·시나리오·운영가이드) 항목은 발송 시 스냅숏 버전이 자동
+    // 등록되어 발송 조건을 충족한다(§5, §23.2 R-O2 — doc-snapshot이 cue-snapshot을 일반화).
+    // 시나리오·운영가이드는 실제 빌더 데이터가 있을 때만(hasScenarioBuilderData 등 — 레거시
+    // 자유 카테고리 충돌 방지, DoD-1 dlv-005 참조) 자동 스냅숏 경로를 탄다.
+    const isAutoSnapshotDoc =
+      d.category === '큐시트' || this.hasScenarioBuilderData(d) || this.hasGuideBuilderData(d)
+    const version = isAutoSnapshotDoc
+      ? await this.createDocSnapshot(deliverableId)
+      : this.state.versions.find(
+          (v) => v.id === input.version_id && v.deliverable_id === deliverableId,
+        )
     if (!version) throw new ProviderError('not_found', '해당 항목의 버전이 아닙니다.')
     // §5 발송 조건: 미리보기 포맷(PDF·PNG·JPG) 버전만
     if (!isPreviewFileName(version.file_name)) {
@@ -1363,20 +1434,26 @@ export class MockProvider implements DataProvider {
     this.state.cues.splice(idx, 1)
   }
 
+  /**
+   * §8 cue-snapshot — 큐시트 검증 후 createDocSnapshot에 위임(R-O2 — 새 스냅숏 규약을
+   * 만들지 않는다). 시그니처·동작·activity log 의미는 v1.3부터 그대로 보존한다.
+   */
   async createCueSnapshot(deliverableId: UUID): Promise<Version> {
-    const user = this.assertPm()
+    // pm 체크를 먼저 해 기존 오류 우선순위(pm→존재→카테고리)를 그대로 보존한다
+    this.assertPm()
     const d = this.mustFindDeliverable(deliverableId)
     if (d.category !== '큐시트') {
       throw new ProviderError('conflict', '큐시트 항목이 아닙니다.')
     }
-    const cues = await this.listCues(deliverableId)
-    if (cues.length === 0) {
-      throw new ProviderError('validation', '스냅숏을 만들 큐가 없습니다.')
-    }
-    const versionNo = (this.versionsOf(deliverableId)[0]?.version_no ?? 0) + 1
-    const version: Version = {
+    return this.createDocSnapshot(deliverableId)
+  }
+
+  /** 정형 문서 스냅숏 공용 — 버전 레코드만 만든다(파일 저장은 persistSnapshotVersion) */
+  private buildSnapshotVersion(d: Deliverable, note: string): Version {
+    const versionNo = (this.versionsOf(d.id)[0]?.version_no ?? 0) + 1
+    return {
       id: this.nextId('ver'),
-      deliverable_id: deliverableId,
+      deliverable_id: d.id,
       version_no: versionNo,
       drive_file_id: this.nextId('drv-f'),
       // 파일명은 .pdf 규약(§5 발송 조건) — mock 내용물은 인쇄용 HTML, 실제 PDF는 Phase 5
@@ -1388,10 +1465,13 @@ export class MockProvider implements DataProvider {
         version_no: versionNo,
         original_file_name: '스냅숏.pdf',
       }),
-      note: '큐시트 스냅숏 — 컨펌 발송용 자동 생성',
-      uploaded_by: user.id,
+      note,
+      uploaded_by: this.currentUser().id,
       created_at: nowIso(),
     }
+  }
+
+  private persistSnapshotVersion(version: Version, html: string): void {
     this.state.versions.push(version)
     const canBlob =
       typeof URL !== 'undefined' &&
@@ -1399,14 +1479,249 @@ export class MockProvider implements DataProvider {
       typeof Blob !== 'undefined'
     this.uploadedFileUrls.set(
       version.id,
-      canBlob
-        ? URL.createObjectURL(new Blob([renderCueSnapshotHtml(d, cues)], { type: 'text/html' }))
-        : `mock://files/${version.id}`,
+      canBlob ? URL.createObjectURL(new Blob([html], { type: 'text/html' })) : `mock://files/${version.id}`,
     )
-    this.log(d.project_id, `user:${user.id}`, 'cue.snapshot', 'version', version.id, {
+  }
+
+  /** §8 doc-snapshot(pm) — 정형 문서(큐시트·시나리오·운영가이드) 공통 인쇄 스냅숏 → 버전 등록 */
+  async createDocSnapshot(deliverableId: UUID, opts?: { include_contacts?: boolean }): Promise<Version> {
+    const user = this.assertPm()
+    const d = this.mustFindDeliverable(deliverableId)
+
+    if (d.category === '큐시트') {
+      const cues = await this.listCues(deliverableId)
+      if (cues.length === 0) {
+        throw new ProviderError('validation', '스냅숏을 만들 큐가 없습니다.')
+      }
+      const version = this.buildSnapshotVersion(d, '큐시트 스냅숏 — 컨펌 발송용 자동 생성')
+      this.persistSnapshotVersion(version, renderCueSnapshotHtml(d, cues))
+      this.log(d.project_id, `user:${user.id}`, 'cue.snapshot', 'version', version.id, {
+        deliverable_id: deliverableId,
+      })
+      return version
+    }
+
+    if (d.category === '시나리오') {
+      const blocks = await this.listScenarioBlocks(deliverableId)
+      if (blocks.length === 0) {
+        throw new ProviderError('validation', '스냅숏을 만들 진행 블록이 없습니다.')
+      }
+      const version = this.buildSnapshotVersion(d, '시나리오 스냅숏 — 컨펌 발송용 자동 생성')
+      this.persistSnapshotVersion(version, renderScenarioSnapshotHtml(d, blocks))
+      this.log(d.project_id, `user:${user.id}`, 'doc.snapshot', 'version', version.id, {
+        deliverable_id: deliverableId,
+        category: d.category,
+      })
+      return version
+    }
+
+    if (d.category === '운영가이드') {
+      const sections = await this.listGuideSections(deliverableId)
+      if (sections.length === 0) {
+        throw new ProviderError('validation', '스냅숏을 만들 섹션이 없습니다.')
+      }
+      // R-O6 — 개인 연락처(contacts 섹션)는 명시 옵션일 때만 인쇄에 포함, 기본은 제외
+      const includeContacts = opts?.include_contacts === true
+      const visible = includeContacts ? sections : sections.filter((s) => s.kind !== 'contacts')
+      const version = this.buildSnapshotVersion(d, '운영가이드 스냅숏 — 컨펌 발송용 자동 생성')
+      this.persistSnapshotVersion(version, renderGuideSnapshotHtml(d, visible))
+      this.log(d.project_id, `user:${user.id}`, 'doc.snapshot', 'version', version.id, {
+        deliverable_id: deliverableId,
+        category: d.category,
+        include_contacts: includeContacts,
+      })
+      return version
+    }
+
+    throw new ProviderError('conflict', '정형 문서(큐시트·시나리오·운영가이드) 항목이 아닙니다.')
+  }
+
+  // ── v2.5 §23 시나리오 (pm·ops 쓰기 / 멤버 읽기 — category='시나리오' 항목만) ──
+  private mustFindScenarioDeliverable(deliverableId: UUID): Deliverable {
+    const d = this.mustFindDeliverable(deliverableId)
+    if (d.category !== '시나리오') {
+      throw new ProviderError('conflict', '시나리오 항목이 아닙니다.')
+    }
+    return d
+  }
+
+  async listScenarioBlocks(deliverableId: UUID): Promise<ScenarioBlock[]> {
+    this.mustFindScenarioDeliverable(deliverableId)
+    return this.state.scenario_blocks
+      .filter((b) => b.deliverable_id === deliverableId)
+      .sort((a, b) => a.sort_order - b.sort_order)
+  }
+
+  async saveScenarioBlocks(deliverableId: UUID, blocks: ScenarioBlockInput[]): Promise<ScenarioBlock[]> {
+    const user = this.assertPmOps()
+    const d = this.mustFindScenarioDeliverable(deliverableId)
+    this.assertWritable(d.project_id)
+    const built: ScenarioBlock[] = blocks.map((b, i) => ({
+      id: this.nextId('scb'),
       deliverable_id: deliverableId,
+      session_id: b.session_id ?? null,
+      time: b.time ?? null,
+      kind: b.kind,
+      script: b.script ?? null,
+      note: b.note ?? null,
+      sort_order: i + 1,
+    }))
+    this.state.scenario_blocks = this.state.scenario_blocks
+      .filter((x) => x.deliverable_id !== deliverableId)
+      .concat(built)
+    this.log(d.project_id, `user:${user.id}`, 'scenario.saved', 'deliverable', deliverableId, {
+      count: built.length,
     })
-    return version
+    return built
+  }
+
+  /** §8.2 scenario-seed — 프로그램표 세션당 그룹 헤더 + 기본 진행 블록. 빈 문서에서만(R-O3) */
+  async seedScenarioFromProgram(deliverableId: UUID): Promise<ScenarioBlock[]> {
+    const user = this.assertPmOps()
+    const d = this.mustFindScenarioDeliverable(deliverableId)
+    this.assertWritable(d.project_id)
+    if (this.state.scenario_blocks.some((b) => b.deliverable_id === deliverableId)) {
+      throw new ProviderError(
+        'conflict',
+        '이미 진행 블록이 있는 문서입니다 — 빈 문서에서만 시드할 수 있습니다.',
+      )
+    }
+    const sessions = await this.listProgramSessions(d.project_id)
+    const built: ScenarioBlock[] = []
+    let order = 0
+    for (const s of sessions) {
+      order += 1
+      built.push({
+        id: this.nextId('scb'),
+        deliverable_id: deliverableId,
+        session_id: s.id,
+        time: s.start_time,
+        kind: 'custom',
+        script: null,
+        note: `세션: ${s.title}`,
+        sort_order: order,
+      })
+      order += 1
+      built.push({
+        id: this.nextId('scb'),
+        deliverable_id: deliverableId,
+        session_id: s.id,
+        time: s.start_time,
+        kind: 'mc',
+        script: '',
+        note: null,
+        sort_order: order,
+      })
+    }
+    this.state.scenario_blocks.push(...built)
+    this.log(d.project_id, `user:${user.id}`, 'scenario.seed', 'deliverable', deliverableId, {
+      session_count: sessions.length,
+    })
+    return built
+  }
+
+  /**
+   * §8.2 scenario-export-cues — 큐 후보(kind video·transition + 큐 표기 토큰)만 변환해
+   * 대상 큐시트에 추가한다. 기존 큐 보존·후미 삽입(R-O5), 대본 전문은 복사하지 않는다(§23.3).
+   */
+  async exportScenarioToCues(deliverableId: UUID, targetDeliverableId: UUID): Promise<Cue[]> {
+    const user = this.assertPmOps()
+    const scenario = this.mustFindScenarioDeliverable(deliverableId)
+    const target = this.mustFindDeliverable(targetDeliverableId)
+    if (target.category !== '큐시트') {
+      throw new ProviderError('conflict', '대상이 큐시트 항목이 아닙니다.')
+    }
+    this.assertWritable(scenario.project_id)
+    const blocks = await this.listScenarioBlocks(deliverableId)
+    const candidates = scenarioCueCandidates(blocks)
+    if (candidates.length === 0) return []
+    const existingCues = await this.listCues(targetDeliverableId)
+    const maxOrder = existingCues.reduce((m, c) => Math.max(m, c.sort_order), 0)
+    const newCues = buildCuesFromScenario({
+      candidates,
+      targetDeliverableId,
+      existingCueNos: existingCues.map((c) => c.cue_no),
+      startSortOrder: maxOrder,
+      scenarioTitle: scenario.title,
+      makeId: () => this.nextId('cue'),
+    })
+    this.state.cues.push(...newCues)
+    this.log(scenario.project_id, `user:${user.id}`, 'scenario.export_cues', 'deliverable', deliverableId, {
+      target_deliverable_id: targetDeliverableId,
+      count: newCues.length,
+    })
+    return newCues
+  }
+
+  // ── v2.5 §23 운영가이드 (pm·ops 쓰기 / 멤버 읽기 — category='운영가이드' 항목만) ──
+  private mustFindGuideDeliverable(deliverableId: UUID): Deliverable {
+    const d = this.mustFindDeliverable(deliverableId)
+    if (d.category !== '운영가이드') {
+      throw new ProviderError('conflict', '운영가이드 항목이 아닙니다.')
+    }
+    return d
+  }
+
+  async listGuideSections(deliverableId: UUID): Promise<GuideSection[]> {
+    this.mustFindGuideDeliverable(deliverableId)
+    return this.state.guide_sections
+      .filter((s) => s.deliverable_id === deliverableId)
+      .sort((a, b) => a.sort_order - b.sort_order)
+  }
+
+  async saveGuideSections(deliverableId: UUID, sections: GuideSectionInput[]): Promise<GuideSection[]> {
+    const user = this.assertPmOps()
+    const d = this.mustFindGuideDeliverable(deliverableId)
+    this.assertWritable(d.project_id)
+    const built: GuideSection[] = sections.map((s, i) => ({
+      id: s.id ?? this.nextId('gds'),
+      deliverable_id: deliverableId,
+      kind: s.kind,
+      title: s.title,
+      content: s.content ?? null,
+      source_ref: s.source_ref ?? null,
+      // 사람이 직접 저장하면 반영 완료 — stale 해제(입력에 명시하지 않으면 false)
+      source_stale: s.source_stale ?? false,
+      sort_order: i + 1,
+    }))
+    this.state.guide_sections = this.state.guide_sections
+      .filter((x) => x.deliverable_id !== deliverableId)
+      .concat(built)
+    this.log(d.project_id, `user:${user.id}`, 'guide.saved', 'deliverable', deliverableId, {
+      count: built.length,
+    })
+    return built
+  }
+
+  /** §8.2 guide-seed — 존별 운영·R&R에서 4섹션 초기 로드. 빈 문서에서만(R-O3) */
+  async seedGuideFromSources(deliverableId: UUID): Promise<GuideSection[]> {
+    const user = this.assertPmOps()
+    const d = this.mustFindGuideDeliverable(deliverableId)
+    this.assertWritable(d.project_id)
+    if (this.state.guide_sections.some((s) => s.deliverable_id === deliverableId)) {
+      throw new ProviderError(
+        'conflict',
+        '이미 섹션이 있는 문서입니다 — 빈 문서에서만 시드할 수 있습니다.',
+      )
+    }
+    const opsItems = this.state.deliverables.filter(
+      (x) => x.project_id === d.project_id && x.area === 'ops',
+    )
+    const charters = await this.listRoleCharters(d.project_id)
+    const seeds = buildGuideSeedSections(opsItems, charters)
+    const built: GuideSection[] = seeds.map((s, i) => ({
+      id: this.nextId('gds'),
+      deliverable_id: deliverableId,
+      kind: s.kind,
+      title: s.title,
+      content: s.content,
+      source_ref: s.source_ref,
+      source_stale: false,
+      sort_order: i + 1,
+    }))
+    this.state.guide_sections.push(...built)
+    this.log(d.project_id, `user:${user.id}`, 'guide.seed', 'deliverable', deliverableId, {})
+    return built
   }
 
   // ── v1.4 WBS·R&R ──────────────────────────────────────────────────
@@ -2659,9 +2974,10 @@ export class MockProvider implements DataProvider {
    *   overview      개요 슬롯 5개(event_date·theme·venue·mc_name·overview_items≥1) 중 채워진 수
    *   program       start_time 있는 세션 수 / 전체 세션 수
    *   cuesheet      구분·본문 채워진 큐 수 / 전체 큐 수 (v1.3)
-   *   zones         content 있는 ops 항목 수 / ops 항목 수
+   *   zones         content 있는 ops 항목 수 / ops 항목 수(v2.5: 시나리오·운영가이드 제외)
    *   production    스펙 4필드(size·qty·location·type) 완비 design 항목 수 / design 항목 수
    *   registration  등록 데이터(RSVP+참관객) 존재 여부 (0/1)
+   *   emergency     운영가이드 emergency 섹션 content 비어있지 않으면 1 / 1 (v2.5)
    *   schedule      완료 마일스톤 수 / 전체 마일스톤 수
    */
   async getPlan(projectId: UUID): Promise<PlanData> {
@@ -2681,8 +2997,15 @@ export class MockProvider implements DataProvider {
           cues,
         }
       : null
+    // v2.5 §23 — zones에서는 **실제로 빌더 데이터(scenario_blocks·guide_sections)를 가진**
+    // 시나리오·운영가이드 항목만 제외한다(큐시트는 기존대로 포함) — hasScenarioBuilderData·
+    // hasGuideBuilderData 참조(레거시 자유 카테고리 충돌 방지, dlv-005).
     const opsItems = this.state.deliverables.filter(
-      (d) => d.project_id === projectId && d.area === 'ops',
+      (d) =>
+        d.project_id === projectId &&
+        d.area === 'ops' &&
+        !this.hasScenarioBuilderData(d) &&
+        !this.hasGuideBuilderData(d),
     )
     const designItems = this.state.deliverables.filter(
       (d) => d.project_id === projectId && d.area === 'design',
@@ -2716,6 +3039,40 @@ export class MockProvider implements DataProvider {
       .filter((m) => m.project_id === projectId)
       .sort((a, b) => a.due_date.localeCompare(b.due_date))
 
+    // v2.5 §23 — ② 세션별 시나리오 펼침 소스(빌더 데이터를 가진 첫 시나리오 항목)
+    const scenarioDeliverable = this.state.deliverables.find(
+      (d) => d.project_id === projectId && this.hasScenarioBuilderData(d),
+    )
+    const scenario = scenarioDeliverable
+      ? {
+          deliverable_id: scenarioDeliverable.id,
+          title: scenarioDeliverable.title,
+          status: scenarioDeliverable.status,
+          blocks: await this.listScenarioBlocks(scenarioDeliverable.id),
+        }
+      : null
+
+    // v2.5 §23 — ③존운영 확장·⑦비상 대응 소스(빌더 데이터를 가진 첫 운영가이드 항목).
+    // R-O6: contacts는 담지 않는다.
+    const guideDeliverable = this.state.deliverables.find(
+      (d) => d.project_id === projectId && this.hasGuideBuilderData(d),
+    )
+    const guideSections = guideDeliverable ? await this.listGuideSections(guideDeliverable.id) : []
+    const zoneSection = guideSections.find((s) => s.kind === 'zone') ?? null
+    const guide_zone = zoneSection
+      ? { content: zoneSection.content, source_stale: zoneSection.source_stale }
+      : null
+    const emergencySection = guideSections.find((s) => s.kind === 'emergency') ?? null
+    const emergency =
+      guideDeliverable && emergencySection
+        ? {
+            deliverable_id: guideDeliverable.id,
+            title: emergencySection.title,
+            content: emergencySection.content,
+            status: guideDeliverable.status,
+          }
+        : null
+
     const overviewSlots = [
       project.event_date,
       project.theme,
@@ -2734,6 +3091,9 @@ export class MockProvider implements DataProvider {
       production_items: production,
       registration_stats: stats,
       milestones,
+      scenario,
+      guide_zone,
+      emergency,
       section_progress: [
         { key: 'overview', done: overviewSlots.filter(Boolean).length, total: overviewSlots.length },
         { key: 'program', done: sessions.filter((s) => s.start_time).length, total: sessions.length },
@@ -2742,6 +3102,7 @@ export class MockProvider implements DataProvider {
         { key: 'zones', done: opsItems.filter((d) => d.content?.trim()).length, total: opsItems.length },
         { key: 'production', done: designItems.filter(specComplete).length, total: designItems.length },
         { key: 'registration', done: stats.rsvp_total + stats.attendee_total > 0 ? 1 : 0, total: 1 },
+        { key: 'emergency', done: emergency?.content?.trim() ? 1 : 0, total: 1 },
         { key: 'schedule', done: milestones.filter((m) => m.done).length, total: milestones.length },
       ],
     }

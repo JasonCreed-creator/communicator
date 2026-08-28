@@ -10,6 +10,7 @@ import type {
   ComplianceCard,
   Cue,
   Deliverable,
+  GuideSection,
   Milestone,
   Partner,
   PartnerTier,
@@ -22,6 +23,7 @@ import type {
   QuoteImport,
   RoleCharter,
   RsvpContact,
+  ScenarioBlock,
   UnregisteredFile,
   Version,
   WbsTask,
@@ -114,6 +116,9 @@ export interface MockState {
   partner_tokens: PartnerToken[]
   // v2.4 §22 — 견적서 임포트
   quote_imports: QuoteImport[]
+  // v2.5 §23 — 운영보드 재구성(시나리오·운영가이드)
+  scenario_blocks: ScenarioBlock[]
+  guide_sections: GuideSection[]
 }
 
 /** v1.2 가이드 문서·스펙·본문 필드 기본값 — 가이드 없이 만든 항목은 전부 null (§4) */
@@ -606,6 +611,10 @@ const FIXTURE: MockState = {
   partners: [],
   partner_tokens: [],
   quote_imports: [],
+
+  // v2.5 §23 — createFixtureState()에서 rebuildFixtures 시드로 채움(RE:BUILD 27)
+  scenario_blocks: [],
+  guide_sections: [],
 
   unregistered_files: [
     {

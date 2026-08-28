@@ -2,6 +2,7 @@
 // 디자인지시서 v1 §6 S9 — 종이 메타포: 캔버스 위 중앙 white 시트(.plan-doc) + 상단 오렌지 헤어라인.
 import ErrorAlert from '../components/internal/ErrorAlert'
 import CuesheetSection from '../components/plan/CuesheetSection'
+import EmergencySection from '../components/plan/EmergencySection'
 import OverviewSection from '../components/plan/OverviewSection'
 import PlanProgressSummary from '../components/plan/PlanProgressSummary'
 import ProductionSection from '../components/plan/ProductionSection'
@@ -67,6 +68,7 @@ export default function PlanDocPage() {
               progress={progressFor(plan.data.section_progress, 'program')}
               canEdit={canEdit}
               onChanged={plan.reload}
+              scenario={plan.data.scenario}
             />
 
             <CuesheetSection
@@ -74,7 +76,11 @@ export default function PlanDocPage() {
               progress={progressFor(plan.data.section_progress, 'cuesheet')}
             />
 
-            <ZonesSection zones={plan.data.zones} progress={progressFor(plan.data.section_progress, 'zones')} />
+            <ZonesSection
+              zones={plan.data.zones}
+              progress={progressFor(plan.data.section_progress, 'zones')}
+              guideZone={plan.data.guide_zone}
+            />
 
             <ProductionSection
               items={plan.data.production_items}
@@ -84,6 +90,11 @@ export default function PlanDocPage() {
             <RegistrationSection
               stats={plan.data.registration_stats}
               progress={progressFor(plan.data.section_progress, 'registration')}
+            />
+
+            <EmergencySection
+              emergency={plan.data.emergency}
+              progress={progressFor(plan.data.section_progress, 'emergency')}
             />
 
             <ScheduleSection

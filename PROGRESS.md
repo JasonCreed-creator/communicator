@@ -3,6 +3,21 @@
 > 가변 상태 파일. 매 세션 체크아웃 시 에이전트가 갱신한다 (CLAUDE.md §9 리추얼).
 
 ## 1. 상태 요약
+- **완료: Phase 3.16 — v2.5 운영보드 재구성(문서 유형 우선 + 시나리오·운영가이드 빌더)** (브랜치
+  `claude/new-session-cf31uu` → **PR #27(draft) — 챗 검수 대기**, 2026-08-28. AE 직렬 → AF·AG·AH
+  병렬, 메인이 스텁 선배선·S3 배선·DoD 코드화). ① 3.16a 타입 §23.1 1:1(`ScenarioBlock`·
+  `GuideSection`)·정형 카테고리 3종 상수화·**DataProvider v9 재동결(8메서드 추가 · 110메서드,
+  importVendorQuote는 v10 예약 유지)**·cue-snapshot→doc-snapshot 위임(R-O2)·getPlan 확장
+  (⑦emergency·②scenario·③guide_zone, R-O6 contacts 미조립)·§23.4 RB27 픽스처(시나리오 3그룹
+  8블록·가이드 4섹션 stale 1) ② 3.16b ops 보드 유형 카드 4종+인라인 빌더 펼침+"+ 항목 추가"
+  카테고리→빌더 직결(P7 완성형)·R-O1 표시 레벨 분류(디자인 보드 무변경) ③ 3.16c 시나리오 빌더
+  (세션 그룹·블록 행·시드 R-O3·큐 내보내기 R-O5·인쇄) ④ 3.16d 운영가이드 빌더(4섹션 시드·stale
+  차이 확인→반영 R-O4·R-O6 인쇄 기본 제외)+S9 ⑦비상 대응 신설·②시나리오 펼침·③존운영 확장.
+  **레거시 판정 주의**: v2.5 이전 자유 카테고리 '시나리오'(샘플 dlv-005)는 **빌더 행 보유 또는
+  버전 0건**일 때만 빌더 모드(provider·S3·보드 동일 기준 — DoD-1 파일 흐름 보존).
+  결과: vitest **680개**(3.15.1 기준 612 + AE 26 + AF 7 + AG 6 + AH 14 + DoD35~38 15)
+  **연속 3회+ 무실패** · tsc 클린 · vite build · `npm run demo` 4단(no-charset 포함) ·
+  상시 grep 가드 5종 프로덕션 0건 · 스크린샷 5장 · **데모 아티팩트 기존 URL 재발행 완료**
 - **완료: Phase 3.15.1 — 챗 감수(2026-08-27, ⚠️ 조건부 보완) 후속 폴리시 P1~P9** (브랜치
   `claude/phase-3-15-1-polish` → **PR #26 머지, main `8a359d3`** — 사용자 지시 2026-08-28
   "머지하고 새로운 세션에서 이어 진행". 머지본 main 재검증: tsc 클린 · demo 4단 통과 ·
@@ -96,6 +111,23 @@
   전 청크 인라인) 산출을 기존 URL에 재배포. 하위 경로 서빙 실측 검증(5개 라우트 렌더·외부 요청 0건)
 
 ## 2. 완료
+- **Phase 3.16 — v2.5 운영보드 재구성** (2026-08-28, 이 세션 — AE 직렬 후 AF·AG·AH 병렬,
+  메인이 빌더 스텁 선배선·S3(ItemDetailPage) 배선·DoD 35~38 코드화·검증·아티팩트 재발행)
+  - 3.16a(AE): `ScenarioBlockKind`·`GuideSectionKind`·`STRUCTURED_DOC_CATEGORIES`, v9 8메서드
+    (list/saveScenarioBlocks·seedScenarioFromProgram·exportScenarioToCues·list/saveGuideSections·
+    seedGuideFromSources·createDocSnapshot(include_contacts 옵션)) MockProvider 구현,
+    §23.3 변환·조립 순수 함수(`src/lib/scenario.ts`·`src/lib/guideAssembly.ts`), stale 훅
+    (createDeliverable의 비정형 ops 추가 → zone 섹션 stale), 공유 라벨·도움말·'운영가이드' 프리셋
+  - 3.16b(AF): ops 보드 유형 카드 4종(건수+최신 상태)·카드 좁히기·행 "빌더 열기" 인라인 패널·
+    생성 직후 자동 오픈 3종 일반화·레거시 파일 문서 보호("파일 문서 — 상세에서 열람")
+  - 3.16c(AG): ScenarioBuilder(벌크 저장 경로 단일화·세션 접기·대본 펼침·인쇄 시 전체 펼침·
+    ScenarioExportPanel 대상 큐시트 선택·변환 건수 배너)
+  - 3.16d(AH): GuideBuilder(4종 카드·마크다운 미리보기·차이 확인 나란히 보기→"반영"만 저장·
+    연락망 포함(인쇄) 체크 기본 꺼짐)+EmergencySection·ProgramSection 시나리오 펼침·
+    ZonesSection 가이드 존 블록·dod9 섹션 수 7→8 의미 유지 갱신
+  - 통합(메인): S3 상세가 정형 3종을 빌더로 렌더(빌더 행/버전 0건 판정·1단 전폭 메타 스트립
+    재사용), StatusActionBar `autoSnapshotDoc` 일반화(version_id 'auto'), DoD 35~38 테스트
+    4파일(15건), 데모 아티팩트 기존 URL 재발행, 스크린샷 5장
 - **Phase 3.15 — v2.4 주최형 확장 + 견적서 임포트** (2026-08-27, 이 세션 — AA 직렬 후 AB·AC·AD 병렬,
   메인이 라우트 셸 선배선·통합·DoD 코드화)
   - 3.15a(AA): 타입 §21.1 1:1·전이표 §5.1 확장(via partner_submit·partner_review, host_inbound 분기
@@ -584,10 +616,12 @@ DoD-29뿐 아니라 **실물 검산 2건에서 바로** 잡힌다(위 표의 "2 
 
 ## 4. 다음 스텝
 - ~~① PR #26(3.15.1) 챗 검수 → 머지~~ → **종결** (사용자 지시 2026-08-28, merge commit `8a359d3`)
-- **(v2.5 현재) Phase 3.16(운영보드 재구성) — 새 세션에서 착수**(사용자 지시): 순서 = 3.16a(AE
-  타입·DataProvider v9 재동결 110메서드) → 3.16b·c·d(AF·AG·AH 병렬), PR 1개, 정본 = 설계서
-  v2.5 §10.2·§23. 기준치 = **머지본 main vitest 612개**. 문서는 이미 v2.5 채택 — 새 세션은
-  문서 교체 커밋 없이 §9 체크인(3줄 복명)부터 시작
+- ~~(v2.5) Phase 3.16(운영보드 재구성) — 새 세션에서 착수~~ → **구현 완료** (2026-08-28 이 세션,
+  브랜치 `claude/new-session-cf31uu` — 기준치 612 → 680, 상태 요약 참조)
+- **(현재) PR #27(Phase 3.16) 챗 검수 → 머지**: draft 상태로 대기. 검수 포인트 = ① AH가 공개한
+  범위 예외(3.16a 픽스처 session_id 자릿수 정정 — `rebuildFixtures.ts`) ② 레거시 판정 기준
+  (빌더 행/버전 0건)의 사후 정본화 ③ RB27 큐시트 실측 1건(§23.4의 "기존 큐시트 2건"에 미달 —
+  임의 추가하지 않음)
 - ~~① PR #25 챗 검수 → 머지~~ → **종결** (사용자 지시 "머지하고 테스트할 수 있게" 2026-08-27 —
   merge commit `22e247f`, 머지본 재검증 통과. 검수에서 되돌릴 것이 나오면 main 위 후속 커밋으로)
 - ~~② 데모 아티팩트 재발행~~ → **종결** (같은 세션에서 재시도 성공 — 기존 URL 유지, Phase 3.15
@@ -635,6 +669,44 @@ DoD-29뿐 아니라 **실물 검산 2건에서 바로** 잡힌다(위 표의 "2 
 - 이후 Phase 5(Drive) → Phase 6(알림·cron)
 
 ## 5. 결정 로그
+- 2026-08-28 (Phase 3.16a, AE): **DataProvider v9 재동결 — 동결 해제 근거 = 사용자 v2.5 승인
+  (2026-08-28, 시각안 3화면) + 설계서 v2.5 §23.** listScenarioBlocks·saveScenarioBlocks·
+  seedScenarioFromProgram·exportScenarioToCues·listGuideSections·saveGuideSections·
+  seedGuideFromSources·createDocSnapshot 8메서드 추가 = **110메서드**. 기존 102메서드
+  시그니처 불변. `ScenarioBlock`·`GuideSection` 엔티티(§23.1), `ScenarioBlockKind`·
+  `GuideSectionKind`·`STRUCTURED_DOC_CATEGORIES`(+`isStructuredDocCategory`) 열거형 추가.
+  기존 `createCueSnapshot`은 `createDocSnapshot`에 위임하도록 내부만 리팩터(R-O2 — 시그니처·
+  동작·activity log 의미 보존, dod12 등 회귀 없음). `importVendorQuote`는 여전히 **v10
+  예약 — 만들지 않았다**(§19.5).
+- 2026-08-28 (Phase 3.16a — 구현 해석 3건, PROGRESS 임시 정본·다음 설계서 개정에서 승격 후보):
+  ① **§23.3 토큰→채널 매핑 구체화**: 정규식 `/\b([A-Z]{1,2})-(\d{1,3})\b/`로 큐 표기 토큰을
+  추출하고, 접두 `M`→console_audio·`C`→console_light·`V`→console_screen으로 배치한다.
+  그 외 접두(예: `X-01`)는 채널에 넣지 않고 참조 문구에 병기한다. cue_no는 대상 큐시트의
+  기존 번호와 충돌하지 않는 `S01`식 연번(순수 함수 `src/lib/scenario.ts` 정본).
+  ② **R-O6 "개인 연락처 제외"의 판정 대상 = kind='contacts' 섹션 그 자체**로 해석했다 —
+  PlanData(getPlan)는 애초에 contacts 섹션을 조립하지 않고, createDocSnapshot(운영가이드)도
+  기본은 contacts를 제외하며 `include_contacts:true`를 명시했을 때만 인쇄에 포함한다.
+  ③ **stale(R-O4) 런타임 마킹 경로 = `createDeliverable`(ops·비정형 항목 추가)뿐** —
+  현재 인터페이스에 기존 zone 항목의 `content`를 사후 수정하는 PATCH 경로가 없어(생성 시에만
+  content를 받는다) 이것이 "존별 운영 원본 변경"을 감지할 수 있는 유일한 실제 쓰기 경로다.
+  향후 zone 항목 본문 편집 API가 생기면 그 경로에도 같은 마킹을 추가해야 한다(사후 정본화 후보).
+- 2026-08-28 (Phase 3.16a — 레거시 자유 카테고리 충돌, DoD-1 회귀 방지): 기존 샘플 픽스처
+  (prj-stc26)의 dlv-005는 v2.5 이전부터 **자유 텍스트 카테고리로 '시나리오'**를 썼고
+  (당시엔 예약어가 아니었다) scenario_blocks가 없다. category 문자열만으로 "정형 문서 여부"를
+  판정하면 이 레거시 항목이 getPlan의 zones 제외·requestApproval의 자동 스냅숏 대상에
+  잘못 걸려 DoD-1(비큐시트 항목의 수동 버전 컨펌 흐름)이 깨진다. **"실제로 빌더 데이터
+  (scenario_blocks·guide_sections 행)를 가진 항목만 정형 취급"**(`hasScenarioBuilderData`·
+  `hasGuideBuilderData`)으로 판정 기준을 좁혀 해결했다 — 이는 §23.2 R-O1(보드 자동분류가
+  "실제로 새 빌더를 거친 문서만" 승격시킨다는 원칙)과도 일치하는 해석이다. 큐시트는 v1.3부터
+  이미 예약 카테고리라 이 문제가 없어 종전대로 카테고리 문자열만으로 판정한다.
+- 2026-08-28 (Phase 3.16a — 범위 예외 1건, 명시 플래그): `src/components/plan/planSections.ts`
+  (컴포넌트 디렉터리, 원칙상 AE 수정 금지 대상)에 `PlanSectionKey`의 'emergency' 키 1개를
+  최소 추가했다 — `PLAN_SECTION_META: Record<PlanSectionKey, PlanSectionMeta>`가 완전성을
+  요구해 그 타입을 확장하면 이 파일이 깨진다(tsc 클린이 하드 요구사항). 번호(⑦)·타이틀만
+  채운 자리표시이고 JSX·렌더링·레이아웃은 손대지 않았다(PlanDocPage.tsx는 여전히 7개
+  `<XSection>`을 그대로 렌더해 dod9의 `.plan-section` 개수(7) 회귀 없음 — PlanProgressSummary만
+  8번째 진행률 타일을 일반 로직으로 더 그린다). **실제 ⑦비상 대응 섹션 렌더·정확한 위치·인쇄
+  규약은 Phase 3.16d(AH)가 완성**해야 한다.
 - 2026-08-28 (Phase 3.15.1): **DataProvider v8.1 재동결 — 동결 해제 근거 = 사용자 3.15.1 승인
   (지시문 P2, 2026-08-28) + 설계서 v2.4.1 §21.1(v2.5 승계).** partner_guide_url·
   partner_contact_email 필드 추가만, 메서드 수 102 불변(v3.1 전례). 주최형 R&R·규약 카드
@@ -961,6 +1033,15 @@ DoD-29뿐 아니라 **실물 검산 2건에서 바로** 잡힌다(위 표의 "2 
   표 min-w 820→936 상향(열 규격 합계와 일치 — 1280 콘텐츠 폭 958 안에서 무스크롤 실측)
 
 ## 6. 세션 로그
+- 2026-08-28 세션 #9: **Phase 3.16 운영보드 재구성** (브랜치 `claude/new-session-cf31uu`,
+  base=main `8a359d3` — 3.15.1 머지본. 문서는 이미 v2.5 채택 상태라 §0 교체 커밋 생략, 체크인
+  복명 후 사용자 승인으로 개시). AE → AF·AG·AH 병렬, 메인 통합. **운영 사고 1건**: 병렬 에이전트
+  (AF)가 조사 중 작업 트리 전체 `git stash/pop/drop`을 실행해 AG·AH 진행 파일이 일시 되돌려짐 —
+  AF가 부분 복원, 메인이 두 에이전트에 즉시 무결성 재검증 지시, 각자 디스크 재확인·md5 검증으로
+  유실 0 확인, 이후 경로 한정 커밋 + WIP 체크포인트 커밋으로 재발 대비. **다음 병렬 세션 규약
+  후보: 에이전트 지시문에 "저장소 전체 git 명령(stash·reset·checkout) 금지" 명문화(이번 세션은
+  사후 지시로 커버)**. 결과: vitest 680 연속 3회+ · tsc · build · demo 4단 · 가드 5종 ·
+  스크린샷 5장 · 데모 아티팩트 재발행 · PR #27(draft) 챗 검수 대기
 - 2026-08-23 세션 #6 계속: **Phase 3.14 정산보드**(설계서 v2.2·CLAUDE.md v2.2 채택 → 3.14a~3.14d).
   사용자 요청의 출발점은 "발주금액을 실시간으로 확인하고 최초 계약 견적 대비 ±를 파악한다"였고,
   마진 식은 사용자가 공유한 실물 내부정산 2건에서 원 단위로 검산해 잠갔다.

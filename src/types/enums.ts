@@ -106,3 +106,22 @@ export type QuoteImportStatus = (typeof QUOTE_IMPORT_STATUSES)[number]
 /** §22.1 지원 서식 3형 — A 단가·수량형 / B 금액 단식 / C 패키지형 */
 export const QUOTE_IMPORT_FORMATS = ['A', 'B', 'C'] as const
 export type QuoteImportFormat = (typeof QUOTE_IMPORT_FORMATS)[number]
+
+// v2.5 §23: 운영보드 재구성 — scenario_blocks.kind
+export const SCENARIO_BLOCK_KINDS = ['mc', 'video', 'protocol', 'transition', 'custom'] as const
+export type ScenarioBlockKind = (typeof SCENARIO_BLOCK_KINDS)[number]
+
+// v2.5 §23: guide_sections.kind
+export const GUIDE_SECTION_KINDS = ['zone', 'role', 'emergency', 'contacts', 'custom'] as const
+export type GuideSectionKind = (typeof GUIDE_SECTION_KINDS)[number]
+
+/**
+ * v2.5 §23 — deliverables.category 정형 3종. "카테고리가 빌더를 결정한다" 원칙의 보드 레벨
+ * 확장(§10.2) — 이 3종을 고르면 파일 업로드 대신 전용 빌더가 인라인으로 열린다.
+ */
+export const STRUCTURED_DOC_CATEGORIES = ['큐시트', '시나리오', '운영가이드'] as const
+export type StructuredDocCategory = (typeof STRUCTURED_DOC_CATEGORIES)[number]
+
+export function isStructuredDocCategory(category: string): category is StructuredDocCategory {
+  return (STRUCTURED_DOC_CATEGORIES as readonly string[]).includes(category)
+}
