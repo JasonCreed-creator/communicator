@@ -112,21 +112,21 @@ describe('P9 — 빈 행 제외(xlsx)', () => {
   })
 })
 
-describe('P9 — 구글시트 연동 자리(안내만, 새 필드 없음)', () => {
-  it('버튼을 누르면 시점을 밝히는 안내 문구가 뜨고, 닫기로 닫힌다', async () => {
+describe('P9 → v2.6 §24 — 구글시트 연동 진입점(자리 표시 → 실물 연결 카드)', () => {
+  it('연결이 없는 행사에서도 연결 카드가 탭 위에 상시 노출되고, 빈 상태 ②로 연결을 유도한다', async () => {
     renderRoute('/registration')
     await screen.findByText('홍초청')
 
-    expect(screen.queryByText(/구글 계정 연동/)).toBeNull()
-    await userEvent.click(screen.getByRole('button', { name: '구글시트 연동' }))
+    // 게이트 뒤에 숨기지 않는다(§10 진입점 원칙) — 카드가 항상 있고 상태는 '미연결'
+    const card = await screen.findByRole('region', { name: '구글 시트 연결' })
+    expect(within(card).getByText('미연결')).toBeTruthy()
+    expect(within(card).getByText('시트 → 앱 단방향 · 시트가 정본')).toBeTruthy()
     expect(
-      await screen.findByText(
-        '구글 계정 연동(Drive 이식 단계)과 함께 열립니다. 그때까지는 시트를 xlsx로 내려받아 임포트해 주세요.',
-        { exact: false },
-      ),
+      within(card).getByText(/참가자 명단 구글 시트를 연결하면/),
     ).toBeTruthy()
+    expect(within(card).getByRole('button', { name: '시트 연결하기' })).toBeTruthy()
 
-    await userEvent.click(screen.getByRole('button', { name: '닫기' }))
-    expect(screen.queryByText(/구글 계정 연동/)).toBeNull()
+    // 미연결이면 파일 임포트는 기존 비중 그대로(버튼)
+    expect(screen.getByLabelText(/CSV 임포트 \(RSVP\)/)).toBeTruthy()
   })
 })

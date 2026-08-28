@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 // DoD-4: 등록 — CSV 임포트(헤더 매핑 UI) → 테이블 → 체크인 토글 → 통계 3종.
-import { cleanup, screen, waitFor } from '@testing-library/react'
+import { cleanup, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it } from 'vitest'
 import { mockProvider, renderRoute } from './testUtils'
@@ -40,7 +40,9 @@ describe('DoD-4 등록 모듈', () => {
     await screen.findByText('임참관')
 
     // 픽스처: att-002(임참관)만 체크인 상태 → 미체크인 버튼 2개
-    const before = screen.getAllByRole('button', { name: '체크인' })
+    // (v2.6 §24: 탭에 '체크인'이 생겼으므로 명단 표 안으로 범위를 좁힌다 — 의미는 그대로)
+    const table = within(screen.getByRole('table', { name: '참관객 명단' }))
+    const before = table.getAllByRole('button', { name: '체크인' })
     expect(before).toHaveLength(2)
     await userEvent.click(before[0])
 
