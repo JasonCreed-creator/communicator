@@ -21,7 +21,8 @@ describe('S-11 파트너 보드', () => {
     // KPI: 파트너 수 5 · 이번 마감 제출 4/5(HT-1) · 검토 대기 1 · 수정요청 미회신 1
     expect(await screen.findByText('파트너 수')).toBeTruthy()
     const partnerCountTile = screen.getByText('파트너 수').closest('.ui-card') as HTMLElement
-    expect(within(partnerCountTile).getByText('5')).toBeTruthy()
+    // 타일 라벨은 집계보다 먼저 그려진다 — 수치는 비동기 로드를 기다려 단언한다(flake 방지, 3.16.4)
+    expect(await within(partnerCountTile).findByText('5')).toBeTruthy()
 
     const currentDeadlineTile = screen.getByText('이번 마감 제출').closest('.ui-card') as HTMLElement
     expect(within(currentDeadlineTile).getByText('4/5')).toBeTruthy()

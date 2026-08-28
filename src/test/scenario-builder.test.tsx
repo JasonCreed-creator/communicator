@@ -38,8 +38,10 @@ describe('시나리오 빌더 — RE:BUILD 27 픽스처 렌더 (§23.4)', () => 
     expect(screen.getByRole('button', { name: /트랙 세션/ })).toBeTruthy()
     expect(screen.getByRole('button', { name: /애프터파티/ })).toBeTruthy()
 
-    // thead 1행 + 그룹 헤더 3행 + 블록 8행 = 12행
-    expect(screen.getAllByRole('row')).toHaveLength(12)
+    // 3.16.4 화면 B — 세션 = 개별 카드(카드마다 thead 1행) + 블록 8행 = 11행
+    expect(screen.getAllByRole('row')).toHaveLength(11)
+    // 프로그램표 연동 배지가 세션 카드 3곳에 붙는다(공통/수동 그룹은 없음)
+    expect(screen.getAllByText('프로그램표 연동')).toHaveLength(3)
 
     // 구분 칩 5종(MC·영상·의전·전환·커스텀) 전부 등장 — RB27 픽스처가 5종을 모두 포함한다
     for (const label of Object.values(SCENARIO_KIND_LABELS)) {
@@ -47,13 +49,37 @@ describe('시나리오 빌더 — RE:BUILD 27 픽스처 렌더 (§23.4)', () => 
     }
   })
 
-  it('대본이 있는 블록만 "대본" 토글이 있고, 펼치면 전문이 보인다', async () => {
+  it('대본이 행에 인라인 노출된다 — 짧은 대본은 토글 없이 전문이 바로 보인다(3.16.4 읽기 우선)', async () => {
     renderBuilder(SCENARIO_ID, true)
     await screen.findByRole('button', { name: /오프닝 키노트/ })
 
-    const videoRow = screen.getAllByText('영상')[0].closest('tr')!
-    await userEvent.click(within(videoRow).getByRole('button', { name: '대본' }))
-    expect(await screen.findByText(/오프닝 인트로 영상 재생/)).toBeTruthy()
+    // RB27 대본은 전부 72자 이하 — 클릭 없이 본문이 행에 보이고, 풀 멘트 토글은 없다
+    expect(screen.getByText(/오프닝 인트로 영상 재생/)).toBeTruthy()
+    expect(screen.getByText(/MC 무대 인사 및 오프닝 키노트 세션 소개/)).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /풀 멘트 펼침/ })).toBeNull()
+  })
+
+  it('장문 대본(72자 초과)은 말줄임 미리보기 + "풀 멘트 펼침 ▾" 토글로 전문 패널이 열린다', async () => {
+    const LONG = '안녕하십니까, RE:BUILD 27에 오신 여러분을 진심으로 환영합니다. ' .repeat(3).trim()
+    const fresh = await provider.createDeliverable({
+      project_id: RB27,
+      area: 'ops',
+      category: '시나리오',
+      title: '장문 대본 테스트 시나리오',
+    })
+    await provider.saveScenarioBlocks(fresh.id, [
+      { session_id: null, time: '09:32', kind: 'mc', script: LONG, note: '프롬프터 #1' },
+    ])
+    renderBuilder(fresh.id, true)
+
+    await screen.findByRole('button', { name: '풀 멘트 펼침 ▾' })
+    // 전문 패널이 열리기 전에는 잘린 미리보기만 있다(말줄임 문자)
+    expect(screen.getByText(/…$/)).toBeTruthy()
+    // 클릭 시점에 재조회 — 헤더(권한·행사) 비동기 로드의 재렌더와 겹치면 이전 참조가 detach될 수 있다
+    await userEvent.click(screen.getByRole('button', { name: '풀 멘트 펼침 ▾' }))
+    // 패널 제목 + 전문 렌더
+    expect(await screen.findByText(/풀 멘트 — 프롬프터 #1/)).toBeTruthy()
+    expect(screen.getByRole('button', { name: '풀 멘트 접기 ▴' })).toBeTruthy()
   })
 })
 
@@ -68,6 +94,7 @@ describe('진행 블록 CRUD·정렬 — saveScenarioBlocks 벌크 경유', () =
     const user = userEvent.setup()
     renderBuilder(fresh.id, true)
 
+    await user.click(await screen.findByRole('button', { name: '+ 진행 블록 (공통·다른 세션)' }))
     await screen.findByText('진행 블록 추가')
     const addForm = screen.getByText('진행 블록 추가').closest('div')!
 
@@ -172,7 +199,8 @@ describe('큐시트로 내보내기 — R-O5·§23.3', () => {
     renderBuilder(SCENARIO_ID, true)
     const user = userEvent.setup()
 
-    await screen.findByText('큐시트로 내보내기')
+    // 3.16.4 — 내보내기는 헤더 버튼으로 패널을 연 뒤 진행한다(목업 화면 B 버튼 배치)
+    await user.click(await screen.findByRole('button', { name: '큐시트로 내보내기' }))
     // RB27에는 큐시트가 1건뿐이라 자동 선택된다 — 명시적으로도 골라 견고하게 만든다
     const select = await screen.findByLabelText('대상 큐시트')
     await user.selectOptions(select, CUE_ID)
@@ -198,13 +226,11 @@ describe('읽기 전용(canEdit=false) — §10.2', () => {
     expect(screen.queryByRole('button', { name: '삭제' })).toBeNull()
     expect(screen.queryByRole('button', { name: '위로' })).toBeNull()
     expect(screen.queryByRole('button', { name: '아래로' })).toBeNull()
-    expect(screen.queryByText('진행 블록 추가')).toBeNull()
+    expect(screen.queryByText(/\+ 진행 블록/)).toBeNull()
     expect(screen.queryByText('큐시트로 내보내기')).toBeNull()
     expect(screen.queryByRole('button', { name: '프로그램표에서 뼈대 만들기' })).toBeNull()
 
-    // 대본 열람은 읽기 전용에서도 가능(canEdit=false는 편집 UI만 숨긴다)
-    const videoRow = screen.getAllByText('영상')[0].closest('tr')!
-    await userEvent.click(within(videoRow).getByRole('button', { name: '대본' }))
-    expect(await screen.findByText(/오프닝 인트로 영상 재생/)).toBeTruthy()
+    // 대본 열람은 읽기 전용에서도 가능 — 3.16.4부터는 클릭 없이 행에 인라인 노출된다
+    expect(screen.getByText(/오프닝 인트로 영상 재생/)).toBeTruthy()
   })
 })

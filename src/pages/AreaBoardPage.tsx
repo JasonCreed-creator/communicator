@@ -471,10 +471,10 @@ function BoardRowItem({
               <CuesheetEditor deliverableId={deliverable.id} canEdit={canEditBuilder} />
             )}
             {deliverable.category === '시나리오' && (
-              <ScenarioBuilder deliverableId={deliverable.id} canEdit={canEditBuilder} />
+              <ScenarioBuilder deliverableId={deliverable.id} canEdit={canEditBuilder} onStatusChanged={onChanged} />
             )}
             {deliverable.category === '운영가이드' && (
-              <GuideBuilder deliverableId={deliverable.id} canEdit={canEditBuilder} />
+              <GuideBuilder deliverableId={deliverable.id} canEdit={canEditBuilder} onStatusChanged={onChanged} />
             )}
           </div>
         </div>

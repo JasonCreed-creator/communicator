@@ -2,13 +2,16 @@ import { useState, type FormEvent } from 'react'
 import ErrorAlert from '../internal/ErrorAlert'
 import { renderLiteMarkdown } from '../plan/markdown'
 import { useMutation } from '../../hooks/useAsync'
-import { SCENARIO_KIND_LABELS } from '../../lib/labels'
+import { SCENARIO_KIND_CHIP_CLASSES, SCENARIO_KIND_LABELS } from '../../lib/labels'
 import type { ProgramSession, ScenarioBlock } from '../../types/entities'
 import ScenarioBlockForm from './ScenarioBlockForm'
 import { toFormValues, type ScenarioBlockFormValues } from './scenarioFormValues'
 
-/** 시각·구분·대본·비고·액션 = 5열 (편집 폼·대본 전문 패널이 colSpan으로 펼쳐질 때 기준) */
+/** 시각·구분·대본·비고·편집 = 5열 (편집 폼·대본 전문 패널이 colSpan으로 펼쳐질 때 기준) */
 const COLS = 5
+
+/** 3.16.4 화면 B — 인라인 노출 한도. 이보다 길거나 줄바꿈이 있으면 "풀 멘트 펼침 ▾"로 접는다. */
+const INLINE_SCRIPT_LIMIT = 72
 
 interface ScenarioBlockRowProps {
   block: ScenarioBlock
@@ -25,12 +28,16 @@ interface ScenarioBlockRowProps {
   onSave: (blockId: string, values: ScenarioBlockFormValues) => Promise<ScenarioBlock[]>
   onDelete: (blockId: string) => Promise<ScenarioBlock[]>
   onChanged: () => void
-  /** 대본 전문 패널 펼침 여부 — 인쇄 시 전 블록을 펼쳐야 하므로 부모(ScenarioBuilder)가 관리한다 */
+  /** 풀 멘트(대본 전문) 패널 펼침 여부 — 인쇄 시 전 블록을 펼쳐야 하므로 부모(ScenarioBuilder)가 관리한다 */
   scriptOpen: boolean
   onToggleScript: () => void
 }
 
-/** 시나리오 빌더 — 진행 블록 1행. 보기/인라인 편집/대본 전문 패널 3모드를 오간다(CueRow 패턴 준용). */
+/**
+ * 시나리오 빌더 — 진행 블록 1행 (3.16.4 목업 화면 B 정합).
+ * 대본은 행에 직접 노출하고, 장문만 "풀 멘트 펼침 ▾"로 전문 패널을 연다(읽기 우선 구성).
+ * 편집·이동·삭제 액션은 우측 편집 열에 유지(인쇄 숨김).
+ */
 export default function ScenarioBlockRow({
   block,
   sessions,
@@ -90,25 +97,36 @@ export default function ScenarioBlockRow({
     )
   }
 
+  const script = block.script ?? ''
+  const flatScript = script.replace(/\s+/g, ' ').trim()
+  const isLong = script.includes('\n') || flatScript.length > INLINE_SCRIPT_LIMIT
+
   return (
     <>
-      <tr className="h-11 hover:bg-accent-tint/30">
+      <tr className="hover:bg-accent-tint/30">
         <td className="py-2 pr-3 align-top text-ink-sub whitespace-nowrap">{block.time ?? '—'}</td>
         <td className="py-2 pr-3 align-top">
-          <span className="t-caption inline-block whitespace-nowrap rounded-full bg-canvas px-2 py-0.5">
+          <span
+            className={`inline-block whitespace-nowrap rounded-md px-2 py-0.5 text-[11px] font-semibold ${SCENARIO_KIND_CHIP_CLASSES[block.kind]}`}
+          >
             {SCENARIO_KIND_LABELS[block.kind]}
           </span>
         </td>
-        <td className="py-2 pr-3 align-top text-ink-sub">
-          {block.script ? (
-            <button
-              type="button"
-              onClick={onToggleScript}
-              aria-expanded={scriptOpen}
-              className="text-xs font-medium text-steel underline underline-offset-2"
-            >
-              대본
-            </button>
+        <td className="py-2 pr-3 align-top text-sm text-ink">
+          {flatScript ? (
+            <>
+              {isLong ? `${flatScript.slice(0, INLINE_SCRIPT_LIMIT)}…` : flatScript}{' '}
+              {isLong && (
+                <button
+                  type="button"
+                  onClick={onToggleScript}
+                  aria-expanded={scriptOpen}
+                  className="plan-print-hidden whitespace-nowrap text-xs font-medium text-steel underline underline-offset-2"
+                >
+                  {scriptOpen ? '풀 멘트 접기 ▴' : '풀 멘트 펼침 ▾'}
+                </button>
+              )}
+            </>
           ) : (
             <span className="text-ink-cap">—</span>
           )}
@@ -153,15 +171,15 @@ export default function ScenarioBlockRow({
           <ErrorAlert message={remove.error} />
         </td>
       </tr>
-      {scriptOpen && (
+      {scriptOpen && isLong && (
         <tr>
           <td colSpan={COLS} className="px-3 py-3">
             {/* 카드 안 카드 금지 — 면 분리는 canvas 인셋으로 */}
             <div className="rounded-lg bg-canvas p-3">
               <p className="mb-1 text-xs font-semibold text-ink-sub">
-                대본 전문 — {block.note ?? SCENARIO_KIND_LABELS[block.kind]}
+                풀 멘트 — {block.note ?? SCENARIO_KIND_LABELS[block.kind]}
               </p>
-              {block.script ? renderLiteMarkdown(block.script) : <p className="text-xs text-ink-cap">작성된 대본이 없습니다.</p>}
+              {renderLiteMarkdown(script)}
             </div>
           </td>
         </tr>

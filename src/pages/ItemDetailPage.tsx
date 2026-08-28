@@ -144,6 +144,7 @@ function ItemDetail({ itemId }: { itemId: string }) {
             status={d.status}
             category={d.category}
             autoSnapshotDoc={isStructuredPanel}
+            sendViaHeader={isBuilderDoc}
             requiresApproval={d.requires_approval}
             versions={d.versions}
             isPm={isPm}
@@ -162,9 +163,9 @@ function ItemDetail({ itemId }: { itemId: string }) {
           {isCuesheet ? (
             <CuesheetEditor deliverableId={d.id} canEdit={canEditCue} />
           ) : isBuilderDoc && isScenarioDoc ? (
-            <ScenarioBuilder deliverableId={d.id} canEdit={canEditCue} />
+            <ScenarioBuilder deliverableId={d.id} canEdit={canEditCue} onStatusChanged={detail.reload} />
           ) : isBuilderDoc ? (
-            <GuideBuilder deliverableId={d.id} canEdit={canEditCue} />
+            <GuideBuilder deliverableId={d.id} canEdit={canEditCue} onStatusChanged={detail.reload} />
           ) : (
             <VersionUploadForm deliverableId={d.id} canWrite={canWriteArea} onUploaded={detail.reload} />
           )}
@@ -347,6 +348,7 @@ function StatusActionBar({
   status,
   category,
   autoSnapshotDoc,
+  sendViaHeader = false,
   requiresApproval,
   versions,
   isPm,
@@ -362,6 +364,9 @@ function StatusActionBar({
   /** v2.5 §23 — 발송 시 provider가 인쇄 스냅숏을 자동 버전 등록하는 정형 문서
    *  (큐시트, 그리고 빌더 데이터가 있는 시나리오·운영가이드 — R-O2 doc-snapshot) */
   autoSnapshotDoc: boolean
+  /** 3.16.4 — 시나리오·운영가이드 빌더 문서는 컨펌 발송을 문서 헤더(StructuredDocHeader)가
+   *  담당한다. true면 이 카드에서 발송 폼을 그리지 않는다(중복 노출 정리 — 반려·안내는 유지) */
+  sendViaHeader?: boolean
   requiresApproval: boolean
   versions: Version[]
   isPm: boolean
@@ -474,6 +479,10 @@ function StatusActionBar({
             <p className="border-t border-border pt-4 text-xs text-ink-cap">
               주최형 행사는 이 화면에서 발주처 컨펌을 발송하지 않습니다
               {hasPartner ? ' — 파트너 제출 항목은 파트너 보드에서 검토하세요.' : '.'}
+            </p>
+          ) : sendViaHeader ? (
+            <p className="border-t border-border pt-4 text-xs text-ink-cap">
+              컨펌 발송은 아래 문서 헤더의 [컨펌 발송] 버튼으로 진행합니다.
             </p>
           ) : requiresApproval ? (
             <form onSubmit={handleRequestApproval} className="space-y-2 border-t border-border pt-4">
