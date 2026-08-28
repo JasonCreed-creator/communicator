@@ -14,6 +14,7 @@
     "demo:check:routing": "vitest run --config demo/verify/vitest.config.ts",
     "demo:check:browser": "node demo/verify/browser-check.mjs",
     "demo:serve": "node demo/verify/serve.mjs",
+    "demo:smoke": "node demo/verify/interaction-smoke.mjs",
     "demo": "npm run demo:build && npm run demo:check && npm run demo:check:routing && npm run demo:check:browser"
   },
   "dependencies": {

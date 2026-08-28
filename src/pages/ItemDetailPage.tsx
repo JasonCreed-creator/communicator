@@ -204,7 +204,9 @@ function ItemDetail({ itemId }: { itemId: string }) {
           </Card>
         </div>
 
-        {!isCuesheet && (
+        {/* 3.16.3 T3② — 정형 문서(큐시트·빌더)는 메타가 상단 스트립에 이미 있으므로
+            하단(1단 폴드 아래) 메타·버전 카드를 그리지 않는다(중복 제거). 레거시 파일 문서는 유지 */}
+        {!isStructuredPanel && (
         <aside className="space-y-6">
           <div className="ui-card space-y-4 p-5">
             <div>

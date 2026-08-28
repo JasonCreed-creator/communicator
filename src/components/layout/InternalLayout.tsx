@@ -99,9 +99,10 @@ function SidebarLink({
   return (
     <NavLink to={to} end={end} onClick={onNavigate} className="block">
       {({ isActive }) => (
+        // 3.16.3 T2 — 비활성 항목 hover 배경 하이라이트(다크 사이드바 규격). 활성 항목은 현행 유지
         <span
           className={`relative flex items-center gap-2.5 px-5 py-2 text-sm transition-colors ${
-            isActive ? 'font-medium text-dark-ink' : 'text-dark-ink/70 hover:text-dark-ink'
+            isActive ? 'font-medium text-dark-ink' : 'text-dark-ink/70 hover:bg-dark-ink/10 hover:text-dark-ink'
           }`}
         >
           {isActive && (
