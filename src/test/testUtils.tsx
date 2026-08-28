@@ -13,6 +13,7 @@ import OnboardingGuard from '../components/onboarding/OnboardingGuard'
 import { ProjectProvider } from '../context/ProjectContext'
 import AreaBoardPage from '../pages/AreaBoardPage'
 import ClientConfirmQueuePage from '../pages/ClientConfirmQueuePage'
+import ClientMaterialsPage from '../pages/ClientMaterialsPage'
 import ClientStatusPage from '../pages/ClientStatusPage'
 import HomeDashboardPage from '../pages/HomeDashboardPage'
 import ItemDetailPage from '../pages/ItemDetailPage'
@@ -88,6 +89,7 @@ export function renderRoute(path: string) {
         <Route path="/c/:token" element={<ClientLayout />}>
           <Route index element={<ClientConfirmQueuePage />} />
           <Route path="status" element={<ClientStatusPage />} />
+          <Route path="materials" element={<ClientMaterialsPage />} />
         </Route>
 
         {/* v2.0 §10 — 옛 Configurator 라우트 리다이렉트 (App.tsx와 동일 구성) */}
