@@ -131,18 +131,20 @@ check(
   `${docCountBefore} → ${docRequests.length}`,
 )
 
-// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — 3.16.3: S9 존별 운영 단일 표시(T3①) ──
-await tab.getByRole('link', { name: /운영계획서/ }).click()
-await tab.waitForURL(/#\/plan/, { timeout: 10_000 })
-const zonesHeading = tab.getByRole('heading', { name: /존별 운영/ })
-await zonesHeading.waitFor({ timeout: 10_000 })
-const zonesSection = tab.locator('section', { has: zonesHeading }).last()
-await zonesSection.getByText('운영가이드 존 섹션').waitFor({ timeout: 10_000 })
-// 존운영 항목은 <article>로 그려진다 — 가이드 존 섹션이 정본이면 article 0건이어야 한다
-const dupCount = await zonesSection.locator('article').count()
-check(dupCount === 0, 'S9 ④존별 운영 — 가이드 존 섹션 단일 표시(이중 렌더 0)', `존운영 원본 항목 article ${dupCount}건`)
-await zonesSection.scrollIntoViewIfNeeded()
-await tab.screenshot({ path: resolve(SHOTS, '03-plan-zones-single.png') })
+// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — 3.16.4: 시나리오 카드 → 빌더 열기 →
+//     세션 카드·인라인 대본 표시(목업 화면 B 정합, T1) ──
+await tab.getByRole('link', { name: /운영 보드/ }).click()
+await tab.waitForURL(/#\/board\/ops/, { timeout: 10_000 })
+await tab.getByTestId('ops-doc-card-scenario').getByRole('button', { name: /시나리오/ }).click()
+await tab.getByRole('button', { name: '빌더 열기' }).first().click()
+// 빌더 헤더(시나리오 — 문서명) + 세션 카드(프로그램표 연동 배지) + 대본 인라인 노출
+await tab.getByRole('heading', { name: /시나리오 — 진행 시나리오/ }).waitFor({ timeout: 10_000 })
+const linkBadges = await tab.getByText('프로그램표 연동').count()
+check(linkBadges >= 3, '세션 카드 — 프로그램표 연동 배지', `${linkBadges}개(RB27 3세션)`)
+const inlineScript = await tab.getByText(/MC 무대 인사 및 오프닝 키노트 세션 소개/).count()
+check(inlineScript >= 1, '대본 인라인 노출(토글 클릭 없이 본문 표시)', `${inlineScript}건`)
+await tab.getByRole('heading', { name: /시나리오 — 진행 시나리오/ }).scrollIntoViewIfNeeded()
+await tab.screenshot({ path: resolve(SHOTS, '03-scenario-builder-inline.png') })
 
 await browser.close()
 server.close()
