@@ -10,7 +10,7 @@ import ProgressBar from '../components/internal/ProgressBar'
 import CompletionNotice from '../components/onboarding/CompletionNotice'
 import EventTypeStep from '../components/onboarding/EventTypeStep'
 import StepIndicator, { type WizardStep } from '../components/onboarding/StepIndicator'
-import { countMissingRequired } from '../components/onboarding/requiredFields'
+import { missingRequired } from '../components/settings/requiredFields'
 import ClientContactsEditor from '../components/settings/ClientContactsEditor'
 import MembersEditor from '../components/settings/MembersEditor'
 import ProjectOverviewForm from '../components/settings/ProjectOverviewForm'
@@ -53,7 +53,7 @@ export default function OnboardingPage() {
   // 시안(온보딩 · 파트너 포털.dc.html) — 카드 상단 전체 진행 막대 + 필수 남은 개수.
   // '완료 단계'는 현재 단계 직전까지(③에 있으면 2/3 = 67%), 필수는 행사 설정과 같은 4항목 기준.
   const doneSteps = step - 1
-  const missingRequired = countMissingRequired(project.data ?? null)
+  const missingCount = missingRequired(project.data ?? {}).length
 
   return (
     <div className="min-h-screen bg-canvas px-4 py-10">
@@ -75,7 +75,7 @@ export default function OnboardingPage() {
               <ProgressBar done={doneSteps} total={STEPS.length} hideValue />
             </div>
             <span className="shrink-0 whitespace-nowrap text-xs font-medium text-ink-sub">
-              {STEPS.length}단계 중 {doneSteps}단계 완료 · 필수 {missingRequired}개 남음
+              {STEPS.length}단계 중 {doneSteps}단계 완료 · 필수 {missingCount}개 남음
             </span>
           </div>
         )}
