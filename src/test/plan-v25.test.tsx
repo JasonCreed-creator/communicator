@@ -16,23 +16,26 @@ describe('v2.5 S9 ⑦비상 대응 — RE:BUILD 27', () => {
     localStorage.setItem('communicator.currentProjectId', PROJECT_ID_REBUILD27)
     renderRoute('/plan')
 
-    const heading = await screen.findByRole('heading', { name: '⑦비상 대응' })
+    const heading = await screen.findByRole('heading', { name: '07 비상 대응' })
     const section = heading.closest('section')!
     // guideAssembly.EMERGENCY_SECTION_PLACEHOLDER 원문의 일부
     expect(within(section).getByText(/1차 대응자와 절차를 작성하세요/)).toBeTruthy()
   })
 
-  it('(b) 진행률 요약(PlanProgressSummary)에도 ⑦비상 대응이 노출된다', async () => {
+  it('(b) 목차 레일(옛 PlanProgressSummary)에도 07 비상 대응이 노출된다', async () => {
     localStorage.setItem('communicator.currentProjectId', PROJECT_ID_REBUILD27)
     renderRoute('/plan')
-    await screen.findByRole('heading', { name: '⑦비상 대응' })
-    expect(screen.getByText('⑦ 비상 대응')).toBeTruthy()
+    await screen.findByRole('heading', { name: '07 비상 대응' })
+    // v2.5.2 정렬 — 진행률 요약 6칸 그리드를 좌측 고정 목차 레일이 대체했다(의미 유지)
+    const toc = screen.getByRole('navigation', { name: '운영계획서 목차' })
+    expect(within(toc).getByText('비상 대응')).toBeTruthy()
+    expect(within(toc).getByText('07')).toBeTruthy()
   })
 
   it('(c) 인쇄 시 숨김 대상이 아니다 — plan-section 구조 계약(page-break 회피) 적용', async () => {
     localStorage.setItem('communicator.currentProjectId', PROJECT_ID_REBUILD27)
     renderRoute('/plan')
-    const heading = await screen.findByRole('heading', { name: '⑦비상 대응' })
+    const heading = await screen.findByRole('heading', { name: '07 비상 대응' })
     const section = heading.closest('section')!
     expect(section.className).toContain('plan-section')
     expect(section.className).not.toContain('plan-print-hidden')
@@ -85,12 +88,12 @@ describe('v2.5 회귀 — 샘플 테크(prj-stc26, 시나리오·운영가이드
 
     await screen.findByRole('heading', { name: /행사개요/ })
     expect(screen.getByRole('heading', { name: /프로그램/ })).toBeTruthy()
-    expect(screen.getByRole('heading', { name: '③큐시트' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: '03 큐시트' })).toBeTruthy()
     expect(screen.getByRole('heading', { name: /존별 운영/ })).toBeTruthy()
     expect(screen.getByRole('heading', { name: /제작물 리스트/ })).toBeTruthy()
     expect(screen.getByRole('heading', { name: /등록 통계/ })).toBeTruthy()
     // v2.5 신설 — 운영가이드 항목이 없어 emergency는 null이지만 섹션 자체는 항상 렌더된다(빈 상태)
-    const emergencyHeading = screen.getByRole('heading', { name: '⑦비상 대응' })
+    const emergencyHeading = screen.getByRole('heading', { name: '07 비상 대응' })
     const emergencySection = emergencyHeading.closest('section')!
     expect(within(emergencySection).getByText('등록된 운영가이드 항목이 없습니다.')).toBeTruthy()
     expect(screen.getByRole('heading', { name: /일정/ })).toBeTruthy()

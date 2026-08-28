@@ -7,7 +7,8 @@ import { getDataProvider } from '../../providers'
 import type { ProgramSession, ScenarioBlock } from '../../types/entities'
 import type { PlanScenarioSection, ProgramSessionInput } from '../../types/views'
 import PlanSection from './PlanSection'
-import { PLAN_SECTION_META, type SectionProgressData } from './planSections'
+import PrintExcludedChip from './PrintExcludedChip'
+import { type SectionProgressData } from './planSections'
 
 const provider = getDataProvider()
 
@@ -59,7 +60,7 @@ export default function ProgramSection({ sessions, progress, canEdit, onChanged,
   const blocksBySession = groupBlocksBySession(scenario)
 
   return (
-    <PlanSection number={PLAN_SECTION_META.program.number} title={PLAN_SECTION_META.program.title} progress={progress}>
+    <PlanSection sectionKey="program" progress={progress}>
       {sessions.length === 0 && <p className="text-xs text-ink-cap">등록된 세션이 없습니다.</p>}
       <div className="space-y-5">
         {grouped.map(([section, rows]) => (
@@ -370,7 +371,10 @@ function ProgramAddForm({ onCreated }: { onCreated: () => void }) {
 
   return (
     <div className="plan-print-hidden mt-4 border-t border-border pt-4">
-      <p className="mb-2 t-caption">세션 추가</p>
+      <div className="mb-2 flex items-center gap-2.5">
+        <p className="t-caption">세션 추가</p>
+        <PrintExcludedChip />
+      </div>
       <ProgramFieldsForm
         values={values}
         onChange={(p) => setValues((v) => ({ ...v, ...p }))}

@@ -15,7 +15,7 @@ describe('DoD 38 — S9 확장', () => {
     localStorage.setItem('communicator.currentProjectId', PROJECT_ID_REBUILD27)
     renderRoute('/plan')
 
-    const heading = await screen.findByRole('heading', { name: '⑦비상 대응' })
+    const heading = await screen.findByRole('heading', { name: '07 비상 대응' })
     const section = heading.closest('section')!
     expect(section.className).toContain('plan-section')
     expect(section.className).not.toContain('plan-print-hidden')
@@ -40,7 +40,7 @@ describe('DoD 38 — S9 확장', () => {
 
     localStorage.setItem('communicator.currentProjectId', PROJECT_ID)
     renderRoute('/plan')
-    await screen.findByRole('heading', { name: '⑦비상 대응' })
+    await screen.findByRole('heading', { name: '07 비상 대응' })
     expect(screen.queryByText('진행 시나리오 펼침')).toBeNull()
   })
 
@@ -49,7 +49,7 @@ describe('DoD 38 — S9 확장', () => {
     renderRoute('/plan')
 
     await screen.findByRole('heading', { name: /행사개요/ })
-    for (const name of [/프로그램/, '③큐시트', /존별 운영/, /제작물 리스트/, /등록 통계/, /일정/]) {
+    for (const name of [/프로그램/, '03 큐시트', /존별 운영/, /제작물 리스트/, /등록 통계/, /일정/]) {
       expect(screen.getByRole('heading', { name })).toBeTruthy()
     }
   })

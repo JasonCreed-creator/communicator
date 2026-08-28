@@ -119,7 +119,7 @@ describe('DoD-12 큐시트 정형 에디터', () => {
   it('(e) /plan 렌더 시 ③큐시트 섹션에 변경사항(편집·추가·정렬)이 즉시 반영된다', async () => {
     renderRoute('/plan')
 
-    const cuesheetSection = (await screen.findByRole('heading', { name: '③큐시트' })).closest('section')!
+    const cuesheetSection = (await screen.findByRole('heading', { name: '03 큐시트' })).closest('section')!
     expect(within(cuesheetSection).getByText('09:15')).toBeTruthy() // (c) 편집 반영
     expect(within(cuesheetSection).getByText('C05')).toBeTruthy() // (b) 추가 반영
     expect(within(cuesheetSection).getByText('VIP 소개')).toBeTruthy()
