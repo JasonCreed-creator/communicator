@@ -1,6 +1,8 @@
 import { useState, type ChangeEvent, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import CuesheetEditor from '../components/cue/CuesheetEditor'
+import GuideBuilder from '../components/guide/GuideBuilder'
+import ScenarioBuilder from '../components/scenario/ScenarioBuilder'
 import BriefCard from '../components/internal/BriefCard'
 import Card from '../components/internal/Card'
 import DdayBadge from '../components/internal/DdayBadge'
@@ -48,6 +50,18 @@ function ItemDetail({ itemId }: { itemId: string }) {
   const detail = useAsync(() => provider.getDeliverable(itemId), [itemId])
   // v2.4 §10.1 — 주최형에서는 발주처 컨펌 발송 UI를 숨긴다(파트너 항목이든 아니든, DoD 31)
   const isHost = project.data?.kind === 'host'
+  // v2.5 §23 — 시나리오·운영가이드 빌더 문서 판정 재료. 카테고리 문자열만으로는 부족하다:
+  // v2.5 이전의 자유 카테고리 '시나리오' 항목(예: 샘플 dlv-005)은 파일 흐름을 유지해야
+  // 한다(R-O1 무손실). provider의 requestApproval 자동 스냅숏 판정과 같은 기준 — 빌더 행이
+  // 있거나 파일 버전이 아직 없는 정형 문서만 빌더 모드다. 카테고리 불일치 조회는 409를
+  // 던지므로 0건으로 흡수한다.
+  const builderRows = useAsync(async () => {
+    const [blocks, sections] = await Promise.all([
+      provider.listScenarioBlocks(itemId).catch(() => []),
+      provider.listGuideSections(itemId).catch(() => []),
+    ])
+    return blocks.length + sections.length
+  }, [itemId])
 
   if (detail.error) {
     return (
@@ -70,7 +84,25 @@ function ItemDetail({ itemId }: { itemId: string }) {
   const isPm = role === 'pm'
   // v1.3 큐시트: category='큐시트' 항목은 파일 대신 정형 표 에디터 — 편집은 pm·ops 전용(§6.1)
   const isCuesheet = d.category === '큐시트'
+  // v2.5 §23 — 시나리오·운영가이드 빌더 모드(위 builderRows 주석의 판정 기준)
+  const isScenarioDoc = d.category === '시나리오'
+  const isGuideDoc = d.category === '운영가이드'
+  const isBuilderDoc =
+    (isScenarioDoc || isGuideDoc) && ((builderRows.data ?? 0) > 0 || d.versions.length === 0)
+  // 정형 문서 공통 레이아웃(1단 전폭 + 메타 스트립) — 큐시트(3.9.1 P1)와 동일 취급
+  const isStructuredPanel = isCuesheet || isBuilderDoc
+  // 큐시트·빌더 편집 권한은 동일하게 pm·ops(§6.1·§8.2)
   const canEditCue = role === 'pm' || role === 'ops'
+
+  // 판정 재료(builderRows)가 오기 전에 파일 폼을 잠깐 그렸다가 빌더로 바꾸면 화면이 튄다 —
+  // 정형 2종 카테고리에서만 로딩을 기다린다(그 외 카테고리는 판정과 무관).
+  if ((isScenarioDoc || isGuideDoc) && builderRows.data === undefined) {
+    return (
+      <section className="p-6">
+        <p className="text-sm text-ink-cap">불러오는 중…</p>
+      </section>
+    )
+  }
   const memberName = (userId: string | null) =>
     members.data?.find((m) => m.user_id === userId)?.profile.name ?? (userId ? userId : '미배정')
 
@@ -90,11 +122,11 @@ function ItemDetail({ itemId }: { itemId: string }) {
           가로 스트립 카드로 재배치(버전 이력은 최신 1건 + 전체 보기 토글). */}
       <div
         className={`grid grid-cols-1 gap-6 ${
-          isCuesheet ? '' : 'lg:grid-cols-[minmax(0,660px)_300px]'
+          isStructuredPanel ? '' : 'lg:grid-cols-[minmax(0,660px)_300px]'
         }`}
       >
         <div className="min-w-0 space-y-6">
-          {isCuesheet && (
+          {isStructuredPanel && (
             <CuesheetMetaStrip
               status={d.status}
               assigneeName={memberName(d.assignee_id)}
@@ -111,6 +143,7 @@ function ItemDetail({ itemId }: { itemId: string }) {
             deliverableId={d.id}
             status={d.status}
             category={d.category}
+            autoSnapshotDoc={isStructuredPanel}
             requiresApproval={d.requires_approval}
             versions={d.versions}
             isPm={isPm}
@@ -128,6 +161,10 @@ function ItemDetail({ itemId }: { itemId: string }) {
 
           {isCuesheet ? (
             <CuesheetEditor deliverableId={d.id} canEdit={canEditCue} />
+          ) : isBuilderDoc && isScenarioDoc ? (
+            <ScenarioBuilder deliverableId={d.id} canEdit={canEditCue} />
+          ) : isBuilderDoc ? (
+            <GuideBuilder deliverableId={d.id} canEdit={canEditCue} />
           ) : (
             <VersionUploadForm deliverableId={d.id} canWrite={canWriteArea} onUploaded={detail.reload} />
           )}
@@ -307,6 +344,7 @@ function StatusActionBar({
   deliverableId,
   status,
   category,
+  autoSnapshotDoc,
   requiresApproval,
   versions,
   isPm,
@@ -319,6 +357,9 @@ function StatusActionBar({
   deliverableId: string
   status: string
   category: string
+  /** v2.5 §23 — 발송 시 provider가 인쇄 스냅숏을 자동 버전 등록하는 정형 문서
+   *  (큐시트, 그리고 빌더 데이터가 있는 시나리오·운영가이드 — R-O2 doc-snapshot) */
+  autoSnapshotDoc: boolean
   requiresApproval: boolean
   versions: Version[]
   isPm: boolean
@@ -330,8 +371,9 @@ function StatusActionBar({
   lastChangesRequestedComment: string | null
   onChanged: () => void
 }) {
-  // v1.3 큐시트: 발송 시 provider(requestApproval)가 표를 .pdf 스냅숏으로 자동 버전 등록하고
-  // version_id는 무시한다 — 버전 선택 셀렉트 대신 안내 문구로 대체한다.
+  // v1.3→v2.5 정형 문서(autoSnapshotDoc): 발송 시 provider(requestApproval)가 문서를 .pdf
+  // 스냅숏으로 자동 버전 등록하고 version_id는 무시한다 — 버전 선택 셀렉트 대신 안내 문구로
+  // 대체한다. 안내 문구만 큐시트("표")와 빌더 문서("인쇄 스냅숏")로 나눠 쓴다.
   const isCuesheet = category === '큐시트'
   const toReview = useMutation(() => provider.transitionStatus(deliverableId, 'internal_review'))
   const [rejectComment, setRejectComment] = useState('')
@@ -342,10 +384,10 @@ function StatusActionBar({
   const [dueAt, setDueAt] = useState('')
   const requestApproval = useMutation(() =>
     provider.requestApproval(deliverableId, {
-      // 큐시트 항목은 DataProvider가 version_id를 무시하고 createCueSnapshot으로 대체한다.
+      // 정형 문서는 DataProvider가 version_id를 무시하고 createDocSnapshot으로 대체한다.
       // 동결된 RequestApprovalInput이 version_id를 필수로 요구해 관례상 리터럴 'auto'를 보낸다
-      // (§8 cue-snapshot 전처리 — MockProvider.requestApproval 참조).
-      version_id: isCuesheet ? 'auto' : versionId,
+      // (§8 doc-snapshot 전처리 — MockProvider.requestApproval 참조).
+      version_id: autoSnapshotDoc ? 'auto' : versionId,
       due_at: dueAt ? new Date(dueAt).toISOString() : undefined,
     }),
   )
@@ -367,7 +409,7 @@ function StatusActionBar({
 
   const handleRequestApproval = async (e: FormEvent) => {
     e.preventDefault()
-    if (!isCuesheet && !versionId) {
+    if (!autoSnapshotDoc && !versionId) {
       requestApproval.setError('발송할 버전을 선택하세요.')
       return
     }
@@ -438,6 +480,10 @@ function StatusActionBar({
                 {isCuesheet ? (
                   <p className="max-w-xs text-xs text-ink-sub">
                     발송 시 표의 스냅숏(.pdf)이 자동 버전으로 등록됩니다.
+                  </p>
+                ) : autoSnapshotDoc ? (
+                  <p className="max-w-xs text-xs text-ink-sub">
+                    발송 시 인쇄 스냅숏(.pdf)이 자동 버전으로 등록됩니다.
                   </p>
                 ) : (
                   <label className="flex flex-col gap-1 t-caption">

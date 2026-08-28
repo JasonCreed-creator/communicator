@@ -3,6 +3,21 @@
 > 가변 상태 파일. 매 세션 체크아웃 시 에이전트가 갱신한다 (CLAUDE.md §9 리추얼).
 
 ## 1. 상태 요약
+- **완료: Phase 3.16 — v2.5 운영보드 재구성(문서 유형 우선 + 시나리오·운영가이드 빌더)** (브랜치
+  `claude/new-session-cf31uu` → **PR #27(draft) — 챗 검수 대기**, 2026-08-28. AE 직렬 → AF·AG·AH
+  병렬, 메인이 스텁 선배선·S3 배선·DoD 코드화). ① 3.16a 타입 §23.1 1:1(`ScenarioBlock`·
+  `GuideSection`)·정형 카테고리 3종 상수화·**DataProvider v9 재동결(8메서드 추가 · 110메서드,
+  importVendorQuote는 v10 예약 유지)**·cue-snapshot→doc-snapshot 위임(R-O2)·getPlan 확장
+  (⑦emergency·②scenario·③guide_zone, R-O6 contacts 미조립)·§23.4 RB27 픽스처(시나리오 3그룹
+  8블록·가이드 4섹션 stale 1) ② 3.16b ops 보드 유형 카드 4종+인라인 빌더 펼침+"+ 항목 추가"
+  카테고리→빌더 직결(P7 완성형)·R-O1 표시 레벨 분류(디자인 보드 무변경) ③ 3.16c 시나리오 빌더
+  (세션 그룹·블록 행·시드 R-O3·큐 내보내기 R-O5·인쇄) ④ 3.16d 운영가이드 빌더(4섹션 시드·stale
+  차이 확인→반영 R-O4·R-O6 인쇄 기본 제외)+S9 ⑦비상 대응 신설·②시나리오 펼침·③존운영 확장.
+  **레거시 판정 주의**: v2.5 이전 자유 카테고리 '시나리오'(샘플 dlv-005)는 **빌더 행 보유 또는
+  버전 0건**일 때만 빌더 모드(provider·S3·보드 동일 기준 — DoD-1 파일 흐름 보존).
+  결과: vitest **680개**(3.15.1 기준 612 + AE 26 + AF 7 + AG 6 + AH 14 + DoD35~38 15)
+  **연속 3회+ 무실패** · tsc 클린 · vite build · `npm run demo` 4단(no-charset 포함) ·
+  상시 grep 가드 5종 프로덕션 0건 · 스크린샷 5장 · **데모 아티팩트 기존 URL 재발행 완료**
 - **완료: Phase 3.15.1 — 챗 감수(2026-08-27, ⚠️ 조건부 보완) 후속 폴리시 P1~P9** (브랜치
   `claude/phase-3-15-1-polish` → **PR #26 머지, main `8a359d3`** — 사용자 지시 2026-08-28
   "머지하고 새로운 세션에서 이어 진행". 머지본 main 재검증: tsc 클린 · demo 4단 통과 ·
@@ -96,6 +111,23 @@
   전 청크 인라인) 산출을 기존 URL에 재배포. 하위 경로 서빙 실측 검증(5개 라우트 렌더·외부 요청 0건)
 
 ## 2. 완료
+- **Phase 3.16 — v2.5 운영보드 재구성** (2026-08-28, 이 세션 — AE 직렬 후 AF·AG·AH 병렬,
+  메인이 빌더 스텁 선배선·S3(ItemDetailPage) 배선·DoD 35~38 코드화·검증·아티팩트 재발행)
+  - 3.16a(AE): `ScenarioBlockKind`·`GuideSectionKind`·`STRUCTURED_DOC_CATEGORIES`, v9 8메서드
+    (list/saveScenarioBlocks·seedScenarioFromProgram·exportScenarioToCues·list/saveGuideSections·
+    seedGuideFromSources·createDocSnapshot(include_contacts 옵션)) MockProvider 구현,
+    §23.3 변환·조립 순수 함수(`src/lib/scenario.ts`·`src/lib/guideAssembly.ts`), stale 훅
+    (createDeliverable의 비정형 ops 추가 → zone 섹션 stale), 공유 라벨·도움말·'운영가이드' 프리셋
+  - 3.16b(AF): ops 보드 유형 카드 4종(건수+최신 상태)·카드 좁히기·행 "빌더 열기" 인라인 패널·
+    생성 직후 자동 오픈 3종 일반화·레거시 파일 문서 보호("파일 문서 — 상세에서 열람")
+  - 3.16c(AG): ScenarioBuilder(벌크 저장 경로 단일화·세션 접기·대본 펼침·인쇄 시 전체 펼침·
+    ScenarioExportPanel 대상 큐시트 선택·변환 건수 배너)
+  - 3.16d(AH): GuideBuilder(4종 카드·마크다운 미리보기·차이 확인 나란히 보기→"반영"만 저장·
+    연락망 포함(인쇄) 체크 기본 꺼짐)+EmergencySection·ProgramSection 시나리오 펼침·
+    ZonesSection 가이드 존 블록·dod9 섹션 수 7→8 의미 유지 갱신
+  - 통합(메인): S3 상세가 정형 3종을 빌더로 렌더(빌더 행/버전 0건 판정·1단 전폭 메타 스트립
+    재사용), StatusActionBar `autoSnapshotDoc` 일반화(version_id 'auto'), DoD 35~38 테스트
+    4파일(15건), 데모 아티팩트 기존 URL 재발행, 스크린샷 5장
 - **Phase 3.15 — v2.4 주최형 확장 + 견적서 임포트** (2026-08-27, 이 세션 — AA 직렬 후 AB·AC·AD 병렬,
   메인이 라우트 셸 선배선·통합·DoD 코드화)
   - 3.15a(AA): 타입 §21.1 1:1·전이표 §5.1 확장(via partner_submit·partner_review, host_inbound 분기
@@ -584,10 +616,12 @@ DoD-29뿐 아니라 **실물 검산 2건에서 바로** 잡힌다(위 표의 "2 
 
 ## 4. 다음 스텝
 - ~~① PR #26(3.15.1) 챗 검수 → 머지~~ → **종결** (사용자 지시 2026-08-28, merge commit `8a359d3`)
-- **(v2.5 현재) Phase 3.16(운영보드 재구성) — 새 세션에서 착수**(사용자 지시): 순서 = 3.16a(AE
-  타입·DataProvider v9 재동결 110메서드) → 3.16b·c·d(AF·AG·AH 병렬), PR 1개, 정본 = 설계서
-  v2.5 §10.2·§23. 기준치 = **머지본 main vitest 612개**. 문서는 이미 v2.5 채택 — 새 세션은
-  문서 교체 커밋 없이 §9 체크인(3줄 복명)부터 시작
+- ~~(v2.5) Phase 3.16(운영보드 재구성) — 새 세션에서 착수~~ → **구현 완료** (2026-08-28 이 세션,
+  브랜치 `claude/new-session-cf31uu` — 기준치 612 → 680, 상태 요약 참조)
+- **(현재) PR #27(Phase 3.16) 챗 검수 → 머지**: draft 상태로 대기. 검수 포인트 = ① AH가 공개한
+  범위 예외(3.16a 픽스처 session_id 자릿수 정정 — `rebuildFixtures.ts`) ② 레거시 판정 기준
+  (빌더 행/버전 0건)의 사후 정본화 ③ RB27 큐시트 실측 1건(§23.4의 "기존 큐시트 2건"에 미달 —
+  임의 추가하지 않음)
 - ~~① PR #25 챗 검수 → 머지~~ → **종결** (사용자 지시 "머지하고 테스트할 수 있게" 2026-08-27 —
   merge commit `22e247f`, 머지본 재검증 통과. 검수에서 되돌릴 것이 나오면 main 위 후속 커밋으로)
 - ~~② 데모 아티팩트 재발행~~ → **종결** (같은 세션에서 재시도 성공 — 기존 URL 유지, Phase 3.15
@@ -999,6 +1033,15 @@ DoD-29뿐 아니라 **실물 검산 2건에서 바로** 잡힌다(위 표의 "2 
   표 min-w 820→936 상향(열 규격 합계와 일치 — 1280 콘텐츠 폭 958 안에서 무스크롤 실측)
 
 ## 6. 세션 로그
+- 2026-08-28 세션 #9: **Phase 3.16 운영보드 재구성** (브랜치 `claude/new-session-cf31uu`,
+  base=main `8a359d3` — 3.15.1 머지본. 문서는 이미 v2.5 채택 상태라 §0 교체 커밋 생략, 체크인
+  복명 후 사용자 승인으로 개시). AE → AF·AG·AH 병렬, 메인 통합. **운영 사고 1건**: 병렬 에이전트
+  (AF)가 조사 중 작업 트리 전체 `git stash/pop/drop`을 실행해 AG·AH 진행 파일이 일시 되돌려짐 —
+  AF가 부분 복원, 메인이 두 에이전트에 즉시 무결성 재검증 지시, 각자 디스크 재확인·md5 검증으로
+  유실 0 확인, 이후 경로 한정 커밋 + WIP 체크포인트 커밋으로 재발 대비. **다음 병렬 세션 규약
+  후보: 에이전트 지시문에 "저장소 전체 git 명령(stash·reset·checkout) 금지" 명문화(이번 세션은
+  사후 지시로 커버)**. 결과: vitest 680 연속 3회+ · tsc · build · demo 4단 · 가드 5종 ·
+  스크린샷 5장 · 데모 아티팩트 재발행 · PR #27(draft) 챗 검수 대기
 - 2026-08-23 세션 #6 계속: **Phase 3.14 정산보드**(설계서 v2.2·CLAUDE.md v2.2 채택 → 3.14a~3.14d).
   사용자 요청의 출발점은 "발주금액을 실시간으로 확인하고 최초 계약 견적 대비 ±를 파악한다"였고,
   마진 식은 사용자가 공유한 실물 내부정산 2건에서 원 단위로 검산해 잠갔다.
