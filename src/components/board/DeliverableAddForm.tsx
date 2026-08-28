@@ -27,6 +27,7 @@ export default function DeliverableAddForm({
   projectId,
   isPm,
   onCreated,
+  presetCategory,
 }: {
   area: DeliverableArea
   projectId: string
@@ -34,6 +35,9 @@ export default function DeliverableAddForm({
   isPm: boolean
   /** 생성 직후 부모(AreaBoardPage)가 보드를 새로고침하고, 카테고리='큐시트'면 인라인 에디터를 연다 */
   onCreated: (created: Deliverable) => void
+  /** P10(3.16 챗 검수 후속) — 운영보드에서 유형 카드가 선택된 상태면 그 카테고리를
+   *  폼을 여는 시점에 프리셀렉트한다(사용자가 언제든 바꿀 수 있는 초깃값일 뿐이다). */
+  presetCategory?: string
 }) {
   const [expanded, setExpanded] = useState(false)
 
@@ -50,6 +54,7 @@ export default function DeliverableAddForm({
       area={area}
       projectId={projectId}
       isPm={isPm}
+      presetCategory={presetCategory}
       onCreated={(created) => {
         onCreated(created)
         setExpanded(false)
@@ -65,16 +70,19 @@ function AddFormBody({
   isPm,
   onCreated,
   onCancel,
+  presetCategory,
 }: {
   area: DeliverableArea
   projectId: string
   isPm: boolean
   onCreated: (created: Deliverable) => void
   onCancel: () => void
+  presetCategory?: string
 }) {
   const members = useAsync(() => provider.listMembers(projectId), [projectId])
   const [guideMode, setGuideMode] = useState(false)
-  const [category, setCategory] = useState('')
+  // P10 — 폼이 열리는 시점(AddFormBody 마운트)의 카드 선택을 초깃값으로만 쓴다
+  const [category, setCategory] = useState(presetCategory ?? '')
   const [title, setTitle] = useState('')
   const [assigneeId, setAssigneeId] = useState('')
   const [dueDate, setDueDate] = useState('')
