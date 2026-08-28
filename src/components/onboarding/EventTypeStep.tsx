@@ -42,14 +42,15 @@ export default function EventTypeStep({
 
   return (
     <div>
-      <fieldset className="space-y-3">
+      {/* 시안 — 2열 유형 카드. 라디오는 유지하고(접근성·기존 계약) 선택 카드에 '선택' 배지를 얹는다 */}
+      <fieldset className="grid gap-2.5 sm:grid-cols-2">
         <legend className="sr-only">행사 유형 선택</legend>
         {OPTIONS.map((opt) => (
           <label
             key={opt.value}
-            className={`flex cursor-pointer items-start gap-3 rounded-lg p-4 text-sm transition-colors ${
+            className={`flex cursor-pointer items-start gap-2.5 rounded-lg p-3.5 text-sm transition-colors ${
               value === opt.value
-                ? 'border-2 border-accent bg-accent-tint'
+                ? 'border border-accent bg-accent-tint'
                 : 'border border-border bg-card hover:border-border-strong'
             }`}
           >
@@ -62,9 +63,16 @@ export default function EventTypeStep({
               disabled={save.pending}
               className="mt-0.5"
             />
-            <span>
-              <span className="block font-semibold text-ink">{opt.title}</span>
-              <span className="mt-0.5 block text-xs text-ink-sub">{opt.desc}</span>
+            <span className="min-w-0 flex-1">
+              <span className="flex items-center justify-between gap-2">
+                <span className="font-semibold text-ink">{opt.title}</span>
+                {value === opt.value && (
+                  <span className="inline-flex shrink-0 items-center rounded-full bg-accent px-1.5 py-0.5 text-[11px] font-semibold text-white">
+                    선택
+                  </span>
+                )}
+              </span>
+              <span className="mt-1 block text-xs leading-relaxed text-ink-sub">{opt.desc}</span>
             </span>
           </label>
         ))}

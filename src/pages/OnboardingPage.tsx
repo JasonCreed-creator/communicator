@@ -6,14 +6,17 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import BrandLogo from '../components/BrandLogo'
 import ErrorAlert from '../components/internal/ErrorAlert'
+import ProgressBar from '../components/internal/ProgressBar'
+import CompletionNotice from '../components/onboarding/CompletionNotice'
 import EventTypeStep from '../components/onboarding/EventTypeStep'
 import StepIndicator, { type WizardStep } from '../components/onboarding/StepIndicator'
+import { countMissingRequired } from '../components/onboarding/requiredFields'
 import ClientContactsEditor from '../components/settings/ClientContactsEditor'
 import MembersEditor from '../components/settings/MembersEditor'
 import ProjectOverviewForm from '../components/settings/ProjectOverviewForm'
 import { useProject } from '../context/ProjectContext'
 import { useAsync, useMutation } from '../hooks/useAsync'
-import { EVENT_TYPE_LABELS, formatDate } from '../lib/labels'
+import { EVENT_TYPE_LABELS, ROLE_LABELS, formatDate } from '../lib/labels'
 import { getDataProvider } from '../providers'
 
 const provider = getDataProvider()
@@ -29,6 +32,7 @@ export default function OnboardingPage() {
   const [step, setStep] = useState(1)
   const project = useAsync(() => provider.getProject(projectId), [projectId])
   const currentUser = useAsync(() => provider.getCurrentUser(), [])
+  const members = useAsync(() => provider.listMembers(projectId), [projectId])
   const navigate = useNavigate()
   const isPm = currentUser.data?.role === 'pm'
 
@@ -46,6 +50,10 @@ export default function OnboardingPage() {
   }
 
   const alreadyOnboarded = !!project.data?.onboarded_at
+  // 시안(온보딩 · 파트너 포털.dc.html) — 카드 상단 전체 진행 막대 + 필수 남은 개수.
+  // '완료 단계'는 현재 단계 직전까지(③에 있으면 2/3 = 67%), 필수는 행사 설정과 같은 4항목 기준.
+  const doneSteps = step - 1
+  const missingRequired = countMissingRequired(project.data ?? null)
 
   return (
     <div className="min-h-screen bg-canvas px-4 py-10">
@@ -57,6 +65,20 @@ export default function OnboardingPage() {
 
         <h1 className="t-page-title">온보딩 위저드</h1>
         <p className="mt-1 text-sm text-ink-sub">행사 정보를 입력하면 본체 화면을 사용할 수 있습니다.</p>
+
+        {project.data && !alreadyOnboarded && (
+          <div
+            data-testid="onboarding-progress"
+            className="mt-4 flex items-center gap-3 rounded-lg border border-border bg-canvas px-3.5 py-2.5"
+          >
+            <div className="min-w-0 flex-1">
+              <ProgressBar done={doneSteps} total={STEPS.length} hideValue />
+            </div>
+            <span className="shrink-0 whitespace-nowrap text-xs font-medium text-ink-sub">
+              {STEPS.length}단계 중 {doneSteps}단계 완료 · 필수 {missingRequired}개 남음
+            </span>
+          </div>
+        )}
 
         {project.loading && <p className="mt-6 text-sm text-ink-cap">불러오는 중…</p>}
         <div className="mt-4">
@@ -132,31 +154,29 @@ export default function OnboardingPage() {
 
                   <div className="rounded-lg bg-canvas p-4 text-sm text-ink">
                     <h3 className="t-card-title mb-2">요약</h3>
-                    <dl className="space-y-1">
-                      <div>
-                        <dt className="inline text-ink-cap">행사명 </dt>
-                        <dd className="inline">{project.data.name}</dd>
-                      </div>
-                      <div>
-                        <dt className="inline text-ink-cap">일자 </dt>
-                        <dd className="inline">
-                          {project.data.event_date ? formatDate(project.data.event_date) : '-'}
-                        </dd>
-                      </div>
-                      <div>
-                        <dt className="inline text-ink-cap">장소 </dt>
-                        <dd className="inline">{project.data.venue ?? '-'}</dd>
-                      </div>
-                      <div>
-                        <dt className="inline text-ink-cap">유형 </dt>
-                        <dd className="inline">{EVENT_TYPE_LABELS[project.data.event_type]}</dd>
-                      </div>
+                    {/* 시안 요약 — 라벨/값 2열 정의 그리드 */}
+                    <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
+                      <dt className="text-ink-cap">행사명</dt>
+                      <dd className="min-w-0">{project.data.name}</dd>
+                      <dt className="text-ink-cap">일자</dt>
+                      <dd className="min-w-0">
+                        {project.data.event_date ? formatDate(project.data.event_date) : '-'}
+                      </dd>
+                      <dt className="text-ink-cap">장소</dt>
+                      <dd className="min-w-0">{project.data.venue ?? '-'}</dd>
+                      <dt className="text-ink-cap">유형</dt>
+                      <dd className="min-w-0">{EVENT_TYPE_LABELS[project.data.event_type]}</dd>
+                      {/* 확인 단계에서 ②에 넣은 담당자를 다시 읽어볼 수 있게 한다 */}
+                      <dt className="text-ink-cap">담당</dt>
+                      <dd className="min-w-0">
+                        {members.data && members.data.length > 0
+                          ? members.data.map((m) => `${ROLE_LABELS[m.role]} ${m.profile.name}`).join(' · ')
+                          : '-'}
+                      </dd>
                     </dl>
-                    <p className="mt-3 text-xs text-ink-sub">
-                      온보딩을 완료하면 선택한 유형에 맞는 WBS 일정이 행사일 기준으로 자동
-                      전개됩니다(모객형 37건 / 일반형 28건) — 역할별 R&amp;R 카드도 함께 생성됩니다.
-                    </p>
                   </div>
+
+                  <CompletionNotice project={project.data} />
 
                   {!currentUser.loading && !isPm && (
                     <p className="text-xs text-negative">

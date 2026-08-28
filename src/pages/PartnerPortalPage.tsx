@@ -42,7 +42,7 @@ export default function PartnerPortalPage() {
               href={data.guide_url}
               target="_blank"
               rel="noreferrer"
-              className="btn btn-ghost btn-sm"
+              className="btn btn-ghost h-11"
             >
               참가 가이드 보기 ↗
             </a>
