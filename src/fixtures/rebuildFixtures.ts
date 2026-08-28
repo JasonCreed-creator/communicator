@@ -1236,15 +1236,19 @@ export function appendRebuildFixtures(state: MockState): void {
 
   // 진행 블록 8행 · 세션 3개 그룹(②오프닝 키노트·③트랙 세션·④애프터파티) — video·transition
   // 블록에 M-XX/C-XX/V-XX 큐 표기를 심어 "큐시트로 내보내기" 데모가 바로 동작하게 한다(§23.3).
+  // session_id는 buildProgram()의 `pgs-${prefix}-${pad(i+1)}`(3자리 zero-pad, 603행)과 반드시
+  // 일치해야 S9 ② 세션별 시나리오 펼침·시나리오 빌더의 세션 그룹 헤더가 실제 프로그램 세션에
+  // 연결된다 — 3.16d(AH) 통합 중 2자리('pgs-rb27-02') 오기재를 발견해 3자리로 수정(버그 픽스,
+  // 블록 개수·세션 그룹 수·큐 변환 등 다른 데이터는 무변경).
   const rb27ScenarioBlocks: ScenarioBlock[] = [
-    { id: 'scb-rb27-01', deliverable_id: RB27_SCENARIO_ID, session_id: 'pgs-rb27-02', time: '10:30', kind: 'custom', script: null, note: '세션: 오프닝 키노트 (연사 섭외 중)', sort_order: 1 },
-    { id: 'scb-rb27-02', deliverable_id: RB27_SCENARIO_ID, session_id: 'pgs-rb27-02', time: '10:30', kind: 'mc', script: 'MC 무대 인사 및 오프닝 키노트 세션 소개 — 연사 확정 후 소개 멘트 보완 예정', note: null, sort_order: 2 },
-    { id: 'scb-rb27-03', deliverable_id: RB27_SCENARIO_ID, session_id: 'pgs-rb27-02', time: '10:35', kind: 'video', script: '오프닝 인트로 영상 재생 — LED 키비주얼 루핑 종료 후 영상 사운드 온(M-02), 무대 암전(C-11) 후 스크린 전환', note: null, sort_order: 3 },
-    { id: 'scb-rb27-04', deliverable_id: RB27_SCENARIO_ID, session_id: 'pgs-rb27-03', time: '13:00', kind: 'custom', script: null, note: '세션: 트랙 세션 (연사 섭외 중, 25~30분 × 8세션)', sort_order: 4 },
-    { id: 'scb-rb27-05', deliverable_id: RB27_SCENARIO_ID, session_id: 'pgs-rb27-03', time: '13:00', kind: 'protocol', script: '세션 좌장 소개 및 귀빈 의전 — 참석 임원진 착석 확인 후 진행', note: null, sort_order: 5 },
-    { id: 'scb-rb27-06', deliverable_id: RB27_SCENARIO_ID, session_id: 'pgs-rb27-03', time: '16:25', kind: 'transition', script: '트랙 세션 종료 전환 — 무대 조명 전환(C-05), 브릿지 음악 온(M-01), 다음 순서 안내', note: null, sort_order: 6 },
-    { id: 'scb-rb27-07', deliverable_id: RB27_SCENARIO_ID, session_id: 'pgs-rb27-04', time: '18:30', kind: 'custom', script: null, note: '세션: 애프터파티 (네트워킹, 가안)', sort_order: 7 },
-    { id: 'scb-rb27-08', deliverable_id: RB27_SCENARIO_ID, session_id: 'pgs-rb27-04', time: '19:50', kind: 'video', script: '애프터파티 하이라이트 영상 송출(V-01), 배경음악 페이드(M-03)', note: null, sort_order: 8 },
+    { id: 'scb-rb27-01', deliverable_id: RB27_SCENARIO_ID, session_id: 'pgs-rb27-002', time: '10:30', kind: 'custom', script: null, note: '세션: 오프닝 키노트 (연사 섭외 중)', sort_order: 1 },
+    { id: 'scb-rb27-02', deliverable_id: RB27_SCENARIO_ID, session_id: 'pgs-rb27-002', time: '10:30', kind: 'mc', script: 'MC 무대 인사 및 오프닝 키노트 세션 소개 — 연사 확정 후 소개 멘트 보완 예정', note: null, sort_order: 2 },
+    { id: 'scb-rb27-03', deliverable_id: RB27_SCENARIO_ID, session_id: 'pgs-rb27-002', time: '10:35', kind: 'video', script: '오프닝 인트로 영상 재생 — LED 키비주얼 루핑 종료 후 영상 사운드 온(M-02), 무대 암전(C-11) 후 스크린 전환', note: null, sort_order: 3 },
+    { id: 'scb-rb27-04', deliverable_id: RB27_SCENARIO_ID, session_id: 'pgs-rb27-003', time: '13:00', kind: 'custom', script: null, note: '세션: 트랙 세션 (연사 섭외 중, 25~30분 × 8세션)', sort_order: 4 },
+    { id: 'scb-rb27-05', deliverable_id: RB27_SCENARIO_ID, session_id: 'pgs-rb27-003', time: '13:00', kind: 'protocol', script: '세션 좌장 소개 및 귀빈 의전 — 참석 임원진 착석 확인 후 진행', note: null, sort_order: 5 },
+    { id: 'scb-rb27-06', deliverable_id: RB27_SCENARIO_ID, session_id: 'pgs-rb27-003', time: '16:25', kind: 'transition', script: '트랙 세션 종료 전환 — 무대 조명 전환(C-05), 브릿지 음악 온(M-01), 다음 순서 안내', note: null, sort_order: 6 },
+    { id: 'scb-rb27-07', deliverable_id: RB27_SCENARIO_ID, session_id: 'pgs-rb27-004', time: '18:30', kind: 'custom', script: null, note: '세션: 애프터파티 (네트워킹, 가안)', sort_order: 7 },
+    { id: 'scb-rb27-08', deliverable_id: RB27_SCENARIO_ID, session_id: 'pgs-rb27-004', time: '19:50', kind: 'video', script: '애프터파티 하이라이트 영상 송출(V-01), 배경음악 페이드(M-03)', note: null, sort_order: 8 },
   ]
   state.scenario_blocks.push(...rb27ScenarioBlocks)
 

@@ -133,6 +133,14 @@ describe('운영가이드 빌더 — RE:BUILD 27 픽스처', () => {
   })
 
   it('(f) 읽기 전용(canEdit=false)에서는 편집·정렬·삭제·추가·시드·반영 버튼이 전혀 없다', async () => {
+    // (d)에서 이미 zone 섹션의 stale이 해제됐으므로, "차이 확인 있음·반영 없음"을 검증하려면
+    // 새 존별 운영 항목을 하나 더 추가해 markGuideZoneStale로 다시 stale을 만든다(R-O4 재현).
+    await provider.createDeliverable({
+      project_id: PROJECT_ID_REBUILD27,
+      area: 'ops',
+      category: '존운영',
+      title: '읽기 전용 테스트용 신규 존',
+    })
     renderBuilder(false)
     await screen.findByRole('heading', { name: '존별 운영' })
 
@@ -147,10 +155,12 @@ describe('운영가이드 빌더 — RE:BUILD 27 픽스처', () => {
     expect(screen.getByRole('button', { name: '인쇄' })).toBeTruthy()
     expect(screen.getByRole('checkbox', { name: /연락망 포함/ })).toBeTruthy()
 
-    // 차이 확인은 볼 수 있지만 "반영" 버튼은 없다
+    // 차이 확인은 볼 수 있지만(저장된 내용·현재 원본 나란히) "반영" 버튼은 없다
     const zoneCard = screen.getByRole('heading', { name: '존별 운영' }).closest('article')!
+    expect(within(zoneCard).getByText('갱신 있음')).toBeTruthy()
     await userEvent.click(within(zoneCard).getByRole('button', { name: '차이 확인' }))
-    await within(zoneCard).findByText(/애프터파티 정원 150명 유지 여부/)
+    await within(zoneCard).findByText('현재 원본')
+    expect(within(zoneCard).getByText('저장된 내용')).toBeTruthy()
     expect(within(zoneCard).queryByRole('button', { name: '반영' })).toBeNull()
   })
 
