@@ -1390,3 +1390,88 @@ guide_sections (
 ### 23.4 데모 픽스처 (Phase 3.16)
 
 RE:BUILD 27에 시나리오 1건(세션 3개 그룹·블록 8행, 프로그램표 연동)·운영가이드 1건(4섹션, 존운영·R&R 연동 시드 + 존운영 원본 1건 변경으로 stale 상태 1개 시연). 기존 큐시트 2건은 큐시트 카드로 이관 표시.
+
+## 24. 부록 — 등록 구글 시트 연동 정본 (v2.6, S4)
+
+> 사용자 승인 2026-08-28 (디자인 핸드오프 `등록 보드 · 구글시트 연동` 시안). 미결 2건 확정 —
+> 체크인 배치 = **A안(등록 보드 탭)**, 동기화 = **B안(주기 자동 확인 + 수동 병행)**.
+> DataProvider **v10 재동결(10메서드 추가 · 120메서드)**. `importVendorQuote`는 v11 예약(만들지 말 것).
+
+### 24.1 대원칙
+
+1. **시트 → 앱 단방향. 시트가 정본.** 앱은 어떤 경우에도 시트에 쓰지 않는다 — 이 방향은 연결 후 변경 불가.
+2. **자동 덮어쓰기 없음.** 자동 확인은 **감지까지만** 하고, 화면 반영은 항상 사람이 차이를 확인한 뒤에 일어난다(§23.2 R-O4와 같은 패턴).
+3. **필드 소유 분리.** 매핑된 명단 필드는 시트 소유(앱에서 수정 불가), 체크인·비고는 앱 소유(시트를 덮어쓰지 않음).
+4. **하드 삭제 금지.** 시트에서 행이 사라져도 삭제하지 않고 `sheet_status='removed'`(시트에서 제거됨)로 이력을 보존한다.
+5. **연락처 기본 마스킹.** 원문은 내보내기 시 명시 옵션으로만 포함한다.
+
+### 24.2 스키마 (§4 규약 준용)
+
+```
+sheet_connections (
+  id uuid pk, project_id fk projects unique,      -- 행사당 1개
+  state text not null,                            -- 'disconnected'|'connected'|'stale'|'revoked'
+  title text, url text, tab_name text,
+  mapping jsonb not null,                         -- [{column, field}] field: name|org|title|email|phone|group_tag|registered_at|null
+  connected_at timestamptz, connected_by text,
+  snapshot_at timestamptz,                        -- 화면이 기준으로 삼는 마지막 성공 읽기 시각
+  snapshot_version int not null default 1,        -- 낙관적 잠금 키 (§24.3)
+  checked_at timestamptz,                         -- 마지막 자동/수동 확인
+  auto_check_minutes int not null default 15,     -- 0이면 수동만
+  source_modified_at timestamptz null,            -- 원본 시트 최종 수정 — stale 판정 근거
+  pending_added int, pending_changed int, pending_removed int,
+  failure_times jsonb, last_success_at timestamptz null )
+
+attendees 확장 (전부 nullable — 시트 연결 시에만 채워진다)
+  sheet_row_id text null,                         -- 원본 행 식별자
+  title text null, group_tag text null,           -- 시트 소유
+  sheet_status text null,                         -- 'applied'|'confirmed'|'cancelled'|'removed'
+  note text null                                  -- 앱 소유
+```
+
+### 24.3 동시 접속 계약 (다중 담당자 운영)
+
+행사 당일에는 여러 담당자가 같은 등록 보드를 동시에 연다. 서로 다른 스냅숏을 보고 있다는 사실이
+**반드시 감지되어야** 하므로 낙관적 잠금을 계약에 넣는다.
+
+| # | 계약 |
+|---|---|
+| R-S1 | `applySheetDiff(projectId, snapshotVersion)`는 호출자가 **보고 있던** 버전을 넘긴다. 저장된 값과 다르면 **409 conflict** — "다른 담당자가 이미 반영했습니다. 최신 차이를 다시 확인해 주세요." 화면은 조용히 덮어쓰지 않는다 |
+| R-S2 | `checkSheetUpdates`는 상태·버전·미확인 건수만 갱신한다 — 데이터를 반영하지 않는다(자동 감지 전용) |
+| R-S3 | 반영이 성공하면 `snapshot_version`이 증가하고 `snapshot_at`이 원본 수정 시각으로 이동한다 |
+| R-S4 | Phase 4에서 폴링을 Supabase Realtime 구독으로 교체할 때 **이 계약은 그대로 둔다** — 감지 경로만 바뀌고 반영 경로(사람 확인 → 버전 검사)는 불변이다 |
+
+> **열린 질문(Phase 4)**: 진정한 실시간 상호 반영 — 담당자 A의 반영이 담당자 B 화면에 즉시 나타나는 것 — 은
+> 서버 푸시가 있어야 가능하다. mock·서버 0 단계에서는 R-S1의 409 감지가 그 자리를 대신한다.
+> Phase 4 착수 시 `sheet_connections` 변경을 Realtime 채널로 브로드캐스트할지 확정할 것.
+
+### 24.4 DataProvider v10 (110 → 120)
+
+```
+getSheetConnection(projectId)                    -> SheetConnection | null
+probeSheet(projectId, url)                       -> SheetProbe          -- 위저드 1·2단계(제목·탭 목록)
+previewSheetColumns(projectId, url, tabName)     -> SheetColumnPreview[] -- 3단계(첫 행 미리보기·마스킹)
+connectSheet(projectId, input)                   -> SheetConnection      -- 필수 매핑 name+email 없으면 422
+disconnectSheet(projectId)                       -> void
+reauthorizeSheet(projectId)                      -> SheetConnection      -- revoked 복구
+checkSheetUpdates(projectId)                     -> SheetConnection      -- 감지만(R-S2)
+getSheetDiff(projectId)                          -> SheetDiff
+applySheetDiff(projectId, snapshotVersion)       -> SheetApplyResult     -- 버전 불일치 409(R-S1)
+getSheetRegistrationStats(projectId)             -> SheetRegistrationStats
+```
+
+### 24.5 화면 계약 (S4)
+
+- **연결 카드**는 탭 위 페이지 상단에 **상시 노출**(게이트 뒤에 숨기지 않음 — §10 진입점 원칙). 상태 4종:
+  연결됨·정상 / 갱신 있음(주의 + ● 도트) / 권한 끊김·재인증 필요(차단) / 미연결(빈 상태 ②).
+- **갱신 있음 → 인라인 차이 확인**: 카드 안 canvas 인셋에 `구분 / 대상 / 현재 화면(스냅숏 시각) / 시트 원본(수정 시각)` 4열 표 +
+  [나중에] · [변경 n건 반영]. 확인 전까지 화면은 직전 스냅숏 기준을 유지한다.
+- **KPI 4카드**(시트 기준): 신청 · 확정 · 취소 · 체크인. 응답률·체크인율은 보조 수치로 내린다.
+- **명단 표는 읽기 전용**이며 상단 steel 배너로 필드 소유 분리를 명시한다.
+- **체크인 탭**(결정 A)은 현장용이므로 밀집 모드 금지 · 터치 타깃 44 고정.
+- **최초 연결 3단계**: URL → 탭 선택 → 컬럼 매핑. 필수 매핑은 **이름 + 이메일**. `시트 → 앱 단방향` 고지는 3단계 내내 상단 고정.
+- **xlsx 임포트는 약화** — 버튼이 아니라 작은 텍스트 링크 + "시트 연결 중에는 보조 수단입니다".
+
+### 24.6 금지
+
+시트에 쓰는 코드 일체 · 명단 필드의 앱 내 편집 UI · 확인 없는 자동 반영 · 하드 삭제 · 연락처 원문 기본 노출.
