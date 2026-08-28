@@ -19,6 +19,7 @@ import type {
   PartnerToken,
   ProgramSession,
   Project,
+  ScenarioBlock,
   UUID,
   Version,
   WbsTask,
@@ -30,10 +31,12 @@ import type {
   DeliverableArea,
   DeliverableStatus,
   EventType,
+  GuideSectionKind,
   MemberRole,
   PartnerStatus,
   ProjectKind,
   ProjectStatus,
+  ScenarioBlockKind,
   WbsStatus,
 } from './enums'
 import type { ComplianceItem, Targeting } from './entities'
@@ -437,6 +440,8 @@ export type PlanSectionKey =
   | 'zones'
   | 'production'
   | 'registration'
+  /** v2.5 §23 — ⑦비상 대응(운영가이드 emergency 섹션 조립) */
+  | 'emergency'
   | 'schedule'
 
 /** 섹션별 진행률 — done/total 산정 기준은 provider 구현(getPlan) 주석이 정본 */
@@ -486,18 +491,73 @@ export interface PlanCuesheet {
   cues: Cue[]
 }
 
+/** v2.5 §23 — S9 ② 세션별 시나리오 펼침 소스. 첫 시나리오 항목이 없으면 null */
+export interface PlanScenarioSection {
+  deliverable_id: UUID
+  title: string
+  status: DeliverableStatus
+  /** sort_order 순 */
+  blocks: ScenarioBlock[]
+}
+
+/** v2.5 §23 — S9 ③ 존운영 확장 소스(가이드의 zone 섹션). 첫 운영가이드 항목이 없으면 null */
+export interface PlanGuideZone {
+  content: string | null
+  source_stale: boolean
+}
+
+/**
+ * v2.5 §23 — S9 ⑦비상 대응 섹션 소스(가이드의 emergency 섹션). 첫 운영가이드 항목이
+ * 없거나 emergency 섹션이 없으면 null. **R-O6**: contacts 섹션은 이 타입에도, PlanData
+ * 어디에도 담기지 않는다.
+ */
+export interface PlanEmergencySection {
+  deliverable_id: UUID
+  title: string
+  content: string | null
+  status: DeliverableStatus
+}
+
 export interface PlanData {
   project: Project
   /** sort_order 순 */
   program_sessions: ProgramSession[]
   /** 큐시트 항목이 없으면 null */
   cuesheet: PlanCuesheet | null
+  /** v2.5 §23 — 신설 정형 2종(시나리오·운영가이드)은 제외(큐시트는 기존대로 포함) */
   zones: PlanZoneItem[]
   production_items: PlanProductionItem[]
   registration_stats: RegistrationStats
   /** 기한순 */
   milestones: Milestone[]
   section_progress: PlanSectionProgress[]
+  /** v2.5 §23 — 첫 시나리오 항목 (없으면 null) */
+  scenario: PlanScenarioSection | null
+  /** v2.5 §23 — 첫 운영가이드 항목의 zone 섹션 (없으면 null) */
+  guide_zone: PlanGuideZone | null
+  /** v2.5 §23 — 첫 운영가이드 항목의 emergency 섹션 (없으면 null) */
+  emergency: PlanEmergencySection | null
+}
+
+// ── 운영보드 재구성 입력 (v2.5 §23·§8.2) ───────────────────────────────
+
+/** PUT scenario-blocks 벌크 교체 입력 — id 없음, sort_order는 배열 순서로 유도 */
+export interface ScenarioBlockInput {
+  session_id?: UUID | null
+  time?: string | null
+  kind: ScenarioBlockKind
+  script?: string | null
+  note?: string | null
+}
+
+/** PUT guide-sections 벌크 교체 입력 — id를 넘기면 재사용(연동 identity 유지), 없으면 새로 생성 */
+export interface GuideSectionInput {
+  id?: UUID
+  kind: GuideSectionKind
+  title: string
+  content?: string | null
+  source_ref?: 'zone_items' | 'role_charters' | null
+  source_stale?: boolean
 }
 
 // ── S-10 정산보드 뷰 (v2.2 §19) ───────────────────────────────────────

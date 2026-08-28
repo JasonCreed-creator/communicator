@@ -9,6 +9,7 @@ import type {
   DeliverableArea,
   DeliverableStatus,
   EventType,
+  GuideSectionKind,
   InviteStatus,
   LandingFieldKind,
   LandingSectionType,
@@ -22,6 +23,7 @@ import type {
   QuoteImportStatus,
   QuoteSource,
   QuoteStatus,
+  ScenarioBlockKind,
   WbsDirection,
   WbsStatus,
 } from './enums'
@@ -770,4 +772,36 @@ export interface QuoteImport {
   quote_id: UUID | null
   created_by: UUID | null
   created_at: IsoDateTime
+}
+
+// ── 운영보드 재구성 (v2.5 §23.1) — category='시나리오'|'운영가이드' 항목에만 귀속 ──────
+
+/** scenario_blocks — 시나리오(사람이 읽는 진행 대본) 항목의 진행 블록 1행 */
+export interface ScenarioBlock {
+  id: UUID
+  deliverable_id: UUID
+  /** 프로그램표 세션 연결(세션 그룹 헤더) — 수동 블록·연결 없음은 null */
+  session_id: UUID | null
+  /** 'HH:MM' 문자열 */
+  time: string | null
+  kind: ScenarioBlockKind
+  /** 대본 전문(마크다운) — 큐시트로 내보낼 때 이 전문은 복사하지 않는다(§23.3) */
+  script: string | null
+  note: string | null
+  sort_order: number
+}
+
+/** guide_sections — 운영가이드 항목의 섹션 1개(존별 운영·역할별 체크리스트·비상 대응·연락망) */
+export interface GuideSection {
+  id: UUID
+  deliverable_id: UUID
+  kind: GuideSectionKind
+  title: string
+  /** 마크다운 — S9 초경량 렌더러 재사용 */
+  content: string | null
+  /** 연동 출처 — 없으면 수기 작성 섹션(비상 대응·연락망 등) */
+  source_ref: 'zone_items' | 'role_charters' | null
+  /** 원본 변경 감지 표시 — 자동 덮어쓰기 금지, 사람이 차이를 확인하고 반영(R-O4) */
+  source_stale: boolean
+  sort_order: number
 }

@@ -635,6 +635,44 @@ DoD-29뿐 아니라 **실물 검산 2건에서 바로** 잡힌다(위 표의 "2 
 - 이후 Phase 5(Drive) → Phase 6(알림·cron)
 
 ## 5. 결정 로그
+- 2026-08-28 (Phase 3.16a, AE): **DataProvider v9 재동결 — 동결 해제 근거 = 사용자 v2.5 승인
+  (2026-08-28, 시각안 3화면) + 설계서 v2.5 §23.** listScenarioBlocks·saveScenarioBlocks·
+  seedScenarioFromProgram·exportScenarioToCues·listGuideSections·saveGuideSections·
+  seedGuideFromSources·createDocSnapshot 8메서드 추가 = **110메서드**. 기존 102메서드
+  시그니처 불변. `ScenarioBlock`·`GuideSection` 엔티티(§23.1), `ScenarioBlockKind`·
+  `GuideSectionKind`·`STRUCTURED_DOC_CATEGORIES`(+`isStructuredDocCategory`) 열거형 추가.
+  기존 `createCueSnapshot`은 `createDocSnapshot`에 위임하도록 내부만 리팩터(R-O2 — 시그니처·
+  동작·activity log 의미 보존, dod12 등 회귀 없음). `importVendorQuote`는 여전히 **v10
+  예약 — 만들지 않았다**(§19.5).
+- 2026-08-28 (Phase 3.16a — 구현 해석 3건, PROGRESS 임시 정본·다음 설계서 개정에서 승격 후보):
+  ① **§23.3 토큰→채널 매핑 구체화**: 정규식 `/\b([A-Z]{1,2})-(\d{1,3})\b/`로 큐 표기 토큰을
+  추출하고, 접두 `M`→console_audio·`C`→console_light·`V`→console_screen으로 배치한다.
+  그 외 접두(예: `X-01`)는 채널에 넣지 않고 참조 문구에 병기한다. cue_no는 대상 큐시트의
+  기존 번호와 충돌하지 않는 `S01`식 연번(순수 함수 `src/lib/scenario.ts` 정본).
+  ② **R-O6 "개인 연락처 제외"의 판정 대상 = kind='contacts' 섹션 그 자체**로 해석했다 —
+  PlanData(getPlan)는 애초에 contacts 섹션을 조립하지 않고, createDocSnapshot(운영가이드)도
+  기본은 contacts를 제외하며 `include_contacts:true`를 명시했을 때만 인쇄에 포함한다.
+  ③ **stale(R-O4) 런타임 마킹 경로 = `createDeliverable`(ops·비정형 항목 추가)뿐** —
+  현재 인터페이스에 기존 zone 항목의 `content`를 사후 수정하는 PATCH 경로가 없어(생성 시에만
+  content를 받는다) 이것이 "존별 운영 원본 변경"을 감지할 수 있는 유일한 실제 쓰기 경로다.
+  향후 zone 항목 본문 편집 API가 생기면 그 경로에도 같은 마킹을 추가해야 한다(사후 정본화 후보).
+- 2026-08-28 (Phase 3.16a — 레거시 자유 카테고리 충돌, DoD-1 회귀 방지): 기존 샘플 픽스처
+  (prj-stc26)의 dlv-005는 v2.5 이전부터 **자유 텍스트 카테고리로 '시나리오'**를 썼고
+  (당시엔 예약어가 아니었다) scenario_blocks가 없다. category 문자열만으로 "정형 문서 여부"를
+  판정하면 이 레거시 항목이 getPlan의 zones 제외·requestApproval의 자동 스냅숏 대상에
+  잘못 걸려 DoD-1(비큐시트 항목의 수동 버전 컨펌 흐름)이 깨진다. **"실제로 빌더 데이터
+  (scenario_blocks·guide_sections 행)를 가진 항목만 정형 취급"**(`hasScenarioBuilderData`·
+  `hasGuideBuilderData`)으로 판정 기준을 좁혀 해결했다 — 이는 §23.2 R-O1(보드 자동분류가
+  "실제로 새 빌더를 거친 문서만" 승격시킨다는 원칙)과도 일치하는 해석이다. 큐시트는 v1.3부터
+  이미 예약 카테고리라 이 문제가 없어 종전대로 카테고리 문자열만으로 판정한다.
+- 2026-08-28 (Phase 3.16a — 범위 예외 1건, 명시 플래그): `src/components/plan/planSections.ts`
+  (컴포넌트 디렉터리, 원칙상 AE 수정 금지 대상)에 `PlanSectionKey`의 'emergency' 키 1개를
+  최소 추가했다 — `PLAN_SECTION_META: Record<PlanSectionKey, PlanSectionMeta>`가 완전성을
+  요구해 그 타입을 확장하면 이 파일이 깨진다(tsc 클린이 하드 요구사항). 번호(⑦)·타이틀만
+  채운 자리표시이고 JSX·렌더링·레이아웃은 손대지 않았다(PlanDocPage.tsx는 여전히 7개
+  `<XSection>`을 그대로 렌더해 dod9의 `.plan-section` 개수(7) 회귀 없음 — PlanProgressSummary만
+  8번째 진행률 타일을 일반 로직으로 더 그린다). **실제 ⑦비상 대응 섹션 렌더·정확한 위치·인쇄
+  규약은 Phase 3.16d(AH)가 완성**해야 한다.
 - 2026-08-28 (Phase 3.15.1): **DataProvider v8.1 재동결 — 동결 해제 근거 = 사용자 3.15.1 승인
   (지시문 P2, 2026-08-28) + 설계서 v2.4.1 §21.1(v2.5 승계).** partner_guide_url·
   partner_contact_email 필드 추가만, 메서드 수 102 불변(v3.1 전례). 주최형 R&R·규약 카드

@@ -5,10 +5,12 @@ import type {
   DeliverableArea,
   DeliverableStatus,
   EventType,
+  GuideSectionKind,
   InviteStatus,
   MemberRole,
   PartnerStatus,
   ProjectKind,
+  ScenarioBlockKind,
   WbsDirection,
 } from '../types/enums'
 
@@ -121,6 +123,32 @@ export const PARTNER_STATUS_LABELS: Record<PartnerStatus, string> = {
   active: '참여 중',
   withdrawn: '철회',
 }
+
+/** v2.5 §23 — 시나리오 빌더 진행 블록 구분 칩 */
+export const SCENARIO_KIND_LABELS: Record<ScenarioBlockKind, string> = {
+  mc: 'MC',
+  video: '영상',
+  protocol: '의전',
+  transition: '전환',
+  custom: '커스텀',
+}
+
+/** v2.5 §23 — 운영가이드 빌더 섹션 카드 4종 라벨 */
+export const GUIDE_KIND_LABELS: Record<GuideSectionKind, string> = {
+  zone: '존별 운영',
+  role: '역할별 체크리스트',
+  emergency: '비상 대응',
+  contacts: '연락망/비품',
+  custom: '커스텀',
+}
+
+/** v2.5 §23 — 운영보드 홈 유형 카드 4종 라벨(정형 3종 + 기타 제작물) */
+export const OPS_DOC_CARD_LABELS = {
+  cuesheet: '큐시트',
+  scenario: '시나리오',
+  guide: '운영가이드',
+  other: '기타 제작물',
+} as const
 
 /** YYYY-MM-DD → 'M월 D일' */
 export function formatDate(isoDate: string): string {

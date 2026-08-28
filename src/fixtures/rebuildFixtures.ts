@@ -18,12 +18,14 @@ import type {
   ClientToken,
   ComplianceCard,
   Cue,
+  GuideSection,
   ProgramSession,
   Project,
   Quote,
   QuoteInput,
   RoleCharter,
   RsvpContact,
+  ScenarioBlock,
   Targeting,
   WbsTask,
 } from '../types/entities'
@@ -31,6 +33,12 @@ import type { AttendeeChannel, DeliverableStatus, InviteStatus } from '../types/
 import { offsetToDate, toIsoDate } from '../lib/wbs'
 import { COMPLIANCE_CARD_TEMPLATES } from './complianceTemplates'
 import { computeQuoteOutputs } from '../modules/quote/engine/quoteInput'
+import {
+  assembleRoleSectionContent,
+  assembleZoneSectionContent,
+  CONTACTS_SECTION_PLACEHOLDER,
+  EMERGENCY_SECTION_PLACEHOLDER,
+} from '../lib/guideAssembly'
 import { RECRUITING_WBS_TEMPLATE, ROLE_CHARTER_TEMPLATES } from './wbsTemplates'
 import type { MockState } from './sampleProject'
 import { appendLanding, buildLanding } from './landingFixtures'
@@ -1185,6 +1193,112 @@ export function appendRebuildFixtures(state: MockState): void {
     { id: 113, project_id: RB27, actor: 'user:usr-pm', action: 'approval.requested', target_type: 'approval', target_id: 'apr-rb27-01', meta: { deliverable_id: 'dlv-rb27-prd-007' }, created_at: '2026-08-21T02:00:00.000Z' },
     { id: 114, project_id: RB27, actor: 'user:usr-pm', action: 'deliverable.requested', target_type: 'deliverable', target_id: 'dlv-rb27-cue-01', meta: { assignee_id: 'usr-ops' }, created_at: '2026-08-18T09:00:00.000Z' },
   )
+
+  // ── v2.5 §23.4 — 시나리오 1건 + 운영가이드 1건 (RE:BUILD 27 데모 픽스처) ────────
+  // 실측: RE:BUILD 27 프로그램은 4세션(등록·오프닝·트랙·애프터파티) — §23.4가 요구하는
+  // "3개 그룹"에는 등록·웰컴을 제외한 3세션(오프닝·트랙·애프터파티)을 쓴다. 큐시트는 RB27에
+  // 1건(개막 세션 큐시트)뿐이라 "기존 큐시트 2건"에는 못 미친다 — 임의로 늘리지 않고
+  // 체크아웃 보고에 실측으로 남긴다(브리프 지시).
+  const RB27_SCENARIO_ID = 'dlv-rb27-scenario-01'
+  const RB27_GUIDE_ID = 'dlv-rb27-guide-01'
+  state.deliverables.push(
+    {
+      id: RB27_SCENARIO_ID,
+      project_id: RB27,
+      area: 'ops',
+      category: '시나리오',
+      title: '진행 시나리오 (가안)',
+      status: 'draft',
+      assignee_id: 'usr-ops',
+      due_date: offsetToDate(rb27Date, -7),
+      drive_folder_id: null,
+      requires_approval: true,
+      ...NO_BRIEF,
+      created_at: '2026-08-20T09:00:00.000Z',
+      updated_at: '2026-08-20T09:00:00.000Z',
+    },
+    {
+      id: RB27_GUIDE_ID,
+      project_id: RB27,
+      area: 'ops',
+      category: '운영가이드',
+      title: '현장 운영가이드 (가안)',
+      status: 'draft',
+      assignee_id: 'usr-ops',
+      due_date: offsetToDate(rb27Date, -5),
+      drive_folder_id: null,
+      requires_approval: true,
+      ...NO_BRIEF,
+      created_at: '2026-08-20T09:00:00.000Z',
+      updated_at: '2026-08-20T09:00:00.000Z',
+    },
+  )
+
+  // 진행 블록 8행 · 세션 3개 그룹(②오프닝 키노트·③트랙 세션·④애프터파티) — video·transition
+  // 블록에 M-XX/C-XX/V-XX 큐 표기를 심어 "큐시트로 내보내기" 데모가 바로 동작하게 한다(§23.3).
+  const rb27ScenarioBlocks: ScenarioBlock[] = [
+    { id: 'scb-rb27-01', deliverable_id: RB27_SCENARIO_ID, session_id: 'pgs-rb27-02', time: '10:30', kind: 'custom', script: null, note: '세션: 오프닝 키노트 (연사 섭외 중)', sort_order: 1 },
+    { id: 'scb-rb27-02', deliverable_id: RB27_SCENARIO_ID, session_id: 'pgs-rb27-02', time: '10:30', kind: 'mc', script: 'MC 무대 인사 및 오프닝 키노트 세션 소개 — 연사 확정 후 소개 멘트 보완 예정', note: null, sort_order: 2 },
+    { id: 'scb-rb27-03', deliverable_id: RB27_SCENARIO_ID, session_id: 'pgs-rb27-02', time: '10:35', kind: 'video', script: '오프닝 인트로 영상 재생 — LED 키비주얼 루핑 종료 후 영상 사운드 온(M-02), 무대 암전(C-11) 후 스크린 전환', note: null, sort_order: 3 },
+    { id: 'scb-rb27-04', deliverable_id: RB27_SCENARIO_ID, session_id: 'pgs-rb27-03', time: '13:00', kind: 'custom', script: null, note: '세션: 트랙 세션 (연사 섭외 중, 25~30분 × 8세션)', sort_order: 4 },
+    { id: 'scb-rb27-05', deliverable_id: RB27_SCENARIO_ID, session_id: 'pgs-rb27-03', time: '13:00', kind: 'protocol', script: '세션 좌장 소개 및 귀빈 의전 — 참석 임원진 착석 확인 후 진행', note: null, sort_order: 5 },
+    { id: 'scb-rb27-06', deliverable_id: RB27_SCENARIO_ID, session_id: 'pgs-rb27-03', time: '16:25', kind: 'transition', script: '트랙 세션 종료 전환 — 무대 조명 전환(C-05), 브릿지 음악 온(M-01), 다음 순서 안내', note: null, sort_order: 6 },
+    { id: 'scb-rb27-07', deliverable_id: RB27_SCENARIO_ID, session_id: 'pgs-rb27-04', time: '18:30', kind: 'custom', script: null, note: '세션: 애프터파티 (네트워킹, 가안)', sort_order: 7 },
+    { id: 'scb-rb27-08', deliverable_id: RB27_SCENARIO_ID, session_id: 'pgs-rb27-04', time: '19:50', kind: 'video', script: '애프터파티 하이라이트 영상 송출(V-01), 배경음악 페이드(M-03)', note: null, sort_order: 8 },
+  ]
+  state.scenario_blocks.push(...rb27ScenarioBlocks)
+
+  // 운영가이드 4섹션 — zone·role은 lib/guideAssembly.ts의 조립 함수를 그대로 호출해
+  // provider·픽스처가 같은 결과를 내도록 한다(로직 중복 방지). zone 섹션은 **stale 데모**로
+  // 한 줄 앞선(구) 스냅숏을 저장해 둔다 — 존운영 원본("존 구성 (가안)")에 검토 항목 한 줄이
+  // 나중에 추가된 것으로 시연(R-O4: 자동 반영 금지, 사람이 차이를 확인해야 함).
+  const rb27OpsItemsSoFar = state.deliverables.filter((d) => d.project_id === RB27 && d.area === 'ops')
+  const rb27Charters = state.role_charters.filter((c) => c.project_id === RB27)
+  const zoneContentNow = assembleZoneSectionContent(rb27OpsItemsSoFar)
+  const zoneSnapshotContent = zoneContentNow.replace(/\n- 애프터파티 정원 150명 유지 여부$/, '')
+  const rb27GuideSections: GuideSection[] = [
+    {
+      id: 'gds-rb27-01',
+      deliverable_id: RB27_GUIDE_ID,
+      kind: 'zone',
+      title: '존별 운영',
+      content: zoneSnapshotContent,
+      source_ref: 'zone_items',
+      source_stale: true,
+      sort_order: 1,
+    },
+    {
+      id: 'gds-rb27-02',
+      deliverable_id: RB27_GUIDE_ID,
+      kind: 'role',
+      title: '역할별 체크리스트',
+      content: assembleRoleSectionContent(rb27Charters),
+      source_ref: 'role_charters',
+      source_stale: false,
+      sort_order: 2,
+    },
+    {
+      id: 'gds-rb27-03',
+      deliverable_id: RB27_GUIDE_ID,
+      kind: 'emergency',
+      title: '비상 대응',
+      content: EMERGENCY_SECTION_PLACEHOLDER,
+      source_ref: null,
+      source_stale: false,
+      sort_order: 3,
+    },
+    {
+      id: 'gds-rb27-04',
+      deliverable_id: RB27_GUIDE_ID,
+      kind: 'contacts',
+      title: '연락망/비품',
+      content: CONTACTS_SECTION_PLACEHOLDER,
+      source_ref: null,
+      source_stale: false,
+      sort_order: 4,
+    },
+  ]
+  state.guide_sections.push(...rb27GuideSections)
 
   // 견적 2버전 — 금액은 엔진 산출값만 저장한다
   const quotes: Quote[] = [

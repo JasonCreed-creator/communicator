@@ -1,5 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────
-// DataProvider 인터페이스 v7 — 2026-08-23 재동결 (설계서 v2.2 §2.1·§19)
+// DataProvider 인터페이스 v9 — 2026-08-28 재동결 (설계서 v2.5 §23) — 110메서드
+//   (아래 이력 전체를 유지한다. v7 표기는 2026-08-23 시점의 스냅숏이었다 — v8·v8.1·v9은
+//   그 뒤에 이어 붙은 것이므로 제목 줄만 최신으로 갱신한다.)
 //   v1: 2026-08-19 동결(35메서드). v2: v1.2 승인 근거로 41메서드 재동결.
 //   v3: 사용자 v1.4 승인(2026-08-22, v1.3 포함)을 근거로 동결 해제 →
 //   온보딩·프로젝트 패치·큐시트 CRUD/스냅숏·WBS 전개/조회/패치·R&R 조회
@@ -39,6 +41,13 @@
 //   `importVendorQuote`(§19.5 협력사 견적서 파싱)는 여전히 **v9 예약 — 지금 만들지 않는다**.
 //   v8.1: 사용자 3.15.1 승인(2026-08-27) + 설계서 v2.4.1(§21.1, v2.5에 승계)를 근거로 동결 해제 →
 //   partner_guide_url·partner_contact_email 필드 추가만, 메서드 수 102 불변(v3.1 전례).
+//   v9: 사용자 v2.5 승인(2026-08-28, 시각안 3화면) + 설계서 v2.5 §23을 근거로 동결 해제 →
+//   운영보드 재구성(시나리오·운영가이드 빌더): listScenarioBlocks·saveScenarioBlocks·
+//   seedScenarioFromProgram·exportScenarioToCues·listGuideSections·saveGuideSections·
+//   seedGuideFromSources·createDocSnapshot 8메서드 추가 = 110메서드. **기존 102메서드
+//   시그니처 불변** 후 재동결. 기존 createCueSnapshot은 createDocSnapshot에 위임하도록
+//   내부 리팩터만 하고 시그니처·동작·activity log 의미는 그대로 둔다(R-O2). `importVendorQuote`는
+//   여전히 **v10 예약 — 지금 만들지 않는다**(§19.5). 경위는 PROGRESS.md 결정 로그 참조.
 //
 // 프로젝트 스코프 규칙(설계서 v2.1 §4-21 R-L1): 프로젝트 단위 조회·생성 메서드는 projectId를
 // 인자로 받는다. currentUser()는 행위자 신원·권한 판정 전용이며 스코프 유도에 쓰지 않는다.
@@ -61,12 +70,14 @@ import type {
   ComplianceCard,
   Cue,
   Deliverable,
+  GuideSection,
   LandingDailyMetric,
   LandingPage,
   Partner,
   PartnerTier,
   PartnerToken,
   QuoteImport,
+  ScenarioBlock,
   SettlementBucket,
   SettlementItem,
   SettlementItemStatus,
@@ -101,6 +112,7 @@ import type {
   DashboardData,
   DeliverableDetail,
   DeliverableFilter,
+  GuideSectionInput,
   IssueTokenInput,
   MemberInput,
   MemberWithProfile,
@@ -125,6 +137,7 @@ import type {
   RegistrationStats,
   RequestApprovalInput,
   RsvpContactPatch,
+  ScenarioBlockInput,
   UploadVersionInput,
   WbsTaskFilter,
   WbsTaskPatch,
@@ -417,6 +430,40 @@ export interface DataProvider {
   /** 협력사 마스터 — 프로젝트 비종속(§19.6) */
   listVendors(): Promise<Vendor[]>
   upsertVendor(input: VendorInput): Promise<Vendor>
+
+  // ── 운영보드 재구성 — 시나리오·운영가이드 (v2.5 §23·§8.2) ─────────
+  // 쓰기(save·seed·export) = pm·ops / 읽기(list) = 멤버 전원. category 불일치는 409(conflict).
+  /** GET scenario-blocks — sort_order 순. category='시나리오' 항목만(그 외는 409) */
+  listScenarioBlocks(deliverableId: UUID): Promise<ScenarioBlock[]>
+  /** PUT scenario-blocks — 벌크 전체 교체(정렬 포함, id는 매번 새로 발급) */
+  saveScenarioBlocks(deliverableId: UUID, blocks: ScenarioBlockInput[]): Promise<ScenarioBlock[]>
+  /**
+   * 프로그램표 세션에서 뼈대 생성(세션당 그룹 헤더 + 기본 진행 블록, §8.2).
+   * **빈 문서에서만** — 기존 블록이 있으면 409(R-O3, 덮어쓰기 금지).
+   */
+  seedScenarioFromProgram(deliverableId: UUID): Promise<ScenarioBlock[]>
+  /**
+   * kind가 video·transition이고 큐 표기 토큰(예: M-02·C-11)이 있는 블록만 큐로 변환해
+   * 대상 큐시트 항목에 추가한다. **기존 큐를 보존하고 후미에만 삽입**한다(R-O5, §23.3).
+   * 대본 전문은 복사하지 않는다. 응답 = 새로 추가된 큐만(변환 건수 = length).
+   */
+  exportScenarioToCues(deliverableId: UUID, targetDeliverableId: UUID): Promise<Cue[]>
+  /** GET guide-sections — sort_order 순. category='운영가이드' 항목만(그 외는 409) */
+  listGuideSections(deliverableId: UUID): Promise<GuideSection[]>
+  /** PUT guide-sections — 벌크 전체 교체. id를 넘긴 섹션은 identity 유지(연동 stale 판정용) */
+  saveGuideSections(deliverableId: UUID, sections: GuideSectionInput[]): Promise<GuideSection[]>
+  /**
+   * 존별 운영(비정형 ops 항목)·역할별 체크리스트(R&R)에서 4섹션(존별 운영·역할별 체크리스트·
+   * 비상 대응·연락망)을 초기 로드한다. **빈 문서에서만** — 기존 섹션이 있으면 409(R-O3).
+   */
+  seedGuideFromSources(deliverableId: UUID): Promise<GuideSection[]>
+  /**
+   * 정형 문서(큐시트·시나리오·운영가이드) 공통 인쇄 스냅숏 → 버전 등록 (pm, §8 doc-snapshot —
+   * 기존 cue-snapshot의 일반화, createCueSnapshot은 이 메서드에 위임한다 R-O2). 컨펌 발송 전처리로
+   * requestApproval이 정형 3종 항목에서 자동 호출한다. **R-O6**: 운영가이드의 contacts 섹션은
+   * include_contacts=true일 때만 인쇄에 포함되고, 기본은 제외된다.
+   */
+  createDocSnapshot(deliverableId: UUID, opts?: { include_contacts?: boolean }): Promise<Version>
 
   // ── 발주처 뷰 (S7·S8) — 토큰 스코프, 만료·회수 시 410 ─────────────
   /** 컨펌 대기 큐 + 처리 이력. 코멘트는 shared만 포함(§6.2) */
