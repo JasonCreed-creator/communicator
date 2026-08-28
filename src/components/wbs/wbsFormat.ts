@@ -1,6 +1,7 @@
 // S5 WBS 화면 전용 표시 포맷터. 지연/임박 판정 자체는 lib/wbs.ts(정본)를 그대로 가져다 쓴다 —
 // 여기는 오프셋·기간 라벨, 간트 축 좌표, 단계 옵션처럼 "화면에 어떻게 보여줄지"만 담당한다.
-import { formatDate } from '../../lib/labels'
+import { formatDate, type StatusLevel } from '../../lib/labels'
+import { isDelayed, isImminent } from '../../lib/wbs'
 import type { IsoDate } from '../../types/entities'
 import type { WbsTask } from '../../types/entities'
 import type { WbsDirection, WbsStatus } from '../../types/enums'
@@ -13,18 +14,43 @@ export const WBS_DIRECTION_BADGE_CLASSES: Record<WbsDirection, string> = {
   internal: 'bg-track text-ink-sub',
 }
 
+/** 패턴 기준 시트 §03 WBS 계열 5단계 라벨 — 미착수 / 진행 / 마감 임박 / 완료 / 지연.
+ *  todo·doing·done은 저장된 상태, '마감 임박'·'지연'은 마감일에서 파생한다(wbsTaskLevel 참조). */
 export const WBS_STATUS_LABELS: Record<WbsStatus, string> = {
-  todo: '예정',
-  doing: '진행중',
+  todo: '미착수',
+  doing: '진행',
   done: '완료',
 }
 
-/** 뱃지/토글 버튼용 색 — 시맨틱 고정(라벨 텍스트 동반 원칙, CLAUDE.md §6).
- *  디자인지시서 v1 §3 상태 컬러 체계 차용: todo=draft 톤, doing=internal_review 톤, done=approved 톤. */
-export const WBS_STATUS_BADGE_CLASSES: Record<WbsStatus, string> = {
-  todo: 'bg-track text-ink-sub',
-  doing: 'bg-steel-tint text-steel',
-  done: 'bg-positive-tint text-positive',
+export const WBS_IMMINENT_LABEL = '마감 임박'
+export const WBS_DELAYED_LABEL = '지연'
+
+/** 패턴 기준 시트 §03 — WBS 계열의 의미 단계 매핑(색이 아니라 라벨이 계열을 말한다).
+ *  미착수=중립 · 진행=진행 · 마감 임박=주의 · 완료=정상 · 지연=차단. */
+export const WBS_STATUS_LEVELS: Record<WbsStatus, StatusLevel> = {
+  todo: 'neutral',
+  doing: 'progress',
+  done: 'positive',
+}
+
+export type WbsUrgency = 'delayed' | 'imminent' | null
+
+/** 지연/임박 판정은 lib/wbs.ts(정본)를 그대로 쓴다 — 여기는 표시 단계로 접는 어댑터다. */
+export function wbsUrgency(task: Pick<WbsTask, 'status' | 'end_date'>, today: IsoDate): WbsUrgency {
+  if (isDelayed(task, today)) return 'delayed'
+  if (isImminent(task, today)) return 'imminent'
+  return null
+}
+
+/** 태스크 하나의 배지 = 의미 단계 + 라벨. 마감 파생(지연·마감 임박)이 저장 상태보다 우선한다. */
+export function wbsTaskLevel(
+  task: Pick<WbsTask, 'status' | 'end_date'>,
+  today: IsoDate,
+): { level: StatusLevel; label: string } {
+  const urgency = wbsUrgency(task, today)
+  if (urgency === 'delayed') return { level: 'blocked', label: WBS_DELAYED_LABEL }
+  if (urgency === 'imminent') return { level: 'attention', label: WBS_IMMINENT_LABEL }
+  return { level: WBS_STATUS_LEVELS[task.status], label: WBS_STATUS_LABELS[task.status] }
 }
 
 const WBS_STATUS_CYCLE: readonly WbsStatus[] = ['todo', 'doing', 'done']
@@ -62,6 +88,23 @@ export function dateRangeLabel(
   return `${dates} (${offsetRangeLabel(offsetStart, offsetEnd)})`
 }
 
+/** 간트 바 안쪽 기간 표기용 짧은 날짜 — 'M/D' */
+export function shortDate(iso: IsoDate): string {
+  const [, m, d] = iso.split('-')
+  return `${Number(m)}/${Number(d)}`
+}
+
+/** 간트 바 기간 표기 — 'M/D~M/D'. 전개 날짜가 없으면 오프셋 표기로 갈음한다. */
+export function shortDateRangeLabel(
+  startDate: IsoDate | null,
+  endDate: IsoDate | null,
+  offsetStart: number,
+  offsetEnd: number,
+): string {
+  if (!startDate || !endDate) return offsetRangeLabel(offsetStart, offsetEnd)
+  return startDate === endDate ? shortDate(startDate) : `${shortDate(startDate)}~${shortDate(endDate)}`
+}
+
 /** UTC 자정 기준 날짜 차이(a − b, 일수) — lib/wbs.ts의 addDays와 동일한 UTC 산술 */
 export function diffDays(a: IsoDate, b: IsoDate): number {
   const da = new Date(`${a}T00:00:00.000Z`).getTime()
@@ -96,6 +139,27 @@ export function groupTasksByPhase(tasks: WbsTask[]): PhaseGroup[] {
     map.get(task.phase_no)!.tasks.push(task)
   }
   return [...map.values()].sort((a, b) => a.phase_no - b.phase_no)
+}
+
+export interface PhaseSummary {
+  total: number
+  done: number
+  delayed: number
+  imminent: number
+}
+
+/** 단계 그룹 헤더용 집계 — 완료 n/m + 지연·임박 건수(간트 단계 헤더·체크리스트 그룹 행 공용) */
+export function summarizePhase(tasks: WbsTask[], today: IsoDate): PhaseSummary {
+  let done = 0
+  let delayed = 0
+  let imminent = 0
+  for (const t of tasks) {
+    if (t.status === 'done') done += 1
+    const urgency = wbsUrgency(t, today)
+    if (urgency === 'delayed') delayed += 1
+    else if (urgency === 'imminent') imminent += 1
+  }
+  return { total: tasks.length, done, delayed, imminent }
 }
 
 export interface PhaseOption {
