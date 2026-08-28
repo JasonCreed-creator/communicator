@@ -345,7 +345,15 @@ export default function SheetConnectionCard({
           <div className="rounded-lg border border-border bg-canvas">
             <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
               <div className="flex flex-wrap items-center gap-2.5">
-                <LevelBadge level="attention" label={`갱신 있음 ${pendingTotal}`} dot />
+                {/* 핸드오프 §2.12: 배지 클릭으로도 차이가 펼쳐진다(우측 '차이 확인'과 같은 토글) */}
+                <button
+                  type="button"
+                  onClick={() => setDiffOpen((v) => !v)}
+                  aria-expanded={diffOpen}
+                  className="rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                >
+                  <LevelBadge level="attention" label={`갱신 있음 ${pendingTotal}`} dot />
+                </button>
                 <span className="text-sm text-ink-sub">
                   원본 시트가 {timeHm(connection.source_modified_at)}에 수정되었습니다 — 추가{' '}
                   {connection.pending_added} · 변경 {connection.pending_changed} · 시트에서 제거{' '}

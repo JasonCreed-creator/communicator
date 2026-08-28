@@ -57,7 +57,12 @@ const server = createServer((req, res) => {
 await new Promise((r) => server.listen(PORT, r))
 
 mkdirSync(SHOTS, { recursive: true })
-const browser = await chromium.launch()
+// 사전 설치된 Chromium을 쓰는 환경(원격 세션 등)에서는 playwright 패키지 버전과 브라우저 빌드
+// 번호가 어긋나 기본 launch()가 실패한다. PLAYWRIGHT_CHROMIUM_PATH가 있으면 그 실행 파일을 쓴다.
+const launchOpts = process.env.PLAYWRIGHT_CHROMIUM_PATH
+  ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_PATH }
+  : {}
+const browser = await chromium.launch(launchOpts)
 const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } })
 const tab = await ctx.newPage()
 const docRequests = []
@@ -131,20 +136,46 @@ check(
   `${docCountBefore} → ${docRequests.length}`,
 )
 
-// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — 3.16.4: 시나리오 카드 → 빌더 열기 →
-//     세션 카드·인라인 대본 표시(목업 화면 B 정합, T1) ──
-await tab.getByRole('link', { name: /운영 보드/ }).click()
-await tab.waitForURL(/#\/board\/ops/, { timeout: 10_000 })
-await tab.getByTestId('ops-doc-card-scenario').getByRole('button', { name: /시나리오/ }).click()
-await tab.getByRole('button', { name: '빌더 열기' }).first().click()
-// 빌더 헤더(시나리오 — 문서명) + 세션 카드(프로그램표 연동 배지) + 대본 인라인 노출
-await tab.getByRole('heading', { name: /시나리오 — 진행 시나리오/ }).waitFor({ timeout: 10_000 })
-const linkBadges = await tab.getByText('프로그램표 연동').count()
-check(linkBadges >= 3, '세션 카드 — 프로그램표 연동 배지', `${linkBadges}개(RB27 3세션)`)
-const inlineScript = await tab.getByText(/MC 무대 인사 및 오프닝 키노트 세션 소개/).count()
-check(inlineScript >= 1, '대본 인라인 노출(토글 클릭 없이 본문 표시)', `${inlineScript}건`)
-await tab.getByRole('heading', { name: /시나리오 — 진행 시나리오/ }).scrollIntoViewIfNeeded()
-await tab.screenshot({ path: resolve(SHOTS, '03-scenario-builder-inline.png') })
+// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — 3.17c: 등록 보드 시트 연결 카드 →
+//     '갱신 있음' 배지로 인라인 차이 펼침 → 체크인 탭 이동(결정 A) ──
+await tab.getByRole('link', { name: /^등록$/ }).click()
+await tab.waitForURL(/#\/registration/, { timeout: 10_000 })
+
+// 연결 카드는 탭 위 상시 노출 — 단방향 고지가 화면에 있어야 한다
+await tab.getByText('시트 → 앱 단방향 · 시트가 정본').first().waitFor({ timeout: 10_000 })
+
+// 차이 표는 '갱신 있음'이면 기본 펼침(목업 기준) — 확인 전까지 반영되지 않는다
+await tab.getByRole('button', { name: /변경 \d+건 반영/ }).waitFor({ timeout: 10_000 })
+const diffRows = await tab.getByText(/^(추가|변경|제거)$/).count()
+check(diffRows >= 4, '인라인 차이 표 — 구분 열(추가·변경·제거)', `${diffRows}행`)
+const snapshotNotice = await tab.getByText(/자동 덮어쓰기는 하지 않습니다/).count()
+check(snapshotNotice >= 1, '확인 전까지 스냅숏 유지 고지', `${snapshotNotice}건`)
+await tab.screenshot({ path: resolve(SHOTS, '03a-sheet-diff-inline.png') })
+
+// 배지 클릭으로 접히고 다시 펼쳐진다(핸드오프 §2.12 — 배지가 토글)
+const staleBadge = tab.getByRole('button', { name: /갱신 있음/ }).first()
+await staleBadge.click()
+await tab.getByRole('button', { name: /변경 \d+건 반영/ }).waitFor({ state: 'hidden', timeout: 10_000 })
+await staleBadge.click()
+await tab.getByRole('button', { name: /변경 \d+건 반영/ }).waitFor({ timeout: 10_000 })
+check(true, '갱신 있음 배지 토글 — 접힘 → 펼침 왕복', '차이 표 재노출')
+
+// 반영 전에는 명단이 직전 스냅숏 기준을 유지한다 — 새 행은 차이 표에만 있고 명단에는 없어야 한다
+const roster = tab.getByRole('table', { name: '참관객 명단' })
+const inRoster = await roster.getByText('서지안').count()
+const inDiff = await tab.getByRole('table', { name: '시트 차이' }).getByText(/서지안/).count()
+check(
+  inRoster === 0 && inDiff >= 1,
+  '확인 전 스냅숏 유지 — 신규 행은 차이 표에만, 명단에는 없음',
+  `명단 ${inRoster}건 / 차이 표 ${inDiff}건`,
+)
+
+// 체크인 탭은 등록 보드 안에 있다(별도 라우트를 만들지 않았다 — 결정 A)
+await tab.getByRole('button', { name: '체크인' }).first().click()
+await tab.getByPlaceholder(/이름 · 소속 · 뱃지번호/).waitFor({ timeout: 10_000 })
+const denseToggle = await tab.getByRole('button', { name: /밀집 모드|기본 밀도/ }).count()
+check(denseToggle === 0, '체크인 탭 — 밀집 모드 토글 부재(현장 터치 44 고정)', `${denseToggle}개`)
+await tab.screenshot({ path: resolve(SHOTS, '03b-checkin-tab.png') })
 
 await browser.close()
 server.close()
