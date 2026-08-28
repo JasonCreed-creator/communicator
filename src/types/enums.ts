@@ -125,3 +125,69 @@ export type StructuredDocCategory = (typeof STRUCTURED_DOC_CATEGORIES)[number]
 export function isStructuredDocCategory(category: string): category is StructuredDocCategory {
   return (STRUCTURED_DOC_CATEGORIES as readonly string[]).includes(category)
 }
+
+// ── v2.6 §24: 등록 구글 시트 연동 (S4) ─────────────────────────────────
+/**
+ * sheet_connections.state — 연결 카드 4상태(§24.5).
+ * disconnected = 행 자체가 없거나 해제 직후 / connected = 원본과 일치 /
+ * stale = 원본이 바뀜(감지만 됨, 반영 전) / revoked = 권한 끊김(마지막 스냅숏 유지)
+ */
+export const SHEET_CONNECTION_STATES = ['disconnected', 'connected', 'stale', 'revoked'] as const
+export type SheetConnectionState = (typeof SHEET_CONNECTION_STATES)[number]
+
+/** 차이 표의 구분 — 추가 / 변경 / 시트에서 제거(하드 삭제 금지, §24.1-4) */
+export const SHEET_DIFF_KINDS = ['added', 'changed', 'removed'] as const
+export type SheetDiffKind = (typeof SHEET_DIFF_KINDS)[number]
+
+/** attendees.sheet_status — 신청·확정·취소·시트에서 제거됨. removed는 이력 보존 표시다 */
+export const ATTENDEE_SHEET_STATUSES = ['applied', 'confirmed', 'cancelled', 'removed'] as const
+export type AttendeeSheetStatus = (typeof ATTENDEE_SHEET_STATUSES)[number]
+
+/** 매핑 가능한 등록 필드 — 이 7종이 '시트 소유' 필드다(앱에서 수정 불가, §24.1-3) */
+export const SHEET_MAPPED_FIELDS = [
+  'name',
+  'org',
+  'title',
+  'email',
+  'phone',
+  'group_tag',
+  'registered_at',
+] as const
+export type SheetMappedField = (typeof SHEET_MAPPED_FIELDS)[number]
+
+/** 연결에 반드시 있어야 하는 매핑 — 없으면 connectSheet가 422(§24.4) */
+export const SHEET_REQUIRED_FIELDS: readonly SheetMappedField[] = ['name', 'email']
+
+/**
+ * 시트 연동 표시 라벨 — 화면(S4)과 provider가 같은 문구를 쓰도록 여기에 한 벌만 둔다.
+ * (기존 `src/lib/labels.ts`는 상태 머신 계열 정본이라 건드리지 않는다.)
+ */
+export const SHEET_STATE_LABELS: Record<SheetConnectionState, string> = {
+  disconnected: '미연결',
+  connected: '연결됨',
+  stale: '갱신 있음',
+  revoked: '권한 끊김',
+}
+
+export const SHEET_STATUS_LABELS: Record<AttendeeSheetStatus, string> = {
+  applied: '신청',
+  confirmed: '확정',
+  cancelled: '취소',
+  removed: '시트에서 제거됨',
+}
+
+export const SHEET_DIFF_KIND_LABELS: Record<SheetDiffKind, string> = {
+  added: '추가',
+  changed: '변경',
+  removed: '제거',
+}
+
+export const SHEET_FIELD_LABELS: Record<SheetMappedField, string> = {
+  name: '이름',
+  org: '소속',
+  title: '직함',
+  email: '이메일',
+  phone: '전화',
+  group_tag: '구분',
+  registered_at: '신청 일시',
+}

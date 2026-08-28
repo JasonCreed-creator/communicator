@@ -4,6 +4,7 @@ import type {
   AppRole,
   ApprovalDecision,
   AttendeeChannel,
+  AttendeeSheetStatus,
   CommentVisibility,
   ComplianceKind,
   DeliverableArea,
@@ -24,6 +25,8 @@ import type {
   QuoteSource,
   QuoteStatus,
   ScenarioBlockKind,
+  SheetConnectionState,
+  SheetMappedField,
   WbsDirection,
   WbsStatus,
 } from './enums'
@@ -265,6 +268,18 @@ export interface Attendee {
   registered_at: IsoDateTime
   checked_in_at: IsoDateTime | null
   badge_no: string | null
+  // ── v2.6 §24 시트 연동 확장 — 전부 optional. 시트 연결 행사에서만 채워지고,
+  //    CSV·RSVP·랜딩 등 기존 생성 경로는 하나도 바뀌지 않는다(값이 없으면 undefined).
+  /** 원본 시트의 행 식별자 — 이 값이 있으면 '시트 소유' 행이다 */
+  sheet_row_id?: string
+  /** 시트 소유 — 직함 */
+  title?: string | null
+  /** 시트 소유 — 구분·그룹(VIP·연사·바이어 등) */
+  group_tag?: string | null
+  /** 시트 소유 — 신청 상태. 'removed'는 시트에서 사라진 행의 이력 보존 표시(§24.1-4) */
+  sheet_status?: AttendeeSheetStatus
+  /** 앱 소유 — 현장 비고. 시트를 덮어쓰지 않는다(§24.1-3) */
+  note?: string | null
 }
 
 // §4-11 activity_log
@@ -804,4 +819,70 @@ export interface GuideSection {
   /** 원본 변경 감지 표시 — 자동 덮어쓰기 금지, 사람이 차이를 확인하고 반영(R-O4) */
   source_stale: boolean
   sort_order: number
+}
+
+// ── v2.6 §24 sheet_connections — 등록 명단 구글 시트 연동 (행사당 1개) ──────
+// 대원칙(§24.1): 시트 → 앱 단방향(앱은 시트에 쓰지 않는다) · 자동 덮어쓰기 없음 ·
+// 필드 소유 분리 · 하드 삭제 금지 · 연락처 기본 마스킹.
+
+/** 시트 컬럼 1개 ↔ 등록 필드 매핑. field=null이면 '무시'(앱으로 가져오지 않음) */
+export interface SheetColumnMapping {
+  /** 시트 헤더 문자열 (첫 행을 헤더로 쓰지 않으면 'A'·'B' 같은 열 문자) */
+  column: string
+  field: SheetMappedField | null
+}
+
+export interface SheetConnection {
+  id: UUID
+  project_id: UUID
+  state: SheetConnectionState
+  /** 원본 시트 문서 제목 */
+  title: string | null
+  url: string | null
+  /** 명단이 있는 탭 이름 */
+  tab_name: string | null
+  mapping: SheetColumnMapping[]
+  connected_at: IsoDateTime | null
+  /** 연결한 사람의 표시 이름 */
+  connected_by: string | null
+  /** 화면이 기준으로 삼는 마지막 성공 읽기 시각 — 명단·KPI는 전부 이 시점 기준이다 */
+  snapshot_at: IsoDateTime | null
+  /** 낙관적 잠금 키 (§24.3 R-S1) — applySheetDiff가 이 값과 대조해 409를 낸다 */
+  snapshot_version: number
+  /** 마지막 자동/수동 확인 시각 (반영과 무관 — R-S2) */
+  checked_at: IsoDateTime | null
+  /** 주기 자동 확인 간격(분). 0이면 수동만 (결정 B안) */
+  auto_check_minutes: number
+  /** 원본 시트 최종 수정 시각 — stale 판정 근거 */
+  source_modified_at: IsoDateTime | null
+  /** 미확인 차이 건수 — checkSheetUpdates·applySheetDiff가 갱신 */
+  pending_added: number
+  pending_changed: number
+  pending_removed: number
+  /** 최근 읽기 실패 시각들(권한 끊김 카드의 "실패 3회") */
+  failure_times: IsoDateTime[]
+  last_success_at: IsoDateTime | null
+}
+
+/**
+ * mock 전용 — 원본 시트의 현재 행을 재현한다. **DataProvider 계약에는 나오지 않는다**
+ * (Phase 4에서는 Sheets API 응답이 이 자리를 대신한다). 차이 계산은 항상
+ * 이 행 집합 ↔ attendees(sheet_row_id 보유) 비교로 이뤄진다.
+ */
+export interface SheetSourceRow {
+  project_id: UUID
+  /** attendees.sheet_row_id와 짝을 이룬다 */
+  sheet_row_id: string
+  name: string
+  org: string | null
+  title: string | null
+  email: string | null
+  phone: string | null
+  group_tag: string | null
+  registered_at: IsoDateTime
+  status: AttendeeSheetStatus
+  /** 중복·형식 오류로 앱에 적재하지 않는 행(KPI의 '제외' 건수) */
+  invalid?: boolean
+  /** mock 근사 — 취소 이전에 확정이었던 행(§24 KPI '확정 후 취소'). Phase 4는 상태 변경 이력에서 산출 */
+  previously_confirmed?: boolean
 }

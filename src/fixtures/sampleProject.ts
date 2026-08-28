@@ -24,6 +24,8 @@ import type {
   RoleCharter,
   RsvpContact,
   ScenarioBlock,
+  SheetConnection,
+  SheetSourceRow,
   UnregisteredFile,
   Version,
   WbsTask,
@@ -48,6 +50,7 @@ import {
 } from './rebuildFixtures'
 import { seedLandingFixtures } from './landingFixtures'
 import { seedSettlementFixtures } from './settlementFixtures'
+import { seedSheetFixtures } from './sheetFixtures'
 import {
   PARTNER_DEMO_TOKEN,
   PARTNER_EXPIRED_TOKEN,
@@ -119,6 +122,10 @@ export interface MockState {
   // v2.5 §23 — 운영보드 재구성(시나리오·운영가이드)
   scenario_blocks: ScenarioBlock[]
   guide_sections: GuideSection[]
+  // v2.6 §24 — 등록 명단 구글 시트 연동 (행사당 최대 1건)
+  sheet_connections: SheetConnection[]
+  /** mock 전용 — 원본 시트의 현재 행. 차이 계산의 기준이며 Phase 4에서는 Sheets API가 대신한다 */
+  sheet_source_rows: SheetSourceRow[]
 }
 
 /** v1.2 가이드 문서·스펙·본문 필드 기본값 — 가이드 없이 만든 항목은 전부 null (§4) */
@@ -616,6 +623,10 @@ const FIXTURE: MockState = {
   scenario_blocks: [],
   guide_sections: [],
 
+  // v2.6 §24 — createFixtureState()에서 seedSheetFixtures로 채움(RE:BUILD 27 1건만)
+  sheet_connections: [],
+  sheet_source_rows: [],
+
   unregistered_files: [
     {
       id: 'inb-001',
@@ -914,6 +925,9 @@ export function createFixtureState(): MockState {
 
   // ── v2.4 §21.3 — 주최형(파트너) 데모 행사 ──
   seedHostFixtures(state)
+
+  // ── v2.6 §24 — 등록 명단 시트 연동('갱신 있음' 상태). 데모 기본 행사 1건에만 붙는다 ──
+  seedSheetFixtures(state)
 
   return state
 }

@@ -43,6 +43,8 @@ import type {
   QuoteBreakdown,
   QuoteImport,
   ScenarioBlock,
+  SheetConnection,
+  SheetSourceRow,
   SettlementBoard,
   SettlementBucket,
   SettlementItem,
@@ -67,7 +69,15 @@ import type {
   MemberRole,
   QuoteImportFormat,
 } from '../../types/enums'
-import { isStructuredDocCategory } from '../../types/enums'
+import { isStructuredDocCategory, SHEET_FIELD_LABELS, SHEET_REQUIRED_FIELDS } from '../../types/enums'
+import {
+  buildColumnPreviews,
+  buildProbe,
+  computeSheetDiffRows,
+  DEFAULT_SOURCE_MODIFIED_AT,
+  generateSourceRows,
+  mappedFields,
+} from './sheetSync'
 import type {
   AddCommentInput,
   AttendeeWithRsvp,
@@ -114,6 +124,13 @@ import type {
   QuoteImportDistributeResult,
   RegistrationStats,
   RequestApprovalInput,
+  SheetApplyResult,
+  SheetColumnPreview,
+  SheetConnectInput,
+  SheetDiff,
+  SheetDiffRow,
+  SheetProbe,
+  SheetRegistrationStats,
   RsvpContactPatch,
   ScenarioBlockInput,
   UploadVersionInput,
@@ -1071,6 +1088,329 @@ export class MockProvider implements DataProvider {
       checked_in: checkedIn,
       checkin_rate: attendees.length === 0 ? 0 : checkedIn / attendees.length,
     }
+  }
+
+  // ── 등록 · 구글 시트 연동 (S4, v2.6 §24) ──────────────────────────
+  // 이 절에는 시트로 쓰는 코드가 없다(§24.6). 원본 행(state.sheet_source_rows)은 mock이
+  // 재현한 '시트의 현재 모습'이고, 앱은 그것을 읽어 차이만 보여준다.
+
+  private sheetConnOf(projectId: UUID): SheetConnection | undefined {
+    return this.state.sheet_connections.find((c) => c.project_id === projectId)
+  }
+
+  private mustSheetConn(projectId: UUID): SheetConnection {
+    this.mustFindProject(projectId)
+    const conn = this.sheetConnOf(projectId)
+    if (!conn) throw new ProviderError('not_found', '연결된 시트가 없습니다.')
+    return conn
+  }
+
+  private sheetRowsOf(projectId: UUID): SheetSourceRow[] {
+    return this.state.sheet_source_rows.filter((r) => r.project_id === projectId)
+  }
+
+  private sheetDiffRows(conn: SheetConnection): SheetDiffRow[] {
+    return computeSheetDiffRows({
+      mapping: conn.mapping,
+      sourceRows: this.sheetRowsOf(conn.project_id),
+      attendees: this.state.attendees.filter((a) => a.project_id === conn.project_id),
+    })
+  }
+
+  async getSheetConnection(projectId: UUID): Promise<SheetConnection | null> {
+    this.mustFindProject(projectId)
+    const conn = this.sheetConnOf(projectId)
+    return conn ? structuredClone(conn) : null
+  }
+
+  async probeSheet(projectId: UUID, url: string): Promise<SheetProbe> {
+    const project = this.mustFindProject(projectId)
+    if (!/^https?:\/\/\S+$/.test(url.trim())) {
+      throw new ProviderError('validation', '시트 URL을 확인해 주세요 — http로 시작하는 주소여야 합니다.')
+    }
+    const modified = this.sheetConnOf(projectId)?.source_modified_at ?? DEFAULT_SOURCE_MODIFIED_AT
+    return buildProbe(`${project.name} — 참가자 명단`, modified)
+  }
+
+  async previewSheetColumns(
+    projectId: UUID,
+    url: string,
+    tabName: string,
+  ): Promise<SheetColumnPreview[]> {
+    const probe = await this.probeSheet(projectId, url)
+    const tab = probe.tabs.find((t) => t.name === tabName)
+    if (!tab) throw new ProviderError('not_found', '해당 이름의 탭을 찾을 수 없습니다.')
+    if (!tab.selectable) {
+      throw new ProviderError('validation', '표 형태가 아닌 탭입니다 — 명단으로 쓸 수 없습니다.')
+    }
+    return buildColumnPreviews(tab)
+  }
+
+  async connectSheet(projectId: UUID, input: SheetConnectInput): Promise<SheetConnection> {
+    const user = this.assertRegRole()
+    this.assertWritable(projectId)
+    if (this.sheetConnOf(projectId)) {
+      throw new ProviderError('conflict', '이미 연결된 시트가 있습니다 — 연결을 해제한 뒤 다시 연결해 주세요.')
+    }
+    const probe = await this.probeSheet(projectId, input.url)
+    const tab = probe.tabs.find((t) => t.name === input.tab_name)
+    if (!tab || !tab.selectable) {
+      throw new ProviderError('validation', '명단으로 쓸 수 있는 탭을 선택해 주세요.')
+    }
+    const mapped = mappedFields(input.mapping)
+    const missing = SHEET_REQUIRED_FIELDS.filter((f) => !mapped.includes(f))
+    if (missing.length > 0) {
+      const labels = missing.map((f) => SHEET_FIELD_LABELS[f]).join('·')
+      throw new ProviderError('validation', `필수 매핑이 없습니다 — ${labels} 컬럼을 지정해 주세요.`)
+    }
+    // mock의 '시트 내용' — 이 행사에 원본 행이 없으면 결정적 데모 행을 만들어 둔다
+    if (this.sheetRowsOf(projectId).length === 0) {
+      this.state.sheet_source_rows.push(...generateSourceRows(projectId, 12))
+    }
+    const now = nowIso()
+    const conn: SheetConnection = {
+      id: this.nextId('sht'),
+      project_id: projectId,
+      state: 'connected',
+      title: probe.title,
+      url: input.url.trim(),
+      tab_name: input.tab_name,
+      mapping: input.mapping.map((m) => ({ ...m })),
+      connected_at: now,
+      connected_by: user.name,
+      snapshot_at: now,
+      snapshot_version: 1,
+      checked_at: now,
+      auto_check_minutes: 15,
+      source_modified_at: probe.source_modified_at,
+      pending_added: 0,
+      pending_changed: 0,
+      pending_removed: 0,
+      failure_times: [],
+      last_success_at: now,
+    }
+    this.state.sheet_connections.push(conn)
+    // 최초 적재는 사람이 위저드로 명시한 행동이라 그 자리에서 읽어 온다. 단 **추가만** 한다 —
+    // 기존 행의 값 변경·삭제는 언제나 차이 확인을 거친다(§24.1-2).
+    let seeded = 0
+    for (const row of this.sheetRowsOf(projectId)) {
+      if (row.invalid) continue
+      if (this.state.attendees.some((a) => a.project_id === projectId && a.sheet_row_id === row.sheet_row_id)) {
+        continue
+      }
+      this.state.attendees.push(this.attendeeFromSheetRow(projectId, row))
+      seeded += 1
+    }
+    this.log(projectId, `user:${user.id}`, 'sheet.connected', 'sheet_connection', conn.id, {
+      tab_name: input.tab_name,
+      seeded,
+    })
+    return structuredClone(conn)
+  }
+
+  private attendeeFromSheetRow(projectId: UUID, row: SheetSourceRow): Attendee {
+    return {
+      id: this.nextId('att'),
+      project_id: projectId,
+      rsvp_contact_id: null,
+      name: row.name,
+      org: row.org,
+      email: row.email,
+      phone: row.phone,
+      channel: 'import',
+      registered_at: row.registered_at,
+      // 앱 소유 필드는 비어 있는 상태로 시작한다 — 시트가 채우지 않는다
+      checked_in_at: null,
+      badge_no: null,
+      sheet_row_id: row.sheet_row_id,
+      title: row.title,
+      group_tag: row.group_tag,
+      sheet_status: row.status,
+      note: null,
+    }
+  }
+
+  async disconnectSheet(projectId: UUID): Promise<void> {
+    const user = this.assertRegRole()
+    this.assertWritable(projectId)
+    const conn = this.mustSheetConn(projectId)
+    this.state.sheet_connections = this.state.sheet_connections.filter((c) => c.id !== conn.id)
+    // 참관객 행은 남긴다(이력 보존) — 시트 소유 필드도 마지막 스냅숏 그대로 둔다
+    this.log(projectId, `user:${user.id}`, 'sheet.disconnected', 'sheet_connection', conn.id)
+  }
+
+  async reauthorizeSheet(projectId: UUID): Promise<SheetConnection> {
+    const user = this.assertRegRole()
+    this.assertWritable(projectId)
+    const conn = this.mustSheetConn(projectId)
+    const now = nowIso()
+    conn.failure_times = []
+    conn.checked_at = now
+    conn.last_success_at = now
+    const rows = this.sheetDiffRows(conn)
+    this.applyPendingCounts(conn, rows)
+    this.log(projectId, `user:${user.id}`, 'sheet.reauthorized', 'sheet_connection', conn.id)
+    return structuredClone(conn)
+  }
+
+  /** 감지 결과를 연결 행에 적는다 — 참관객 데이터는 건드리지 않는다(R-S2) */
+  private applyPendingCounts(conn: SheetConnection, rows: SheetDiffRow[]): void {
+    conn.pending_added = rows.filter((r) => r.kind === 'added').length
+    conn.pending_changed = rows.filter((r) => r.kind === 'changed').length
+    conn.pending_removed = rows.filter((r) => r.kind === 'removed').length
+    conn.state = rows.length > 0 ? 'stale' : 'connected'
+  }
+
+  async checkSheetUpdates(projectId: UUID): Promise<SheetConnection> {
+    const conn = this.mustSheetConn(projectId)
+    const now = nowIso()
+    conn.checked_at = now
+    if (conn.state === 'revoked') {
+      // 권한이 끊긴 동안에는 읽기 자체가 실패한다 — 실패 시각만 쌓고 스냅숏은 그대로 유지한다
+      conn.failure_times = [...conn.failure_times, now].slice(-5)
+      return structuredClone(conn)
+    }
+    conn.last_success_at = now
+    this.applyPendingCounts(conn, this.sheetDiffRows(conn))
+    return structuredClone(conn)
+  }
+
+  async getSheetDiff(projectId: UUID): Promise<SheetDiff> {
+    const conn = this.mustSheetConn(projectId)
+    const rows = this.sheetDiffRows(conn)
+    return {
+      snapshot_at: conn.snapshot_at,
+      snapshot_version: conn.snapshot_version,
+      source_modified_at: conn.source_modified_at,
+      rows,
+      added: rows.filter((r) => r.kind === 'added').length,
+      changed: rows.filter((r) => r.kind === 'changed').length,
+      removed: rows.filter((r) => r.kind === 'removed').length,
+    }
+  }
+
+  async applySheetDiff(projectId: UUID, snapshotVersion: number): Promise<SheetApplyResult> {
+    const user = this.assertRegRole()
+    this.assertWritable(projectId)
+    const conn = this.mustSheetConn(projectId)
+    if (conn.state === 'revoked') {
+      throw new ProviderError(
+        'forbidden',
+        '시트 접근 권한이 끊겼습니다 — 재인증한 뒤 다시 반영해 주세요.',
+      )
+    }
+    if (snapshotVersion !== conn.snapshot_version) {
+      throw new ProviderError(
+        'conflict',
+        '다른 담당자가 이미 반영했습니다. 최신 차이를 다시 확인해 주세요.',
+      )
+    }
+    const rows = this.sheetDiffRows(conn)
+    if (rows.length === 0) {
+      // 반영할 것이 없으면 버전을 올리지 않는다 — 다른 담당자의 화면을 헛되이 낡게 만들지 않기 위함
+      return { applied: 0, added: 0, changed: 0, removed: 0, connection: structuredClone(conn) }
+    }
+    const sourceById = new Map(this.sheetRowsOf(projectId).map((r) => [r.sheet_row_id, r]))
+    const fields = mappedFields(conn.mapping)
+    let added = 0
+    let changed = 0
+    let removed = 0
+
+    for (const row of rows) {
+      if (row.kind === 'added') {
+        const source = sourceById.get(row.sheet_row_id)
+        if (!source) continue
+        this.state.attendees.push(this.attendeeFromSheetRow(projectId, source))
+        added += 1
+        continue
+      }
+      const attendee = this.state.attendees.find((a) => a.id === row.attendee_id)
+      if (!attendee) continue
+      if (row.kind === 'removed') {
+        // 하드 삭제 금지 — 상태만 바꿔 이력을 남긴다(체크인·비고는 그대로)
+        attendee.sheet_status = 'removed'
+        removed += 1
+        continue
+      }
+      const source = sourceById.get(row.sheet_row_id)
+      if (!source) continue
+      // 시트 소유 필드만 갱신한다 — checked_in_at·note·badge_no(앱 소유)는 손대지 않는다
+      for (const field of fields) {
+        if (field === 'name') attendee.name = source.name
+        if (field === 'org') attendee.org = source.org
+        if (field === 'title') attendee.title = source.title
+        if (field === 'email') attendee.email = source.email
+        if (field === 'phone') attendee.phone = source.phone
+        if (field === 'group_tag') attendee.group_tag = source.group_tag
+        if (field === 'registered_at') attendee.registered_at = source.registered_at
+      }
+      attendee.sheet_status = source.status
+      changed += 1
+    }
+
+    const now = nowIso()
+    conn.snapshot_version += 1
+    conn.snapshot_at = conn.source_modified_at ?? now
+    conn.state = 'connected'
+    conn.pending_added = 0
+    conn.pending_changed = 0
+    conn.pending_removed = 0
+    conn.checked_at = now
+    conn.last_success_at = now
+    this.log(projectId, `user:${user.id}`, 'sheet.applied', 'sheet_connection', conn.id, {
+      added,
+      changed,
+      removed,
+      snapshot_version: conn.snapshot_version,
+    })
+    return {
+      applied: added + changed + removed,
+      added,
+      changed,
+      removed,
+      connection: structuredClone(conn),
+    }
+  }
+
+  async getSheetRegistrationStats(projectId: UUID): Promise<SheetRegistrationStats | null> {
+    this.mustFindProject(projectId)
+    const conn = this.sheetConnOf(projectId)
+    if (!conn) return null // 미연결 — 화면은 기존 getRegistrationStats로 폴백한다
+    const linked = this.state.attendees.filter(
+      (a) => a.project_id === projectId && a.sheet_row_id && a.sheet_status !== 'removed',
+    )
+    const rows = this.sheetRowsOf(projectId)
+    const bySourceRow = new Map(rows.map((r) => [r.sheet_row_id, r]))
+    const confirmed = linked.filter((a) => a.sheet_status === 'confirmed').length
+    const cancelled = linked.filter((a) => a.sheet_status === 'cancelled')
+    const checkedIn = linked.filter((a) => a.checked_in_at).length
+    const applied = linked.length
+    return {
+      applied,
+      confirmed,
+      cancelled: cancelled.length,
+      checked_in: checkedIn,
+      source_rows: rows.length,
+      excluded: rows.filter((r) => r.invalid).length,
+      response_rate: applied === 0 ? 0 : confirmed / applied,
+      checkin_rate: confirmed === 0 ? 0 : checkedIn / confirmed,
+      cancelled_after_confirm: cancelled.filter(
+        (a) => bySourceRow.get(a.sheet_row_id as string)?.previously_confirmed,
+      ).length,
+      snapshot_at: conn.snapshot_at,
+    }
+  }
+
+  /**
+   * mock 전용 — 공유 해제·인증 만료를 재현한다(인터페이스에는 없다). 화면의 '권한 끊김' 카드와
+   * reauthorizeSheet 복구 경로를 데모·테스트에서 밟기 위한 스위치다.
+   */
+  simulateSheetRevoke(projectId: UUID): SheetConnection {
+    const conn = this.mustSheetConn(projectId)
+    const base = Date.parse(conn.checked_at ?? nowIso())
+    conn.state = 'revoked'
+    conn.failure_times = [0, 15, 30].map((m) => new Date(base + m * 60_000).toISOString())
+    return structuredClone(conn)
   }
 
   // ── 설정 (pm 전용 — §6.1) ─────────────────────────────────────────

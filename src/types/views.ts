@@ -20,6 +20,8 @@ import type {
   ProgramSession,
   Project,
   ScenarioBlock,
+  SheetColumnMapping,
+  SheetConnection,
   UUID,
   Version,
   WbsTask,
@@ -37,6 +39,8 @@ import type {
   ProjectKind,
   ProjectStatus,
   ScenarioBlockKind,
+  SheetDiffKind,
+  SheetMappedField,
   WbsStatus,
 } from './enums'
 import type { ComplianceItem, Targeting } from './entities'
@@ -709,4 +713,111 @@ export interface QuoteImportDistributeResult {
   project_id: UUID | null
   settlement_created: boolean
   deliverables_seeded: number
+}
+
+// ── 등록 구글 시트 연동 입출력 (v2.6 §24, S4) ──────────────────────────
+// 화면(S4)은 이 6종만 본다. 시트에 쓰는 입력 타입은 존재하지 않는다(§24.6).
+
+/** 위저드 1·2단계 — URL 확인 결과(문서 제목·수정 시각·공유 대상 계정·탭 목록) */
+export interface SheetProbe {
+  title: string
+  /** 원본 시트 최종 수정 시각 */
+  source_modified_at: IsoDateTime
+  /** 뷰어로 초대할 서비스 계정 주소 (읽기 권한만 필요) */
+  service_account: string
+  tabs: SheetTabInfo[]
+}
+
+export interface SheetTabInfo {
+  name: string
+  rows: number
+  columns: number
+  headers: string[]
+  /** 표 형태가 아니면 false — 명단으로 선택할 수 없다 */
+  selectable: boolean
+  /** 선택 불가 사유 등 보조 설명 (없으면 null) */
+  note: string | null
+}
+
+/** 위저드 3단계 — 컬럼별 첫 행 미리보기. 연락처는 마스킹된 값만 내려온다(§24.1-5) */
+export interface SheetColumnPreview {
+  column: string
+  /** 첫 데이터 행의 값 — masked=true면 이미 가려진 문자열이다(원문은 내려보내지 않는다) */
+  sample: string
+  masked: boolean
+  /** 헤더 이름으로 추측한 기본 매핑 (없으면 null = 무시) */
+  suggested: SheetMappedField | null
+}
+
+/** 위저드 완료 입력 — 필수 매핑은 name + email(없으면 422) */
+export interface SheetConnectInput {
+  url: string
+  tab_name: string
+  mapping: SheetColumnMapping[]
+  /** 첫 행을 헤더로 사용할지 (false면 열 문자 A·B…를 컬럼명으로 쓴다) */
+  first_row_is_header: boolean
+}
+
+/** 차이 표 1행 — 화면의 4열(구분 / 대상 / 현재 화면 / 시트 원본)과 1:1 */
+export interface SheetDiffRow {
+  kind: SheetDiffKind
+  /** 대상 — '이름 · 소속' 형태의 사람 읽는 라벨 */
+  subject: string
+  /** 현재 화면(직전 스냅숏) 값 요약. added면 null(화면에 아직 없음) */
+  current: string | null
+  /** 시트 원본 값 요약. removed면 null(원본에서 사라짐) */
+  source: string | null
+  /** 화면에 이미 있는 행이면 그 참관객 id (added면 null) */
+  attendee_id: UUID | null
+  sheet_row_id: string
+}
+
+export interface SheetDiff {
+  /** 현재 화면이 서 있는 스냅숏 시각 */
+  snapshot_at: IsoDateTime | null
+  /** 이 값을 그대로 applySheetDiff에 넘긴다 (§24.3 R-S1) */
+  snapshot_version: number
+  /** 원본 시트 최종 수정 시각 */
+  source_modified_at: IsoDateTime | null
+  rows: SheetDiffRow[]
+  added: number
+  changed: number
+  removed: number
+}
+
+export interface SheetApplyResult {
+  /** 반영된 총 건수 = added + changed + removed */
+  applied: number
+  added: number
+  changed: number
+  removed: number
+  /** 반영 후 연결 상태(snapshot_version이 1 증가해 있다 — R-S3) */
+  connection: SheetConnection
+}
+
+/**
+ * 시트 기준 등록 통계 (KPI 4카드 + 보조 수치). 연결이 없는 행사에서는
+ * getSheetRegistrationStats가 **null**을 돌려주고 화면은 기존 getRegistrationStats로 폴백한다.
+ */
+export interface SheetRegistrationStats {
+  /** ① 신청 — removed를 뺀 명단 총계(상태 무관) */
+  applied: number
+  /** ② 확정 — sheet_status='confirmed' */
+  confirmed: number
+  /** ③ 취소 — sheet_status='cancelled' */
+  cancelled: number
+  /** ④ 체크인 — 앱 소유 필드 기준(removed 제외) */
+  checked_in: number
+  /** 원본 시트 행 수(무효 행 포함) */
+  source_rows: number
+  /** 중복·형식 오류로 적재하지 않은 행 수 */
+  excluded: number
+  /** confirmed ÷ applied (applied=0이면 0) */
+  response_rate: number
+  /** checked_in ÷ confirmed — 확정 기준(confirmed=0이면 0) */
+  checkin_rate: number
+  /** 취소 중 '확정 후 취소'였던 건수 */
+  cancelled_after_confirm: number
+  /** 이 통계가 서 있는 스냅숏 시각 */
+  snapshot_at: IsoDateTime | null
 }

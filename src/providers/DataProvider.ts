@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────
-// DataProvider 인터페이스 v9 — 2026-08-28 재동결 (설계서 v2.5 §23) — 110메서드
+// DataProvider 인터페이스 v10 — 2026-08-28 재동결 (설계서 v2.6 §24) — 120메서드
 //   (아래 이력 전체를 유지한다. v7 표기는 2026-08-23 시점의 스냅숏이었다 — v8·v8.1·v9은
 //   그 뒤에 이어 붙은 것이므로 제목 줄만 최신으로 갱신한다.)
 //   v1: 2026-08-19 동결(35메서드). v2: v1.2 승인 근거로 41메서드 재동결.
@@ -48,6 +48,12 @@
 //   시그니처 불변** 후 재동결. 기존 createCueSnapshot은 createDocSnapshot에 위임하도록
 //   내부 리팩터만 하고 시그니처·동작·activity log 의미는 그대로 둔다(R-O2). `importVendorQuote`는
 //   여전히 **v10 예약 — 지금 만들지 않는다**(§19.5). 경위는 PROGRESS.md 결정 로그 참조.
+//   v10: 사용자 v2.6 승인(2026-08-28, 등록 보드 · 구글시트 연동 시안) + 설계서 v2.6 §24를 근거로
+//   동결 해제 → 등록 시트 연동: getSheetConnection·probeSheet·previewSheetColumns·connectSheet·
+//   disconnectSheet·reauthorizeSheet·checkSheetUpdates·getSheetDiff·applySheetDiff·
+//   getSheetRegistrationStats 10메서드 추가 = 120메서드. **기존 110메서드 시그니처 불변** 후 재동결.
+//   Attendee 확장(sheet_row_id·title·group_tag·sheet_status·note)은 전부 optional이라 기존 생성
+//   경로·픽스처를 건드리지 않는다. `importVendorQuote`는 이제 **v11 예약 — 지금 만들지 않는다**.
 //
 // 프로젝트 스코프 규칙(설계서 v2.1 §4-21 R-L1): 프로젝트 단위 조회·생성 메서드는 projectId를
 // 인자로 받는다. currentUser()는 행위자 신원·권한 판정 전용이며 스코프 유도에 쓰지 않는다.
@@ -93,6 +99,7 @@ import type {
   UUID,
   Version,
   WbsTask,
+  SheetConnection,
 } from '../types/entities'
 import type { DeliverableStatus } from '../types/enums'
 import type {
@@ -142,6 +149,12 @@ import type {
   WbsTaskFilter,
   WbsTaskPatch,
   SettlementBoardView,
+  SheetApplyResult,
+  SheetColumnPreview,
+  SheetConnectInput,
+  SheetDiff,
+  SheetProbe,
+  SheetRegistrationStats,
 } from '../types/views'
 
 export interface DataProvider {
@@ -471,6 +484,38 @@ export interface DataProvider {
   /** 승인/수정요청 (§5 client_decision). 수정요청은 comment 필수 */
   submitClientDecision(token: string, input: ClientDecisionInput): Promise<void>
   getClientStatus(token: string): Promise<ClientStatusData>
+
+  // ── 등록 · 구글 시트 연동 (S4, v2.6 §24) ──────────────────────────
+  // 시트 → 앱 단방향이다. 이 절에 시트로 쓰는 메서드는 없고, 앞으로도 추가하지 않는다(§24.6).
+  /** 행사의 시트 연결 1건. 연결한 적이 없으면 null(화면은 미연결 빈 상태로 분기) */
+  getSheetConnection(projectId: UUID): Promise<SheetConnection | null>
+  /** 위저드 1·2단계 — URL 확인(문서 제목·최종 수정 시각·공유 대상 계정·탭 목록) */
+  probeSheet(projectId: UUID, url: string): Promise<SheetProbe>
+  /** 위저드 3단계 — 선택한 탭의 컬럼별 첫 행 미리보기(연락처는 마스킹된 값만) */
+  previewSheetColumns(projectId: UUID, url: string, tabName: string): Promise<SheetColumnPreview[]>
+  /** 연결 확정 (pm·reg). 필수 매핑 name+email이 없으면 422 validation */
+  connectSheet(projectId: UUID, input: SheetConnectInput): Promise<SheetConnection>
+  /** 연결 해제 (pm·reg). 이미 적재된 참관객 행은 이력으로 남긴다(하드 삭제 금지) */
+  disconnectSheet(projectId: UUID): Promise<void>
+  /** 권한 끊김(revoked) 복구 — 재인증 후 connected로 (pm·reg) */
+  reauthorizeSheet(projectId: UUID): Promise<SheetConnection>
+  /** 주기 자동/수동 확인. **감지만** 한다 — 상태·확인 시각·미확인 건수만 갱신(R-S2) */
+  checkSheetUpdates(projectId: UUID): Promise<SheetConnection>
+  /** 미확인 차이 목록. 차이가 없으면 rows=[](오류가 아니다) */
+  getSheetDiff(projectId: UUID): Promise<SheetDiff>
+  /**
+   * 사람이 차이를 확인한 뒤의 반영 (pm·reg). snapshotVersion은 **호출자가 보고 있던** 버전이며,
+   * 저장값과 다르면 409 conflict(R-S1 — 다른 담당자가 이미 반영했다는 뜻).
+   * 성공 시 snapshot_version 증가 · snapshot_at = 원본 수정 시각(R-S3).
+   * 체크인·비고(앱 소유)는 어떤 경우에도 덮어쓰지 않고, 사라진 행은 sheet_status='removed'로 남긴다.
+   */
+  applySheetDiff(projectId: UUID, snapshotVersion: number): Promise<SheetApplyResult>
+  /**
+   * 시트 기준 등록 통계(KPI 4카드). 연결이 없으면 **null** — 화면은 기존 getRegistrationStats
+   * (응답률·등록 수·체크인율)로 폴백한다. §24.4는 반환형을 SheetRegistrationStats로만 적었으나,
+   * 미연결 행사에서 404를 던지면 상시 노출 카드가 오류로 보이므로 null 분기로 확정한다.
+   */
+  getSheetRegistrationStats(projectId: UUID): Promise<SheetRegistrationStats | null>
 }
 
 
