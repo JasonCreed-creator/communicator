@@ -5,6 +5,7 @@ import OnboardingGuard from './components/onboarding/OnboardingGuard'
 import { ProjectProvider } from './context/ProjectContext'
 import AreaBoardPage from './pages/AreaBoardPage'
 import ClientConfirmQueuePage from './pages/ClientConfirmQueuePage'
+import ClientMaterialsPage from './pages/ClientMaterialsPage'
 import ClientStatusPage from './pages/ClientStatusPage'
 import HomeDashboardPage from './pages/HomeDashboardPage'
 import ItemDetailPage from './pages/ItemDetailPage'
@@ -21,6 +22,7 @@ import LandingBoardPage from './pages/LandingBoardPage'
 import LandingEditorPage from './pages/LandingEditorPage'
 import QuotesPage from './pages/QuotesPage'
 import RegistrationPage from './pages/RegistrationPage'
+import OnsiteCheckinPage from './pages/OnsiteCheckinPage'
 import SchedulePage from './pages/SchedulePage'
 import SettingsPage from './pages/SettingsPage'
 import SettlementPage from './pages/SettlementPage'
@@ -79,6 +81,8 @@ export function AppRoutes() {
             <Route path="/board/:area" element={<AreaBoardPage />} />
             <Route path="/items/:itemId" element={<ItemDetailPage />} />
             <Route path="/registration" element={<RegistrationPage />} />
+            {/* S-12 현장 체크인 — v2.6 §10. 등록 보드와 분리된 현장 전용 화면(3.17.1 T1) */}
+            <Route path="/checkin" element={<OnsiteCheckinPage />} />
             <Route path="/schedule" element={<SchedulePage />} />
             <Route path="/plan" element={<PlanDocPage />} />
             {/* v2.2 S-10 정산보드 — 운영 그룹 마지막. 내부 전용이라 /c/* 밖에만 있다 */}
@@ -93,6 +97,8 @@ export function AppRoutes() {
       <Route path="/c/:token" element={<ClientLayout />}>
         <Route index element={<ClientConfirmQueuePage />} />
         <Route path="status" element={<ClientStatusPage />} />
+        {/* 시안 「발주처 보드」 3번째 탭 — 고객사가 보내주셔야 할 자료 */}
+        <Route path="materials" element={<ClientMaterialsPage />} />
       </Route>
 
       {/* v2.4 파트너 제출 포털 — 무로그인 파트너 토큰 링크 (/p/demo-partner 데모 포함), ProjectScope 밖.

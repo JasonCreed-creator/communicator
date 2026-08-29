@@ -13,6 +13,7 @@ import OnboardingGuard from '../components/onboarding/OnboardingGuard'
 import { ProjectProvider } from '../context/ProjectContext'
 import AreaBoardPage from '../pages/AreaBoardPage'
 import ClientConfirmQueuePage from '../pages/ClientConfirmQueuePage'
+import ClientMaterialsPage from '../pages/ClientMaterialsPage'
 import ClientStatusPage from '../pages/ClientStatusPage'
 import HomeDashboardPage from '../pages/HomeDashboardPage'
 import ItemDetailPage from '../pages/ItemDetailPage'
@@ -25,6 +26,7 @@ import ProjectListPage from '../pages/ProjectListPage'
 import QuoteEditorPage from '../pages/QuoteEditorPage'
 import QuotesPage from '../pages/QuotesPage'
 import RegistrationPage from '../pages/RegistrationPage'
+import OnsiteCheckinPage from '../pages/OnsiteCheckinPage'
 import SchedulePage from '../pages/SchedulePage'
 import SettingsPage from '../pages/SettingsPage'
 import SettlementPage from '../pages/SettlementPage'
@@ -75,6 +77,8 @@ export function renderRoute(path: string) {
               <Route path="/board/:area" element={<AreaBoardPage />} />
               <Route path="/items/:itemId" element={<ItemDetailPage />} />
               <Route path="/registration" element={<RegistrationPage />} />
+            {/* S-12 현장 체크인 — v2.6 §10 (App.tsx와 동일 구성) */}
+            <Route path="/checkin" element={<OnsiteCheckinPage />} />
               <Route path="/schedule" element={<SchedulePage />} />
               <Route path="/plan" element={<PlanDocPage />} />
               {/* v2.2 S-10 정산보드 */}
@@ -88,6 +92,7 @@ export function renderRoute(path: string) {
         <Route path="/c/:token" element={<ClientLayout />}>
           <Route index element={<ClientConfirmQueuePage />} />
           <Route path="status" element={<ClientStatusPage />} />
+          <Route path="materials" element={<ClientMaterialsPage />} />
         </Route>
 
         {/* v2.0 §10 — 옛 Configurator 라우트 리다이렉트 (App.tsx와 동일 구성) */}

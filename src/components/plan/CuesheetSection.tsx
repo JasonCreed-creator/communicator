@@ -1,11 +1,11 @@
 import { summaryLine } from '../cue/cueFormValues'
 import PlanSection from './PlanSection'
-import { PLAN_SECTION_META, type SectionProgressData } from './planSections'
+import { type SectionProgressData } from './planSections'
 import StatusPill from './StatusPill'
 import type { PlanCuesheet } from '../../types/views'
 
 /**
- * ③큐시트 — 첫 큐시트 항목의 큐 표(시간·큐·구분·내용·콘솔 3채널), 설계서 §10 S9대로 프로그램 다음 배치.
+ * 03 큐시트 — 첫 큐시트 항목의 큐 표(시간·큐·구분·내용·콘솔 3채널), 설계서 §10 S9대로 프로그램 다음 배치.
  * 편집 UI 없음(읽기 전용 조립 뷰) — 편집은 S3 CuesheetEditor(src/components/cue/)에서 한다.
  */
 export default function CuesheetSection({
@@ -16,7 +16,7 @@ export default function CuesheetSection({
   progress: SectionProgressData
 }) {
   return (
-    <PlanSection number={PLAN_SECTION_META.cuesheet.number} title={PLAN_SECTION_META.cuesheet.title} progress={progress}>
+    <PlanSection sectionKey="cuesheet" progress={progress}>
       {!cuesheet ? (
         <p className="text-xs text-ink-cap">등록된 큐시트 항목이 없습니다.</p>
       ) : (

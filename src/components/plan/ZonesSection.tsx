@@ -1,11 +1,11 @@
 import { renderLiteMarkdown } from './markdown'
 import PlanSection from './PlanSection'
-import { PLAN_SECTION_META, type SectionProgressData } from './planSections'
+import { type SectionProgressData } from './planSections'
 import StatusPill from './StatusPill'
 import type { PlanGuideZone, PlanZoneItem } from '../../types/views'
 
 /**
- * ④존별 운영 — ops 항목의 content(마크다운)+최신 도면 미리보기.
+ * 04 존별 운영 — ops 항목의 content(마크다운)+최신 도면 미리보기.
  * v2.5 §23 + 3.16.3 T3① — 운영가이드의 zone 섹션이 있으면 **그것만 정본으로 단일 표시**한다
  * (가이드 존 섹션은 존운영 항목에서 시드되므로 같이 그리면 같은 내용이 이중 렌더된다).
  * guideZone이 null이면 기존 존운영 항목 렌더와 완전히 동일 — 회귀 없음.
@@ -20,7 +20,7 @@ export default function ZonesSection({
   guideZone: PlanGuideZone | null
 }) {
   return (
-    <PlanSection number={PLAN_SECTION_META.zones.number} title={PLAN_SECTION_META.zones.title} progress={progress}>
+    <PlanSection sectionKey="zones" progress={progress}>
       {guideZone ? (
         <div className="rounded-lg border border-border bg-canvas p-4">
           <div className="mb-2 flex flex-wrap items-center gap-2">

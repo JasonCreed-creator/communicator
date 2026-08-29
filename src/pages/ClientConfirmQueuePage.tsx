@@ -61,11 +61,16 @@ export default function ClientConfirmQueuePage() {
 
   return (
     <div className="pb-10">
+      {/* 행사명은 상단 다크 바가 이미 말한다 — 본문 헤더는 '내가 할 일'만 (시안 「발주처 보드」) */}
       <div className="border-b border-border bg-card px-4 py-4">
-        <p className="t-caption">{data.project_name}</p>
-        <h1 className="mt-0.5 t-section-title">
+        <h1 className="t-section-title">
           {data.contact_name ?? '담당자'}님, 확인 부탁드립니다
         </h1>
+        <p className="mt-1 text-sm text-ink-sub">
+          {data.queue.length > 0
+            ? `컨펌 요청 ${data.queue.length}건이 회신을 기다립니다.`
+            : '확인을 기다리는 항목이 없습니다.'}
+        </p>
       </div>
 
       <div className="space-y-4 px-4 py-4">

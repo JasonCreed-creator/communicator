@@ -97,7 +97,7 @@ describe('DoD 37 (c·d) — R-O6·인쇄 구조 (라우트 싱글턴)', () => {
 
     localStorage.setItem('communicator.currentProjectId', RB27)
     renderRoute('/plan')
-    await screen.findByRole('heading', { name: '⑦비상 대응' })
+    await screen.findByRole('heading', { name: '07 비상 대응' })
     expect(screen.queryByText(new RegExp(MARKER))).toBeNull()
   })
 

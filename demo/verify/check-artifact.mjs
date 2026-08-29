@@ -80,6 +80,7 @@ const BENIGN_HOSTS = new Map([
   ['stuartk.com', 'jszip 라이선스 배너'],
   ['feross.org', 'buffer 라이선스 배너'],
   ['hooks.slack.com', 'S6 비활성 input의 placeholder'],
+  ['sheets.example.com', 'S4 시트 연결 픽스처의 더미 URL (실제 요청 없음 — 표시·링크 문자열)'],
   ['example.com', '픽스처 더미 링크'],
   ['…', 'S3 지시 참고링크 textarea placeholder ("https://…")'],
   // v2.1 랜딩보드: 랜딩 내보내기 템플릿의 GA4/GTM 스니펫 문자열. 내려받은 .html에서만 실행되며

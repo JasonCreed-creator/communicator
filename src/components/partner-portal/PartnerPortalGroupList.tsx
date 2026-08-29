@@ -33,7 +33,8 @@ export default function PartnerPortalGroupList({ title, groups, token, onSubmitt
         {groups.map((group) => (
           <li key={group.deadline ?? 'no-deadline'} className="ui-card overflow-hidden">
             <details>
-              <summary className="flex cursor-pointer list-none flex-col gap-0.5 px-4 py-3">
+              {/* 외부 지면 — 접힘 행도 터치 타깃 44 이상(min-h-11) */}
+              <summary className="flex min-h-11 cursor-pointer list-none flex-col justify-center gap-0.5 px-4 py-3">
                 <span className="flex items-center justify-between gap-2">
                   <span className="text-sm font-medium text-ink">
                     {group.deadline ? formatDate(group.deadline) : '마감일 미정'}

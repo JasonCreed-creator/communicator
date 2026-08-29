@@ -4,10 +4,13 @@ import Card from '../components/internal/Card'
 import DdayBadge from '../components/internal/DdayBadge'
 import EmptyState from '../components/internal/EmptyState'
 import ErrorAlert from '../components/internal/ErrorAlert'
+import FilterEmptyState, { type AppliedFilter } from '../components/internal/FilterEmptyState'
 import InfoTip from '../components/internal/InfoTip'
 import PageHeader from '../components/internal/PageHeader'
 import StatusBadge from '../components/internal/StatusBadge'
 import BoardFilterBar from '../components/board/BoardFilterBar'
+import BoardGroupHeading from '../components/board/BoardGroupHeading'
+import BoardStatusLegend from '../components/board/BoardStatusLegend'
 import DeliverableAddForm from '../components/board/DeliverableAddForm'
 import OpsDocCardGrid, { type OpsDocCardSummary } from '../components/board/OpsDocCardGrid'
 import {
@@ -24,20 +27,29 @@ import { useAsync, useMutation } from '../hooks/useAsync'
 import {
   AREA_LABELS,
   OPS_DOC_CARD_LABELS,
-  STATUS_BADGE_CLASSES,
+  ROLE_BAR_CLASSES,
   STATUS_LABELS,
   STATUS_STRIP_CLASSES,
   formatDate,
 } from '../lib/labels'
 import { categoryGroupLabel } from '../lib/boardPresets'
-import { BOARD_HELP, OPS_BOARD_HEADER_HELP, STATUS_HELP } from '../lib/helpTexts'
+import { BOARD_HELP, OPS_BOARD_HEADER_HELP } from '../lib/helpTexts'
 import { getDataProvider } from '../providers'
 import type { Deliverable } from '../types/entities'
-import { isStructuredDocCategory, type DeliverableArea, type DeliverableStatus } from '../types/enums'
+import { isStructuredDocCategory, type DeliverableArea, type DeliverableStatus, type MemberRole } from '../types/enums'
 import NotFoundPage from './NotFoundPage'
 
 const provider = getDataProvider()
 const BOARD_AREAS: DeliverableArea[] = ['design', 'ops']
+
+/** 3.17b 시안 정렬 — 항목 행 고정 열 그리드(상태 92 · 제목 flex · 버전 48 · 담당 84 · 마감 132 · 액션 96).
+ *  옛 구조(flex-wrap + gap-3)는 제목 길이에 따라 뒤 열이 행마다 흔들려 세로 스캔이 안 됐다. */
+const ROW_GRID = 'grid grid-cols-[92px_minmax(0,1fr)_48px_84px_132px_96px] items-center gap-3'
+
+/** 확정(final) 건수 — 그룹 헤딩·유형 카드의 진행 막대 분자 */
+function doneCountOf(rows: { deliverable: Deliverable }[]): number {
+  return rows.filter((r) => r.deliverable.status === 'final').length
+}
 
 interface BoardRow {
   deliverable: Deliverable
@@ -101,8 +113,13 @@ function AreaBoard({ area }: { area: DeliverableArea }) {
     )
   }, [projectId, area, statusFilter, assigneeFilter])
 
-  const memberName = (userId: string | null) =>
-    members.data?.find((m) => m.user_id === userId)?.profile.name ?? '미배정'
+  // 3.17b — 빈 상태 ③(필터 결과 없음)이 보여줄 "전체 건수". 상태·담당 필터는 provider가
+  // 적용하므로 걸러지지 않은 목록을 따로 한 번 읽는다(읽기 전용 · 데이터 무변경).
+  const allItems = useAsync(() => provider.listDeliverables(projectId, { area }), [projectId, area])
+
+  const memberOf = (userId: string | null) => members.data?.find((m) => m.user_id === userId)
+  const memberName = (userId: string | null) => memberOf(userId)?.profile.name ?? '미배정'
+  const memberRole = (userId: string | null): MemberRole | null => memberOf(userId)?.role ?? null
 
   // v1.5 §8: 종료 행사는 읽기 전용 — provider가 쓰기 API를 409로 막으므로 생성 폼도 내린다.
   // (폼이 남아 있으면 지난 행사를 참고 자료로 열람할 때 아직 쓸 수 있는 것처럼 읽힌다.)
@@ -126,8 +143,8 @@ function AreaBoard({ area }: { area: DeliverableArea }) {
     return visibleRows.filter((r) => classifyOpsCard(r.deliverable.category) === selectedCard)
   }, [visibleRows, area, selectedCard])
 
-  // v2.5 §10.2 — 카드 4종 건수·대표 상태. 상태·담당 필터는 반영하되(다른 카운트 표시와 일관),
-  // 제목 검색은 반영하지 않는다(카드는 안정적인 상단 내비게이션 — 검색은 목록에만 영향).
+  // v2.5 §10.2 — 카드 4종 건수·대표 상태·확정 건수. 상태·담당 필터는 반영하되(다른 카운트 표시와
+  // 일관), 제목 검색은 반영하지 않는다(카드는 안정적인 상단 내비게이션 — 검색은 목록에만 영향).
   const opsCardSummaries = useMemo<OpsDocCardSummary[]>(() => {
     if (area !== 'ops') return []
     const rows = board.data ?? []
@@ -137,7 +154,12 @@ function AreaBoard({ area }: { area: DeliverableArea }) {
         if (!acc) return r
         return r.deliverable.updated_at > acc.deliverable.updated_at ? r : acc
       }, null)
-      return { key, count: items.length, latestStatus: latest?.deliverable.status ?? null }
+      return {
+        key,
+        count: items.length,
+        latestStatus: latest?.deliverable.status ?? null,
+        doneCount: doneCountOf(items),
+      }
     })
   }, [area, board.data])
 
@@ -172,6 +194,7 @@ function AreaBoard({ area }: { area: DeliverableArea }) {
       key={row.deliverable.id}
       row={row}
       assigneeName={memberName(row.deliverable.assignee_id)}
+      assigneeRole={memberRole(row.deliverable.assignee_id)}
       canWrite={!!canWrite}
       isExpanded={expandedDoc?.id === row.deliverable.id}
       canEditBuilder={canEditCue}
@@ -189,6 +212,7 @@ function AreaBoard({ area }: { area: DeliverableArea }) {
       presetCategory={area === 'ops' && selectedCard ? CARD_PRESET_CATEGORY[selectedCard] : undefined}
       onCreated={(created) => {
         board.reload()
+        allItems.reload()
         // v2.5 §10.2 — P7의 완성형: 큐시트뿐 아니라 정형 3종 전부에서 생성 직후 빌더가 열린다.
         setExpandedDoc(isStructuredDocCategory(created.category) ? created : null)
       }}
@@ -199,9 +223,42 @@ function AreaBoard({ area }: { area: DeliverableArea }) {
     <p className="text-sm text-ink-cap">이 영역에는 쓰기 권한이 없습니다(열람만 가능).</p>
   ) : null
 
-  const emptyMessage = board.data && cardFilteredRows.length === 0 && (
-    <EmptyState message="조건에 맞는 항목이 없습니다." />
-  )
+  // 3.17b 빈 상태 정본(§06) — ② '문서 없음'과 ③ '필터 결과 없음'을 반드시 가른다.
+  const appliedFilters: AppliedFilter[] = []
+  if (statusFilter) appliedFilters.push({ label: '상태', value: STATUS_LABELS[statusFilter] })
+  if (assigneeFilter) appliedFilters.push({ label: '담당', value: memberName(assigneeFilter) })
+  if (titleQuery.trim()) appliedFilters.push({ label: '제목 검색', value: titleQuery.trim() })
+
+  const resetFilters = () => {
+    setStatusFilter('')
+    setAssigneeFilter('')
+    setTitleQuery('')
+  }
+
+  // ③이 보여줄 전체 건수 — 유형 카드가 선택돼 있으면 그 유형 범위의 전체 건수다.
+  const scopedTotal = useMemo(() => {
+    const items = allItems.data ?? []
+    if (area !== 'ops' || !selectedCard) return items.length
+    return items.filter((d) => classifyOpsCard(d.category) === selectedCard).length
+  }, [allItems.data, area, selectedCard])
+
+  const emptyLabel =
+    area === 'ops' && selectedCard
+      ? `아직 ${OPS_DOC_CARD_LABELS[selectedCard]} 문서가 없습니다.`
+      : '아직 등록된 항목이 없습니다.'
+
+  const emptyMessage =
+    board.data && cardFilteredRows.length === 0 ? (
+      appliedFilters.length > 0 ? (
+        <FilterEmptyState
+          totalCount={scopedTotal}
+          filters={appliedFilters}
+          onReset={resetFilters}
+        />
+      ) : (
+        <EmptyState message={emptyLabel} />
+      )
+    ) : null
   const loadingMessage = board.loading && <p className="text-sm text-ink-cap">불러오는 중…</p>
 
   return (
@@ -230,7 +287,10 @@ function AreaBoard({ area }: { area: DeliverableArea }) {
       {area === 'ops' && selectedCard ? (
         // P11 통합 카드 — 목업 화면 A: 카드 아래는 "[유형명] — 문서 목록" 한 장으로,
         // 필터는 그 헤더 우측에, 항목 추가는 목록 하단에, 빌더는 각 행 바로 아래에 들어간다.
-        <Card title={`${OPS_DOC_CARD_LABELS[selectedCard]} — 문서 목록`} action={filterBar(true)}>
+        <Card
+          title={`${OPS_DOC_CARD_LABELS[selectedCard]} — 문서 목록`}
+          action={<span className="print-hidden">{filterBar(true)}</span>}
+        >
           <div className="space-y-4">
             {loadingMessage}
             {emptyMessage}
@@ -242,9 +302,9 @@ function AreaBoard({ area }: { area: DeliverableArea }) {
         </Card>
       ) : (
         <>
-          {filterBar(false)}
+          <div className="print-hidden">{filterBar(false)}</div>
           {/* design 보드는 상태 범례를 그대로 둔다(3.16 범위 = 운영보드) */}
-          {area === 'design' && <StatusLegend />}
+          {area === 'design' && <BoardStatusLegend />}
           {loadingMessage}
           {emptyMessage}
           <BoardGroupList
@@ -284,7 +344,11 @@ function BoardGroupList({
       <div className="space-y-6">
         {[...grouped.entries()].map(([category, groupRows]) => (
           <div key={category} className="space-y-3">
-            <GroupHeading label={categoryGroupLabel(category)} count={groupRows.length} />
+            <BoardGroupHeading
+              label={categoryGroupLabel(category)}
+              count={groupRows.length}
+              doneCount={doneCountOf(groupRows)}
+            />
             <ul className="space-y-2">{groupRows.map(renderRow)}</ul>
           </div>
         ))}
@@ -307,7 +371,11 @@ function BoardGroupList({
         if (key !== 'other') {
           return (
             <div key={key} className="space-y-3">
-              <GroupHeading label={OPS_DOC_CARD_LABELS[key]} count={groupRows.length} />
+              <BoardGroupHeading
+                label={OPS_DOC_CARD_LABELS[key]}
+                count={groupRows.length}
+                doneCount={doneCountOf(groupRows)}
+              />
               <ul className="space-y-2">{groupRows.map(renderRow)}</ul>
             </div>
           )
@@ -321,7 +389,11 @@ function BoardGroupList({
         }
         return (
           <div key={key} className="space-y-3">
-            <GroupHeading label={OPS_DOC_CARD_LABELS.other} count={groupRows.length} />
+            <BoardGroupHeading
+              label={OPS_DOC_CARD_LABELS.other}
+              count={groupRows.length}
+              doneCount={doneCountOf(groupRows)}
+            />
             <div className="space-y-4">
               {[...byCategory.entries()].map(([category, categoryRows]) => (
                 <div key={category} className="space-y-2">
@@ -339,36 +411,10 @@ function BoardGroupList({
   )
 }
 
-function GroupHeading({ label, count }: { label: string; count: number }) {
-  return (
-    <div className="flex items-baseline gap-2 px-1">
-      <span className="text-xs font-medium tracking-wide text-brown">{label}</span>
-      <span className="text-xs text-ink-cap">{count}건</span>
-    </div>
-  )
-}
-
-/** 상태 뱃지 범례 — P8(3.15.1). 디자인 보드 전용(운영보드는 P11에서 헤더 도움말로 합침). */
-function StatusLegend() {
-  return (
-    <div className="flex flex-wrap items-center gap-1.5" aria-label="상태 범례">
-      <span className="t-caption">상태 범례</span>
-      {(Object.keys(STATUS_LABELS) as DeliverableStatus[]).map((s) => (
-        <span
-          key={s}
-          title={STATUS_HELP[s]}
-          className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_BADGE_CLASSES[s]}`}
-        >
-          {STATUS_LABELS[s]}
-        </span>
-      ))}
-    </div>
-  )
-}
-
 function BoardRowItem({
   row,
   assigneeName,
+  assigneeRole,
   canWrite,
   isExpanded,
   canEditBuilder,
@@ -378,6 +424,8 @@ function BoardRowItem({
 }: {
   row: BoardRow
   assigneeName: string
+  /** 담당자 역할 — 이름 앞 8px 도트 색(역할은 면이 아니라 형태로만 표시한다, 패턴 §04) */
+  assigneeRole: MemberRole | null
   canWrite: boolean
   /** 이 항목의 인라인 빌더가 지금 펼쳐져 있는지(부모의 expandedDoc과 id 비교) */
   isExpanded: boolean
@@ -410,38 +458,65 @@ function BoardRowItem({
   return (
     <li className="ui-card relative overflow-hidden">
       <span aria-hidden className={`absolute inset-y-0 left-0 w-[3px] ${STATUS_STRIP_CLASSES[deliverable.status]}`} />
+      {/* 3.17b — 고정 열 그리드. 각 열은 행마다 같은 자리에 서고, 넘치는 값은 …로 자른다
+          (조건 2: 잘린 제목은 title 속성으로 전체 확인 가능). */}
       <Link
         to={`/items/${deliverable.id}`}
-        className="flex flex-wrap items-center gap-3 py-3 pr-4 pl-5 hover:opacity-70"
+        className={`${ROW_GRID} py-3 pr-4 pl-5 hover:opacity-70`}
       >
         <StatusBadge status={deliverable.status} />
-        <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink">{deliverable.title}</span>
-        <span className="shrink-0 text-xs text-ink-sub">
+        <span className="min-w-0 truncate text-sm font-medium text-ink" title={deliverable.title}>
+          {deliverable.title}
+        </span>
+        <span
+          className="truncate text-xs text-ink-sub"
+          title={latestVersionNo > 0 ? `버전 v${latestVersionNo}` : '등록된 버전 없음'}
+        >
           {latestVersionNo > 0 ? `v${latestVersionNo}` : '버전 없음'}
         </span>
-        <span className="shrink-0 text-xs text-ink-sub">{assigneeName}</span>
+        {/* 담당 — 역할은 pill이 아니라 이름 앞 8px 도트(형태)로만 나타낸다 */}
+        <span className="flex min-w-0 items-center gap-1.5 text-xs text-ink-sub">
+          <span
+            aria-hidden
+            className={`size-2 shrink-0 rounded-full ${
+              assigneeRole ? ROLE_BAR_CLASSES[assigneeRole] : 'bg-track'
+            }`}
+          />
+          <span className="truncate" title={assigneeName}>
+            {assigneeName}
+          </span>
+        </span>
         {deliverable.due_date ? (
-          <span className="flex shrink-0 items-center gap-1.5 text-xs text-ink-sub">
+          <span className="flex items-center gap-1.5 text-xs text-ink-sub">
             {formatDate(deliverable.due_date)}
             <DdayBadge isoDate={deliverable.due_date} />
           </span>
         ) : (
-          <span className="shrink-0 text-xs text-ink-cap">마감 미정</span>
+          <span className="text-xs text-ink-cap">마감 미정</span>
         )}
-        {/* v2.5 §10.2 인라인 빌더 — 레거시 파일 문서는 빌더를 강제로 열지 않고 안내만 노출한다 */}
-        {structured && legacy && (
-          <span className="shrink-0 text-xs text-ink-cap">파일 문서 — 상세에서 열람</span>
-        )}
-        {structured && !legacy && (
-          <button type="button" onClick={handleToggleBuilder} className="btn btn-ghost btn-sm shrink-0">
-            {isExpanded ? '빌더 닫기' : '빌더 열기'}
-          </button>
-        )}
-        {canWrite && deliverable.status === 'draft' && (
-          <button type="button" onClick={handleTransition} disabled={transition.pending} className="btn btn-ghost btn-sm shrink-0">
-            내부검토 요청
-          </button>
-        )}
+        <span className="flex flex-wrap items-center justify-end gap-1">
+          {/* v2.5 §10.2 인라인 빌더 — 레거시 파일 문서는 빌더를 강제로 열지 않고 안내만 노출한다 */}
+          {structured && legacy && (
+            <span className="text-right text-[11px] leading-tight text-ink-cap">
+              파일 문서 — 상세에서 열람
+            </span>
+          )}
+          {structured && !legacy && (
+            <button type="button" onClick={handleToggleBuilder} className="btn btn-ghost btn-sm">
+              {isExpanded ? '빌더 닫기' : '빌더 열기'}
+            </button>
+          )}
+          {canWrite && deliverable.status === 'draft' && (
+            <button
+              type="button"
+              onClick={handleTransition}
+              disabled={transition.pending}
+              className="btn btn-ghost btn-sm"
+            >
+              내부검토 요청
+            </button>
+          )}
+        </span>
       </Link>
       {transition.error && (
         <div className="px-5 pb-3">

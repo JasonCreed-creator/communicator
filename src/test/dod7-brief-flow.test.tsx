@@ -84,13 +84,16 @@ describe('DoD-7 가이드 발행 흐름', () => {
 
   it('(d) 첫 버전 업로드 시 초안 상태로 자동 전환된다', async () => {
     renderRoute(`/items/${issuedItemId}`)
-    await screen.findByText('가이드됨')
+    // 3.17b — 6단계 진행 레일이 '가이드됨'을 라벨로도 그린다(상태 배지와 별개).
+    await screen.findAllByText('가이드됨')
 
     const fileInput = screen.getByLabelText(/파일/) as HTMLInputElement
     await userEvent.upload(fileInput, new File(['fake'], '사이니지_v1.png', { type: 'image/png' }))
     await userEvent.click(screen.getByRole('button', { name: '업로드' }))
 
-    expect(await screen.findByText('초안')).toBeTruthy()
+    // 의미 유지: 상태 배지(.ui-badge)가 초안으로 바뀌었는지 확인한다(레일 라벨과 구분).
+    const badges = await screen.findAllByText('초안')
+    expect(badges.some((el) => el.classList.contains('ui-badge'))).toBe(true)
     const d = await mockProvider().getDeliverable(issuedItemId)
     expect(d.status).toBe('draft')
     expect(d.versions).toHaveLength(1)

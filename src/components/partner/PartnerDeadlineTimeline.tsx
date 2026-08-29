@@ -1,5 +1,7 @@
-// S-11 마감 타임라인 스트립 (§10.1) — 주최형 WBS 태스크를 code 단위로 묶어 end_date 순으로 나열.
-// 방향 뱃지(WBS_DIRECTION_LABELS) + 지난/이번/다가오는 구분. 금액은 다루지 않는다.
+// S-11 마감 타임라인 스트립 (§10.1 / 시안 '파트너 보드.dc.html') — 주최형 WBS 태스크를 code
+// 단위로 묶어 end_date 순으로 나열. 방향 뱃지(WBS_DIRECTION_LABELS) + 지난/이번/다가오는 3단.
+// 접수 대장 전환(Phase 3.17b)으로 건수 문구가 '제출'에서 **'접수'**로 바뀐다. 금액은 다루지 않는다.
+// 168px 카드 · overflow-x:auto(클립 금지, §07).
 import DdayBadge from '../internal/DdayBadge'
 import { formatDate, WBS_DIRECTION_LABELS } from '../../lib/labels'
 import {
@@ -67,7 +69,7 @@ export default function PartnerDeadlineTimeline({ groups }: { groups: HostTaskGr
               </div>
               {g.direction === 'partner_submit' && (
                 <p className="mt-1.5 text-[11px] text-ink-cap">
-                  제출 {g.submitted}/{g.total}
+                  접수 {g.submitted}/{g.total}
                 </p>
               )}
             </li>

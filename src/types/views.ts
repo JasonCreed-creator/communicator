@@ -20,6 +20,8 @@ import type {
   ProgramSession,
   Project,
   ScenarioBlock,
+  SheetColumnMapping,
+  SheetConnection,
   UUID,
   Version,
   WbsTask,
@@ -37,6 +39,11 @@ import type {
   ProjectKind,
   ProjectStatus,
   ScenarioBlockKind,
+  AudienceModel,
+  EventFormat,
+  SheetDiffKind,
+  SheetInvalidReason,
+  SheetMappedField,
   WbsStatus,
 } from './enums'
 import type { ComplianceItem, Targeting } from './entities'
@@ -280,6 +287,8 @@ export interface ProgramSessionInput {
   speaker_title?: string
   speaker_org?: string
   note?: string
+  /** v2.6 §25.4 — 트랙 편성(판매 플래너 ③). 빈 문자열은 null로 저장한다 */
+  track?: string | null
   sort_order?: number
 }
 
@@ -301,6 +310,10 @@ export interface ProjectPatch {
   kind?: ProjectKind
   event_date?: IsoDate | null
   event_type?: EventType
+  /** v2.6 §25 — format 전환은 확인 다이얼로그 + WBS 재전개(§4-15 보존 규칙)를 호출부가 동반한다 */
+  format?: EventFormat
+  psa_enabled?: boolean
+  audience_model?: AudienceModel | null
   // v1.5 — 행사 설정 ① 개요 전 필드 (§8 PATCH /projects/{id})
   event_end_date?: IsoDate | null
   start_time?: string | null
@@ -328,6 +341,10 @@ export interface ProjectPatch {
  *  "새 행사 만들기"는 빈 입력으로 호출해 자리표시 행사를 만든 뒤 S0에서 채운다. */
 export interface ProjectCreateInput {
   name?: string
+  /** v2.6 §25 — 미지정이면 'conference'. S0 ③ 4카드가 이 값과 kind·event_type을 함께 시드한다 */
+  format?: EventFormat
+  psa_enabled?: boolean
+  audience_model?: AudienceModel | null
   code?: string
   event_date?: IsoDate | null
   event_end_date?: IsoDate | null
@@ -528,6 +545,9 @@ export interface PlanData {
   zones: PlanZoneItem[]
   production_items: PlanProductionItem[]
   registration_stats: RegistrationStats
+  /** 3.17.1 T4 — 시트가 연결돼 있으면 등록 수치가 서 있는 스냅숏 시각. 미연결이면 null.
+   *  §4-22 GA 캡션 규약 준용 — 출처와 기준 시각을 지면에 밝힌다. */
+  sheet_snapshot_at: IsoDateTime | null
   /** 기한순 */
   milestones: Milestone[]
   section_progress: PlanSectionProgress[]
@@ -597,6 +617,11 @@ export interface PartnerTierInput {
   description?: string | null
   capacity?: number | null
   sort?: number
+  // v2.6 §25.4 — 판매 상품 정의. price는 내부 전용(§25.8 비노출 가드 대상)
+  session_slots?: number
+  booth_included?: boolean
+  staff_cap?: number | null
+  price?: number | null
 }
 
 export interface PartnerInput {
@@ -605,6 +630,11 @@ export interface PartnerInput {
   status?: PartnerStatus
   contract_amount?: number | null
   note?: string | null
+  // v2.6 §25.4 — 부스 필드 그룹(HT-4·HT-7 매핑)
+  booth_no?: string | null
+  booth_size?: string | null
+  booth_power?: string | null
+  booth_internet?: boolean | null
 }
 
 /** 다음 마감(오늘 이후 미완료 partner_submit 태스크 중 가장 가까운 것) */
@@ -709,4 +739,130 @@ export interface QuoteImportDistributeResult {
   project_id: UUID | null
   settlement_created: boolean
   deliverables_seeded: number
+}
+
+// ── 등록 구글 시트 연동 입출력 (v2.6 §24, S4) ──────────────────────────
+// 화면(S4)은 이 6종만 본다. 시트에 쓰는 입력 타입은 존재하지 않는다(§24.6).
+
+/** 위저드 1·2단계 — URL 확인 결과(문서 제목·수정 시각·공유 대상 계정·탭 목록) */
+export interface SheetProbe {
+  title: string
+  /** 원본 시트 최종 수정 시각 */
+  source_modified_at: IsoDateTime
+  /** 뷰어로 초대할 서비스 계정 주소 (읽기 권한만 필요) */
+  service_account: string
+  tabs: SheetTabInfo[]
+}
+
+export interface SheetTabInfo {
+  name: string
+  rows: number
+  columns: number
+  headers: string[]
+  /** 표 형태가 아니면 false — 명단으로 선택할 수 없다 */
+  selectable: boolean
+  /** 선택 불가 사유 등 보조 설명 (없으면 null) */
+  note: string | null
+}
+
+/** 위저드 3단계 — 컬럼별 첫 행 미리보기. 연락처는 마스킹된 값만 내려온다(§24.1-5) */
+export interface SheetColumnPreview {
+  column: string
+  /** 첫 데이터 행의 값 — masked=true면 이미 가려진 문자열이다(원문은 내려보내지 않는다) */
+  sample: string
+  masked: boolean
+  /** 헤더 이름으로 추측한 기본 매핑 (없으면 null = 무시) */
+  suggested: SheetMappedField | null
+}
+
+/** 위저드 완료 입력 — 필수 매핑은 name + email(없으면 422) */
+export interface SheetConnectInput {
+  url: string
+  tab_name: string
+  mapping: SheetColumnMapping[]
+  /** 첫 행을 헤더로 사용할지 (false면 열 문자 A·B…를 컬럼명으로 쓴다) */
+  first_row_is_header: boolean
+}
+
+/** 차이 표 1행 — 화면의 4열(구분 / 대상 / 현재 화면 / 시트 원본)과 1:1 */
+export interface SheetDiffRow {
+  kind: SheetDiffKind
+  /** 대상 — '이름 · 소속' 형태의 사람 읽는 라벨 */
+  subject: string
+  /** 현재 화면(직전 스냅숏) 값 요약. added면 null(화면에 아직 없음) */
+  current: string | null
+  /** 시트 원본 값 요약. removed면 null(원본에서 사라짐) */
+  source: string | null
+  /** 화면에 이미 있는 행이면 그 참관객 id (added면 null) */
+  attendee_id: UUID | null
+  sheet_row_id: string
+}
+
+export interface SheetDiff {
+  /** 현재 화면이 서 있는 스냅숏 시각 */
+  snapshot_at: IsoDateTime | null
+  /** 이 값을 그대로 applySheetDiff에 넘긴다 (§24.3 R-S1) */
+  snapshot_version: number
+  /** 원본 시트 최종 수정 시각 */
+  source_modified_at: IsoDateTime | null
+  rows: SheetDiffRow[]
+  added: number
+  changed: number
+  removed: number
+}
+
+export interface SheetApplyResult {
+  /** 반영된 총 건수 = added + changed + removed */
+  applied: number
+  added: number
+  changed: number
+  removed: number
+  /** 반영 후 연결 상태(snapshot_version이 1 증가해 있다 — R-S3) */
+  connection: SheetConnection
+}
+
+/**
+ * 시트 기준 등록 통계 (KPI 4카드 + 보조 수치). 연결이 없는 행사에서는
+ * getSheetRegistrationStats가 **null**을 돌려주고 화면은 기존 getRegistrationStats로 폴백한다.
+ */
+/** 3.17.1 T3 — 제외 목록의 한 행. 원본 값은 확인용 미리보기이므로 연락처는 화면이 마스킹한다. */
+export interface SheetExcludedRow {
+  sheet_row_id: string
+  /** 시트에서 몇 번째 행인지 — 사용자가 시트로 건너가 고칠 때 쓰는 좌표 */
+  row_number: number
+  reason: SheetInvalidReason
+  name: string
+  org: string | null
+  email: string | null
+  phone: string | null
+}
+
+export interface SheetRegistrationStats {
+  /** ① 신청 — removed를 뺀 명단 총계(상태 무관) */
+  applied: number
+  /** ② 확정 — sheet_status='confirmed' */
+  confirmed: number
+  /** ③ 취소 — sheet_status='cancelled' */
+  cancelled: number
+  /** ④ 체크인 — 앱 소유 필드 기준(removed 제외) */
+  checked_in: number
+  /** 원본 시트 행 수(무효 행 포함) */
+  source_rows: number
+  /** 중복·형식 오류로 적재하지 않은 행 수 */
+  excluded: number
+  /** confirmed ÷ applied (applied=0이면 0).
+   *  3.17.1 T4 — RSVP '응답률'(발송 대비 응답)과 **분모가 달라** 이름을 나눴다. 화면 라벨도 '확정률'이다. */
+  confirm_rate: number
+  /** checked_in ÷ confirmed — 확정 기준(confirmed=0이면 0) */
+  checkin_rate: number
+  /** 취소 중 '확정 후 취소'였던 건수 */
+  cancelled_after_confirm: number
+  /** 이 통계가 서 있는 스냅숏 시각 */
+  snapshot_at: IsoDateTime | null
+  /** 3.17.1 T5 — 아직 확인·반영되지 않은 차이. 캡션 항등식의 항이다:
+   *  `source_rows = applied + excluded + pending_added − pending_removed` */
+  pending_added: number
+  pending_removed: number
+  /** 3.17.1 T3 — 적재되지 못한 행. 연락처는 화면에서 마스킹해 렌더한다 */
+  excluded_rows: SheetExcludedRow[]
 }

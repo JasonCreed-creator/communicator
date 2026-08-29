@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'react'
-import { ROLE_BAR_CLASSES } from '../../lib/labels'
+import WbsPhaseHeader from './WbsPhaseHeader'
+import { ROLE_BAR_CLASSES, ddayLabel } from '../../lib/labels'
 import { isDelayed, isImminent, toIsoDate } from '../../lib/wbs'
 import type { IsoDate, WbsTask } from '../../types/entities'
 import {
@@ -9,6 +10,9 @@ import {
   groupTasksByPhase,
   offsetLabel,
   offsetToPercent,
+  shortDateRangeLabel,
+  summarizePhase,
+  wbsUrgency,
 } from './wbsFormat'
 
 /** 간트 바 색 — 디자인지시서 v1 §3·§6 S5: 기본은 역할 컬러(ROLE_BAR_CLASSES),
@@ -30,6 +34,15 @@ const TICK_OFFSETS: readonly number[] = (() => {
 
 /** 축 폭 대비 바 폭이 라벨(≈28px@1280)보다 좁아지는 경계 — 기간 3일 미만이면 라벨을 바 밖에 표시 */
 const LABEL_OUTSIDE_UNDER_DAYS = 3
+
+/** 시안 '일정 · WBS 보드' — 바 안쪽에 '코드 M/D~M/D'를 넣는다. 축 72일 기준 1일 ≈ 12px(1120 폭)이므로
+ *  기간 표기까지 들어가려면 8일, D-day를 함께 붙이는 지연·임박 바는 12일이 필요하다.
+ *  그보다 좁으면 기존 규칙대로 코드만 바 안에 두고 기간은 바 바깥으로 밀어낸다. */
+const LABEL_INSIDE_MIN_DAYS = 8
+const LABEL_INSIDE_MIN_DAYS_WITH_DDAY = 12
+
+/** 바 오른쪽 끝이 축의 이 지점을 넘으면 바깥 라벨을 바 왼쪽으로 넘긴다(카드 밖 흘러넘침 방지) */
+const LABEL_FLIP_LEFT_OVER_PERCENT = 82
 
 /** 3.10.1 R2 — 축 끝 눈금(D+30)과 직전 7일 눈금(D+28)의 픽셀 간격이 이보다 좁으면 직전 눈금을 생략 */
 const MIN_LAST_TICK_GAP_PX = 28
@@ -114,9 +127,11 @@ export default function WbsGantt({ tasks, eventDate }: WbsGanttProps) {
 
       {groups.map((g) => (
         <div key={g.phase_no}>
-          <h3 className="mb-1.5 text-xs font-semibold text-brown">
-            {g.phase_no}. {g.phase_name}
-          </h3>
+          <WbsPhaseHeader
+            phaseNo={g.phase_no}
+            phaseName={g.phase_name}
+            summary={summarizePhase(g.tasks, today)}
+          />
           <div className="flex rounded-md bg-canvas p-2">
             {/* 3.9.1 P2 — 고정 160px 라벨 컬럼: 코드 + 제목(truncate). 바 행과 같은 h-5·간격으로 정렬 유지 */}
             <div className="w-[160px] shrink-0 space-y-1.5 pr-3">
@@ -153,7 +168,23 @@ export default function WbsGantt({ tasks, eventDate }: WbsGanttProps) {
                 const left = offsetToPercent(task.offset_start)
                 const width = Math.max(offsetToPercent(task.offset_end) - left, 0.8)
                 const colorClass = barColorClass(task, today)
-                const labelOutside = task.offset_end - task.offset_start < LABEL_OUTSIDE_UNDER_DAYS
+                const days = task.offset_end - task.offset_start
+                // 3일 미만은 기존 규칙대로 라벨 전체가 바 바깥(건드리지 않음)
+                const labelOutside = days < LABEL_OUTSIDE_UNDER_DAYS
+                const urgency = wbsUrgency(task, today)
+                const range = shortDateRangeLabel(
+                  task.start_date,
+                  task.end_date,
+                  task.offset_start,
+                  task.offset_end,
+                )
+                // 지연·임박 바는 색 없이도 읽히도록 D-day를 기간 뒤에 함께 붙인다 ('8/19~8/26 · D+3')
+                const dday = urgency && task.end_date ? ddayLabel(task.end_date) : null
+                const period = dday ? `${range} · ${dday}` : range
+                const periodInside =
+                  !labelOutside && days >= (dday ? LABEL_INSIDE_MIN_DAYS_WITH_DDAY : LABEL_INSIDE_MIN_DAYS)
+                const outsideDdayClass =
+                  urgency === 'delayed' ? 'text-negative' : urgency === 'imminent' ? 'text-accent-deep' : 'text-ink-cap'
                 return (
                   <div key={task.id} className="relative h-5">
                     <div
@@ -164,18 +195,25 @@ export default function WbsGantt({ tasks, eventDate }: WbsGanttProps) {
                     >
                       {!labelOutside && (
                         <span
-                          className={`pointer-events-none absolute inset-y-0 left-1.5 flex items-center text-[11px] font-semibold ${barLabelInk(colorClass)}`}
+                          className={`pointer-events-none absolute inset-y-0 left-1.5 flex items-center gap-1.5 text-[11px] ${barLabelInk(colorClass)}`}
                         >
-                          {task.code}
+                          <span className="font-semibold">{task.code}</span>
+                          {periodInside && <span className="opacity-85">{period}</span>}
                         </span>
                       )}
                     </div>
-                    {labelOutside && (
+                    {(labelOutside || !periodInside) && (
                       <span
-                        className="pointer-events-none absolute inset-y-0 z-10 flex items-center whitespace-nowrap text-[11px] font-semibold text-ink-sub"
-                        style={{ left: `calc(${left + width}% + 6px)` }}
+                        className="pointer-events-none absolute inset-y-0 z-10 flex items-center gap-1.5 whitespace-nowrap text-[11px]"
+                        // 축 끝에 붙은 바는 라벨을 오른쪽에 두면 카드 밖으로 흘러 나가므로 바 왼쪽에 단다
+                        style={
+                          left + width > LABEL_FLIP_LEFT_OVER_PERCENT
+                            ? { right: `calc(${100 - left}% + 6px)` }
+                            : { left: `calc(${left + width}% + 6px)` }
+                        }
                       >
-                        {task.code}
+                        {labelOutside && <span className="font-semibold text-ink-sub">{task.code}</span>}
+                        <span className={dday ? outsideDdayClass : 'text-ink-cap'}>{period}</span>
                       </span>
                     )}
                   </div>

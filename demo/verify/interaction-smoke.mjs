@@ -7,6 +7,7 @@
 //   ① InfoTip 호버 1곳 표시 + 뷰포트 내 완전 노출 (가장 오른쪽 ⓘ로 클램프를 강제)
 //   ② 사이드바 링크 클릭 → aria-current 갱신 + 전체 리로드 0 (SPA 내비 증명)
 //   ③ 해당 세션이 바꾼 화면의 핵심 클릭 경로 1개 — 세션마다 아래 "③" 블록을 교체한다
+//      (3.18: 판매 플래너 3스텝 · S0 ③ 유형 4카드)
 // 캡처는 dist-demo/shots-interaction/ 에 남긴다. 실패 시 exit 1.
 import { createServer } from 'node:http'
 import { readFileSync, mkdirSync } from 'node:fs'
@@ -57,7 +58,12 @@ const server = createServer((req, res) => {
 await new Promise((r) => server.listen(PORT, r))
 
 mkdirSync(SHOTS, { recursive: true })
-const browser = await chromium.launch()
+// 사전 설치된 Chromium을 쓰는 환경(원격 세션 등)에서는 playwright 패키지 버전과 브라우저 빌드
+// 번호가 어긋나 기본 launch()가 실패한다. PLAYWRIGHT_CHROMIUM_PATH가 있으면 그 실행 파일을 쓴다.
+const launchOpts = process.env.PLAYWRIGHT_CHROMIUM_PATH
+  ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_PATH }
+  : {}
+const browser = await chromium.launch(launchOpts)
 const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } })
 const tab = await ctx.newPage()
 const docRequests = []
@@ -131,20 +137,93 @@ check(
   `${docCountBefore} → ${docRequests.length}`,
 )
 
-// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — 3.16.4: 시나리오 카드 → 빌더 열기 →
-//     세션 카드·인라인 대본 표시(목업 화면 B 정합, T1) ──
-await tab.getByRole('link', { name: /운영 보드/ }).click()
-await tab.waitForURL(/#\/board\/ops/, { timeout: 10_000 })
-await tab.getByTestId('ops-doc-card-scenario').getByRole('button', { name: /시나리오/ }).click()
-await tab.getByRole('button', { name: '빌더 열기' }).first().click()
-// 빌더 헤더(시나리오 — 문서명) + 세션 카드(프로그램표 연동 배지) + 대본 인라인 노출
-await tab.getByRole('heading', { name: /시나리오 — 진행 시나리오/ }).waitFor({ timeout: 10_000 })
-const linkBadges = await tab.getByText('프로그램표 연동').count()
-check(linkBadges >= 3, '세션 카드 — 프로그램표 연동 배지', `${linkBadges}개(RB27 3세션)`)
-const inlineScript = await tab.getByText(/MC 무대 인사 및 오프닝 키노트 세션 소개/).count()
-check(inlineScript >= 1, '대본 인라인 노출(토글 클릭 없이 본문 표시)', `${inlineScript}건`)
-await tab.getByRole('heading', { name: /시나리오 — 진행 시나리오/ }).scrollIntoViewIfNeeded()
-await tab.screenshot({ path: resolve(SHOTS, '03-scenario-builder-inline.png') })
+// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — 3.18: **행사 유형 4분류**.
+//     주최형(DMS) 행사로 전환 → 파트너 보드 **판매 플래너 탭** 3스텝 왕복 →
+//     세팅 미완료 행사의 S0 ③ **4카드** 확인. 전부 이번 회차에 새로 생긴 경로다. ──
+
+// 데모 안내 칩은 우하단 고정이라 셀렉터 드롭다운 하단 행과 겹친다 — 사용자와 똑같이 닫고 시작한다
+const notice = tab.getByRole('button', { name: '안내 닫기' })
+if (await notice.count()) await notice.click()
+
+/** 사이드바 셀렉터로 현재 행사를 바꾼다 — 실제 사용자 경로 그대로(직접 URL 주입 아님) */
+async function switchProject(name) {
+  await tab.getByRole('button', { name: /현재 행사/ }).click()
+  await tab.getByRole('button', { name: new RegExp(name) }).first().click()
+  await tab.getByText(name).first().waitFor({ timeout: 10_000 })
+}
+
+await switchProject('가상 서밋 2026')
+await tab.getByRole('link', { name: /^파트너 보드$/ }).click()
+await tab.waitForURL(/#\/partners/, { timeout: 10_000 })
+
+// 판매 플래너 탭은 복합 게이트(주최형 + 판매형 포맷)를 통과한 행사에만 뜬다
+const plannerTab = tab.getByRole('button', { name: '판매 플래너' })
+await plannerTab.waitFor({ timeout: 10_000 })
+await plannerTab.click()
+
+// ① 상품 정의 — 등급 카드에 판매 단가 입력이 있다(내부 전용)
+await tab.getByRole('heading', { name: /① 상품 정의/ }).waitFor({ timeout: 10_000 })
+const priceInputs = await tab.getByLabel('판매 단가 (내부)').count()
+check(priceInputs >= 3, '① 상품 정의 — 등급별 판매 단가 입력', `${priceInputs}개`)
+await tab.screenshot({ path: resolve(SHOTS, '03a-planner-step1.png') })
+
+// ② 목표 시뮬레이션 — 만석 기준 합계와 '왜 빠졌는지'가 함께 보인다
+await tab.getByRole('button', { name: '다음' }).click()
+await tab.getByRole('table', { name: '등급별 판매 계획' }).waitFor({ timeout: 10_000 })
+const targetCells = await tab.getByText('200,000,000원').count()
+check(targetCells >= 1, '② 시뮬레이션 — 만석 기준 매출 Σ(정원×단가)', `${targetCells}곳`)
+const excludedNote = await tab.getByTestId('planner-excluded-note').innerText()
+check(
+  /silver/.test(excludedNote),
+  '② 합계에서 빠진 등급을 숨기지 않고 이유를 적는다',
+  excludedNote.trim().slice(0, 40),
+)
+await tab.screenshot({ path: resolve(SHOTS, '03b-planner-step2.png') })
+
+// ③ 프리셋 확인 — DMS 운영 프리셋 5줄 + 트랙 편성
+await tab.getByRole('button', { name: '다음' }).click()
+await tab.getByTestId('planner-ops-notes').waitFor({ timeout: 10_000 })
+const opsNotes = await tab.getByTestId('planner-ops-notes').locator('li').count()
+check(opsNotes === 5, '③ 프리셋 확인 — DMS 운영 프리셋 5줄', `${opsNotes}줄`)
+const trackTable = await tab.getByRole('table', { name: '트랙 편성' }).count()
+check(trackTable >= 1, '③ 트랙 편성 표', `${trackTable}개`)
+await tab.screenshot({ path: resolve(SHOTS, '03c-planner-step3.png') })
+
+// 대행형 행사로 돌아가면 탭 자체가 사라진다 — format 단독 게이트가 아님을 실행으로 확인
+await switchProject('샘플 테크 컨퍼런스')
+await tab.getByRole('heading', { name: '파트너 보드' }).waitFor({ timeout: 10_000 })
+const plannerOnAgency = await tab.getByRole('button', { name: '판매 플래너' }).count()
+check(plannerOnAgency === 0, '대행형에서는 판매 플래너 탭 부재(복합 게이트)', `${plannerOnAgency}개`)
+
+// S0 ③ — 세팅 미완료 행사의 유형 4카드
+await switchProject('리더십 포럼 하반기')
+await tab.evaluate(() => {
+  window.location.hash = '#/onboarding'
+})
+await tab.getByRole('heading', { name: '① 행사개요' }).waitFor({ timeout: 10_000 })
+await tab.getByRole('button', { name: '다음' }).click()
+await tab.getByRole('heading', { name: '② 담당자' }).waitFor({ timeout: 10_000 })
+await tab.getByRole('button', { name: '다음' }).click()
+await tab.getByRole('heading', { name: '③ 유형·확인' }).waitFor({ timeout: 10_000 })
+const cards = await tab.getByRole('radio').count()
+check(cards === 4, 'S0 ③ — 유형 4카드', `${cards}장`)
+const assumedBadges = await tab.getByText('가정', { exact: true }).count()
+check(assumedBadges === 2, "근거가 약한 프리셋만 '가정' 표기(DMS·전시회)", `${assumedBadges}개`)
+await tab.screenshot({ path: resolve(SHOTS, '03d-onboarding-format-cards.png') })
+
+// 전시회 데모 — EX 템플릿이 실제로 전개돼 일정에 EX 코드로 보인다(3.18d, 전부 '가정')
+// S0는 사이드바가 없는 독립 화면이라 셀렉터를 쓰려면 먼저 본체로 돌아온다
+await tab.evaluate(() => {
+  window.location.hash = '#/'
+})
+await tab.getByRole('button', { name: /현재 행사/ }).waitFor({ timeout: 10_000 })
+await switchProject('가상산업박람회 2026')
+await tab.getByRole('link', { name: /^일정$/ }).click()
+await tab.waitForURL(/#\/schedule/, { timeout: 10_000 })
+await tab.getByText(/EX-1\b/).first().waitFor({ timeout: 10_000 })
+const exCodes = await tab.getByText(/^EX-\d+$/).count()
+check(exCodes >= 10, '전시회 — EX WBS 템플릿 전개', `${exCodes}개 코드`)
+await tab.screenshot({ path: resolve(SHOTS, '03e-exhibition-ex-wbs.png') })
 
 await browser.close()
 server.close()

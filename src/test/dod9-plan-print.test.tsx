@@ -42,8 +42,10 @@ describe('DoD-9 S9 인쇄 미리보기(A4)', () => {
     renderRoute('/plan')
     await screen.findByRole('heading', { name: /행사개요/ })
 
-    const printBtn = await screen.findByRole('button', { name: '인쇄' })
-    expect(printBtn.className).toContain('plan-print-hidden')
+    // v2.5.2 정렬 — 인쇄 버튼은 발행 게이트 줄로 올라갔고 라벨이 '인쇄 · PDF'가 됐다.
+    // 인쇄 숨김 계약은 전역 유틸리티 .print-hidden으로 유지된다(.plan-print-hidden은 별칭).
+    const printBtn = await screen.findByRole('button', { name: '인쇄 · PDF' })
+    expect(printBtn.className).toContain('print-hidden')
 
     // v1.5: 개요 인라인 편집 제거 — '행사 설정에서 편집' 링크가 인쇄 시 숨겨져야 한다
     const editLink = screen.getByRole('link', { name: '행사 설정에서 편집' })
@@ -62,7 +64,7 @@ describe('DoD-9 S9 인쇄 미리보기(A4)', () => {
 
   it('(c) 인쇄 버튼이 렌더되고 window.print를 호출한다', async () => {
     renderRoute('/plan')
-    const printBtn = await screen.findByRole('button', { name: '인쇄' })
+    const printBtn = await screen.findByRole('button', { name: '인쇄 · PDF' })
     expect(printBtn).toBeTruthy()
     expect(printBtn.tagName).toBe('BUTTON')
   })

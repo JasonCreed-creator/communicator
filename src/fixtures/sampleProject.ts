@@ -24,6 +24,8 @@ import type {
   RoleCharter,
   RsvpContact,
   ScenarioBlock,
+  SheetConnection,
+  SheetSourceRow,
   UnregisteredFile,
   Version,
   WbsTask,
@@ -48,6 +50,7 @@ import {
 } from './rebuildFixtures'
 import { seedLandingFixtures } from './landingFixtures'
 import { seedSettlementFixtures } from './settlementFixtures'
+import { seedSheetFixtures } from './sheetFixtures'
 import {
   PARTNER_DEMO_TOKEN,
   PARTNER_EXPIRED_TOKEN,
@@ -55,6 +58,7 @@ import {
   PROJECT_ID_HOST,
   seedHostFixtures,
 } from './hostFixtures'
+import { seedExhibitionFixtures } from './exhibitionFixtures'
 
 /** `/c/demo` 데모 라우트용 토큰 값 (CLAUDE.md §4 Phase 3) */
 export const DEMO_TOKEN = 'demo'
@@ -119,6 +123,10 @@ export interface MockState {
   // v2.5 §23 — 운영보드 재구성(시나리오·운영가이드)
   scenario_blocks: ScenarioBlock[]
   guide_sections: GuideSection[]
+  // v2.6 §24 — 등록 명단 구글 시트 연동 (행사당 최대 1건)
+  sheet_connections: SheetConnection[]
+  /** mock 전용 — 원본 시트의 현재 행. 차이 계산의 기준이며 Phase 4에서는 Sheets API가 대신한다 */
+  sheet_source_rows: SheetSourceRow[]
 }
 
 /** v1.2 가이드 문서·스펙·본문 필드 기본값 — 가이드 없이 만든 항목은 전부 null (§4) */
@@ -179,6 +187,10 @@ const FIXTURE: MockState = {
     quote_id: FINAL_QUOTE_ID,
     drive_root_folder_id: 'drv-root-stc26',
     slack_webhook_url: null,
+    // v2.6 §25 — 대행형 기존 행사는 기본값 conference로 마이그레이션(§25.1 픽스처 규칙)
+    format: 'conference',
+    psa_enabled: false,
+    audience_model: null,
     event_type: 'recruiting', // v1.3 — 픽스처는 RSVP 파이프라인을 쓰는 모객형
     // v1.2 행사개요 — S9 §행사개요 소스 (전부 가상 명칭)
     theme: '연결, 다음 단계로',
@@ -573,11 +585,11 @@ const FIXTURE: MockState = {
 
   // v1.2 프로그램표 — S9 §프로그램 정형 소스 (sort_order 순)
   program_sessions: [
-    { id: 'pgs-001', project_id: PROJECT_ID, section: '오전', start_time: '09:30', end_time: '10:00', title: '등록·리셉션', speaker_name: null, speaker_title: null, speaker_org: null, note: null, sort_order: 1 },
-    { id: 'pgs-002', project_id: PROJECT_ID, section: '오전', start_time: '10:00', end_time: '10:20', title: '개회사', speaker_name: '오대표', speaker_title: '대표', speaker_org: '가상재단', note: null, sort_order: 2 },
-    { id: 'pgs-003', project_id: PROJECT_ID, section: '오전', start_time: '10:20', end_time: '11:10', title: '기조연설 — 연결의 다음 단계', speaker_name: '한석학', speaker_title: '교수', speaker_org: '가상대학교', note: '기조', sort_order: 3 },
-    { id: 'pgs-004', project_id: PROJECT_ID, section: '오후', start_time: '14:00', end_time: '14:50', title: '파트너 세션 — 산업 적용 사례', speaker_name: '문리더', speaker_title: '본부장', speaker_org: '가상소프트', note: '파트너 연사', sort_order: 4 },
-    { id: 'pgs-005', project_id: PROJECT_ID, section: '오후', start_time: '15:00', end_time: '16:00', title: '패널 토론', speaker_name: null, speaker_title: null, speaker_org: null, note: '패널 4인', sort_order: 5 },
+    { id: 'pgs-001', project_id: PROJECT_ID, section: '오전', start_time: '09:30', end_time: '10:00', title: '등록·리셉션', speaker_name: null, speaker_title: null, speaker_org: null, note: null, track: null, sort_order: 1 },
+    { id: 'pgs-002', project_id: PROJECT_ID, section: '오전', start_time: '10:00', end_time: '10:20', title: '개회사', speaker_name: '오대표', speaker_title: '대표', speaker_org: '가상재단', note: null, track: null, sort_order: 2 },
+    { id: 'pgs-003', project_id: PROJECT_ID, section: '오전', start_time: '10:20', end_time: '11:10', title: '기조연설 — 연결의 다음 단계', speaker_name: '한석학', speaker_title: '교수', speaker_org: '가상대학교', note: '기조', track: null, sort_order: 3 },
+    { id: 'pgs-004', project_id: PROJECT_ID, section: '오후', start_time: '14:00', end_time: '14:50', title: '파트너 세션 — 산업 적용 사례', speaker_name: '문리더', speaker_title: '본부장', speaker_org: '가상소프트', note: '파트너 연사', track: null, sort_order: 4 },
+    { id: 'pgs-005', project_id: PROJECT_ID, section: '오후', start_time: '15:00', end_time: '16:00', title: '패널 토론', speaker_name: null, speaker_title: null, speaker_org: null, note: '패널 4인', track: null, sort_order: 5 },
   ],
 
   // v1.3 큐시트 — dlv-004(개막식 큐시트)의 정형 큐 (sort_order 순, 콘솔 3채널·대본 전문)
@@ -615,6 +627,10 @@ const FIXTURE: MockState = {
   // v2.5 §23 — createFixtureState()에서 rebuildFixtures 시드로 채움(RE:BUILD 27)
   scenario_blocks: [],
   guide_sections: [],
+
+  // v2.6 §24 — createFixtureState()에서 seedSheetFixtures로 채움(RE:BUILD 27 1건만)
+  sheet_connections: [],
+  sheet_source_rows: [],
 
   unregistered_files: [
     {
@@ -664,6 +680,7 @@ export function createFixtureState(): MockState {
     direction: 'internal' as const, // v2.4 §21 — 대행형 템플릿은 항상 내부 태스크
     partner_id: null,
     note: null,
+    track: null,
     sort_order: i + 1,
   }))
   // 데모용 상태 분포: 1.1·1.2 완료, 1.3 진행 중, 2.8 제작물 ↔ dlv-007(현수막 가이드) 연결
@@ -708,6 +725,10 @@ export function createFixtureState(): MockState {
       quote_id: null,
       drive_root_folder_id: null,
       slack_webhook_url: null,
+      // v2.6 §25 — 대행형 기존 행사는 기본값 conference로 마이그레이션(§25.1 픽스처 규칙)
+      format: 'conference',
+      psa_enabled: false,
+      audience_model: null,
       event_type: 'general',
       theme: '함께 여는 다음 분기',
       venue: '본사 대강당',
@@ -741,6 +762,10 @@ export function createFixtureState(): MockState {
       quote_id: null,
       drive_root_folder_id: null,
       slack_webhook_url: null,
+      // v2.6 §25 — 대행형 기존 행사는 기본값 conference로 마이그레이션(§25.1 픽스처 규칙)
+      format: 'conference',
+      psa_enabled: false,
+      audience_model: null,
       event_type: 'general',
       theme: null,
       venue: '가상트레이닝센터 오디토리움(가안)', // ③=개요만 입력(온보딩 1/3): PM 미지정·완료 전
@@ -773,6 +798,10 @@ export function createFixtureState(): MockState {
       quote_id: null,
       drive_root_folder_id: null,
       slack_webhook_url: null,
+      // v2.6 §25 — 대행형 기존 행사는 기본값 conference로 마이그레이션(§25.1 픽스처 규칙)
+      format: 'conference',
+      psa_enabled: false,
+      audience_model: null,
       event_type: 'recruiting',
       theme: 'AI, 실전으로',
       venue: '가상컨벤션센터 5F 오디토리움',
@@ -865,6 +894,7 @@ export function createFixtureState(): MockState {
     direction: 'internal' as const, // v2.4 §21 — 대행형 템플릿은 항상 내부 태스크
     partner_id: null,
     note: null,
+    track: null,
     sort_order: i + 1,
   }))
   const pastTasks = partnerTasks.filter((t) => t.end_date! < today)
@@ -914,6 +944,11 @@ export function createFixtureState(): MockState {
 
   // ── v2.4 §21.3 — 주최형(파트너) 데모 행사 ──
   seedHostFixtures(state)
+  // v2.6 §25.7 — 전시회 데모 [전부 가정]
+  seedExhibitionFixtures(state)
+
+  // ── v2.6 §24 — 등록 명단 시트 연동('갱신 있음' 상태). 데모 기본 행사 1건에만 붙는다 ──
+  seedSheetFixtures(state)
 
   return state
 }

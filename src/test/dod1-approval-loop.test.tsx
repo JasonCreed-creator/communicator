@@ -46,7 +46,10 @@ describe('DoD-1 컨펌 루프 (dlv-005 운영 시나리오)', () => {
     await userEvent.selectOptions(select, pdfOption!)
     await userEvent.click(screen.getByRole('button', { name: '컨펌 발송' }))
 
-    expect(await screen.findByText('컨펌대기')).toBeTruthy()
+    // 3.17b — S3에 6단계 진행 레일이 생겨 '컨펌대기'가 레일 라벨로도 나온다.
+    // 의미는 그대로: **상태 배지(.ui-badge)** 가 새 상태를 표시하는지 확인한다.
+    const badges = await screen.findAllByText('컨펌대기')
+    expect(badges.some((el) => el.classList.contains('ui-badge'))).toBe(true)
     expect(await p_status()).toBe('pending_approval')
   })
 

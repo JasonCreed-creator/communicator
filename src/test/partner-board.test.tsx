@@ -12,34 +12,37 @@ import { renderRoute } from './testUtils'
 afterEach(cleanup)
 
 describe('S-11 파트너 보드', () => {
-  it('KPI 4·파트너 5행·검토 대기 1건이 렌더된다', async () => {
+  it('KPI 4·파트너 5행·검토 필요 1건이 렌더된다', async () => {
     localStorage.setItem('communicator.currentProjectId', PROJECT_ID_HOST)
     renderRoute('/partners')
 
     expect(await screen.findByRole('heading', { name: '파트너 보드' })).toBeTruthy()
 
-    // KPI: 파트너 수 5 · 이번 마감 제출 4/5(HT-1) · 검토 대기 1 · 수정요청 미회신 1
+    // KPI: 파트너 수 5 · 이번 마감 접수 4/5(HT-1) · 접수 후 검토 필요 1 · 재요청 미회신 1
+    // (Phase 3.17b 접수 대장 전환 — 라벨만 제출→접수 / 검토 대기→검토 필요 / 수정요청→재요청)
     expect(await screen.findByText('파트너 수')).toBeTruthy()
     const partnerCountTile = screen.getByText('파트너 수').closest('.ui-card') as HTMLElement
     // 타일 라벨은 집계보다 먼저 그려진다 — 수치는 비동기 로드를 기다려 단언한다(flake 방지, 3.16.4)
     expect(await within(partnerCountTile).findByText('5')).toBeTruthy()
 
-    const currentDeadlineTile = screen.getByText('이번 마감 제출').closest('.ui-card') as HTMLElement
+    const currentDeadlineTile = screen.getByText('이번 마감 접수').closest('.ui-card') as HTMLElement
     expect(within(currentDeadlineTile).getByText('4/5')).toBeTruthy()
 
-    const reviewPendingTile = screen.getByText('검토 대기').closest('.ui-card') as HTMLElement
+    const reviewPendingTile = screen.getByText('접수 후 검토 필요').closest('.ui-card') as HTMLElement
     expect(within(reviewPendingTile).getByText('1')).toBeTruthy()
 
-    const unresolvedTile = screen.getByText('수정요청 미회신').closest('.ui-card') as HTMLElement
+    const unresolvedTile = screen.getByText('재요청 미회신').closest('.ui-card') as HTMLElement
     expect(within(unresolvedTile).getByText('1')).toBeTruthy()
 
-    // 파트너 표 5행 — 등급 배지·참여 상태(PARTNER_STATUS_LABELS)
+    // 파트너 표 5행 — 등급·참여 상태(PARTNER_STATUS_LABELS).
+    // (3.17b: 파트너명은 KPI '재요청 미회신' 보조 수치에도 나오므로 표 안으로 스코프한다)
     expect(await screen.findByText('가상다이아텍')).toBeTruthy()
-    expect(screen.getByText('가상골드플랫폼')).toBeTruthy()
-    expect(screen.getByText('가상실버클라우드')).toBeTruthy()
-    expect(screen.getByText('가상실버네트웍스')).toBeTruthy()
-    expect(screen.getByText('가상실버랩스')).toBeTruthy()
-    expect(screen.getAllByText('참여 중').length).toBe(5)
+    const partnerTable = screen.getByRole('table', { name: '' }) as HTMLElement
+    for (const name of ['가상다이아텍', '가상골드플랫폼', '가상실버클라우드', '가상실버네트웍스', '가상실버랩스']) {
+      expect(within(partnerTable).getByText(name)).toBeTruthy()
+    }
+    // (KPI 보조 수치에도 '참여 중 5'가 있으므로 표 안으로 스코프한다)
+    expect(within(partnerTable).getAllByText('참여 중').length).toBe(5)
 
     // 마감 타임라인 — 방향 뱃지(WBS_DIRECTION_LABELS, 코드마다 1행)와 '이번 마감' 강조가 렌더
     expect(screen.getAllByText('▲ 파트너 제출').length).toBeGreaterThan(0)
@@ -113,20 +116,20 @@ describe('S-11 파트너 보드 — 표 행 클릭 어포던스(P3)', () => {
   })
 })
 
-describe('S-11 파트너 보드 — 검토 대기 자동 선택·스크롤(P3)', () => {
+describe('S-11 파트너 보드 — 검토 필요 자동 선택·스크롤(P3)', () => {
   beforeEach(() => {
     // jsdom(30)엔 scrollIntoView가 없다 — 호출 여부를 검증하려면 최소 구현을 채워야 한다.
     Element.prototype.scrollIntoView = vi.fn()
   })
 
-  it('KPI "검토 대기" 타일 클릭 시 검토 대기 항목이 있는 첫 파트너가 선택되고 스크롤된다', async () => {
+  it('KPI "접수 후 검토 필요" 타일 클릭 시 검토 필요 항목이 있는 첫 파트너가 선택되고 스크롤된다', async () => {
     localStorage.setItem('communicator.currentProjectId', PROJECT_ID_HOST)
     renderRoute('/partners')
     await screen.findByRole('heading', { name: '파트너 보드' })
     await screen.findByText('가상다이아텍')
     expect(screen.queryByRole('heading', { name: /파트너 상세/ })).toBeNull()
 
-    await userEvent.click(screen.getByRole('button', { name: /검토 대기/ }))
+    await userEvent.click(screen.getByRole('button', { name: /검토 필요/ }))
 
     expect(
       await screen.findByRole('heading', { name: /파트너 상세 — 가상실버클라우드/ }),

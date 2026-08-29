@@ -85,6 +85,23 @@ export const LANDING_SUBMIT_TARGETS = ['registration', 'external'] as const
 export type LandingSubmitTarget = (typeof LANDING_SUBMIT_TARGETS)[number]
 
 // v2.4 §21: 주최형(파트너) 확장 — kind는 event_type과 직교하는 축(표시 계층 토글, R-H1)
+// v2.6 §25 — 행사 유형 4분류의 format 축.
+// **format의 권한은 3가지뿐**: ①온보딩 시드 ②견적 모델 결정 ③전용 화면의 복합 게이트 구성요소.
+// 상시 모듈 표시 게이트는 기존 축이 유지한다(파트너 보드=kind · 등록 깊이=event_type · PSA=psa_enabled) —
+// format이 상시 토글의 두 번째 주인이 되면 §10 진입점 원칙과 충돌한다(감수 C1).
+export const EVENT_FORMATS = ['conference', 'dms', 'exhibition'] as const
+export type EventFormat = (typeof EVENT_FORMATS)[number]
+
+export const EVENT_FORMAT_LABELS: Record<EventFormat, string> = {
+  conference: '컨퍼런스',
+  dms: 'DMS',
+  exhibition: '전시회',
+}
+
+/** 청중 모델 — dms 기본 'invite'(초청제). 초청제 **게이트 자체는 미구현**(§25.6 열린 질문) */
+export const AUDIENCE_MODELS = ['invite', 'open'] as const
+export type AudienceModel = (typeof AUDIENCE_MODELS)[number]
+
 export const PROJECT_KINDS = ['agency', 'host'] as const
 export type ProjectKind = (typeof PROJECT_KINDS)[number]
 
@@ -124,4 +141,82 @@ export type StructuredDocCategory = (typeof STRUCTURED_DOC_CATEGORIES)[number]
 
 export function isStructuredDocCategory(category: string): category is StructuredDocCategory {
   return (STRUCTURED_DOC_CATEGORIES as readonly string[]).includes(category)
+}
+
+// ── v2.6 §24: 등록 구글 시트 연동 (S4) ─────────────────────────────────
+/**
+ * sheet_connections.state — 연결 카드 4상태(§24.5).
+ * disconnected = 행 자체가 없거나 해제 직후 / connected = 원본과 일치 /
+ * stale = 원본이 바뀜(감지만 됨, 반영 전) / revoked = 권한 끊김(마지막 스냅숏 유지)
+ */
+export const SHEET_CONNECTION_STATES = ['disconnected', 'connected', 'stale', 'revoked'] as const
+export type SheetConnectionState = (typeof SHEET_CONNECTION_STATES)[number]
+
+/** 차이 표의 구분 — 추가 / 변경 / 시트에서 제거(하드 삭제 금지, §24.1-4) */
+// v2.6 §24 / 3.17.1 T3 — 시트 행이 앱에 적재되지 못한 사유.
+// 이메일 필수 결정을 유지하는 대신 **탈락한 행을 화면에서 볼 수 있어야** 한다 —
+// 그러지 않으면 시트엔 있는데 앱엔 없는 사람이 D-Day에 발견된다.
+export const SHEET_INVALID_REASONS = ['no_email', 'duplicate_email', 'missing_required'] as const
+export type SheetInvalidReason = (typeof SHEET_INVALID_REASONS)[number]
+
+export const SHEET_INVALID_REASON_LABELS: Record<SheetInvalidReason, string> = {
+  no_email: '이메일 없음',
+  duplicate_email: '이메일 중복',
+  missing_required: '필수 항목 누락',
+}
+
+export const SHEET_DIFF_KINDS = ['added', 'changed', 'removed'] as const
+export type SheetDiffKind = (typeof SHEET_DIFF_KINDS)[number]
+
+/** attendees.sheet_status — 신청·확정·취소·시트에서 제거됨. removed는 이력 보존 표시다 */
+export const ATTENDEE_SHEET_STATUSES = ['applied', 'confirmed', 'cancelled', 'removed'] as const
+export type AttendeeSheetStatus = (typeof ATTENDEE_SHEET_STATUSES)[number]
+
+/** 매핑 가능한 등록 필드 — 이 7종이 '시트 소유' 필드다(앱에서 수정 불가, §24.1-3) */
+export const SHEET_MAPPED_FIELDS = [
+  'name',
+  'org',
+  'title',
+  'email',
+  'phone',
+  'group_tag',
+  'registered_at',
+] as const
+export type SheetMappedField = (typeof SHEET_MAPPED_FIELDS)[number]
+
+/** 연결에 반드시 있어야 하는 매핑 — 없으면 connectSheet가 422(§24.4) */
+export const SHEET_REQUIRED_FIELDS: readonly SheetMappedField[] = ['name', 'email']
+
+/**
+ * 시트 연동 표시 라벨 — 화면(S4)과 provider가 같은 문구를 쓰도록 여기에 한 벌만 둔다.
+ * (기존 `src/lib/labels.ts`는 상태 머신 계열 정본이라 건드리지 않는다.)
+ */
+export const SHEET_STATE_LABELS: Record<SheetConnectionState, string> = {
+  disconnected: '미연결',
+  connected: '연결됨',
+  stale: '갱신 있음',
+  revoked: '권한 끊김',
+}
+
+export const SHEET_STATUS_LABELS: Record<AttendeeSheetStatus, string> = {
+  applied: '신청',
+  confirmed: '확정',
+  cancelled: '취소',
+  removed: '시트에서 제거됨',
+}
+
+export const SHEET_DIFF_KIND_LABELS: Record<SheetDiffKind, string> = {
+  added: '추가',
+  changed: '변경',
+  removed: '제거',
+}
+
+export const SHEET_FIELD_LABELS: Record<SheetMappedField, string> = {
+  name: '이름',
+  org: '소속',
+  title: '직함',
+  email: '이메일',
+  phone: '전화',
+  group_tag: '구분',
+  registered_at: '신청 일시',
 }

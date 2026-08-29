@@ -126,8 +126,11 @@ describe('DoD-26 (b) RE:BUILD 27 — 진행 중·데모 기본', () => {
     localStorage.setItem('communicator.currentProjectId', RB27)
     renderRoute('/')
     await screen.findByRole('heading', { name: '홈 대시보드' })
-    const delayTile = (await screen.findByText('지연 태스크')).closest('div')!.parentElement!
-    expect(within(delayTile).getByText(String(delayed.length))).toBeTruthy()
+    // 홈은 3분할 액션 큐 — 지연 건수는 KPI 타일이 아니라 '지연' 큐 헤더 배지가 말한다(시안).
+    const delayQueue = (await screen.findByRole('heading', { name: '지연' })).closest(
+      '.ui-card',
+    ) as HTMLElement
+    expect(within(delayQueue).getByText(`${delayed.length}건`)).toBeTruthy()
     expect(await screen.findByText('기초 자료 수령 리마인더')).toBeTruthy()
     // 미결 컨펌(제작물 2건)이 RE:BUILD 27 것으로 렌더된다
     expect(await screen.findByText('외관 대형 현수막')).toBeTruthy()

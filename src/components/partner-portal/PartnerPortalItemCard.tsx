@@ -1,12 +1,27 @@
 // `/p/{token}` 항목 카드 — §10.1 화면 C: 상태 배지 · 수정요청 코멘트(shared) · 제출/재제출
 // (파일 드롭존 또는 텍스트 인라인 폼, 카드에서 토글) · 승인됨은 읽기 전용.
 // 라벨은 주최형 세트(HOST_STATUS_LABELS, §5.1 표) — 대행형 STATUS_LABELS와 문구만 다르다.
+//
+// 시안 정렬(Phase 3.17b · '온보딩 · 파트너 포털.dc.html'):
+//  · 배지는 공용 LevelBadge(의미 4단계 + 중립)로 — 어휘는 내부(PM 보드)와 같은 HOST_STATUS_LABELS.
+//    좌측 도트는 '내 행동을 기다리는' 상태 하나(pending_approval)에만(STATUS_DOT_STATUSES).
+//  · 배지 옆에 **수신 경로**를 적는다 — PM 접수 대장과 표기가 일치해야 한다(receiptLabel.ts).
+//  · 외부 지면 규격: 터치 타깃 44 고정(btn-sm 28 금지) · 1열 스택 · 카드 우선.
+// 사용자 결정에 따라 제출 기능은 **현행 유지**다 — 읽기 전용으로 축소하지 않는다.
 import { useState, type DragEvent } from 'react'
 import { isProviderError } from '../../lib/errors'
-import { formatDate, formatDateTime, HOST_STATUS_LABELS, STATUS_BADGE_CLASSES } from '../../lib/labels'
+import {
+  DELIVERABLE_STATUS_LEVEL,
+  formatDate,
+  formatDateTime,
+  HOST_STATUS_LABELS,
+  STATUS_DOT_STATUSES,
+} from '../../lib/labels'
 import { getDataProvider } from '../../providers'
 import type { PartnerPortalItem, PartnerSubmissionInput } from '../../types'
 import ErrorAlert from '../internal/ErrorAlert'
+import { LevelBadge } from '../internal/StatusBadge'
+import { PORTAL_NOT_RECEIVED_LABEL, portalReceiptOf } from './receiptLabel'
 
 const provider = getDataProvider()
 
@@ -61,28 +76,34 @@ export default function PartnerPortalItemCard({ item, token, onSubmitted }: Part
     if (dropped) setFile(dropped)
   }
 
+  const receipt = portalReceiptOf(item.versions)
+
   return (
     <article className="ui-card p-4">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="t-caption">{item.task_code}</p>
-          <h3 className="t-card-title">{item.task_title}</h3>
-        </div>
-        <span
-          className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_BADGE_CLASSES[item.status]}`}
-        >
-          {item.status === 'pending_approval' && (
-            <span aria-hidden className="size-1.5 rounded-full bg-accent" />
-          )}
-          {HOST_STATUS_LABELS[item.status]}
-        </span>
+      <div className="min-w-0">
+        <p className="t-caption">{item.task_code}</p>
+        <h3 className="t-card-title">{item.task_title}</h3>
       </div>
 
       {item.deadline && <p className="mt-1 text-xs text-ink-cap">마감 {formatDate(item.deadline)}</p>}
 
+      {/* 상태 배지 + 수신 경로 — 어휘·파생 규칙 모두 PM 접수 대장과 동일 */}
+      <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+        <LevelBadge
+          level={DELIVERABLE_STATUS_LEVEL[item.status]}
+          label={HOST_STATUS_LABELS[item.status]}
+          dot={STATUS_DOT_STATUSES.includes(item.status)}
+        />
+        <span className="text-xs text-ink-cap">
+          {receipt
+            ? `${formatDate(receipt.receivedAt.slice(0, 10))} 제출 · ${receipt.channelLabel} 수신`
+            : PORTAL_NOT_RECEIVED_LABEL}
+        </span>
+      </div>
+
       {latestVersion && (
-        <p className="mt-2 truncate text-xs text-ink-cap">
-          최근 제출 · {latestVersion.file_name} · v{latestVersion.version_no}
+        <p className="mt-1.5 truncate text-xs text-ink-cap">
+          최근 제출물 · {latestVersion.file_name} · v{latestVersion.version_no}
         </p>
       )}
 
@@ -112,12 +133,13 @@ export default function PartnerPortalItemCard({ item, token, onSubmitted }: Part
 
       {canSubmit && (
         <div className="mt-4 border-t border-border pt-3">
-          <div className="flex gap-1.5">
+          {/* 외부 지면 — btn-sm(28) 금지, 터치 44 고정 */}
+          <div className="flex gap-2">
             <button
               type="button"
               onClick={() => setMode('file')}
               aria-pressed={mode === 'file'}
-              className={`btn btn-sm ${mode === 'file' ? 'btn-primary' : 'btn-ghost'}`}
+              className={`btn h-11 flex-1 ${mode === 'file' ? 'btn-primary' : 'btn-ghost'}`}
             >
               파일로 제출
             </button>
@@ -125,7 +147,7 @@ export default function PartnerPortalItemCard({ item, token, onSubmitted }: Part
               type="button"
               onClick={() => setMode('text')}
               aria-pressed={mode === 'text'}
-              className={`btn btn-sm ${mode === 'text' ? 'btn-primary' : 'btn-ghost'}`}
+              className={`btn h-11 flex-1 ${mode === 'text' ? 'btn-primary' : 'btn-ghost'}`}
             >
               텍스트로 제출
             </button>
@@ -153,7 +175,7 @@ export default function PartnerPortalItemCard({ item, token, onSubmitted }: Part
                 onChange={(e) => setNote(e.target.value)}
                 placeholder="메모(선택)"
                 aria-label={`${item.task_title} 메모`}
-                className="ui-input mt-2 w-full"
+                className="ui-input mt-2 h-11 w-full"
               />
             </>
           ) : (

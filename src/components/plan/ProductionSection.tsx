@@ -1,9 +1,9 @@
 import PlanSection from './PlanSection'
-import { PLAN_SECTION_META, type SectionProgressData } from './planSections'
+import { type SectionProgressData } from './planSections'
 import StatusPill from './StatusPill'
 import type { PlanProductionItem } from '../../types/views'
 
-/** ④제작물 리스트 — design 항목의 가이드 스펙 표 + 최신 시안·상태. 가이드 스펙에서 자동 생성된다(DoD-8) */
+/** 05 제작물 리스트 — design 항목의 가이드 스펙 표 + 최신 시안·상태. 가이드 스펙에서 자동 생성된다(DoD-8) */
 export default function ProductionSection({
   items,
   progress,
@@ -12,7 +12,7 @@ export default function ProductionSection({
   progress: SectionProgressData
 }) {
   return (
-    <PlanSection number={PLAN_SECTION_META.production.number} title={PLAN_SECTION_META.production.title} progress={progress}>
+    <PlanSection sectionKey="production" progress={progress}>
       {items.length === 0 ? (
         <p className="text-xs text-ink-cap">등록된 제작물이 없습니다.</p>
       ) : (

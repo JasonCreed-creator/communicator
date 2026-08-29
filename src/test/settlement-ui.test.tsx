@@ -40,7 +40,8 @@ describe('S-10 정산보드 화면', () => {
     const s2 = await screen.findByTestId('bucket-row-s2')
     expect(within(s2).getByText('견적 초과')).toBeTruthy()
     expect(screen.getByText(/견적 초과 버킷 \d+건/)).toBeTruthy()
-    expect(screen.getByText('항등식이 성립합니다.')).toBeTruthy()
+    // 3.17b: 검산 결과는 카드 헤더 배지로 승격됐다(의미 동일 — 항등식이 성립함을 화면이 단언한다)
+    expect(screen.getByText('항등식 성립')).toBeTruthy()
   })
 
   it('마진 구성 막대가 변동 + 고정 3분할로 그려진다', async () => {

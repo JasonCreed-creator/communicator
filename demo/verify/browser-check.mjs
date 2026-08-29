@@ -68,7 +68,12 @@ const server = createServer((req, res) => {
 await new Promise((r) => server.listen(PORT, r))
 
 mkdirSync(SHOTS, { recursive: true })
-const browser = await chromium.launch()
+// 사전 설치된 Chromium을 쓰는 환경(원격 세션 등)에서는 playwright 패키지 버전과 브라우저 빌드
+// 번호가 어긋나 기본 launch()가 실패한다. PLAYWRIGHT_CHROMIUM_PATH가 있으면 그 실행 파일을 쓴다.
+const launchOpts = process.env.PLAYWRIGHT_CHROMIUM_PATH
+  ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_PATH }
+  : {}
+const browser = await chromium.launch(launchOpts)
 const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } })
 const tab = await ctx.newPage()
 

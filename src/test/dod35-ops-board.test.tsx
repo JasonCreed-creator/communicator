@@ -111,7 +111,11 @@ describe('DoD 35 — 유형 우선 보드 (RE:BUILD 27)', () => {
     await userEvent.type(screen.getByLabelText('제목 검색'), '개막')
     expect(screen.queryByText('개막 세션 큐시트')).toBeNull()
     expect(screen.queryByText('진행 시나리오 (가안)')).toBeNull()
-    expect(screen.getByText('조건에 맞는 항목이 없습니다.')).toBeTruthy()
+    // 3.17b — 빈 상태 ③(필터 결과 없음): '문서 없음'(②)과 갈라 전체 건수 + 필터 칩 + 초기화를 보여준다
+    expect(screen.getByText(/조건에 맞는 항목이 없습니다\./)).toBeTruthy()
+    expect(screen.getByText(/전체 1건 중 0건/)).toBeTruthy()
+    expect(screen.getByText('개막')).toBeTruthy()
+    expect(screen.getByRole('button', { name: '필터 초기화' })).toBeTruthy()
 
     await userEvent.clear(screen.getByLabelText('제목 검색'))
     expect(await screen.findByText('진행 시나리오 (가안)')).toBeTruthy()

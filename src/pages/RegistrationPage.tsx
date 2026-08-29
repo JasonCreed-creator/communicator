@@ -1,12 +1,20 @@
-import { useState, type ChangeEvent } from 'react'
+import { useCallback, useState, type ChangeEvent } from 'react'
 import Card from '../components/internal/Card'
+import DensityToggle from '../components/internal/DensityToggle'
+import EmptyState from '../components/internal/EmptyState'
 import ErrorAlert from '../components/internal/ErrorAlert'
 import PageHeader from '../components/internal/PageHeader'
 import StatTile from '../components/internal/StatTile'
+import TableSkeleton from '../components/internal/TableSkeleton'
+import { LevelBadge } from '../components/internal/StatusBadge'
 import { downloadCsv, parseCsv, toCsv } from '../components/internal/csvUtils'
-import GoogleSheetsButton from '../components/registration/GoogleSheetsButton'
 import PaginationBar from '../components/registration/PaginationBar'
 import RegistrationSearchBar from '../components/registration/RegistrationSearchBar'
+import SheetConnectionCard from '../components/registration/SheetConnectionCard'
+import InfoTip from '../components/internal/InfoTip'
+import SnapshotBadge from '../components/registration/SnapshotBadge'
+import SheetExcludedDialog from '../components/registration/SheetExcludedDialog'
+import { maskedContact, percent1 } from '../components/registration/sheetFormat'
 import { xlsxToTable } from '../components/registration/registrationXlsx'
 import {
   filterAttendees,
@@ -20,7 +28,12 @@ import { useAsync, useMutation } from '../hooks/useAsync'
 import { INVITE_STATUS_LABELS, formatDateTime } from '../lib/labels'
 import { getDataProvider } from '../providers'
 import type { RsvpContact } from '../types/entities'
-import type { AttendeeChannel, InviteStatus } from '../types/enums'
+import {
+  SHEET_STATUS_LABELS,
+  type AttendeeChannel,
+  type AttendeeSheetStatus,
+  type InviteStatus,
+} from '../types/enums'
 import type { AttendeeWithRsvp, CsvImportRow, RegistrationStats } from '../types/views'
 
 const provider = getDataProvider()
@@ -31,6 +44,16 @@ const CHANNEL_LABELS: Record<AttendeeChannel, string> = {
   import: '가져오기',
 }
 
+/** 신청 상태 배지 — 디자인지시서 §7-1.1 시트 계열 매핑(제거됨은 중립) */
+const SHEET_STATUS_LEVEL: Record<AttendeeSheetStatus, 'neutral' | 'progress' | 'positive' | 'blocked'> = {
+  applied: 'progress',
+  confirmed: 'positive',
+  cancelled: 'blocked',
+  removed: 'neutral',
+}
+
+// v2.6 §10 — 체크인 조작은 S-12 현장 체크인(/checkin) 한 곳으로 단일화한다(3.17.1 T1).
+// 여기서는 체크인 **상태만** 읽는다.
 type Tab = 'rsvp' | 'attendees' | 'stats'
 const TABS: { id: Tab; label: string }[] = [
   { id: 'rsvp', label: 'RSVP' },
@@ -41,13 +64,29 @@ const TABS: { id: Tab; label: string }[] = [
 export default function RegistrationPage() {
   const { projectId } = useProject()
   const [tab, setTab] = useState<Tab>('rsvp')
+  // 시트 반영·연결 변경이 일어나면 이 값을 올려 연결·명단·KPI를 한꺼번에 다시 읽는다.
+  const [syncTick, setSyncTick] = useState(0)
+  const bumpSync = useCallback(() => setSyncTick((t) => t + 1), [])
+
   const project = useAsync(() => provider.getProject(projectId), [projectId])
   // v1.3 유형 토글(§3): general(일반형)이면 RSVP 파이프라인은 표시 계층에서만 숨긴다 — 데이터는 보존.
   const isGeneral = project.data?.event_type === 'general'
   const visibleTabs = isGeneral ? TABS.filter((t) => t.id !== 'rsvp') : TABS
   const activeTab: Tab = isGeneral && tab === 'rsvp' ? 'attendees' : tab
-  // 3.9.1 P3 — §6 S4: 상단 통계 3카드 상시 노출. 탭 전환마다 재조회해 체크인 등 변경을 따라간다.
-  const stats = useAsync(() => provider.getRegistrationStats(projectId), [projectId, activeTab])
+
+  // v2.6 §24 — 시트 연결. 연결이 없으면 null이고 화면은 기존 통계로 폴백한다.
+  const connection = useAsync(() => provider.getSheetConnection(projectId), [projectId, syncTick])
+  const sheetStats = useAsync(
+    () => provider.getSheetRegistrationStats(projectId),
+    [projectId, syncTick, activeTab],
+  )
+  // 3.9.1 P3 — §6 S4: 상단 통계 카드 상시 노출. 탭 전환마다 재조회해 체크인 등 변경을 따라간다.
+  const stats = useAsync(() => provider.getRegistrationStats(projectId), [projectId, activeTab, syncTick])
+  const attendees = useAsync(() => provider.listAttendees(projectId), [projectId, syncTick])
+
+  const sheetConnected = connection.data !== null
+  // 3.17.1 T3 — 제외 건수는 클릭 가능한 진입점이다(숫자만 두면 탈락한 사람이 D-Day에 발견된다)
+  const [excludedOpen, setExcludedOpen] = useState(false)
 
   return (
     <section className="space-y-6 p-6">
@@ -59,17 +98,72 @@ export default function RegistrationPage() {
         </div>
       )}
 
-      {/* 상단 통계 3카드 — 일반형은 응답률 대신 참관객 수(RSVP 숨김 규칙 유지) */}
-      {stats.data && (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          {isGeneral ? (
-            <StatTile label="참관객 수" value={stats.data.attendee_total} />
-          ) : (
-            <StatTile label="응답률" value={`${Math.round(stats.data.response_rate * 100)}%`} />
-          )}
-          <StatTile label="등록 수" value={stats.data.attendee_total} />
-          <StatTile label="체크인율" value={`${Math.round(stats.data.checkin_rate * 100)}%`} />
+      {/* 연결 카드 — 탭 위 페이지 상단에 상시 노출(§24.5) */}
+      <SheetConnectionCard
+        projectId={projectId}
+        connection={connection.data}
+        loading={connection.loading}
+        error={connection.error}
+        onChanged={bumpSync}
+      />
+
+      {/* 상단 KPI — 연결이 있으면 시트 기준 4카드, 없으면 기존 3카드로 폴백 */}
+      {sheetStats.data ? (
+        <div data-testid="sheet-kpi" className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <StatTile
+            label="신청"
+            value={sheetStats.data.applied}
+            /* 3.17.1 T5 — 캡션이 스스로 설명해야 한다. 항등식의 모든 항을 드러낸다:
+               시트 행 = 신청 + 제외 + 반영 대기 추가 − 반영 대기 제거 */
+            support={
+              <span data-testid="applied-support" className="flex flex-wrap items-center gap-x-1.5">
+                <span>시트 행 {sheetStats.data.source_rows}</span>
+                <span aria-hidden>·</span>
+                <button
+                  type="button"
+                  onClick={() => setExcludedOpen(true)}
+                  className="underline underline-offset-2 hover:text-accent-deep"
+                >
+                  제외 {sheetStats.data.excluded}
+                </button>
+                <span aria-hidden>·</span>
+                <span>
+                  반영 대기 +{sheetStats.data.pending_added} / −{sheetStats.data.pending_removed}
+                </span>
+                <InfoTip text="시트 행 = 신청 + 제외 + 반영 대기 추가 − 반영 대기 제거. '반영 대기'는 아직 차이를 확인하지 않아 화면에 들어오지 않은 행입니다." />
+              </span>
+            }
+          />
+          <StatTile
+            label="확정"
+            value={sheetStats.data.confirmed}
+            /* 3.17.1 T4 — RSVP '응답률'(발송 대비 응답)과 분모가 달라 이름을 나눴다(확정 ÷ 신청) */
+            support={`확정률 ${percent1(sheetStats.data.confirm_rate)}%`}
+          />
+          <StatTile
+            label="취소"
+            value={sheetStats.data.cancelled}
+            support={`확정 후 취소 ${sheetStats.data.cancelled_after_confirm}`}
+          />
+          <StatTile
+            label="체크인"
+            value={sheetStats.data.checked_in}
+            tone="accent"
+            support={`체크인율 ${percent1(sheetStats.data.checkin_rate)}% · 확정 기준`}
+          />
         </div>
+      ) : (
+        stats.data && (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            {isGeneral ? (
+              <StatTile label="참관객 수" value={stats.data.attendee_total} />
+            ) : (
+              <StatTile label="응답률" value={`${Math.round(stats.data.response_rate * 100)}%`} />
+            )}
+            <StatTile label="등록 수" value={stats.data.attendee_total} />
+            <StatTile label="체크인율" value={`${Math.round(stats.data.checkin_rate * 100)}%`} />
+          </div>
+        )
       )}
 
       <div className="flex gap-1 border-b border-border">
@@ -78,6 +172,7 @@ export default function RegistrationPage() {
             key={t.id}
             type="button"
             onClick={() => setTab(t.id)}
+            aria-current={activeTab === t.id ? 'page' : undefined}
             className={`border-b-2 px-4 py-2 text-sm font-medium ${
               activeTab === t.id ? 'border-accent text-ink' : 'border-transparent text-ink-sub hover:text-ink'
             }`}
@@ -87,10 +182,27 @@ export default function RegistrationPage() {
         ))}
       </div>
 
-      {activeTab === 'rsvp' && <RsvpTab />}
-      {activeTab === 'attendees' && <AttendeesTab />}
+      {activeTab === 'rsvp' && <RsvpTab sheetConnected={sheetConnected} />}
+      {activeTab === 'attendees' && (
+        <AttendeesTab
+          sheetConnected={sheetConnected}
+          snapshotAt={connection.data?.snapshot_at ?? null}
+          attendees={attendees.data}
+          loading={attendees.loading}
+          error={attendees.error}
+          onChanged={attendees.reload}
+        />
+      )}
       {activeTab === 'stats' && (
         <StatsTab showRsvp={!isGeneral} stats={stats.data} loading={stats.loading} error={stats.error} />
+      )}
+
+      {excludedOpen && sheetStats.data && (
+        <SheetExcludedDialog
+          rows={sheetStats.data.excluded_rows}
+          sheetUrl={connection.data?.url ?? null}
+          onClose={() => setExcludedOpen(false)}
+        />
       )}
     </section>
   )
@@ -105,7 +217,7 @@ const RSVP_STATUS_OPTIONS: { value: RsvpStatusFilter; label: string }[] = [
 ]
 
 // ── RSVP 탭 ───────────────────────────────────────────────────────────
-function RsvpTab() {
+function RsvpTab({ sheetConnected }: { sheetConnected: boolean }) {
   const { projectId } = useProject()
   const rsvps = useAsync(() => provider.listRsvpContacts(projectId), [projectId])
   const [search, setSearch] = useState('')
@@ -144,8 +256,7 @@ function RsvpTab() {
       <ErrorAlert message={rsvps.error} />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
-          <CsvImportPanel target="rsvp" onImported={rsvps.reload} />
-          <GoogleSheetsButton />
+          <CsvImportPanel target="rsvp" onImported={rsvps.reload} compact={sheetConnected} />
         </div>
         <button type="button" onClick={handleExport} className="btn btn-ghost shrink-0">
           내보내기
@@ -249,7 +360,7 @@ function RsvpRow({ rsvp, onChanged }: { rsvp: RsvpContact; onChanged: () => void
   )
 }
 
-// 라벨은 AttendeeRow 토글 버튼의 '체크인 완료 (...)' 문구와 겹치지 않게 고른다 — 검색으로 텍스트를
+// 라벨은 AttendeeRow 체크인 상태 문구('완료 · ...')와 겹치지 않게 고른다 — 검색으로 텍스트를
 // 매칭하는 테스트(예: dod4)가 select 옵션까지 함께 집어 오탐하지 않도록.
 const CHECKIN_FILTER_OPTIONS: { value: CheckinFilter; label: string }[] = [
   { value: 'all', label: '전체' },
@@ -258,12 +369,27 @@ const CHECKIN_FILTER_OPTIONS: { value: CheckinFilter; label: string }[] = [
 ]
 
 // ── 참관객 탭 ─────────────────────────────────────────────────────────
-function AttendeesTab() {
-  const { projectId } = useProject()
-  const attendees = useAsync(() => provider.listAttendees(projectId), [projectId])
+// 시트 연결 행사에서는 **읽기 전용 시트 명단**(§24.5)으로, 그 밖에는 기존 열 구성으로 렌더한다.
+// 어느 쪽이든 편집 UI는 체크인·비고(앱 소유)뿐이고 시트 소유 필드에는 입력 요소를 두지 않는다.
+function AttendeesTab({
+  sheetConnected,
+  snapshotAt,
+  attendees,
+  loading,
+  error,
+  onChanged,
+}: {
+  sheetConnected: boolean
+  snapshotAt: string | null
+  attendees: AttendeeWithRsvp[] | null
+  loading: boolean
+  error: string | null
+  onChanged: () => void
+}) {
   const [search, setSearch] = useState('')
   const [checkinFilter, setCheckinFilter] = useState<CheckinFilter>('all')
   const [page, setPage] = useState(1)
+  const [dense, setDense] = useState(false)
 
   const handleSearchChange = (v: string) => {
     setSearch(v)
@@ -274,12 +400,12 @@ function AttendeesTab() {
     setPage(1)
   }
 
-  const filtered = filterAttendees(attendees.data ?? [], search, checkinFilter)
+  const filtered = filterAttendees(attendees ?? [], search, checkinFilter)
   const paged = paginate(filtered, page)
 
   const handleExport = () => {
     const headers = ['이름', '소속', '채널', '등록일', '뱃지번호', '체크인']
-    const rows = (attendees.data ?? []).map((a) => [
+    const rows = (attendees ?? []).map((a) => [
       a.name,
       a.org ?? '',
       CHANNEL_LABELS[a.channel],
@@ -292,11 +418,10 @@ function AttendeesTab() {
 
   return (
     <div className="space-y-6">
-      <ErrorAlert message={attendees.error} />
+      <ErrorAlert message={error} />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
-          <CsvImportPanel target="attendees" onImported={attendees.reload} />
-          <GoogleSheetsButton />
+          <CsvImportPanel target="attendees" onImported={onChanged} compact={sheetConnected} />
         </div>
         <button type="button" onClick={handleExport} className="btn btn-ghost shrink-0">
           내보내기
@@ -312,30 +437,61 @@ function AttendeesTab() {
         statusLabel="체크인 여부 필터"
       />
 
-      <Card title="참관객">
-        {attendees.loading && <p className="text-sm text-ink-cap">불러오는 중…</p>}
-        {attendees.data && attendees.data.length === 0 && (
-          <p className="text-sm text-ink-cap">등록된 참관객이 없습니다.</p>
+      <Card
+        title={sheetConnected ? '참관객 · 시트 명단' : '참관객'}
+        action={
+          <div className="flex items-center gap-2">
+            {sheetConnected && <LevelBadge level="neutral" label="읽기 전용" />}
+            {sheetConnected && <SnapshotBadge snapshotAt={snapshotAt} />}
+            <DensityToggle dense={dense} onChange={setDense} />
+          </div>
+        }
+      >
+        {sheetConnected && (
+          <div className="mb-3 rounded-md border border-steel/20 bg-steel-tint px-3 py-2 text-xs leading-relaxed text-steel">
+            명단 필드(이름·소속·직함·연락처·구분·신청 상태)는 <strong className="font-semibold">시트 소유</strong>
+            로 앱에서 수정할 수 없습니다. 체크인·비고는 <strong className="font-semibold">앱 소유</strong> 필드로
+            시트를 덮어쓰지 않습니다. 연락처는 기본 마스킹으로 표시되며 내보내기 시에만 포함할 수 있습니다.
+          </div>
         )}
-        {attendees.data && attendees.data.length > 0 && filtered.length === 0 && (
+
+        {loading && !attendees && <TableSkeleton rows={5} columns={6} dense={dense} />}
+        {attendees && attendees.length === 0 && <EmptyState message="등록된 참관객이 없습니다." />}
+        {attendees && attendees.length > 0 && filtered.length === 0 && (
           <p className="text-sm text-ink-cap">검색·필터 조건에 맞는 참관객이 없습니다.</p>
         )}
         {paged.items.length > 0 && (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
+            <table
+              className={`ui-table text-left text-sm ${dense ? 'ui-table-dense' : ''}`}
+              aria-label={sheetConnected ? '참관객 시트 명단' : '참관객 명단'}
+            >
               <thead>
                 <tr>
                   <th className="ui-th">이름</th>
                   <th className="ui-th">소속</th>
-                  <th className="ui-th">채널</th>
-                  <th className="ui-th">등록일</th>
-                  <th className="ui-th">뱃지번호</th>
-                  <th className="ui-th">체크인</th>
+                  {sheetConnected ? (
+                    <>
+                      <th className="ui-th">직함</th>
+                      <th className="ui-th">연락처</th>
+                      <th className="ui-th">구분 · 그룹</th>
+                      <th className="ui-th">신청 상태</th>
+                    </>
+                  ) : (
+                    <>
+                      <th className="ui-th">채널</th>
+                      <th className="ui-th">등록일</th>
+                      <th className="ui-th">뱃지번호</th>
+                    </>
+                  )}
+                  <th className="ui-th">
+                    체크인 <span className="text-accent-deep">· 앱 소유</span>
+                  </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border">
+              <tbody>
                 {paged.items.map((a) => (
-                  <AttendeeRow key={a.id} attendee={a} onChanged={attendees.reload} />
+                  <AttendeeRow key={a.id} attendee={a} sheetConnected={sheetConnected} />
                 ))}
               </tbody>
             </table>
@@ -352,31 +508,57 @@ function AttendeesTab() {
   )
 }
 
-function AttendeeRow({ attendee, onChanged }: { attendee: AttendeeWithRsvp; onChanged: () => void }) {
-  const toggle = useMutation(() => provider.toggleCheckin(attendee.id))
-
-  const handleToggle = async () => {
-    const result = await toggle.run()
-    if (result) onChanged()
-  }
+function AttendeeRow({
+  attendee,
+  sheetConnected,
+}: {
+  attendee: AttendeeWithRsvp
+  sheetConnected: boolean
+}) {
+  const removed = attendee.sheet_status === 'removed'
 
   return (
-    <tr className="h-11 hover:bg-accent-tint/30">
-      <td className="py-2 pr-4 text-ink">{attendee.name}</td>
-      <td className="py-2 pr-4 text-ink-sub">{attendee.org ?? '-'}</td>
-      <td className="py-2 pr-4 text-ink-sub">{CHANNEL_LABELS[attendee.channel]}</td>
-      <td className="py-2 pr-4 text-ink-sub">{formatDateTime(attendee.registered_at)}</td>
-      <td className="py-2 pr-4 text-ink-sub">{attendee.badge_no ?? '-'}</td>
-      <td className="py-2">
-        <button
-          type="button"
-          onClick={handleToggle}
-          disabled={toggle.pending}
-          className={`btn btn-sm ${attendee.checked_in_at ? 'btn-primary' : 'btn-ghost'}`}
-        >
-          {attendee.checked_in_at ? `체크인 완료 (${formatDateTime(attendee.checked_in_at)})` : '체크인'}
-        </button>
-        <ErrorAlert message={toggle.error} />
+    <tr className={removed ? 'opacity-60' : undefined}>
+      <td className="text-ink" title={attendee.name}>
+        {attendee.name}
+      </td>
+      <td className="text-ink-sub" title={attendee.org ?? undefined}>
+        {attendee.org ?? '-'}
+      </td>
+      {sheetConnected ? (
+        <>
+          <td className="text-ink-sub">{attendee.title ?? '-'}</td>
+          <td className="text-ink-sub">{maskedContact(attendee.email, attendee.phone)}</td>
+          <td className="text-ink-sub">{attendee.group_tag ?? '-'}</td>
+          <td>
+            {attendee.sheet_status ? (
+              <LevelBadge
+                level={SHEET_STATUS_LEVEL[attendee.sheet_status]}
+                label={SHEET_STATUS_LABELS[attendee.sheet_status]}
+              />
+            ) : (
+              '-'
+            )}
+          </td>
+        </>
+      ) : (
+        <>
+          <td className="text-ink-sub">{CHANNEL_LABELS[attendee.channel]}</td>
+          <td className="text-ink-sub">{formatDateTime(attendee.registered_at)}</td>
+          <td className="text-ink-sub">{attendee.badge_no ?? '-'}</td>
+        </>
+      )}
+      <td>
+        {removed ? (
+          <span className="text-xs text-ink-cap">
+            {attendee.checked_in_at ? `완료 · ${formatDateTime(attendee.checked_in_at)} (이력)` : '이력'}
+          </span>
+        ) : (
+          /* 조작은 S-12 현장 체크인에서만 — 여기는 읽기 전용 상태 표시다(3.17.1 T1-3) */
+          <span className="text-sm text-ink-sub">
+            {attendee.checked_in_at ? `완료 · ${formatDateTime(attendee.checked_in_at)}` : '미체크인'}
+          </span>
+        )}
       </td>
     </tr>
   )
@@ -472,7 +654,16 @@ function csvToTable(text: string): { headers: string[]; rows: string[][] } {
   return { headers, rows }
 }
 
-function CsvImportPanel({ target, onImported }: { target: 'rsvp' | 'attendees'; onImported: () => void }) {
+function CsvImportPanel({
+  target,
+  onImported,
+  compact = false,
+}: {
+  target: 'rsvp' | 'attendees'
+  onImported: () => void
+  /** 시트 연결 중 — 파일 임포트는 보조 수단이라 버튼이 아니라 작은 텍스트 링크로 내린다(§24.5) */
+  compact?: boolean
+}) {
   const { projectId } = useProject()
   const [parsed, setParsed] = useState<{ headers: string[]; rows: string[][] } | null>(null)
   const [mapping, setMapping] = useState<Record<number, keyof CsvImportRow | 'ignore'>>({})
@@ -545,19 +736,34 @@ function CsvImportPanel({ target, onImported }: { target: 'rsvp' | 'attendees'; 
   }
 
   const targetLabel = target === 'rsvp' ? 'RSVP' : '참관객'
+  const fileInput = (
+    <input
+      type="file"
+      accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      onChange={handleFile}
+      className="hidden"
+    />
+  )
 
   return (
     <div className="min-w-0">
-      <label className="btn btn-ghost inline-flex cursor-pointer">
-        CSV 임포트 ({targetLabel})
-        <input
-          type="file"
-          accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-          onChange={handleFile}
-          className="hidden"
-        />
-      </label>
-      <p className="mt-1 text-[11px] text-ink-cap">.csv 또는 .xlsx 파일을 선택하세요.</p>
+      {compact ? (
+        <>
+          <label className="inline-flex cursor-pointer text-sm text-ink-cap underline decoration-border underline-offset-2 hover:text-ink-sub">
+            xlsx로 가져오기 ({targetLabel})
+            {fileInput}
+          </label>
+          <p className="mt-0.5 text-[11px] text-ink-cap">시트 연결 중에는 보조 수단입니다.</p>
+        </>
+      ) : (
+        <>
+          <label className="btn btn-ghost inline-flex cursor-pointer">
+            CSV 임포트 ({targetLabel})
+            {fileInput}
+          </label>
+          <p className="mt-1 text-[11px] text-ink-cap">.csv 또는 .xlsx 파일을 선택하세요.</p>
+        </>
+      )}
       {result && (
         <p className="mt-2 text-sm text-ink-sub">
           신규 {result.inserted}건 · 갱신 {result.updated}건 반영되었습니다.

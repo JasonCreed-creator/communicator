@@ -13,10 +13,12 @@ import { COMPLIANCE_CARD_TEMPLATES, HOST_COMPLIANCE_CARD_TEMPLATES } from '../..
 import { defaultConsents, defaultFormFields, defaultSections } from '../../lib/landingTemplate'
 import {
   HOST_ROLE_CHARTER_TEMPLATE,
-  HOST_TEMPLATE,
+  HOST_SUBMIT_CATEGORY,
   ROLE_CHARTER_TEMPLATES,
+  hostTemplateFor,
   wbsTemplateFor,
 } from '../../fixtures/wbsTemplates'
+import { FORMAT_PRESETS, presetCardOf } from '../../fixtures/formatPresets'
 import { adjustmentDeltas, computeQuoteOutputs, toEngineConfig } from '../../modules/quote/engine/quoteInput'
 import { effectiveAdjust } from '../../modules/quote/engine/quoteMode'
 import { calcEstimate } from '../../modules/quote/engine/calcEstimate'
@@ -43,6 +45,8 @@ import type {
   QuoteBreakdown,
   QuoteImport,
   ScenarioBlock,
+  SheetConnection,
+  SheetSourceRow,
   SettlementBoard,
   SettlementBucket,
   SettlementItem,
@@ -66,8 +70,17 @@ import type {
   DeliverableStatus,
   MemberRole,
   QuoteImportFormat,
+  SheetInvalidReason,
 } from '../../types/enums'
-import { isStructuredDocCategory } from '../../types/enums'
+import { isStructuredDocCategory, SHEET_FIELD_LABELS, SHEET_REQUIRED_FIELDS } from '../../types/enums'
+import {
+  buildColumnPreviews,
+  buildProbe,
+  computeSheetDiffRows,
+  DEFAULT_SOURCE_MODIFIED_AT,
+  generateSourceRows,
+  mappedFields,
+} from './sheetSync'
 import type {
   AddCommentInput,
   AttendeeWithRsvp,
@@ -114,6 +127,13 @@ import type {
   QuoteImportDistributeResult,
   RegistrationStats,
   RequestApprovalInput,
+  SheetApplyResult,
+  SheetColumnPreview,
+  SheetConnectInput,
+  SheetDiff,
+  SheetDiffRow,
+  SheetProbe,
+  SheetRegistrationStats,
   RsvpContactPatch,
   ScenarioBlockInput,
   UploadVersionInput,
@@ -442,6 +462,10 @@ export class MockProvider implements DataProvider {
       id: this.nextId('prj'),
       name: input.name?.trim() || '새 행사',
       code,
+      // v2.6 §25 — format은 시드축이다. 미지정이면 conference(기존 동작과 동일).
+      format: input.format ?? 'conference',
+      psa_enabled: input.psa_enabled ?? false,
+      audience_model: input.audience_model ?? null,
       kind: 'agency', // v2.4 §21 — S0 위저드로 만드는 행사는 기본 대행형(행사 설정에서 전환 가능)
       event_date: input.event_date ?? null,
       event_end_date: input.event_end_date ?? null,
@@ -1073,6 +1097,346 @@ export class MockProvider implements DataProvider {
     }
   }
 
+  // ── 등록 · 구글 시트 연동 (S4, v2.6 §24) ──────────────────────────
+  // 이 절에는 시트로 쓰는 코드가 없다(§24.6). 원본 행(state.sheet_source_rows)은 mock이
+  // 재현한 '시트의 현재 모습'이고, 앱은 그것을 읽어 차이만 보여준다.
+
+  private sheetConnOf(projectId: UUID): SheetConnection | undefined {
+    return this.state.sheet_connections.find((c) => c.project_id === projectId)
+  }
+
+  private mustSheetConn(projectId: UUID): SheetConnection {
+    this.mustFindProject(projectId)
+    const conn = this.sheetConnOf(projectId)
+    if (!conn) throw new ProviderError('not_found', '연결된 시트가 없습니다.')
+    return conn
+  }
+
+  private sheetRowsOf(projectId: UUID): SheetSourceRow[] {
+    return this.state.sheet_source_rows.filter((r) => r.project_id === projectId)
+  }
+
+  private sheetDiffRows(conn: SheetConnection): SheetDiffRow[] {
+    return computeSheetDiffRows({
+      mapping: conn.mapping,
+      sourceRows: this.sheetRowsOf(conn.project_id),
+      attendees: this.state.attendees.filter((a) => a.project_id === conn.project_id),
+    })
+  }
+
+  async getSheetConnection(projectId: UUID): Promise<SheetConnection | null> {
+    this.mustFindProject(projectId)
+    const conn = this.sheetConnOf(projectId)
+    return conn ? structuredClone(conn) : null
+  }
+
+  async probeSheet(projectId: UUID, url: string): Promise<SheetProbe> {
+    const project = this.mustFindProject(projectId)
+    if (!/^https?:\/\/\S+$/.test(url.trim())) {
+      throw new ProviderError('validation', '시트 URL을 확인해 주세요 — http로 시작하는 주소여야 합니다.')
+    }
+    const modified = this.sheetConnOf(projectId)?.source_modified_at ?? DEFAULT_SOURCE_MODIFIED_AT
+    return buildProbe(`${project.name} — 참가자 명단`, modified)
+  }
+
+  async previewSheetColumns(
+    projectId: UUID,
+    url: string,
+    tabName: string,
+  ): Promise<SheetColumnPreview[]> {
+    const probe = await this.probeSheet(projectId, url)
+    const tab = probe.tabs.find((t) => t.name === tabName)
+    if (!tab) throw new ProviderError('not_found', '해당 이름의 탭을 찾을 수 없습니다.')
+    if (!tab.selectable) {
+      throw new ProviderError('validation', '표 형태가 아닌 탭입니다 — 명단으로 쓸 수 없습니다.')
+    }
+    return buildColumnPreviews(tab)
+  }
+
+  async connectSheet(projectId: UUID, input: SheetConnectInput): Promise<SheetConnection> {
+    const user = this.assertRegRole()
+    this.assertWritable(projectId)
+    if (this.sheetConnOf(projectId)) {
+      throw new ProviderError('conflict', '이미 연결된 시트가 있습니다 — 연결을 해제한 뒤 다시 연결해 주세요.')
+    }
+    const probe = await this.probeSheet(projectId, input.url)
+    const tab = probe.tabs.find((t) => t.name === input.tab_name)
+    if (!tab || !tab.selectable) {
+      throw new ProviderError('validation', '명단으로 쓸 수 있는 탭을 선택해 주세요.')
+    }
+    const mapped = mappedFields(input.mapping)
+    const missing = SHEET_REQUIRED_FIELDS.filter((f) => !mapped.includes(f))
+    if (missing.length > 0) {
+      const labels = missing.map((f) => SHEET_FIELD_LABELS[f]).join('·')
+      throw new ProviderError('validation', `필수 매핑이 없습니다 — ${labels} 컬럼을 지정해 주세요.`)
+    }
+    // mock의 '시트 내용' — 이 행사에 원본 행이 없으면 결정적 데모 행을 만들어 둔다
+    if (this.sheetRowsOf(projectId).length === 0) {
+      this.state.sheet_source_rows.push(...generateSourceRows(projectId, 12))
+    }
+    const now = nowIso()
+    const conn: SheetConnection = {
+      id: this.nextId('sht'),
+      project_id: projectId,
+      state: 'connected',
+      title: probe.title,
+      url: input.url.trim(),
+      tab_name: input.tab_name,
+      mapping: input.mapping.map((m) => ({ ...m })),
+      connected_at: now,
+      connected_by: user.name,
+      snapshot_at: now,
+      snapshot_version: 1,
+      checked_at: now,
+      auto_check_minutes: 15,
+      source_modified_at: probe.source_modified_at,
+      pending_added: 0,
+      pending_changed: 0,
+      pending_removed: 0,
+      failure_times: [],
+      last_success_at: now,
+    }
+    this.state.sheet_connections.push(conn)
+    // 최초 적재는 사람이 위저드로 명시한 행동이라 그 자리에서 읽어 온다. 단 **추가만** 한다 —
+    // 기존 행의 값 변경·삭제는 언제나 차이 확인을 거친다(§24.1-2).
+    let seeded = 0
+    for (const row of this.sheetRowsOf(projectId)) {
+      if (row.invalid_reason) continue
+      if (this.state.attendees.some((a) => a.project_id === projectId && a.sheet_row_id === row.sheet_row_id)) {
+        continue
+      }
+      this.state.attendees.push(this.attendeeFromSheetRow(projectId, row))
+      seeded += 1
+    }
+    this.log(projectId, `user:${user.id}`, 'sheet.connected', 'sheet_connection', conn.id, {
+      tab_name: input.tab_name,
+      seeded,
+    })
+    return structuredClone(conn)
+  }
+
+  private attendeeFromSheetRow(projectId: UUID, row: SheetSourceRow): Attendee {
+    return {
+      id: this.nextId('att'),
+      project_id: projectId,
+      rsvp_contact_id: null,
+      name: row.name,
+      org: row.org,
+      email: row.email,
+      phone: row.phone,
+      channel: 'import',
+      registered_at: row.registered_at,
+      // 앱 소유 필드는 비어 있는 상태로 시작한다 — 시트가 채우지 않는다
+      checked_in_at: null,
+      badge_no: null,
+      sheet_row_id: row.sheet_row_id,
+      title: row.title,
+      group_tag: row.group_tag,
+      sheet_status: row.status,
+      note: null,
+    }
+  }
+
+  async disconnectSheet(projectId: UUID): Promise<void> {
+    const user = this.assertRegRole()
+    this.assertWritable(projectId)
+    const conn = this.mustSheetConn(projectId)
+    this.state.sheet_connections = this.state.sheet_connections.filter((c) => c.id !== conn.id)
+    // 참관객 행은 남긴다(이력 보존) — 시트 소유 필드도 마지막 스냅숏 그대로 둔다
+    this.log(projectId, `user:${user.id}`, 'sheet.disconnected', 'sheet_connection', conn.id)
+  }
+
+  async reauthorizeSheet(projectId: UUID): Promise<SheetConnection> {
+    const user = this.assertRegRole()
+    this.assertWritable(projectId)
+    const conn = this.mustSheetConn(projectId)
+    const now = nowIso()
+    conn.failure_times = []
+    conn.checked_at = now
+    conn.last_success_at = now
+    const rows = this.sheetDiffRows(conn)
+    this.applyPendingCounts(conn, rows)
+    this.log(projectId, `user:${user.id}`, 'sheet.reauthorized', 'sheet_connection', conn.id)
+    return structuredClone(conn)
+  }
+
+  /** 감지 결과를 연결 행에 적는다 — 참관객 데이터는 건드리지 않는다(R-S2) */
+  private applyPendingCounts(conn: SheetConnection, rows: SheetDiffRow[]): void {
+    conn.pending_added = rows.filter((r) => r.kind === 'added').length
+    conn.pending_changed = rows.filter((r) => r.kind === 'changed').length
+    conn.pending_removed = rows.filter((r) => r.kind === 'removed').length
+    conn.state = rows.length > 0 ? 'stale' : 'connected'
+  }
+
+  async checkSheetUpdates(projectId: UUID): Promise<SheetConnection> {
+    const conn = this.mustSheetConn(projectId)
+    const now = nowIso()
+    conn.checked_at = now
+    if (conn.state === 'revoked') {
+      // 권한이 끊긴 동안에는 읽기 자체가 실패한다 — 실패 시각만 쌓고 스냅숏은 그대로 유지한다
+      conn.failure_times = [...conn.failure_times, now].slice(-5)
+      return structuredClone(conn)
+    }
+    conn.last_success_at = now
+    this.applyPendingCounts(conn, this.sheetDiffRows(conn))
+    return structuredClone(conn)
+  }
+
+  async getSheetDiff(projectId: UUID): Promise<SheetDiff> {
+    const conn = this.mustSheetConn(projectId)
+    const rows = this.sheetDiffRows(conn)
+    return {
+      snapshot_at: conn.snapshot_at,
+      snapshot_version: conn.snapshot_version,
+      source_modified_at: conn.source_modified_at,
+      rows,
+      added: rows.filter((r) => r.kind === 'added').length,
+      changed: rows.filter((r) => r.kind === 'changed').length,
+      removed: rows.filter((r) => r.kind === 'removed').length,
+    }
+  }
+
+  async applySheetDiff(projectId: UUID, snapshotVersion: number): Promise<SheetApplyResult> {
+    const user = this.assertRegRole()
+    this.assertWritable(projectId)
+    const conn = this.mustSheetConn(projectId)
+    if (conn.state === 'revoked') {
+      throw new ProviderError(
+        'forbidden',
+        '시트 접근 권한이 끊겼습니다 — 재인증한 뒤 다시 반영해 주세요.',
+      )
+    }
+    if (snapshotVersion !== conn.snapshot_version) {
+      throw new ProviderError(
+        'conflict',
+        '다른 담당자가 이미 반영했습니다. 최신 차이를 다시 확인해 주세요.',
+      )
+    }
+    const rows = this.sheetDiffRows(conn)
+    if (rows.length === 0) {
+      // 반영할 것이 없으면 버전을 올리지 않는다 — 다른 담당자의 화면을 헛되이 낡게 만들지 않기 위함
+      return { applied: 0, added: 0, changed: 0, removed: 0, connection: structuredClone(conn) }
+    }
+    const sourceById = new Map(this.sheetRowsOf(projectId).map((r) => [r.sheet_row_id, r]))
+    const fields = mappedFields(conn.mapping)
+    let added = 0
+    let changed = 0
+    let removed = 0
+
+    for (const row of rows) {
+      if (row.kind === 'added') {
+        const source = sourceById.get(row.sheet_row_id)
+        if (!source) continue
+        this.state.attendees.push(this.attendeeFromSheetRow(projectId, source))
+        added += 1
+        continue
+      }
+      const attendee = this.state.attendees.find((a) => a.id === row.attendee_id)
+      if (!attendee) continue
+      if (row.kind === 'removed') {
+        // 하드 삭제 금지 — 상태만 바꿔 이력을 남긴다(체크인·비고는 그대로)
+        attendee.sheet_status = 'removed'
+        removed += 1
+        continue
+      }
+      const source = sourceById.get(row.sheet_row_id)
+      if (!source) continue
+      // 시트 소유 필드만 갱신한다 — checked_in_at·note·badge_no(앱 소유)는 손대지 않는다
+      for (const field of fields) {
+        if (field === 'name') attendee.name = source.name
+        if (field === 'org') attendee.org = source.org
+        if (field === 'title') attendee.title = source.title
+        if (field === 'email') attendee.email = source.email
+        if (field === 'phone') attendee.phone = source.phone
+        if (field === 'group_tag') attendee.group_tag = source.group_tag
+        if (field === 'registered_at') attendee.registered_at = source.registered_at
+      }
+      attendee.sheet_status = source.status
+      changed += 1
+    }
+
+    const now = nowIso()
+    conn.snapshot_version += 1
+    conn.snapshot_at = conn.source_modified_at ?? now
+    conn.state = 'connected'
+    conn.pending_added = 0
+    conn.pending_changed = 0
+    conn.pending_removed = 0
+    conn.checked_at = now
+    conn.last_success_at = now
+    this.log(projectId, `user:${user.id}`, 'sheet.applied', 'sheet_connection', conn.id, {
+      added,
+      changed,
+      removed,
+      snapshot_version: conn.snapshot_version,
+    })
+    return {
+      applied: added + changed + removed,
+      added,
+      changed,
+      removed,
+      connection: structuredClone(conn),
+    }
+  }
+
+  async getSheetRegistrationStats(projectId: UUID): Promise<SheetRegistrationStats | null> {
+    this.mustFindProject(projectId)
+    const conn = this.sheetConnOf(projectId)
+    if (!conn) return null // 미연결 — 화면은 기존 getRegistrationStats로 폴백한다
+    const linked = this.state.attendees.filter(
+      (a) => a.project_id === projectId && a.sheet_row_id && a.sheet_status !== 'removed',
+    )
+    const rows = this.sheetRowsOf(projectId)
+    const bySourceRow = new Map(rows.map((r) => [r.sheet_row_id, r]))
+    const confirmed = linked.filter((a) => a.sheet_status === 'confirmed').length
+    const cancelled = linked.filter((a) => a.sheet_status === 'cancelled')
+    const checkedIn = linked.filter((a) => a.checked_in_at).length
+    const applied = linked.length
+    // 3.17.1 T3 — 적재되지 못한 행은 숫자로만 두지 않고 목록으로 돌려준다.
+    // row_number는 원본 시트에서의 위치 — 사용자가 시트로 건너가 고칠 좌표다.
+    const excludedRows = rows
+      .map((r, i) => ({ row: r, index: i }))
+      .filter(({ row }) => row.invalid_reason)
+      .map(({ row, index }) => ({
+        sheet_row_id: row.sheet_row_id,
+        row_number: index + 1,
+        reason: row.invalid_reason as SheetInvalidReason,
+        name: row.name,
+        org: row.org,
+        email: row.email,
+        phone: row.phone,
+      }))
+    return {
+      applied,
+      confirmed,
+      cancelled: cancelled.length,
+      checked_in: checkedIn,
+      source_rows: rows.length,
+      excluded: excludedRows.length,
+      confirm_rate: applied === 0 ? 0 : confirmed / applied,
+      checkin_rate: confirmed === 0 ? 0 : checkedIn / confirmed,
+      cancelled_after_confirm: cancelled.filter(
+        (a) => bySourceRow.get(a.sheet_row_id as string)?.previously_confirmed,
+      ).length,
+      snapshot_at: conn.snapshot_at,
+      pending_added: conn.pending_added,
+      pending_removed: conn.pending_removed,
+      excluded_rows: excludedRows,
+    }
+  }
+
+  /**
+   * mock 전용 — 공유 해제·인증 만료를 재현한다(인터페이스에는 없다). 화면의 '권한 끊김' 카드와
+   * reauthorizeSheet 복구 경로를 데모·테스트에서 밟기 위한 스위치다.
+   */
+  simulateSheetRevoke(projectId: UUID): SheetConnection {
+    const conn = this.mustSheetConn(projectId)
+    const base = Date.parse(conn.checked_at ?? nowIso())
+    conn.state = 'revoked'
+    conn.failure_times = [0, 15, 30].map((m) => new Date(base + m * 60_000).toISOString())
+    return structuredClone(conn)
+  }
+
   // ── 설정 (pm 전용 — §6.1) ─────────────────────────────────────────
   private assertPm(): CurrentUser {
     const user = this.currentUser()
@@ -1233,6 +1597,8 @@ export class MockProvider implements DataProvider {
       speaker_title: input.speaker_title?.trim() || null,
       speaker_org: input.speaker_org?.trim() || null,
       note: input.note?.trim() || null,
+      // v2.6 §25.4 — 트랙은 판매 플래너 ③에서 편성한다. 빈 문자열은 '미편성'과 같으므로 null로 눕힌다
+      track: input.track?.trim() || null,
       sort_order: input.sort_order ?? maxOrder + 1,
     }
     this.state.program_sessions.push(session)
@@ -1258,6 +1624,7 @@ export class MockProvider implements DataProvider {
     if (patch.speaker_title !== undefined) s.speaker_title = patch.speaker_title.trim() || null
     if (patch.speaker_org !== undefined) s.speaker_org = patch.speaker_org.trim() || null
     if (patch.note !== undefined) s.note = patch.note.trim() || null
+    if (patch.track !== undefined) s.track = patch.track?.trim() || null
     if (patch.sort_order !== undefined) s.sort_order = patch.sort_order
     return s
   }
@@ -1303,6 +1670,12 @@ export class MockProvider implements DataProvider {
     if (patch.kind !== undefined) project.kind = patch.kind
     if (patch.event_date !== undefined) project.event_date = patch.event_date
     if (patch.event_type !== undefined) project.event_type = patch.event_type
+    // v2.6 §25.1 — format은 시드 축이다: 값을 바꿔도 여기서 WBS를 다시 전개하지 않는다.
+    // 재전개는 S5 '템플릿 재전개'(§4-15 보존 규칙)의 몫이고, S0 ③ 카드는 확인 다이얼로그로
+    // 그 사실을 알린 뒤 이 patch를 보낸다 — 저장이 조용히 태스크를 갈아엎지 않게 한다.
+    if (patch.format !== undefined) project.format = patch.format
+    if (patch.psa_enabled !== undefined) project.psa_enabled = patch.psa_enabled
+    if (patch.audience_model !== undefined) project.audience_model = patch.audience_model
     if (patch.event_end_date !== undefined) project.event_end_date = patch.event_end_date
     if (patch.start_time !== undefined) project.start_time = patch.start_time
     if (patch.end_time !== undefined) project.end_time = patch.end_time
@@ -1564,6 +1937,7 @@ export class MockProvider implements DataProvider {
       kind: b.kind,
       script: b.script ?? null,
       note: b.note ?? null,
+      track: null,
       sort_order: i + 1,
     }))
     this.state.scenario_blocks = this.state.scenario_blocks
@@ -1708,7 +2082,11 @@ export class MockProvider implements DataProvider {
       (x) => x.project_id === d.project_id && x.area === 'ops',
     )
     const charters = await this.listRoleCharters(d.project_id)
-    const seeds = buildGuideSeedSections(opsItems, charters)
+    // v2.6 §25.4 — 포맷 운영 프리셋(DMS: Q&A 미운영·발표 40분 등)을 '진행 원칙' 섹션으로 함께 시드한다.
+    // 프리셋이 빈 포맷(컨퍼런스)은 기존 4섹션 그대로다 — 기존 시드 결과가 바뀌지 않는다.
+    const project = this.mustFindProject(d.project_id)
+    const preset = FORMAT_PRESETS[presetCardOf(project.format, project.event_type)]
+    const seeds = buildGuideSeedSections(opsItems, charters, preset.opsNotes)
     const built: GuideSection[] = seeds.map((s, i) => ({
       id: this.nextId('gds'),
       deliverable_id: deliverableId,
@@ -1759,6 +2137,7 @@ export class MockProvider implements DataProvider {
         direction: 'internal' as const, // v2.4 §21 — 대행형 템플릿(모객형·일반형)은 항상 내부 태스크
         partner_id: null,
         note: old?.note ?? null,
+        track: null,
         sort_order: i + 1,
       }
     })
@@ -1799,7 +2178,10 @@ export class MockProvider implements DataProvider {
 
     const expanded: WbsTask[] = []
     let sortOrder = 1
-    for (const tpl of HOST_TEMPLATE) {
+    // v2.6 §25.1 권한 ① — 주최형 안에서 어느 템플릿을 쓸지는 format이 고른다(전시회=EX, 그 외=HT).
+    // 재전개는 code+partner_id 매칭이라 format을 바꾼 뒤 다시 전개하면 코드가 갈려 새로 깔린다 —
+    // S0 ③이 확인 다이얼로그를 띄우는 이유가 이것이다.
+    for (const tpl of hostTemplateFor(project.format)) {
       const direction = tpl.direction ?? 'internal'
       const instances: (Partner | null)[] = direction === 'partner_submit' ? activePartners : [null]
       for (const partner of instances) {
@@ -1835,7 +2217,7 @@ export class MockProvider implements DataProvider {
             id: this.nextId('dlv'),
             project_id: projectId,
             area: areaByRole[tpl.role],
-            category: '파트너 제출',
+            category: HOST_SUBMIT_CATEGORY[tpl.code] ?? '파트너 제출',
             title: `${tpl.title} — ${partner.name}`,
             status: 'requested',
             assignee_id: null,
@@ -1978,6 +2360,17 @@ export class MockProvider implements DataProvider {
       existing.description = input.description ?? null
       existing.capacity = input.capacity ?? null
       if (input.sort !== undefined) existing.sort = input.sort
+      // v2.6 §25.4 — 판매 상품 4필드는 부분 수정을 허용한다(판매 플래너 ①이 단가만 고치는 흐름).
+      // 등급명·설명·정원과 달리 undefined면 기존 값을 지우지 않는다.
+      if (input.session_slots !== undefined) existing.session_slots = input.session_slots
+      if (input.booth_included !== undefined) existing.booth_included = input.booth_included
+      if (input.staff_cap !== undefined) existing.staff_cap = input.staff_cap
+      if (input.price !== undefined) {
+        if (input.price !== null && (!Number.isFinite(input.price) || input.price < 0)) {
+          throw new ProviderError('validation', '판매 단가는 0 이상이어야 합니다.')
+        }
+        existing.price = input.price
+      }
       return { ...existing }
     }
     const tier: PartnerTier = {
@@ -1989,6 +2382,11 @@ export class MockProvider implements DataProvider {
       capacity: input.capacity ?? null,
       sort:
         input.sort ?? this.state.partner_tiers.filter((t) => t.project_id === projectId).length + 1,
+      // v2.6 §25.4 — 신규 등급은 '판매 상품 미정의' 상태로 시작한다(0·false·null)
+      session_slots: input.session_slots ?? 0,
+      booth_included: input.booth_included ?? false,
+      staff_cap: input.staff_cap ?? null,
+      price: input.price ?? null,
     }
     this.state.partner_tiers.push(tier)
     return { ...tier }
@@ -2083,6 +2481,11 @@ export class MockProvider implements DataProvider {
       status: input.status ?? 'active',
       contract_amount: input.contract_amount ?? null,
       note: input.note ?? null,
+      // v2.6 §25.4 — 부스는 등급 확정 뒤에 배정되므로 생성 시점엔 대개 비어 있다
+      booth_no: input.booth_no ?? null,
+      booth_size: input.booth_size ?? null,
+      booth_power: input.booth_power ?? null,
+      booth_internet: input.booth_internet ?? null,
       created_at: nowIso(),
     }
     this.state.partners.push(partner)
@@ -2110,6 +2513,11 @@ export class MockProvider implements DataProvider {
     if (patch.status !== undefined) partner.status = patch.status
     if (patch.contract_amount !== undefined) partner.contract_amount = patch.contract_amount
     if (patch.note !== undefined) partner.note = patch.note
+    // v2.6 §25.4 — 부스 배정(HT-2 통지 · HT-4/HT-7 신청 취합의 기록면)
+    if (patch.booth_no !== undefined) partner.booth_no = patch.booth_no
+    if (patch.booth_size !== undefined) partner.booth_size = patch.booth_size
+    if (patch.booth_power !== undefined) partner.booth_power = patch.booth_power
+    if (patch.booth_internet !== undefined) partner.booth_internet = patch.booth_internet
     return { ...partner }
   }
 
@@ -2517,6 +2925,10 @@ export class MockProvider implements DataProvider {
     }
     const project: Project = {
       id: this.nextId('prj'),
+      // §16 핸드오프는 conference 경로만 해당한다(§25.2) — 스냅샷의 format은 'conference' 고정
+      format: 'conference',
+      psa_enabled: false,
+      audience_model: null,
       name: draft.name,
       code,
       kind: 'agency', // v2.4 §21 — 핸드오프로 만든 행사는 기본 대행형(행사 설정에서 전환 가능)
@@ -3085,6 +3497,8 @@ export class MockProvider implements DataProvider {
 
     return {
       project,
+      // 3.17.1 T4 — 등록 수치가 시트에서 온 것이면 그 기준 시각을 지면에 밝힌다(§4-22 준용)
+      sheet_snapshot_at: this.sheetConnOf(project.id)?.snapshot_at ?? null,
       program_sessions: sessions,
       cuesheet,
       zones,

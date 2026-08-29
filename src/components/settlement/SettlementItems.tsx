@@ -213,6 +213,8 @@ export default function SettlementItems({
     }
   }
 
+  // 이 패널은 버킷 표(.ui-table)의 펼침 행 안쪽에 들어가지만, 표 정본 선택자가 직계 자식으로
+  // 좁혀져 있어 중첩된 항목 표에는 규칙이 흘러들지 않는다(되돌리는 유틸리티가 필요 없다).
   return (
     <div className="bg-canvas px-4 py-3">
       {!hasCost && (

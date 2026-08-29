@@ -1,6 +1,6 @@
-# CLAUDE.md — MICE 커뮤니케이터 구현 지침 v2.5 (Claude Code용)
+# CLAUDE.md — MICE 커뮤니케이터 구현 지침 v2.6 (Claude Code용)
 
-> 레포 루트에 이 파일을 두고, `docs/mice-communicator-설계서-v2.5.md`를 함께 배치할 것(기존 설계서 파일은 버전 무관 전부 대체·삭제). `docs/mice-communicator-디자인지시서-v1.md`도 함께 배치(Phase 3.9 정본).
+> 레포 루트에 이 파일을 두고, `docs/mice-communicator-설계서-v2.6.md`를 함께 배치할 것(기존 설계서 파일은 버전 무관 전부 대체·삭제). `docs/mice-communicator-디자인지시서-v1.md`도 함께 배치(Phase 3.9 정본).
 > **스키마·상태 머신·API 계약·권한 규칙·WBS 템플릿(§15)·핸드오프 계약(§16)·이식 인벤토리(§17)·인프라 전환(§18)·D-Day 런북(§20)·주최형 확장(§21)·견적서 임포트(§22)·운영보드 재구성(§23)의 정본은 설계서 v2.5이다(정산보드는 §19·§4-23·§4-24).** 디자인 토큰·레이아웃·컴포넌트 규격의 정본은 디자인지시서 v1이다. 본 파일은 작업 순서와 규약만 정의한다. 충돌 시 설계서 우선.
 > v1.1 변경 핵심: **프론트 우선·서버 후행** — Phase 0~3은 서버 0, Supabase·Drive는 Phase 4~5 이식.
 > v1.2 변경 핵심: **지시(requested)→제작→컨펌→운영계획서(S9) 조립 파이프라인** — Phase 3.5 프론트 증분.
@@ -132,6 +132,48 @@ MICE 프로젝트 협업 허브 — 역할별(디자인·운영·등록) 산출�
   - 3.16d 운영가이드 빌더 + S9 확장 (에이전트 AH): §10.2 명세 — 섹션 4종 시드·존운영/R&R 초기 로드·stale 표시 후 확인 반영(R-O4)·개인 연락처 제외(R-O6)·인쇄. S9 = ⑦비상 대응 신설·②시나리오 펼침·③존운영 확장·진행률 반영
   - 순서: AE → AF·AG·AH 병렬. PR 1개(Phase 3.16), 체크아웃 보고 후 챗 검수
 
+- **Phase 3.17 — v2.6 UI/UX 고도화 + 등록 시트 연동 (서버 0 유지, 디자인 핸드오프 2026-08-28 사용자 승인)**
+  - 정본 = 핸드오프 번들 `패턴 기준 시트`(공통 규격) + 화면 시안 12파일(16화면). 문서 정본은 **디자인지시서 §7-1**(패턴)·**설계서 §24**(시트 연동).
+    충돌 시 우선순위: `tokens.css` → `index.css` → 패턴 기준 시트 → 화면 시안 → 디자인지시서 본문.
+  - 3.17a 패턴 정본 (메인 직접): `index.css` 표 정본(.ui-table 44/36·zebra·스티키 첫 열·그룹/합계행·.ui-num)·`.ui-th` 헤더 재질(canvas+2px)·
+    `.plan-print-hidden` → 전역 `.print-hidden` 승격 + 표·배지·KPI 인쇄 변형. `labels.ts` 상태 배지 **의미 4단계+중립**으로 통합(기존 계열 맵은 레벨에서 파생 — 클래스 문자열 동일, 무회귀).
+    프리미티브 신설: `LevelBadge`·`TableSkeleton`·`FilterEmptyState`·`PermissionNotice`·`LoadFailedState`·`StackedBar`·`Donut`·`SortableTh`·`DensityToggle`, `StatTile.support`·`ProgressBar` 100%=positive
+  - 3.17b 화면 정렬 11건 (병렬 — 홈·일정/WBS·정산·파트너 보드·발주처/c·S9·디자인/운영 보드·S3·랜딩/견적·행사 설정/목록·온보딩/포털).
+    **표시 계층만** — 데이터·provider·상태 머신·픽스처 무변경. 각 에이전트는 담당 파일 밖 수정 금지, git 명령 금지(§5)
+  - 3.17c 등록 보드 구글 시트 연동 (신규 기능, 설계서 §24): 연결 카드 상시 노출·상태 4종·**갱신 있음 → 인라인 차이 확인 → 확인 후 반영**(자동 덮어쓰기 금지)·
+    시트 기준 KPI 4카드·읽기 전용 명단·필드 소유 분리·삭제 대신 '시트에서 제거됨' 이력 보존·연락처 기본 마스킹·최초 연결 3단계(필수 매핑 이름+이메일)·xlsx 약화.
+    **DataProvider v10 재동결(10메서드 추가 · 120메서드)** — 동결 해제 근거 = 사용자 승인 2026-08-28(핸드오프 채택). `importVendorQuote`는 v11 예약(만들지 말 것).
+    미결 2건 확정: 체크인 = **A안(등록 보드 탭)** · 동기화 = **B안(주기 자동 확인 + 수동 병행)**. 파트너 포털 `/p`는 **제출 기능 포함 현행 유지**(사용자 결정)
+  - 3.17d 검증·문서: DoD 39~44 코드화, 설계서 §24·디자인지시서 §7-1 반영, S9 섹션 번호 정정(코드 정본 01~08 — JSDoc 3곳 포함)
+  - 금지: 새 npm 의존성(차트는 CSS만), 새 색 토큰, 견적 엔진 상수·산식 변경, 앱 → 시트 쓰기, 금액 키의 외부 지면 유출
+
+- **Phase 3.17.1 — PR #32 검수 후속 (새 기능 없음, 챗 실측 검수 2026-08-29)**
+  - T1 **체크인 B안 복원** — `CheckinTab` → `src/pages/OnsiteCheckinPage.tsx`(S-12), 라우트 `/checkin` + NAV_OPS 등재(등록 다음),
+    등록 보드 '체크인' 탭 제거(RSVP·참관객·통계 3탭)·참관객 표는 상태 표시만. **경위: 3.17의 A안은 Code 판단이었고 설계서에 "사용자 승인 A안"으로 잘못 기록됨** — 사실대로 정정.
+    A안 불가 사유는 레이아웃이 아니라 **권한**(현장 접수 담당에게 전체 명단·시트 URL·연결 설정·내보내기가 함께 열린다). `onsite` 전용 롤은 Phase 5
+  - T2 **공개 링크 공유 문구 삭제** — 인증은 서비스 계정 단일 경로. 위저드에 금지 경고 1줄 추가
+  - T3 **제외 목록 화면** — KPI '신청' 캡션의 제외 건수 클릭 → 모달(시트 행 번호·사유·마스킹 미리보기·[시트에서 고치기]). `SheetSourceRow.invalid` → `invalid_reason` 3종
+  - T4 **'응답률' → '확정률'** — 등록 보드 KPI 한정. `SheetRegistrationStats.response_rate` → `confirm_rate`(§24.4 기록). S9 ⑥등록 통계는 RSVP 기준 유지 + 시트 연결 중 스냅숏 캡션
+  - T5 **KPI 캡션 항등식** — `시트 행 = 신청 + 제외 + 반영 대기 추가 − 반영 대기 제거`를 캡션이 전부 드러내고 테스트로 고정
+  - T6 **S9 섹션 번호 정본 확정** — 화면(코드 `PLAN_SECTION_ORDER`) 채택, 설계서 §10 S9 행·§10.2 정정
+  - T7 align-registration 콜드런 플레이크 해소 / T8 설계서 v2.6 승격·§24 첫머리 정정·§10 S-12·§6.1 권한·CLAUDE.md
+  - **DataProvider 메서드 수 120 불변** — 반환 타입 확장만(시그니처 추가 없음)
+
+- **Phase 3.18 — v2.6 증분: 행사 유형 4분류 × 프리셋 (설계서 §25 정본, 2026-08-29)**
+  - **format 축**: `projects.format`(conference/dms/exhibition) + `psa_enabled` + `audience_model`.
+    **format의 권한은 3가지뿐** — ①온보딩 시드 ②견적 모델 결정 ③전용 화면의 복합 게이트 구성요소.
+    **상시 모듈 게이트는 기존 축이 유지**(파트너 보드=kind · 등록 깊이=event_type · PSA=psa_enabled) — format이 상시 토글의 두 번째 주인이 되지 않는다(§10 진입점 원칙 무충돌)
+  - 3.18a format 축·`src/fixtures/formatPresets.ts`(프리셋 **단일 소스**)·S0 ③ 4카드+PSA 체크박스·S6 ① format 그룹·픽스처 마이그레이션
+  - 3.18b 판매 플래너(`calcRevenue.ts` 신설 — **calcEstimate·kpiRules·quoteMode 무접촉**) 3스텝·S-11 상단 탭·partner_tiers 확장·partners 부스·program_sessions.track·혜택 카테고리(HT-3 = '경품·이용권').
+    화면은 `src/components/sales/`에 둔다 — `components/partner/**`는 dod23 금액 비노출 가드 경로라 매출을 다루는 내부 도구를 넣으면 가드 의미가 흐려진다
+  - 3.18c PSA — **미착수**(3.17.2 명단 식별 확정이 선행 조건). 설계만 §25.5에 문서화
+  - 3.18d 전시회 프리셋(EX WBS 템플릿 12건·데모 픽스처 1건 `prj-virtual-expo`) — **전부 '가정' 표기 유지**. 주최형 템플릿 선택 = `hostTemplateFor(format)`
+  - **DataProvider v11 재동결 = 120메서드(불변, 새 메서드 0건)** — 판매 플래너가 쓰는 데이터는 전부 기존 메서드로 닿고, 프리셋은 상수·매출 계산은 순수 함수다.
+    인터페이스 변경은 입력 타입 필드 확장뿐. v10(120메서드)은 3.17c에서 소진. `importVendorQuote`는 계속 예약(만들지 말 것)
+  - **초청제 모드는 구현하지 않는다** — 기존 RSVP `InviteStatus`가 반대 방향이라 '승인 대기'를 표현할 수 없다(§25.6 열린 질문). 추측 구현 금지
+  - 금지: conference 견적 경로 파일 무접촉(골든 벡터 0원 일치가 DoD) · S-10에 주최형 매출 버킷 주입 금지(§19.1 항등식 보호) · `/p`·발주처에 `tier.price`·타 파트너 정보 노출 금지 · 브라우저 E2E 신규 금지(vitest+RTL만)
+  - **시각안 없이 진행** — 사용자 지시로 생략. 판단으로 이탈한 지점은 전부 체크아웃 보고에 "이탈" 명시
+
 ### 서버 스프린트 (v2.3 설계 완료 — **착수 대기: 사용자가 지시할 때 개시**(2026-08-27 우선순위 변경). dev 3키는 착수 시 사용자에게 대화로 요청)
 - **Phase 4 — Supabase 이식** (설계서 v2.3 §4 DDL 전체 기준, 검증 DB = dev 프로젝트)
   - 4a 마이그레이션+RLS+seed (에이전트 D): §4 순서대로 + **v2.4 스키마(§21.1 — kind·partner_tiers·partners·partner_tokens·quote_imports·확장 컬럼) 포함**, RLS는 §6.2 전체(quotes·profiles·compliance_cards·settlement_*·vendors·landing·partner_* 포함). **산출 규약: `supabase/migrations/*.sql` + 통합 `supabase/setup.sql`(신규 프로젝트 SQL 에디터 1회 실행으로 전체 구축 — 멱등, 2회 실행 무해를 테스트로 증명, 말미에 첫 admin 승격 SQL 1줄 주석 동봉) + `supabase/seed.sql`(데모 픽스처 4행사, 선택 실행)**
@@ -180,6 +222,9 @@ MICE 프로젝트 협업 허브 — 역할별(디자인·운영·등록) 산출�
 | AF: ops-board-home | 3.16b 유형 우선 보드·인라인 빌더 셸·이관 | 3.16 | Sonnet |
 | AG: scenario-builder | 3.16c 시나리오 빌더·큐 내보내기 | 3.16 | Sonnet |
 | AH: guide-builder | 3.16d 운영가이드 빌더·S9 확장 | 3.16 | Sonnet |
+| AI: pattern-canon | 3.17a 패턴 정본(표·배지·빈 상태·인쇄·프리미티브) | 3.17 | 메인 직접 |
+| AJ~AT: screen-align | 3.17b 화면 11건 정렬(화면당 1에이전트) | 3.17 | Opus 계열 (시안 대조) |
+| AU: sheets-link | 3.17c 등록 시트 연동(타입·v10·mock·UI·테스트) | 3.17 | Opus 계열 (동시성 계약) |
 | D2: auth | 4c 로그인·프로필·app_role 게이트 | 4 | Fable 5 (보안) |
 | Z: infra | 4.6 Vercel·도메인·임포트·아카이브 | 4.6 | Opus 계열 (사용자 게이트 대화) |
 
@@ -242,6 +287,15 @@ Phase 3.8과 3.9는 **별도 커밋·별도 PR**로 분리한다(3.8 = 타입·�
 37. (v2.5 §23) **운영가이드**: 섹션 4종 시드·존운영/R&R 초기 로드, 원본 변경 시 stale 표시·자동 덮어쓰기 없음(R-O4), 개인 연락처가 화면·S9 조립 데이터에 0건(R-O6), 인쇄 구조 계약 (테스트로 증명)
 38. (v2.5) **S9 확장**: ⑦비상 대응 섹션 렌더·인쇄 포함·진행률 집계 반영, ② 세션별 시나리오 펼침(있을 때만), 기존 6섹션 회귀 없음 (테스트로 증명)
 
+39. (v2.6) **배지 통합**: 5계열 상태가 전부 의미 4단계+중립으로 매핑되고, 좌측 도트가 `pending_approval`·시트 '갱신 있음' **두 곳에만** 나타나며, 기존 컨펌 계열 배지·스트립 클래스 문자열이 통합 전과 동일함 (테스트로 증명)
+40. (v2.6) **표 정본**: `.ui-table` 적용 표에서 행 44(밀집 36)·첫 열 스티키·짝수행 zebra·숫자 열 우측정렬이 성립하고, 밀집 모드 토글이 발주처(`/c`)·파트너 포털(`/p`)·현장 체크인에는 **없음** (테스트로 증명)
+41. (v2.6) **빈 상태 분리**: '데이터 없음'(②)과 '필터 결과 없음'(③)이 서로 다른 컴포넌트로 렌더되고 ③은 전체 건수·적용 필터·초기화를 노출하며, ②에 accent CTA가 0건 (테스트로 증명)
+42. (v2.6) **시트 단방향**: 앱에서 시트로 쓰는 경로가 0건 — 명단 필드에 편집 UI 부재, 체크인·비고만 앱 소유. `grep -rn "sheet.*write\|writeSheet\|updateSheetRow" src` 0건 (테스트로 증명)
+43. (v2.6 §24.3) **시트 동시 접속**: `checkSheetUpdates`는 데이터를 반영하지 않고 상태·버전만 갱신하며, 낡은 `snapshotVersion`으로 `applySheetDiff`를 부르면 **409**로 거부되고 화면이 조용히 덮어써지지 않음 (테스트로 증명)
+44. (v2.6 §24.1) **시트 삭제·마스킹**: 시트에서 사라진 행이 하드 삭제되지 않고 `sheet_status='removed'`로 남으며, 연락처가 기본 마스킹으로 렌더됨 (테스트로 증명)
+45. (v2.6 §10) **S-12 분리**: 현장 체크인 화면에 명단 편집·시트 설정·내보내기 경로가 0건이고, 등록 보드 탭에서 체크인 조작 UI가 제거됐으며, 두 화면이 같은 snapshot_at을 각자 표기한다 (테스트로 증명)
+46. (v2.6 §24) **제외 가시성**: 시트 행 = 반영 + 제외 + 미확인 항등식이 화면 수치로 성립하고, 제외 목록이 1클릭으로 열리며 사유 3종이 각각 뜬다 (테스트로 증명)
+
 ### 상시 grep 가드 (매 세션 종료 시 0건 확인 — 위 DoD와 별개로 항상 검사)
 | 가드 | 명령 | 근거 |
 |---|---|---|
@@ -250,6 +304,7 @@ Phase 3.8과 3.9는 **별도 커밋·별도 PR**로 분리한다(3.8 = 타입·�
 | **행사 스코프 유도** | `grep -rn "user\.project_id\|currentUser()\.project_id" src --include=*.ts --include=*.tsx` | **v2.1 §4-21 — 랜딩 결함 재발 방지. 예외는 `scope-exempt:` 주석 + 테스트의 화이트리스트 둘 다 필요(무설명 예외 금지)** |
 | 금액 비노출 | `grep -rn "total_amount\|breakdown\|ordered_amount\|actual_amount\|markup\|margin\|settlement\|contract_amount" src/pages/Client* src/pages/Landing* src/pages/Partner* src/lib/landing* src/components/plan src/components/client src/components/partner` | **DoD 23·30·32 (v2.4 — contract_amount 키·Partner 경로 확대)** |
 | 온보딩 플래그 | `grep -rn "onboarding_completed" src` | DoD 16 |
+| **공개 링크 공유 문구** | `grep -rn "링크가 있는 모든" src` — 금지문(`공유하지 마세요`) 밖에서 0건 | **3.17.1 T2 — 참가자 실명·연락처 시트를 링크 공개로 권하는 문구 금지** |
 
 앞의 3종은 `src/test/dod-project-scope-guard.test.ts`·기존 DoD 테스트가 상시 자동 검증한다 — 셸 grep은 이중 확인용이다.
 

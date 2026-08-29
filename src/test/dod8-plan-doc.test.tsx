@@ -26,14 +26,17 @@ describe('DoD-8 S9 운영계획서', () => {
     expect(await screen.findByRole('heading', { name: /행사개요/ })).toBeTruthy()
     expect(screen.getByRole('heading', { name: /프로그램/ })).toBeTruthy()
     // ③큐시트 — 프로그램 다음 배치(v1.3), 본 에이전트 소유 컴포넌트라 정확한 번호로 단언
-    expect(screen.getByRole('heading', { name: '③큐시트' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: '03 큐시트' })).toBeTruthy()
     expect(screen.getByRole('heading', { name: /존별 운영/ })).toBeTruthy()
     expect(screen.getByRole('heading', { name: /제작물 리스트/ })).toBeTruthy()
     expect(screen.getByRole('heading', { name: /등록 통계/ })).toBeTruthy()
     expect(screen.getByRole('heading', { name: /일정/ })).toBeTruthy()
 
-    // 섹션 진행률 요약 위젯(PlanProgressSummary)에도 큐시트가 노출된다
-    expect(screen.getByText('③ 큐시트')).toBeTruthy()
+    // v2.5.2 정렬: 옛 진행률 요약 위젯(PlanProgressSummary)을 좌측 목차 레일이 대체했다 —
+    // "8개 섹션이 이동 가능한 목록으로 노출된다"는 의미는 그대로다.
+    const toc = screen.getByRole('navigation', { name: '운영계획서 목차' })
+    expect(within(toc).getByText('큐시트')).toBeTruthy()
+    expect(within(toc).getByText('03')).toBeTruthy()
 
     // ① 행사개요 — 테마·장소·사회·개요 항목
     expect(screen.getByText('연결, 다음 단계로')).toBeTruthy()
@@ -49,7 +52,7 @@ describe('DoD-8 S9 운영계획서', () => {
 
     // ③ 큐시트 — 첫 큐시트 항목(dlv-004 개막식 큐시트)의 큐 표 + 상태 뱃지
     // '개막식 큐시트' 타이틀은 ④존별 운영에도 같은 항목이 나타나 중복되므로 섹션 단위로 스코프한다.
-    const cuesheetSection = screen.getByRole('heading', { name: '③큐시트' }).closest('section')!
+    const cuesheetSection = screen.getByRole('heading', { name: '03 큐시트' }).closest('section')!
     expect(within(cuesheetSection).getByText('개막식 큐시트')).toBeTruthy()
     expect(within(cuesheetSection).getByText('내부검토')).toBeTruthy() // dlv-004 status
     expect(within(cuesheetSection).getByText('09:20')).toBeTruthy() // cue-001 time_at
@@ -91,13 +94,14 @@ describe('DoD-8 S9 운영계획서', () => {
     expect(screen.getByText('키비주얼 확정')).toBeTruthy()
     expect(screen.getByText('킥오프 미팅')).toBeTruthy()
 
-    // 섹션별 진행률 (설계서 §8 getPlan 산식 그대로 재현)
-    expect(screen.getAllByText(/5\/5 \(100%\)/).length).toBeGreaterThan(0) // overview·program
-    expect(screen.getAllByText(/4\/4 \(100%\)/).length).toBeGreaterThan(0) // cuesheet(구분·본문 완비 4/4)
-    expect(screen.getAllByText(/2\/3 \(67%\)/).length).toBeGreaterThan(0) // zones
-    expect(screen.getAllByText(/2\/4 \(50%\)/).length).toBeGreaterThan(0) // production
-    expect(screen.getAllByText(/1\/1 \(100%\)/).length).toBeGreaterThan(0) // registration
-    expect(screen.getAllByText(/1\/5 \(20%\)/).length).toBeGreaterThan(0) // schedule
+    // 섹션별 진행률 (설계서 §8 getPlan 산식 그대로 재현) — v2.5.2 정렬로 표기가
+    // 'n/m (pct%)' 진행바에서 '완료·작성 중·미입력 n/m' 배지로 바뀌었다(숫자는 배지 안에 남는다).
+    expect(screen.getAllByText(/완료 5\/5/).length).toBeGreaterThan(0) // overview·program
+    expect(screen.getAllByText(/완료 4\/4/).length).toBeGreaterThan(0) // cuesheet(구분·본문 완비 4/4)
+    expect(screen.getAllByText(/작성 중 2\/3/).length).toBeGreaterThan(0) // zones
+    expect(screen.getAllByText(/작성 중 2\/4/).length).toBeGreaterThan(0) // production
+    expect(screen.getAllByText(/완료 1\/1/).length).toBeGreaterThan(0) // registration
+    expect(screen.getAllByText(/작성 중 1\/5/).length).toBeGreaterThan(0) // schedule
   })
 
   it('(b) design 역할에는 개요·프로그램 편집 UI가 노출되지 않는다', async () => {

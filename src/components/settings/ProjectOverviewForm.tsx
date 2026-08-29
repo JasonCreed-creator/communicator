@@ -16,7 +16,8 @@ import {
 } from '../../modules/quote/data/leadTargeting'
 import { getDataProvider } from '../../providers'
 import type { OverviewItem, Project, Quote, Targeting, UUID } from '../../types/entities'
-import type { EventType } from '../../types/enums'
+import { LevelBadge } from '../internal/StatusBadge'
+import { EVENT_FORMAT_LABELS, type EventType } from '../../types/enums'
 import type { ProjectPatch } from '../../types/views'
 
 const provider = getDataProvider()
@@ -236,6 +237,21 @@ export default function ProjectOverviewForm({
             화면에서 실행하세요.
           </p>
         </Field>
+        {/* v2.6 §25 — format은 읽기 표시. 전환은 WBS 재전개를 부르므로 S0 ③ 유형 카드가 확인을 받고 처리한다 */}
+        <Field id="ov-format" label="행사 포맷">
+          <p
+            id="ov-format"
+            data-testid="format-display"
+            data-format={project.data?.format ?? 'conference'}
+            className="ui-input flex items-center gap-2 bg-canvas"
+          >
+            {EVENT_FORMAT_LABELS[project.data?.format ?? 'conference']}
+            {project.data?.psa_enabled && <LevelBadge level="progress" label="비즈매칭" />}
+          </p>
+          <p className="mt-1 text-[11px] leading-snug text-ink-cap">
+            포맷 전환은 WBS 재전개를 동반하므로 온보딩 ③ 유형 화면에서 확인을 거쳐 바꿉니다.
+          </p>
+        </Field>
 
         <Field id="ov-start-date" label="시작일" required>
           <input
@@ -351,6 +367,31 @@ export default function ProjectOverviewForm({
             className={`ui-input disabled:opacity-60${tintClass('targetAudience')}`}
           />
         </Field>
+
+        {/* v2.6 §25 — DMS 전용 그룹. 세션 정원·부스 수는 program_sessions·partners가 정본이라
+            여기에 프로젝트 레벨 사본을 두지 않는다(정본 이원화 방지) */}
+        {project.data?.format === 'dms' && (
+          <div
+            data-testid="dms-group"
+            className="rounded-[10px] border border-steel/30 bg-canvas p-4 sm:col-span-2 lg:col-span-4"
+          >
+            <p className="t-card-title mb-3">DMS 전용</p>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <Field id="ov-audience-model" label="청중 모델">
+                <p id="ov-audience-model" className="ui-input flex items-center bg-card">
+                  {project.data.audience_model === 'invite' ? '초청제' : '공개 모집'}
+                </p>
+                <p className="mt-1 text-[11px] leading-snug text-ink-cap">
+                  초청제 승인 게이트는 아직 구현되지 않았습니다 — 등록은 현재 모객형 파이프라인으로
+                  동작합니다(설계서 §25.6).
+                </p>
+              </Field>
+              <div className="sm:col-span-2 lg:col-span-3 self-end text-[11px] leading-relaxed text-ink-cap">
+                세션 정원은 프로그램표(세션별), 부스는 파트너 보드가 정본입니다.
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* v2.0 — 모객형 전용 그룹: 보장 인원·쇼업 KPI·타겟팅 5축·연결 견적 (일반형이면 숨김·데이터 보존) */}
         {values.eventType === 'recruiting' && (

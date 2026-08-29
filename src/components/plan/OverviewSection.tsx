@@ -4,7 +4,8 @@ import { Link } from 'react-router-dom'
 import { ddayLabel, formatDate } from '../../lib/labels'
 import type { Project } from '../../types/entities'
 import PlanSection from './PlanSection'
-import { PLAN_SECTION_META, type SectionProgressData } from './planSections'
+import PrintExcludedChip from './PrintExcludedChip'
+import { type SectionProgressData } from './planSections'
 
 interface OverviewSectionProps {
   project: Project
@@ -20,13 +21,15 @@ interface OverviewSectionProps {
 export default function OverviewSection({ project, progress }: OverviewSectionProps) {
   return (
     <PlanSection
-      number={PLAN_SECTION_META.overview.number}
-      title={PLAN_SECTION_META.overview.title}
+      sectionKey="overview"
       progress={progress}
       action={
-        <Link to="/settings" className="plan-print-hidden text-xs text-steel underline">
-          행사 설정에서 편집
-        </Link>
+        <>
+          <Link to="/settings" className="plan-print-hidden text-xs text-steel underline">
+            행사 설정에서 편집
+          </Link>
+          <PrintExcludedChip />
+        </>
       }
     >
       <OverviewReadOnly project={project} />
