@@ -19,10 +19,12 @@ import EmptyState from '../internal/EmptyState'
 import ErrorAlert from '../internal/ErrorAlert'
 import Field from '../internal/Field'
 import MoneyField from '../internal/MoneyField'
+import PermissionNotice from '../internal/PermissionNotice'
 import ProgressBar from '../internal/ProgressBar'
 import StatTile from '../internal/StatTile'
 import { LevelBadge } from '../internal/StatusBadge'
 import StepIndicator, { type WizardStep } from '../onboarding/StepIndicator'
+import PartnerTierEditor from '../settings/PartnerTierEditor'
 import { useAsync, useMutation } from '../../hooks/useAsync'
 import { FORMAT_PRESETS, presetCardOf } from '../../fixtures/formatPresets'
 import {
@@ -56,6 +58,8 @@ export default function SalesPlanner({ project }: { project: Project }) {
   const tiers = useAsync(() => provider.listPartnerTiers(projectId), [projectId])
   const partners = useAsync(() => provider.listPartners(projectId), [projectId])
   const sessions = useAsync(() => provider.listProgramSessions(projectId), [projectId])
+  // 등급 생성·삭제는 pm 전용(provider assertPm) — 아니면 편집기를 읽기 전용으로 넘긴다
+  const me = useAsync(() => provider.getCurrentUser(), [])
 
   const soldByTier = useMemo(() => countSoldByTier(partners.data ?? []), [partners.data])
   const plan = useMemo(
@@ -78,7 +82,13 @@ export default function SalesPlanner({ project }: { project: Project }) {
           <ErrorAlert message={tiers.error ?? partners.error} />
 
           {step === 1 && (
-            <TierStep tiers={tiers.data ?? []} loading={tiers.loading} onSaved={tiers.reload} projectId={projectId} />
+            <TierStep
+              tiers={tiers.data ?? []}
+              loading={tiers.loading}
+              onSaved={tiers.reload}
+              projectId={projectId}
+              readOnly={me.data?.role !== 'pm'}
+            />
           )}
           {step === 2 && <SimulationStep plan={plan} slotDemand={slotDemand} />}
           {step === 3 && (
@@ -122,30 +132,84 @@ function TierStep({
   tiers,
   loading,
   onSaved,
+  readOnly,
 }: {
   projectId: UUID
   tiers: PartnerTier[]
   loading: boolean
   onSaved: () => void
+  readOnly: boolean
 }) {
+  // 3.20 — 등급을 만드는 곳과 상품을 정의하는 곳이 갈라져 있었다(설정 ③ ↔ 여기).
+  // 상품 정의의 전제인 등급 생성을 이 자리로 들여온다 — 등급이 없으면 그것이 첫 화면이고,
+  // 있으면 접힌 '등급 관리'다(기본 화면은 상품 카드 그대로).
+  const [tierAdminOpen, setTierAdminOpen] = useState(false)
+
   if (loading) return <p className="text-sm text-ink-cap">불러오는 중…</p>
+
+  const header = (
+    <div>
+      <h3 className="t-section-title">① 상품 정의</h3>
+      <p className="mt-1 text-xs leading-relaxed text-ink-sub">
+        등급마다 파는 내용을 정합니다. <strong>판매 단가는 내부 전용</strong>이라 파트너 포털·발주처
+        화면에는 나오지 않습니다.
+      </p>
+    </div>
+  )
+
   if (tiers.length === 0) {
     return (
-      <EmptyState message="등급이 아직 없습니다 — 행사 설정 ③ 유형·연동에서 파트너 등급을 먼저 만들면 여기서 상품 내용을 정의할 수 있습니다." />
+      <div className="space-y-3">
+        {header}
+        <Card title="파트너 등급 만들기">
+          <p className="text-sm text-ink-sub">
+            등급이 아직 없습니다 — 여기서 첫 등급(코드·명칭)을 만들면 등급마다 상품 카드가 생깁니다.
+          </p>
+          {readOnly ? (
+            <div className="mt-3">
+              <PermissionNotice
+                reason="등급을 만들 권한이 없습니다."
+                howToRequest="이 행사의 PM에게 등급 생성을 요청하세요 — 만들어지면 여기서 상품 내용을 정의할 수 있습니다."
+              />
+            </div>
+          ) : (
+            <div className="mt-3">
+              {/* 등급이 생기면 이 카드가 곧바로 상품 정의 폼으로 바뀌어야 한다 */}
+              <PartnerTierEditor projectId={projectId} onChanged={onSaved} />
+            </div>
+          )}
+        </Card>
+      </div>
     )
   }
+
   return (
     <div className="space-y-3">
-      <div>
-        <h3 className="t-section-title">① 상품 정의</h3>
-        <p className="mt-1 text-xs leading-relaxed text-ink-sub">
-          등급마다 파는 내용을 정합니다. <strong>판매 단가는 내부 전용</strong>이라 파트너 포털·발주처
-          화면에는 나오지 않습니다.
-        </p>
-      </div>
+      {header}
       {tiers.map((tier) => (
         <TierCard key={tier.id} projectId={projectId} tier={tier} onSaved={onSaved} />
       ))}
+      <div>
+        <button
+          type="button"
+          onClick={() => setTierAdminOpen((v) => !v)}
+          aria-expanded={tierAdminOpen}
+          className="btn btn-ghost btn-sm"
+        >
+          등급 관리
+        </button>
+        {tierAdminOpen && (
+          <div className="mt-3">
+            <Card title="등급 관리">
+              <p className="mb-3 text-xs leading-relaxed text-ink-sub">
+                등급 추가·명칭/설명/정원 수정·삭제. 판매 단가와 세션·부스 조건은 위 상품 카드에서
+                정합니다.
+              </p>
+              <PartnerTierEditor projectId={projectId} readOnly={readOnly} onChanged={onSaved} />
+            </Card>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

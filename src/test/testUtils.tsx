@@ -20,6 +20,7 @@ import ItemDetailPage from '../pages/ItemDetailPage'
 import NotFoundPage from '../pages/NotFoundPage'
 import OnboardingPage from '../pages/OnboardingPage'
 import PartnerBoardPage from '../pages/PartnerBoardPage'
+import PeoplePage from '../pages/PeoplePage'
 import PlanDocPage from '../pages/PlanDocPage'
 import LegacyGonePage from '../pages/LegacyGonePage'
 import ProjectListPage from '../pages/ProjectListPage'
@@ -66,6 +67,9 @@ export function renderRoute(path: string) {
             {/* v1.5: S-1·행사 설정은 OnboardingGuard 밖 (세팅 미완료 행사도 접근) */}
             <Route path="/projects" element={<ProjectListPage />} />
             <Route path="/settings" element={<SettingsPage />} />
+
+            {/* S-13 담당자 마스터 — 전역 주소록이라 가드 밖(App.tsx와 동일 구성) */}
+            <Route path="/people" element={<PeoplePage />} />
 
             {/* v2.0 S-2 견적 — App.tsx와 동일하게 가드 밖, app_role 게이트는 QuoteGate */}
             <Route path="/quotes" element={<QuotesPage />} />

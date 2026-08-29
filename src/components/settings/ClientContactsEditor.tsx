@@ -42,9 +42,12 @@ function latestTokenOf(tokens: ClientToken[], contactId: UUID): ClientToken | un
 export default function ClientContactsEditor({
   projectId,
   readOnly = false,
+  onChanged,
 }: {
   projectId: UUID
   readOnly?: boolean
+  /** 발급·회수 결과를 옆에서 읽는 화면('발주처 화면 열기' 목록)이 있을 때 함께 갱신한다 */
+  onChanged?: () => void
 }) {
   const contacts = useAsync(() => provider.listClientContacts(projectId), [projectId])
   const tokens = useAsync(() => provider.listClientTokens(projectId), [projectId])
@@ -53,6 +56,7 @@ export default function ClientContactsEditor({
   const reloadAll = () => {
     contacts.reload()
     tokens.reload()
+    onChanged?.()
   }
 
   const issue = useMutation((contactId: UUID) => provider.issueClientToken({ project_id: projectId, contact_id: contactId }))

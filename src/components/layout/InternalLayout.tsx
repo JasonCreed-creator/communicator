@@ -37,6 +37,12 @@ function Icon({ d }: { d: string }) {
 // 운영 보드 → 등록 → 일정 → 운영계획서). 견적 메뉴는 app_role admin·sales만 표시.
 const NAV_TOP = [
   { to: '/projects', label: '행사 목록', icon: 'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z' },
+  // S-13 담당자 마스터(3.20) — 주소록은 **행사 스코프 밖**이라 준비/운영 그룹이 아니라 전역 그룹에 둔다
+  {
+    to: '/people',
+    label: '담당자',
+    icon: 'M6 3h11a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2ZM4 8H2M4 12H2M4 16H2M11.5 11.5a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM8 16.5a3.5 3.5 0 0 1 7 0',
+  },
 ]
 
 const NAV_QUOTE = {

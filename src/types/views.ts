@@ -378,6 +378,31 @@ export interface ProjectCreateInput {
 
 /** v1.5 — 행사 설정 ② 담당자 입력(§8 POST /projects/{id}/members).
  *  mock은 추가 즉시 멤버로 취급, Phase 4부터 project_invites 경유 승격 */
+// ── 담당자 마스터 (v2.7 §4-2b · Phase 3.20) ─────────────────────────
+// 사람은 **행사와 무관하게** 존재하고, 배정(ProjectMember)으로 행사에 붙는다.
+// 이 구분이 없으면 같은 사람을 행사마다 다시 입력하게 되고, 연락처가 행사별로 갈라진다.
+
+/** 주소록 등록·수정 입력. 이메일이 사람의 신원 키다(대소문자 무시). */
+export interface PersonInput {
+  name: string
+  email: string
+  title?: string | null
+  phone?: string | null
+}
+
+export type PersonPatch = Partial<PersonInput>
+
+/** 그 사람이 어느 행사에 어떤 역할로 올라가 있는지 — 삭제 차단 사유를 화면이 그대로 보여준다 */
+export interface PersonAssignment {
+  project_id: UUID
+  project_name: string
+  role: MemberRole
+}
+
+export interface PersonWithAssignments extends UserRef {
+  assignments: PersonAssignment[]
+}
+
 export interface MemberInput {
   display_name: string
   email: string
