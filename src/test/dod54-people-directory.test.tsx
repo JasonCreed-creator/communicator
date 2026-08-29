@@ -222,6 +222,10 @@ describe('DoD 54-E 진입점: 기능이 있는 자리에서 바로 된다 (§10)
     const src = (
       await import('../pages/PartnerBoardPage?raw')
     ).default as unknown as string
+    // 부재 단언은 소스가 비면 무조건 통과한다. 이 세션에서 `.css?raw`가 실제로 빈 문자열을 준
+    // 전례가 있으므로, 읽히고 있다는 사실을 먼저 못 박는다(가드가 조용히 죽는 것을 막는다).
+    expect(src.length).toBeGreaterThan(500)
+    expect(src).toContain('PartnerRosterEditor')
     // 진입점 원칙: 빈 상태에서 다른 화면으로 보내는 문구를 되살리지 않는다
     expect(src).not.toContain('행사 설정 ② 담당자에서 파트너를 추가하세요')
   })
