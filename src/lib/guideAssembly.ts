@@ -37,19 +37,37 @@ export const CONTACTS_SECTION_PLACEHOLDER =
   '- 대표 연락처: (공용 대표번호를 입력하세요)\n' +
   '- 개인 휴대폰은 이 문서에 적지 않습니다 — 필요하면 별도 연락망 문서를 이용하세요.'
 
+/** v2.6 §25.4 — 포맷 프리셋의 운영 규칙(Q&A 미운영·발표 40분 등)을 가이드 첫 섹션으로 옮긴다.
+ *  연동 출처가 아니라 **프리셋 시드**라 source_ref는 null이다 — 사람이 고치면 그대로 남는다. */
+export const FORMAT_RULES_SECTION_TITLE = '진행 원칙'
+
 export interface GuideSeedSection {
-  kind: 'zone' | 'role' | 'emergency' | 'contacts'
+  kind: 'zone' | 'role' | 'emergency' | 'contacts' | 'custom'
   title: string
   content: string
   source_ref: 'zone_items' | 'role_charters' | null
 }
 
-/** §8.2 guide-seed — 4섹션(존별 운영·역할별 체크리스트·비상 대응·연락망) 시드 데이터 */
+/** §8.2 guide-seed — 4섹션(존별 운영·역할별 체크리스트·비상 대응·연락망) 시드 데이터.
+ *  v2.6 §25.4: 포맷 운영 프리셋이 있으면 '진행 원칙'이 맨 앞에 하나 더 붙는다(없으면 4섹션 그대로). */
 export function buildGuideSeedSections(
   opsItems: readonly Deliverable[],
   charters: readonly RoleCharter[],
+  formatOpsNotes: readonly string[] = [],
 ): GuideSeedSection[] {
+  const formatRules: GuideSeedSection[] =
+    formatOpsNotes.length === 0
+      ? []
+      : [
+          {
+            kind: 'custom',
+            title: FORMAT_RULES_SECTION_TITLE,
+            content: formatOpsNotes.map((n) => `- ${n}`).join('\n'),
+            source_ref: null,
+          },
+        ]
   return [
+    ...formatRules,
     {
       kind: 'zone',
       title: '존별 운영',

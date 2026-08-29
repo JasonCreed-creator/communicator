@@ -88,17 +88,17 @@ describe('DoD-27 (b) 행사 데이터 autofill', () => {
     {
       id: 's1', project_id: 'prj-t', section: null, start_time: '10:30', end_time: '11:00',
       title: '오프닝 키노트', speaker_name: '홍길동', speaker_title: '대표', speaker_org: '가상컴퍼니',
-      note: null, sort_order: 1,
+      note: null, track: null, sort_order: 1,
     },
     {
       id: 's2', project_id: 'prj-t', section: null, start_time: '11:10', end_time: '11:40',
       title: '두 번째 세션', speaker_name: '홍길동', speaker_title: '대표', speaker_org: '가상컴퍼니',
-      note: null, sort_order: 2,
+      note: null, track: null, sort_order: 2,
     },
     {
       id: 's3', project_id: 'prj-t', section: null, start_time: '13:00', end_time: '13:40',
       title: '패널 토크', speaker_name: '김철수', speaker_title: 'CTO', speaker_org: '가상랩스',
-      note: null, sort_order: 3,
+      note: null, track: null, sort_order: 3,
     },
   ]
   const src = { project, sessions, zoneDeliverables: [] }

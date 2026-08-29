@@ -13,10 +13,12 @@ import { COMPLIANCE_CARD_TEMPLATES, HOST_COMPLIANCE_CARD_TEMPLATES } from '../..
 import { defaultConsents, defaultFormFields, defaultSections } from '../../lib/landingTemplate'
 import {
   HOST_ROLE_CHARTER_TEMPLATE,
+  HOST_SUBMIT_CATEGORY,
   HOST_TEMPLATE,
   ROLE_CHARTER_TEMPLATES,
   wbsTemplateFor,
 } from '../../fixtures/wbsTemplates'
+import { FORMAT_PRESETS, presetCardOf } from '../../fixtures/formatPresets'
 import { adjustmentDeltas, computeQuoteOutputs, toEngineConfig } from '../../modules/quote/engine/quoteInput'
 import { effectiveAdjust } from '../../modules/quote/engine/quoteMode'
 import { calcEstimate } from '../../modules/quote/engine/calcEstimate'
@@ -1595,6 +1597,8 @@ export class MockProvider implements DataProvider {
       speaker_title: input.speaker_title?.trim() || null,
       speaker_org: input.speaker_org?.trim() || null,
       note: input.note?.trim() || null,
+      // v2.6 §25.4 — 트랙은 판매 플래너 ③에서 편성한다. 빈 문자열은 '미편성'과 같으므로 null로 눕힌다
+      track: input.track?.trim() || null,
       sort_order: input.sort_order ?? maxOrder + 1,
     }
     this.state.program_sessions.push(session)
@@ -1620,6 +1624,7 @@ export class MockProvider implements DataProvider {
     if (patch.speaker_title !== undefined) s.speaker_title = patch.speaker_title.trim() || null
     if (patch.speaker_org !== undefined) s.speaker_org = patch.speaker_org.trim() || null
     if (patch.note !== undefined) s.note = patch.note.trim() || null
+    if (patch.track !== undefined) s.track = patch.track?.trim() || null
     if (patch.sort_order !== undefined) s.sort_order = patch.sort_order
     return s
   }
@@ -1932,6 +1937,7 @@ export class MockProvider implements DataProvider {
       kind: b.kind,
       script: b.script ?? null,
       note: b.note ?? null,
+      track: null,
       sort_order: i + 1,
     }))
     this.state.scenario_blocks = this.state.scenario_blocks
@@ -2076,7 +2082,11 @@ export class MockProvider implements DataProvider {
       (x) => x.project_id === d.project_id && x.area === 'ops',
     )
     const charters = await this.listRoleCharters(d.project_id)
-    const seeds = buildGuideSeedSections(opsItems, charters)
+    // v2.6 §25.4 — 포맷 운영 프리셋(DMS: Q&A 미운영·발표 40분 등)을 '진행 원칙' 섹션으로 함께 시드한다.
+    // 프리셋이 빈 포맷(컨퍼런스)은 기존 4섹션 그대로다 — 기존 시드 결과가 바뀌지 않는다.
+    const project = this.mustFindProject(d.project_id)
+    const preset = FORMAT_PRESETS[presetCardOf(project.format, project.event_type)]
+    const seeds = buildGuideSeedSections(opsItems, charters, preset.opsNotes)
     const built: GuideSection[] = seeds.map((s, i) => ({
       id: this.nextId('gds'),
       deliverable_id: deliverableId,
@@ -2127,6 +2137,7 @@ export class MockProvider implements DataProvider {
         direction: 'internal' as const, // v2.4 §21 — 대행형 템플릿(모객형·일반형)은 항상 내부 태스크
         partner_id: null,
         note: old?.note ?? null,
+        track: null,
         sort_order: i + 1,
       }
     })
@@ -2203,7 +2214,7 @@ export class MockProvider implements DataProvider {
             id: this.nextId('dlv'),
             project_id: projectId,
             area: areaByRole[tpl.role],
-            category: '파트너 제출',
+            category: HOST_SUBMIT_CATEGORY[tpl.code] ?? '파트너 제출',
             title: `${tpl.title} — ${partner.name}`,
             status: 'requested',
             assignee_id: null,
@@ -2346,6 +2357,17 @@ export class MockProvider implements DataProvider {
       existing.description = input.description ?? null
       existing.capacity = input.capacity ?? null
       if (input.sort !== undefined) existing.sort = input.sort
+      // v2.6 §25.4 — 판매 상품 4필드는 부분 수정을 허용한다(판매 플래너 ①이 단가만 고치는 흐름).
+      // 등급명·설명·정원과 달리 undefined면 기존 값을 지우지 않는다.
+      if (input.session_slots !== undefined) existing.session_slots = input.session_slots
+      if (input.booth_included !== undefined) existing.booth_included = input.booth_included
+      if (input.staff_cap !== undefined) existing.staff_cap = input.staff_cap
+      if (input.price !== undefined) {
+        if (input.price !== null && (!Number.isFinite(input.price) || input.price < 0)) {
+          throw new ProviderError('validation', '판매 단가는 0 이상이어야 합니다.')
+        }
+        existing.price = input.price
+      }
       return { ...existing }
     }
     const tier: PartnerTier = {
@@ -2357,6 +2379,11 @@ export class MockProvider implements DataProvider {
       capacity: input.capacity ?? null,
       sort:
         input.sort ?? this.state.partner_tiers.filter((t) => t.project_id === projectId).length + 1,
+      // v2.6 §25.4 — 신규 등급은 '판매 상품 미정의' 상태로 시작한다(0·false·null)
+      session_slots: input.session_slots ?? 0,
+      booth_included: input.booth_included ?? false,
+      staff_cap: input.staff_cap ?? null,
+      price: input.price ?? null,
     }
     this.state.partner_tiers.push(tier)
     return { ...tier }
@@ -2451,6 +2478,11 @@ export class MockProvider implements DataProvider {
       status: input.status ?? 'active',
       contract_amount: input.contract_amount ?? null,
       note: input.note ?? null,
+      // v2.6 §25.4 — 부스는 등급 확정 뒤에 배정되므로 생성 시점엔 대개 비어 있다
+      booth_no: input.booth_no ?? null,
+      booth_size: input.booth_size ?? null,
+      booth_power: input.booth_power ?? null,
+      booth_internet: input.booth_internet ?? null,
       created_at: nowIso(),
     }
     this.state.partners.push(partner)
@@ -2478,6 +2510,11 @@ export class MockProvider implements DataProvider {
     if (patch.status !== undefined) partner.status = patch.status
     if (patch.contract_amount !== undefined) partner.contract_amount = patch.contract_amount
     if (patch.note !== undefined) partner.note = patch.note
+    // v2.6 §25.4 — 부스 배정(HT-2 통지 · HT-4/HT-7 신청 취합의 기록면)
+    if (patch.booth_no !== undefined) partner.booth_no = patch.booth_no
+    if (patch.booth_size !== undefined) partner.booth_size = patch.booth_size
+    if (patch.booth_power !== undefined) partner.booth_power = patch.booth_power
+    if (patch.booth_internet !== undefined) partner.booth_internet = patch.booth_internet
     return { ...partner }
   }
 

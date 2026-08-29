@@ -287,6 +287,8 @@ export interface ProgramSessionInput {
   speaker_title?: string
   speaker_org?: string
   note?: string
+  /** v2.6 §25.4 — 트랙 편성(판매 플래너 ③). 빈 문자열은 null로 저장한다 */
+  track?: string | null
   sort_order?: number
 }
 
@@ -615,6 +617,11 @@ export interface PartnerTierInput {
   description?: string | null
   capacity?: number | null
   sort?: number
+  // v2.6 §25.4 — 판매 상품 정의. price는 내부 전용(§25.8 비노출 가드 대상)
+  session_slots?: number
+  booth_included?: boolean
+  staff_cap?: number | null
+  price?: number | null
 }
 
 export interface PartnerInput {
@@ -623,6 +630,11 @@ export interface PartnerInput {
   status?: PartnerStatus
   contract_amount?: number | null
   note?: string | null
+  // v2.6 §25.4 — 부스 필드 그룹(HT-4·HT-7 매핑)
+  booth_no?: string | null
+  booth_size?: string | null
+  booth_power?: string | null
+  booth_internet?: boolean | null
 }
 
 /** 다음 마감(오늘 이후 미완료 partner_submit 태스크 중 가장 가까운 것) */

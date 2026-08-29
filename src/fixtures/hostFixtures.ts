@@ -17,7 +17,7 @@ import type { DeliverableArea, MemberRole } from '../types/enums'
 import type { MockState } from './sampleProject'
 import { offsetToDate } from '../lib/wbs'
 import { HOST_COMPLIANCE_CARD_TEMPLATES } from './complianceTemplates'
-import { HOST_ROLE_CHARTER_TEMPLATE, HOST_TEMPLATE } from './wbsTemplates'
+import { HOST_ROLE_CHARTER_TEMPLATE, HOST_SUBMIT_CATEGORY, HOST_TEMPLATE } from './wbsTemplates'
 
 export const PROJECT_ID_HOST = 'prj-virtual-summit'
 /** 데모 파트너 포털 토큰(§21.3) — 다이아 등급 파트너(가상다이아텍) 소유, `/p/demo-partner` */
@@ -32,10 +32,12 @@ export const PARTNER_EXPIRED_TOKEN = 'demo-partner-expired'
 const EVENT_DATE = '2026-10-15' // §21.3: ≈D-49
 const SEEDED_AT = '2026-08-20T09:00:00.000Z'
 
+// v2.6 §25.4 — 판매 상품 정의. price는 내부 전용이라 포털·발주처 경로에 실리지 않는다(§25.8).
+// 금액·정원 값은 전부 가상이다(#RULE-NO-COMPANY) — 실물 계약 조건이 아니다.
 const TIERS: Omit<PartnerTier, 'project_id'>[] = [
-  { id: 'tier-diamond', code: 'diamond', name: 'DIAMOND', description: '메인 무대 단독 스폰서 등급', capacity: 1, sort: 1 },
-  { id: 'tier-gold', code: 'gold', name: 'GOLD', description: '트랙 스폰서 등급', capacity: 3, sort: 2 },
-  { id: 'tier-silver', code: 'silver', name: 'SILVER', description: '부스 참가 등급', capacity: null, sort: 3 },
+  { id: 'tier-diamond', code: 'diamond', name: 'DIAMOND', description: '메인 무대 단독 스폰서 등급', capacity: 1, sort: 1, session_slots: 2, booth_included: true, staff_cap: 3, price: 80_000_000 },
+  { id: 'tier-gold', code: 'gold', name: 'GOLD', description: '트랙 스폰서 등급', capacity: 3, sort: 2, session_slots: 1, booth_included: true, staff_cap: 3, price: 40_000_000 },
+  { id: 'tier-silver', code: 'silver', name: 'SILVER', description: '부스 참가 등급', capacity: null, sort: 3, session_slots: 0, booth_included: true, staff_cap: 3, price: 15_000_000 },
 ]
 
 interface PartnerSeed {
@@ -44,15 +46,17 @@ interface PartnerSeed {
   tier: string
   contract_amount: number
   note: string | null
+  /** v2.6 §25.4 — 부스 배정. 미배정이면 null(실버 1곳을 미배정으로 남겨 화면의 빈 상태를 재현한다) */
+  booth_no: string | null
 }
 
 /** 다이아 1·골드 1·실버 3 — 전부 가상 명칭 */
 const PARTNERS: PartnerSeed[] = [
-  { id: 'ptn-001', name: '가상다이아텍', tier: 'tier-diamond', contract_amount: 80_000_000, note: '메인 스폰서' },
-  { id: 'ptn-002', name: '가상골드플랫폼', tier: 'tier-gold', contract_amount: 40_000_000, note: null },
-  { id: 'ptn-003', name: '가상실버클라우드', tier: 'tier-silver', contract_amount: 15_000_000, note: null },
-  { id: 'ptn-004', name: '가상실버네트웍스', tier: 'tier-silver', contract_amount: 15_000_000, note: null },
-  { id: 'ptn-005', name: '가상실버랩스', tier: 'tier-silver', contract_amount: 15_000_000, note: null },
+  { id: 'ptn-001', name: '가상다이아텍', tier: 'tier-diamond', contract_amount: 80_000_000, note: '메인 스폰서', booth_no: 'A-01' },
+  { id: 'ptn-002', name: '가상골드플랫폼', tier: 'tier-gold', contract_amount: 40_000_000, note: null, booth_no: 'A-02' },
+  { id: 'ptn-003', name: '가상실버클라우드', tier: 'tier-silver', contract_amount: 15_000_000, note: null, booth_no: 'B-01' },
+  { id: 'ptn-004', name: '가상실버네트웍스', tier: 'tier-silver', contract_amount: 15_000_000, note: null, booth_no: 'B-02' },
+  { id: 'ptn-005', name: '가상실버랩스', tier: 'tier-silver', contract_amount: 15_000_000, note: null, booth_no: null },
 ]
 
 /**
@@ -138,6 +142,10 @@ export function seedHostFixtures(state: MockState): void {
     status: 'active',
     contract_amount: p.contract_amount,
     note: p.note,
+    booth_no: p.booth_no,
+    booth_size: p.booth_no ? '3m x 3m' : null,
+    booth_power: p.booth_no ? '단상 220V 1구' : null,
+    booth_internet: p.booth_no ? true : null,
     created_at: SEEDED_AT,
   }))
   state.partners.push(...partners)
@@ -239,7 +247,8 @@ export function seedHostFixtures(state: MockState): void {
           id: deliverableId,
           project_id: PROJECT_ID_HOST,
           area: AREA_BY_ROLE[tpl.role],
-          category: '파트너 제출',
+          // v2.6 §25.5 — provider의 expandHostWbs와 같은 규칙(HT-3만 '경품·이용권')
+          category: HOST_SUBMIT_CATEGORY[tpl.code] ?? '파트너 제출',
           title: `${tpl.title} — ${partner.name}`,
           status,
           assignee_id: null,

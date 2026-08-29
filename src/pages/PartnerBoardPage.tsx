@@ -22,12 +22,14 @@ import { LevelBadge } from '../components/internal/StatusBadge'
 import PartnerDeadlineTimeline from '../components/partner/PartnerDeadlineTimeline'
 import PartnerDetailPanel from '../components/partner/PartnerDetailPanel'
 import PartnerTable, { partnerBoardStatus } from '../components/partner/PartnerTable'
+import SalesPlanner from '../components/sales/SalesPlanner'
 import { currentSubmitGroup, groupHostTasks } from '../components/partner/partnerBoardUtils'
 import { buildMailto } from '../components/partner/partnerReceipt'
 import { useProject } from '../context/ProjectContext'
 import { useAsync } from '../hooks/useAsync'
 import { BOARD_HELP, PARTNER_KPI_HELP } from '../lib/helpTexts'
 import { PARTNER_STATUS_LABELS, ddayLabel, formatDate } from '../lib/labels'
+import { usesRevenueModel } from '../fixtures/formatPresets'
 import { getDataProvider } from '../providers'
 import type { PartnerStatus } from '../types/enums'
 
@@ -62,6 +64,9 @@ export default function PartnerBoardPage() {
   const deliverables = useAsync(() => provider.listDeliverables(projectId), [projectId])
   const [selectedPartnerId, setSelectedPartnerId] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  // v2.6 §25.1 권한 ③ — 판매 플래너는 **복합 게이트**다: 주최형이면서 판매형 포맷일 때만.
+  // format 단독으로 화면을 켜지 않는다(대행형 dms 같은 조합에 팔 상품이 없다).
+  const [tab, setTab] = useState<'board' | 'planner'>('board')
   const detailRef = useRef<HTMLDivElement>(null)
 
   const groups = useMemo(
@@ -132,6 +137,8 @@ export default function PartnerBoardPage() {
   }
 
   const projectName = project.data?.name ?? ''
+  const plannerAvailable =
+    project.data?.kind === 'host' && usesRevenueModel(project.data.format)
 
   /** 미접수처 일괄 요청 메일 — 앱이 보내지 않고 사용자의 메일 프로그램을 연다(bcc로 분리 발송) */
   const bulkMailto = useMemo(() => {
@@ -159,6 +166,33 @@ export default function PartnerBoardPage() {
         </div>
       )}
 
+      {plannerAvailable && (
+        <div className="flex gap-1 border-b border-border">
+          {(
+            [
+              { id: 'board', label: '접수 대장' },
+              { id: 'planner', label: '판매 플래너' },
+            ] as const
+          ).map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setTab(t.id)}
+              aria-current={tab === t.id ? 'page' : undefined}
+              className={`border-b-2 px-4 py-2 text-sm font-medium ${
+                tab === t.id ? 'border-accent text-ink' : 'border-transparent text-ink-sub hover:text-ink'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {plannerAvailable && tab === 'planner' && project.data && <SalesPlanner project={project.data} />}
+
+      {!(plannerAvailable && tab === 'planner') && (
+      <>
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <KpiTileWithHelp help={PARTNER_KPI_HELP.count}>
           <StatTile
@@ -314,6 +348,8 @@ export default function PartnerBoardPage() {
             />
           </Card>
         </div>
+      )}
+      </>
       )}
     </section>
   )

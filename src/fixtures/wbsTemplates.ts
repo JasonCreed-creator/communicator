@@ -144,6 +144,15 @@ function ht(
   }
 }
 
+/**
+ * v2.6 §25.4 — 파트너 제출물의 카테고리 기본값은 '파트너 제출'이고, 성격이 다른 코드만 덮어쓴다.
+ * HT-3(참관객 이용권·경품)은 제작물이 아니라 **혜택 제안**이라 운영보드에서 따로 모여야 한다 —
+ * 설계서 §25.5의 `'benefit'` 카테고리를 화면에 그대로 나가는 한국어 라벨로 옮긴 값이다.
+ */
+export const HOST_SUBMIT_CATEGORY: Readonly<Record<string, string>> = {
+  'HT-3': '경품·이용권',
+}
+
 /** 주최형 12태스크 — partner_submit은 전개 시 파트너 수만큼 인스턴스가 된다(§15.3) */
 export const HOST_TEMPLATE: readonly WbsTemplateTask[] = [
   ht('HT-1', '파트너 기본 자료 제출 — 로고·회사소개·발표자 프로필·발표 개요', -45, -45, 'pm', 'partner_submit', 1),

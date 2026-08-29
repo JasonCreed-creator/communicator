@@ -584,11 +584,11 @@ const FIXTURE: MockState = {
 
   // v1.2 프로그램표 — S9 §프로그램 정형 소스 (sort_order 순)
   program_sessions: [
-    { id: 'pgs-001', project_id: PROJECT_ID, section: '오전', start_time: '09:30', end_time: '10:00', title: '등록·리셉션', speaker_name: null, speaker_title: null, speaker_org: null, note: null, sort_order: 1 },
-    { id: 'pgs-002', project_id: PROJECT_ID, section: '오전', start_time: '10:00', end_time: '10:20', title: '개회사', speaker_name: '오대표', speaker_title: '대표', speaker_org: '가상재단', note: null, sort_order: 2 },
-    { id: 'pgs-003', project_id: PROJECT_ID, section: '오전', start_time: '10:20', end_time: '11:10', title: '기조연설 — 연결의 다음 단계', speaker_name: '한석학', speaker_title: '교수', speaker_org: '가상대학교', note: '기조', sort_order: 3 },
-    { id: 'pgs-004', project_id: PROJECT_ID, section: '오후', start_time: '14:00', end_time: '14:50', title: '파트너 세션 — 산업 적용 사례', speaker_name: '문리더', speaker_title: '본부장', speaker_org: '가상소프트', note: '파트너 연사', sort_order: 4 },
-    { id: 'pgs-005', project_id: PROJECT_ID, section: '오후', start_time: '15:00', end_time: '16:00', title: '패널 토론', speaker_name: null, speaker_title: null, speaker_org: null, note: '패널 4인', sort_order: 5 },
+    { id: 'pgs-001', project_id: PROJECT_ID, section: '오전', start_time: '09:30', end_time: '10:00', title: '등록·리셉션', speaker_name: null, speaker_title: null, speaker_org: null, note: null, track: null, sort_order: 1 },
+    { id: 'pgs-002', project_id: PROJECT_ID, section: '오전', start_time: '10:00', end_time: '10:20', title: '개회사', speaker_name: '오대표', speaker_title: '대표', speaker_org: '가상재단', note: null, track: null, sort_order: 2 },
+    { id: 'pgs-003', project_id: PROJECT_ID, section: '오전', start_time: '10:20', end_time: '11:10', title: '기조연설 — 연결의 다음 단계', speaker_name: '한석학', speaker_title: '교수', speaker_org: '가상대학교', note: '기조', track: null, sort_order: 3 },
+    { id: 'pgs-004', project_id: PROJECT_ID, section: '오후', start_time: '14:00', end_time: '14:50', title: '파트너 세션 — 산업 적용 사례', speaker_name: '문리더', speaker_title: '본부장', speaker_org: '가상소프트', note: '파트너 연사', track: null, sort_order: 4 },
+    { id: 'pgs-005', project_id: PROJECT_ID, section: '오후', start_time: '15:00', end_time: '16:00', title: '패널 토론', speaker_name: null, speaker_title: null, speaker_org: null, note: '패널 4인', track: null, sort_order: 5 },
   ],
 
   // v1.3 큐시트 — dlv-004(개막식 큐시트)의 정형 큐 (sort_order 순, 콘솔 3채널·대본 전문)
@@ -679,6 +679,7 @@ export function createFixtureState(): MockState {
     direction: 'internal' as const, // v2.4 §21 — 대행형 템플릿은 항상 내부 태스크
     partner_id: null,
     note: null,
+    track: null,
     sort_order: i + 1,
   }))
   // 데모용 상태 분포: 1.1·1.2 완료, 1.3 진행 중, 2.8 제작물 ↔ dlv-007(현수막 가이드) 연결
@@ -892,6 +893,7 @@ export function createFixtureState(): MockState {
     direction: 'internal' as const, // v2.4 §21 — 대행형 템플릿은 항상 내부 태스크
     partner_id: null,
     note: null,
+    track: null,
     sort_order: i + 1,
   }))
   const pastTasks = partnerTasks.filter((t) => t.end_date! < today)

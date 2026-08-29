@@ -320,6 +320,8 @@ export interface ProgramSession {
   speaker_org: string | null
   /** 비고 태그 (기조·파트너 연사 등) */
   note: string | null
+  /** v2.6 §25.4 — 트랙(행사별 정의, 예: Back-office/Front-office). null=트랙 미편성 */
+  track: string | null
   sort_order: number
 }
 
@@ -750,6 +752,16 @@ export interface PartnerTier {
   /** 정원 — null=무제한 */
   capacity: number | null
   sort: number
+  // ── v2.6 §25.4 판매 상품 정의 (DMS·전시회) ────────────────────────
+  /** 이 등급이 받는 발표 세션 수 */
+  session_slots: number
+  /** 부스 포함 여부 */
+  booth_included: boolean
+  /** 현장 상주 인력 상한 — null=제한 없음 */
+  staff_cap: number | null
+  /** ★ 내부 전용 판매 단가 — contract_amount와 같은 등급의 금액 키다.
+   *  포털(`/p/*`)·발주처(`/c/*`) 응답 타입에 절대 넣지 않는다(§25.8·§21.2 R-H3) */
+  price: number | null
 }
 
 export interface Partner {
@@ -761,6 +773,15 @@ export interface Partner {
   /** ★ 내부 전용 — 절대 포털(`/p/*`) 응답 타입에 넣지 않는다(§21.2 R-H3) */
   contract_amount: number | null
   note: string | null
+  // ── v2.6 §25.4 부스 필드 그룹 (HT-4 그래픽·HT-7 인력/전력/인터넷 신청과 매핑) ──
+  /** 배치도상의 부스 번호 */
+  booth_no: string | null
+  /** 규격 표기 — 자유 문자열('3m x 3m' 등, 행사마다 관례가 달라 파싱하지 않는다) */
+  booth_size: string | null
+  /** 전력 신청 내역 */
+  booth_power: string | null
+  /** 인터넷 신청 여부 — null=미확인 */
+  booth_internet: boolean | null
   created_at: IsoDateTime
 }
 
