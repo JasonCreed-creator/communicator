@@ -165,8 +165,12 @@ export default function SheetConnectWizard({
               <div className="rounded-lg border border-border bg-canvas p-4">
                 <p className="text-sm font-semibold text-ink">읽기 권한 부여</p>
                 <p className="mt-1.5 text-sm leading-relaxed text-ink-sub">
-                  시트를 ‘링크가 있는 모든 사용자 — 뷰어’로 공유하거나, 아래 계정을 뷰어로 초대하세요. 편집
-                  권한은 필요하지 않습니다.
+                  아래 계정을 뷰어로 초대하세요. 편집 권한은 필요하지 않습니다.
+                </p>
+                {/* 인증은 서비스 계정 단일 경로다(3.17.1 T2). 공개 링크 공유를 권하면 참가자 실명·연락처가
+                    링크를 가진 누구에게나 열린다 — 화면이 그 방법을 안내해서는 안 된다. */}
+                <p className="mt-1.5 text-sm leading-relaxed text-negative">
+                  참가자 명단 시트는 ‘링크가 있는 모든 사용자’로 공유하지 마세요.
                 </p>
                 <div className="mt-2.5 flex flex-wrap items-center gap-2">
                   <span className="rounded-md border border-border bg-card px-2.5 py-1.5 text-sm text-ink">

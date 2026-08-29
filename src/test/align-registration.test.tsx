@@ -9,7 +9,7 @@
 //   (3) 확인 전까지 화면은 직전 스냅숏 기준을 유지한다(자동 덮어쓰기 없음)
 //   (4) 동시 접속 — 먼저 반영한 쪽만 성공하고, 늦은 쪽은 409 원문을 보고 차이를 다시 읽는다(R-S1)
 //   (5) 명단 표는 읽기 전용(시트 소유 필드에 입력 요소 0개) · 연락처 기본 마스킹 · 제거 행 이력 보존
-//   (6) 체크인 탭은 현장용 — 밀집 모드 없음 · 컨트롤 44
+//   (6) S-12 현장 체크인은 별도 화면 — 밀집 모드 없음 · 컨트롤 44 · 관리 경로 0건(DoD 45)
 //   (7) 위저드는 필수 매핑(이름+이메일)이 없으면 진행 불가
 //
 // 시트 연결이 붙은 행사는 `prj-rebuild27` 하나뿐이므로 렌더 전에 현재 행사를 반드시 지정한다.
@@ -99,12 +99,16 @@ describe('3.17c 연결 카드 — 갱신 있음(stale)', () => {
     renderRoute('/registration')
     await screen.findByRole('table', { name: '시트 차이' })
 
-    // KPI 4카드는 시트 기준(신청 412) — 원본의 414가 아니다
-    const kpi = within(screen.getByTestId('sheet-kpi'))
+    // KPI 4카드는 시트 기준(신청 412) — 원본의 414가 아니다.
+    // KPI는 차이 표와 **다른 비동기 소스**(getSheetRegistrationStats)라 각자 기다린다 —
+    // 콜드런에서 해소 순서가 뒤집히면 동기 쿼리는 빈손이 된다(3.17.1 T7).
+    const kpi = within(await screen.findByTestId('sheet-kpi'))
     expect(kpi.getByText('신청')).toBeTruthy()
     expect(kpi.getByText('412')).toBeTruthy()
-    expect(kpi.getByText(/시트 행 \d+ · 중복·오류 6 제외/)).toBeTruthy()
-    expect(kpi.getByText('응답률 86.9%')).toBeTruthy()
+    expect(kpi.getByText(/^시트 행 \d+$/)).toBeTruthy()
+    expect(kpi.getByRole('button', { name: '제외 6' })).toBeTruthy()
+    // 3.17.1 T4 — RSVP '응답률'과 분모가 달라 '확정률'로 이름을 나눴다
+    expect(kpi.getByText('확정률 86.9%')).toBeTruthy()
     expect(kpi.getByText('체크인율 59.8% · 확정 기준')).toBeTruthy()
 
     // 명단에서 '서지안'을 검색해도 아직 없다(반영 전)
@@ -122,8 +126,10 @@ describe('3.17c 연결 카드 — 갱신 있음(stale)', () => {
 
     // 시트 소유 필드 편집 UI 금지(§24.6) — 표 안에는 input·select·textarea가 없다
     expect(table.querySelectorAll('input, select, textarea')).toHaveLength(0)
-    // 앱 소유(체크인)만 조작 가능
-    expect(within(table).getAllByRole('button', { name: '체크인' }).length).toBeGreaterThan(0)
+    // 3.17.1 T1-3 — 체크인 **조작**도 S-12로 옮겼으므로 이 표는 완전한 읽기 전용이다.
+    // 체크인은 상태 문구로만 남는다.
+    expect(within(table).queryAllByRole('button', { name: '체크인' })).toHaveLength(0)
+    expect(within(table).getAllByText(/미체크인|완료 ·/).length).toBeGreaterThan(0)
 
     // 필드 소유 분리 배너 + 읽기 전용 배지
     expect(screen.getByText(/시트 소유/)).toBeTruthy()
@@ -154,27 +160,70 @@ describe('3.17c 연결 카드 — 갱신 있음(stale)', () => {
     expect(table.textContent).not.toMatch(/sheet\d+@example\.com/)
   })
 
-  it('체크인 탭(A안)은 현장용 — 밀집 모드 토글이 없고 컨트롤이 44다', async () => {
+  it('등록 보드 탭에는 체크인이 없다 — 조작 경로는 S-12 하나다 (DoD 45)', async () => {
     renderRoute('/registration')
     await screen.findByRole('region', { name: '구글 시트 연결' })
-    await openTab('체크인')
+    expect(screen.queryByRole('button', { name: '체크인' })).toBeNull()
+    expect(screen.getAllByRole('button').map((b) => b.textContent)).not.toContain('체크인')
+  })
+})
+
+// ── (6) S-12 현장 체크인 — 화면 분리 계약(DoD 45, 3.17.1 T1) ──────────────────────────
+describe('3.17.1 S-12 현장 체크인 — 등록 보드와 분리된 현장 전용 화면', () => {
+  beforeEach(() => useProject(SHEET_PROJECT))
+
+  it('현장용 규격 — 밀집 모드가 없고 컨트롤이 44다', async () => {
+    renderRoute('/checkin')
 
     const search = await screen.findByLabelText('이름 · 소속 · 뱃지번호 검색')
     expect(search.className).toContain('h-11')
-    // 밀집 모드는 내부 관리 표에만 — 현장 탭에는 없다(§7-1.3 조건 1)
+    // 밀집 모드는 내부 관리 표에만 — 현장 화면에는 없다(§7-1.3 조건 1)
     expect(screen.queryByRole('button', { name: '밀집 모드' })).toBeNull()
     expect(screen.queryByRole('button', { name: '기본 밀도' })).toBeNull()
 
     // 상단 '체크인 n / m'(확정 기준) + 큰 체크인 버튼
     expect(screen.getByText(/^체크인 \d+ \/ 358$/)).toBeTruthy()
-    const buttons = screen.getAllByRole('button', { name: '체크인' })
-    // 탭 버튼은 제외 — 행 버튼만 44
-    const rowButtons = buttons.filter((b) => b.className.includes('btn'))
+    const rowButtons = screen
+      .getAllByRole('button', { name: '체크인' })
+      .filter((b) => b.className.includes('btn'))
     expect(rowButtons.length).toBeGreaterThan(0)
     rowButtons.forEach((b) => {
       expect(b.className).toContain('h-11')
       expect(b.className).not.toContain('btn-sm')
     })
+  })
+
+  it('명단 편집 · 시트 설정 · 내보내기 경로가 하나도 없다 (DoD 45)', async () => {
+    const { container } = renderRoute('/checkin')
+    await screen.findByLabelText('이름 · 소속 · 뱃지번호 검색')
+
+    // 시트 설정·연결 카드 — 현장 담당에게 열리면 안 되는 관리 경로
+    expect(screen.queryByRole('region', { name: '구글 시트 연결' })).toBeNull()
+    for (const name of ['연결 설정', '지금 동기화', '내보내기', 'CSV 임포트', '시트 열기']) {
+      expect(screen.queryByRole('button', { name })).toBeNull()
+      expect(screen.queryByRole('link', { name })).toBeNull()
+    }
+    // 시트 URL 자체가 지면에 없다
+    expect(container.textContent).not.toMatch(/docs\.google\.com/)
+    // 명단 편집 입력 요소 0개 — 검색창(type=search)만 허용
+    const inputs = Array.from(container.querySelectorAll('input, select, textarea'))
+    expect(inputs).toHaveLength(1)
+    expect((inputs[0] as HTMLInputElement).type).toBe('search')
+  })
+
+  it('등록 보드와 같은 snapshot_at을 각자 표기한다 (DoD 45)', async () => {
+    const onsite = renderRoute('/checkin')
+    const onsiteBadge = await within(onsite.container).findByTestId('snapshot-badge')
+    const onsiteAt = onsiteBadge.getAttribute('data-snapshot-at')
+    expect(onsiteAt).toBeTruthy()
+    cleanup()
+
+    const board = renderRoute('/registration')
+    await within(board.container).findByRole('region', { name: '구글 시트 연결' })
+    await userEvent.click(within(board.container).getByRole('button', { name: '참관객' }))
+    const boardBadges = await within(board.container).findAllByTestId('snapshot-badge')
+    // 두 화면이 같은 기준 시각을 가리킨다 — 서로 다른 시점을 보고 있으면 즉시 드러난다
+    expect(boardBadges.some((b) => b.getAttribute('data-snapshot-at') === onsiteAt)).toBe(true)
   })
 })
 
@@ -190,13 +239,13 @@ describe('3.17c 동시 접속 — 먼저 반영한 쪽만 성공한다(R-S1)', (
     await within(b.container).findByRole('table', { name: '시트 차이' })
 
     // 담당자 A가 먼저 반영 → 성공(§24.3 R-S3: snapshot_version 증가)
-    await userEvent.click(within(a.container).getByRole('button', { name: '변경 4건 반영' }))
+    await userEvent.click(await within(a.container).findByRole('button', { name: '변경 4건 반영' }))
     await waitFor(() => {
       expect(within(a.container).getByText('원본과 일치합니다. 확인할 변경 사항이 없습니다.')).toBeTruthy()
     })
 
     // 담당자 B는 여전히 v3을 들고 있다 → 조용히 덮어쓰지 않고 409 원문을 띄운다
-    await userEvent.click(within(b.container).getByRole('button', { name: '변경 4건 반영' }))
+    await userEvent.click(await within(b.container).findByRole('button', { name: '변경 4건 반영' }))
     expect(
       await within(b.container).findByText('다른 담당자가 이미 반영했습니다. 최신 차이를 다시 확인해 주세요.'),
     ).toBeTruthy()
@@ -241,8 +290,8 @@ describe('3.17c 연결 카드 — 연결됨 · 권한 끊김', () => {
 
     // 반영 버튼은 숨기지 않고 비활성으로 남긴다(왜 못 하는지 보이게)
     expect((within(card).getByRole('button', { name: '변경 반영' }) as HTMLButtonElement).disabled).toBe(true)
-    // KPI·명단은 마지막 성공 스냅숏 그대로
-    expect(within(screen.getByTestId('sheet-kpi')).getByText('신청')).toBeTruthy()
+    // KPI·명단은 마지막 성공 스냅숏 그대로 — KPI는 카드와 다른 비동기 소스라 따로 기다린다(3.17.1 T7)
+    expect(within(await screen.findByTestId('sheet-kpi')).getByText('신청')).toBeTruthy()
   })
 })
 

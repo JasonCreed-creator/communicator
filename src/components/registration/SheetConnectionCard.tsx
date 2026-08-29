@@ -177,7 +177,7 @@ export default function SheetConnectionCard({
                 시트가 정본이고 앱은 읽기만 합니다.
               </p>
               <p className="mt-2 text-xs text-ink-cap">
-                준비물 — 시트 URL, 그리고 뷰어 권한(링크 공유 또는 서비스 계정 초대)
+                준비물 — 시트 URL, 그리고 뷰어 권한(서비스 계정 초대)
               </p>
             </div>
             <div className="shrink-0 text-right">

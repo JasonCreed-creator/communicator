@@ -40,6 +40,7 @@ import type {
   ProjectStatus,
   ScenarioBlockKind,
   SheetDiffKind,
+  SheetInvalidReason,
   SheetMappedField,
   WbsStatus,
 } from './enums'
@@ -532,6 +533,9 @@ export interface PlanData {
   zones: PlanZoneItem[]
   production_items: PlanProductionItem[]
   registration_stats: RegistrationStats
+  /** 3.17.1 T4 — 시트가 연결돼 있으면 등록 수치가 서 있는 스냅숏 시각. 미연결이면 null.
+   *  §4-22 GA 캡션 규약 준용 — 출처와 기준 시각을 지면에 밝힌다. */
+  sheet_snapshot_at: IsoDateTime | null
   /** 기한순 */
   milestones: Milestone[]
   section_progress: PlanSectionProgress[]
@@ -799,6 +803,18 @@ export interface SheetApplyResult {
  * 시트 기준 등록 통계 (KPI 4카드 + 보조 수치). 연결이 없는 행사에서는
  * getSheetRegistrationStats가 **null**을 돌려주고 화면은 기존 getRegistrationStats로 폴백한다.
  */
+/** 3.17.1 T3 — 제외 목록의 한 행. 원본 값은 확인용 미리보기이므로 연락처는 화면이 마스킹한다. */
+export interface SheetExcludedRow {
+  sheet_row_id: string
+  /** 시트에서 몇 번째 행인지 — 사용자가 시트로 건너가 고칠 때 쓰는 좌표 */
+  row_number: number
+  reason: SheetInvalidReason
+  name: string
+  org: string | null
+  email: string | null
+  phone: string | null
+}
+
 export interface SheetRegistrationStats {
   /** ① 신청 — removed를 뺀 명단 총계(상태 무관) */
   applied: number
@@ -812,12 +828,19 @@ export interface SheetRegistrationStats {
   source_rows: number
   /** 중복·형식 오류로 적재하지 않은 행 수 */
   excluded: number
-  /** confirmed ÷ applied (applied=0이면 0) */
-  response_rate: number
+  /** confirmed ÷ applied (applied=0이면 0).
+   *  3.17.1 T4 — RSVP '응답률'(발송 대비 응답)과 **분모가 달라** 이름을 나눴다. 화면 라벨도 '확정률'이다. */
+  confirm_rate: number
   /** checked_in ÷ confirmed — 확정 기준(confirmed=0이면 0) */
   checkin_rate: number
   /** 취소 중 '확정 후 취소'였던 건수 */
   cancelled_after_confirm: number
   /** 이 통계가 서 있는 스냅숏 시각 */
   snapshot_at: IsoDateTime | null
+  /** 3.17.1 T5 — 아직 확인·반영되지 않은 차이. 캡션 항등식의 항이다:
+   *  `source_rows = applied + excluded + pending_added − pending_removed` */
+  pending_added: number
+  pending_removed: number
+  /** 3.17.1 T3 — 적재되지 못한 행. 연락처는 화면에서 마스킹해 렌더한다 */
+  excluded_rows: SheetExcludedRow[]
 }

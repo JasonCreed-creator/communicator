@@ -162,7 +162,7 @@ export interface SheetDiffInput {
 
 export function computeSheetDiffRows({ mapping, sourceRows, attendees }: SheetDiffInput): SheetDiffRow[] {
   const fields = mappedFields(mapping)
-  const valid = sourceRows.filter((r) => !r.invalid)
+  const valid = sourceRows.filter((r) => !r.invalid_reason)
   const bySourceRow = new Map(valid.map((r) => [r.sheet_row_id, r]))
   // 이미 'removed'로 이력이 남은 행은 다시 제거 대상으로 세지 않는다
   const linked = attendees.filter((a) => a.sheet_row_id && a.sheet_status !== 'removed')

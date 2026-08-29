@@ -1,5 +1,6 @@
 import PlanSection from './PlanSection'
 import { type SectionProgressData } from './planSections'
+import { formatDateTime } from '../../lib/labels'
 import type { RegistrationStats } from '../../types/views'
 
 /**
@@ -11,11 +12,14 @@ export default function RegistrationSection({
   stats,
   progress,
   guaranteePax,
+  sheetSnapshotAt,
 }: {
   stats: RegistrationStats
   progress: SectionProgressData
   /** 모객형 Project.guarantee_pax — 일반형·미입력이면 null */
   guaranteePax?: number | null
+  /** 3.17.1 T4 — 시트 연결 중이면 등록 수치의 기준 시각. 미연결이면 null이라 캡션도 없다 */
+  sheetSnapshotAt?: string | null
 }) {
   const guarantee = guaranteePax != null && guaranteePax > 0 ? guaranteePax : null
   const attendeeRatio = guarantee ? stats.attendee_total / guarantee : null
@@ -47,6 +51,12 @@ export default function RegistrationSection({
           sub={`체크인 ${stats.checked_in} / ${stats.attendee_total}`}
         />
       </div>
+      {/* 3.17.1 T4 — 숫자의 출처와 기준 시각을 밝힌다. 응답률만 RSVP 기준이라 함께 적는다. */}
+      {sheetSnapshotAt && (
+        <p className="mt-3 text-[11px] text-ink-cap">
+          등록수·체크인은 시트 기준 · 스냅숏 {formatDateTime(sheetSnapshotAt)} (응답률은 RSVP 기준)
+        </p>
+      )}
     </PlanSection>
   )
 }

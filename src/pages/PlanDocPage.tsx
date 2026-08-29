@@ -166,6 +166,7 @@ function PlanSheet({
             stats={plan.registration_stats}
             progress={progress}
             guaranteePax={plan.project.guarantee_pax}
+            sheetSnapshotAt={plan.sheet_snapshot_at}
           />
         )
       case 'emergency':

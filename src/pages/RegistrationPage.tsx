@@ -8,10 +8,12 @@ import StatTile from '../components/internal/StatTile'
 import TableSkeleton from '../components/internal/TableSkeleton'
 import { LevelBadge } from '../components/internal/StatusBadge'
 import { downloadCsv, parseCsv, toCsv } from '../components/internal/csvUtils'
-import CheckinTab from '../components/registration/CheckinTab'
 import PaginationBar from '../components/registration/PaginationBar'
 import RegistrationSearchBar from '../components/registration/RegistrationSearchBar'
 import SheetConnectionCard from '../components/registration/SheetConnectionCard'
+import InfoTip from '../components/internal/InfoTip'
+import SnapshotBadge from '../components/registration/SnapshotBadge'
+import SheetExcludedDialog from '../components/registration/SheetExcludedDialog'
 import { maskedContact, percent1 } from '../components/registration/sheetFormat'
 import { xlsxToTable } from '../components/registration/registrationXlsx'
 import {
@@ -50,11 +52,12 @@ const SHEET_STATUS_LEVEL: Record<AttendeeSheetStatus, 'neutral' | 'progress' | '
   removed: 'neutral',
 }
 
-type Tab = 'rsvp' | 'attendees' | 'checkin' | 'stats'
+// v2.6 §10 — 체크인 조작은 S-12 현장 체크인(/checkin) 한 곳으로 단일화한다(3.17.1 T1).
+// 여기서는 체크인 **상태만** 읽는다.
+type Tab = 'rsvp' | 'attendees' | 'stats'
 const TABS: { id: Tab; label: string }[] = [
   { id: 'rsvp', label: 'RSVP' },
   { id: 'attendees', label: '참관객' },
-  { id: 'checkin', label: '체크인' },
   { id: 'stats', label: '통계' },
 ]
 
@@ -82,6 +85,8 @@ export default function RegistrationPage() {
   const attendees = useAsync(() => provider.listAttendees(projectId), [projectId, syncTick])
 
   const sheetConnected = connection.data !== null
+  // 3.17.1 T3 — 제외 건수는 클릭 가능한 진입점이다(숫자만 두면 탈락한 사람이 D-Day에 발견된다)
+  const [excludedOpen, setExcludedOpen] = useState(false)
 
   return (
     <section className="space-y-6 p-6">
@@ -108,12 +113,32 @@ export default function RegistrationPage() {
           <StatTile
             label="신청"
             value={sheetStats.data.applied}
-            support={`시트 행 ${sheetStats.data.source_rows} · 중복·오류 ${sheetStats.data.excluded} 제외`}
+            /* 3.17.1 T5 — 캡션이 스스로 설명해야 한다. 항등식의 모든 항을 드러낸다:
+               시트 행 = 신청 + 제외 + 반영 대기 추가 − 반영 대기 제거 */
+            support={
+              <span data-testid="applied-support" className="flex flex-wrap items-center gap-x-1.5">
+                <span>시트 행 {sheetStats.data.source_rows}</span>
+                <span aria-hidden>·</span>
+                <button
+                  type="button"
+                  onClick={() => setExcludedOpen(true)}
+                  className="underline underline-offset-2 hover:text-accent-deep"
+                >
+                  제외 {sheetStats.data.excluded}
+                </button>
+                <span aria-hidden>·</span>
+                <span>
+                  반영 대기 +{sheetStats.data.pending_added} / −{sheetStats.data.pending_removed}
+                </span>
+                <InfoTip text="시트 행 = 신청 + 제외 + 반영 대기 추가 − 반영 대기 제거. '반영 대기'는 아직 차이를 확인하지 않아 화면에 들어오지 않은 행입니다." />
+              </span>
+            }
           />
           <StatTile
             label="확정"
             value={sheetStats.data.confirmed}
-            support={`응답률 ${percent1(sheetStats.data.response_rate)}%`}
+            /* 3.17.1 T4 — RSVP '응답률'(발송 대비 응답)과 분모가 달라 이름을 나눴다(확정 ÷ 신청) */
+            support={`확정률 ${percent1(sheetStats.data.confirm_rate)}%`}
           />
           <StatTile
             label="취소"
@@ -168,16 +193,16 @@ export default function RegistrationPage() {
           onChanged={attendees.reload}
         />
       )}
-      {activeTab === 'checkin' && (
-        <CheckinTab
-          attendees={attendees.data}
-          loading={attendees.loading}
-          error={attendees.error}
-          onChanged={attendees.reload}
-        />
-      )}
       {activeTab === 'stats' && (
         <StatsTab showRsvp={!isGeneral} stats={stats.data} loading={stats.loading} error={stats.error} />
+      )}
+
+      {excludedOpen && sheetStats.data && (
+        <SheetExcludedDialog
+          rows={sheetStats.data.excluded_rows}
+          sheetUrl={connection.data?.url ?? null}
+          onClose={() => setExcludedOpen(false)}
+        />
       )}
     </section>
   )
@@ -335,7 +360,7 @@ function RsvpRow({ rsvp, onChanged }: { rsvp: RsvpContact; onChanged: () => void
   )
 }
 
-// 라벨은 AttendeeRow 토글 버튼의 '체크인 완료 (...)' 문구와 겹치지 않게 고른다 — 검색으로 텍스트를
+// 라벨은 AttendeeRow 체크인 상태 문구('완료 · ...')와 겹치지 않게 고른다 — 검색으로 텍스트를
 // 매칭하는 테스트(예: dod4)가 select 옵션까지 함께 집어 오탐하지 않도록.
 const CHECKIN_FILTER_OPTIONS: { value: CheckinFilter; label: string }[] = [
   { value: 'all', label: '전체' },
@@ -417,11 +442,7 @@ function AttendeesTab({
         action={
           <div className="flex items-center gap-2">
             {sheetConnected && <LevelBadge level="neutral" label="읽기 전용" />}
-            {sheetConnected && snapshotAt && (
-              <span className="ui-badge inline-flex shrink-0 items-center rounded-full bg-steel-tint px-2 py-0.5 text-xs font-medium text-steel">
-                스냅숏 {formatDateTime(snapshotAt)}
-              </span>
-            )}
+            {sheetConnected && <SnapshotBadge snapshotAt={snapshotAt} />}
             <DensityToggle dense={dense} onChange={setDense} />
           </div>
         }
@@ -470,7 +491,7 @@ function AttendeesTab({
               </thead>
               <tbody>
                 {paged.items.map((a) => (
-                  <AttendeeRow key={a.id} attendee={a} sheetConnected={sheetConnected} onChanged={onChanged} />
+                  <AttendeeRow key={a.id} attendee={a} sheetConnected={sheetConnected} />
                 ))}
               </tbody>
             </table>
@@ -490,19 +511,11 @@ function AttendeesTab({
 function AttendeeRow({
   attendee,
   sheetConnected,
-  onChanged,
 }: {
   attendee: AttendeeWithRsvp
   sheetConnected: boolean
-  onChanged: () => void
 }) {
-  const toggle = useMutation(() => provider.toggleCheckin(attendee.id))
   const removed = attendee.sheet_status === 'removed'
-
-  const handleToggle = async () => {
-    const result = await toggle.run()
-    if (result) onChanged()
-  }
 
   return (
     <tr className={removed ? 'opacity-60' : undefined}>
@@ -541,17 +554,10 @@ function AttendeeRow({
             {attendee.checked_in_at ? `완료 · ${formatDateTime(attendee.checked_in_at)} (이력)` : '이력'}
           </span>
         ) : (
-          <>
-            <button
-              type="button"
-              onClick={handleToggle}
-              disabled={toggle.pending}
-              className={`btn btn-sm ${attendee.checked_in_at ? 'btn-primary' : 'btn-ghost'}`}
-            >
-              {attendee.checked_in_at ? `체크인 완료 (${formatDateTime(attendee.checked_in_at)})` : '체크인'}
-            </button>
-            <ErrorAlert message={toggle.error} />
-          </>
+          /* 조작은 S-12 현장 체크인에서만 — 여기는 읽기 전용 상태 표시다(3.17.1 T1-3) */
+          <span className="text-sm text-ink-sub">
+            {attendee.checked_in_at ? `완료 · ${formatDateTime(attendee.checked_in_at)}` : '미체크인'}
+          </span>
         )}
       </td>
     </tr>

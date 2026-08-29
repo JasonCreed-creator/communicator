@@ -5,6 +5,7 @@ import type {
   ApprovalDecision,
   AttendeeChannel,
   AttendeeSheetStatus,
+  SheetInvalidReason,
   CommentVisibility,
   ComplianceKind,
   DeliverableArea,
@@ -881,8 +882,8 @@ export interface SheetSourceRow {
   group_tag: string | null
   registered_at: IsoDateTime
   status: AttendeeSheetStatus
-  /** 중복·형식 오류로 앱에 적재하지 않는 행(KPI의 '제외' 건수) */
-  invalid?: boolean
+  /** 중복·형식 오류로 앱에 적재하지 않는 행(KPI의 '제외' 건수). 사유는 화면의 제외 목록에 그대로 뜬다(§24.5) */
+  invalid_reason?: SheetInvalidReason
   /** mock 근사 — 취소 이전에 확정이었던 행(§24 KPI '확정 후 취소'). Phase 4는 상태 변경 이력에서 산출 */
   previously_confirmed?: boolean
 }

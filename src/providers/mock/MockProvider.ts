@@ -68,6 +68,7 @@ import type {
   DeliverableStatus,
   MemberRole,
   QuoteImportFormat,
+  SheetInvalidReason,
 } from '../../types/enums'
 import { isStructuredDocCategory, SHEET_FIELD_LABELS, SHEET_REQUIRED_FIELDS } from '../../types/enums'
 import {
@@ -1194,7 +1195,7 @@ export class MockProvider implements DataProvider {
     // 기존 행의 값 변경·삭제는 언제나 차이 확인을 거친다(§24.1-2).
     let seeded = 0
     for (const row of this.sheetRowsOf(projectId)) {
-      if (row.invalid) continue
+      if (row.invalid_reason) continue
       if (this.state.attendees.some((a) => a.project_id === projectId && a.sheet_row_id === row.sheet_row_id)) {
         continue
       }
@@ -1385,19 +1386,36 @@ export class MockProvider implements DataProvider {
     const cancelled = linked.filter((a) => a.sheet_status === 'cancelled')
     const checkedIn = linked.filter((a) => a.checked_in_at).length
     const applied = linked.length
+    // 3.17.1 T3 — 적재되지 못한 행은 숫자로만 두지 않고 목록으로 돌려준다.
+    // row_number는 원본 시트에서의 위치 — 사용자가 시트로 건너가 고칠 좌표다.
+    const excludedRows = rows
+      .map((r, i) => ({ row: r, index: i }))
+      .filter(({ row }) => row.invalid_reason)
+      .map(({ row, index }) => ({
+        sheet_row_id: row.sheet_row_id,
+        row_number: index + 1,
+        reason: row.invalid_reason as SheetInvalidReason,
+        name: row.name,
+        org: row.org,
+        email: row.email,
+        phone: row.phone,
+      }))
     return {
       applied,
       confirmed,
       cancelled: cancelled.length,
       checked_in: checkedIn,
       source_rows: rows.length,
-      excluded: rows.filter((r) => r.invalid).length,
-      response_rate: applied === 0 ? 0 : confirmed / applied,
+      excluded: excludedRows.length,
+      confirm_rate: applied === 0 ? 0 : confirmed / applied,
       checkin_rate: confirmed === 0 ? 0 : checkedIn / confirmed,
       cancelled_after_confirm: cancelled.filter(
         (a) => bySourceRow.get(a.sheet_row_id as string)?.previously_confirmed,
       ).length,
       snapshot_at: conn.snapshot_at,
+      pending_added: conn.pending_added,
+      pending_removed: conn.pending_removed,
+      excluded_rows: excludedRows,
     }
   }
 
@@ -3425,6 +3443,8 @@ export class MockProvider implements DataProvider {
 
     return {
       project,
+      // 3.17.1 T4 — 등록 수치가 시트에서 온 것이면 그 기준 시각을 지면에 밝힌다(§4-22 준용)
+      sheet_snapshot_at: this.sheetConnOf(project.id)?.snapshot_at ?? null,
       program_sessions: sessions,
       cuesheet,
       zones,

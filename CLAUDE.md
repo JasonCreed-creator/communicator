@@ -1,6 +1,6 @@
-# CLAUDE.md — MICE 커뮤니케이터 구현 지침 v2.5 (Claude Code용)
+# CLAUDE.md — MICE 커뮤니케이터 구현 지침 v2.6 (Claude Code용)
 
-> 레포 루트에 이 파일을 두고, `docs/mice-communicator-설계서-v2.5.md`를 함께 배치할 것(기존 설계서 파일은 버전 무관 전부 대체·삭제). `docs/mice-communicator-디자인지시서-v1.md`도 함께 배치(Phase 3.9 정본).
+> 레포 루트에 이 파일을 두고, `docs/mice-communicator-설계서-v2.6.md`를 함께 배치할 것(기존 설계서 파일은 버전 무관 전부 대체·삭제). `docs/mice-communicator-디자인지시서-v1.md`도 함께 배치(Phase 3.9 정본).
 > **스키마·상태 머신·API 계약·권한 규칙·WBS 템플릿(§15)·핸드오프 계약(§16)·이식 인벤토리(§17)·인프라 전환(§18)·D-Day 런북(§20)·주최형 확장(§21)·견적서 임포트(§22)·운영보드 재구성(§23)의 정본은 설계서 v2.5이다(정산보드는 §19·§4-23·§4-24).** 디자인 토큰·레이아웃·컴포넌트 규격의 정본은 디자인지시서 v1이다. 본 파일은 작업 순서와 규약만 정의한다. 충돌 시 설계서 우선.
 > v1.1 변경 핵심: **프론트 우선·서버 후행** — Phase 0~3은 서버 0, Supabase·Drive는 Phase 4~5 이식.
 > v1.2 변경 핵심: **지시(requested)→제작→컨펌→운영계획서(S9) 조립 파이프라인** — Phase 3.5 프론트 증분.
@@ -147,6 +147,18 @@ MICE 프로젝트 협업 허브 — 역할별(디자인·운영·등록) 산출�
   - 3.17d 검증·문서: DoD 39~44 코드화, 설계서 §24·디자인지시서 §7-1 반영, S9 섹션 번호 정정(코드 정본 01~08 — JSDoc 3곳 포함)
   - 금지: 새 npm 의존성(차트는 CSS만), 새 색 토큰, 견적 엔진 상수·산식 변경, 앱 → 시트 쓰기, 금액 키의 외부 지면 유출
 
+- **Phase 3.17.1 — PR #32 검수 후속 (새 기능 없음, 챗 실측 검수 2026-08-29)**
+  - T1 **체크인 B안 복원** — `CheckinTab` → `src/pages/OnsiteCheckinPage.tsx`(S-12), 라우트 `/checkin` + NAV_OPS 등재(등록 다음),
+    등록 보드 '체크인' 탭 제거(RSVP·참관객·통계 3탭)·참관객 표는 상태 표시만. **경위: 3.17의 A안은 Code 판단이었고 설계서에 "사용자 승인 A안"으로 잘못 기록됨** — 사실대로 정정.
+    A안 불가 사유는 레이아웃이 아니라 **권한**(현장 접수 담당에게 전체 명단·시트 URL·연결 설정·내보내기가 함께 열린다). `onsite` 전용 롤은 Phase 5
+  - T2 **공개 링크 공유 문구 삭제** — 인증은 서비스 계정 단일 경로. 위저드에 금지 경고 1줄 추가
+  - T3 **제외 목록 화면** — KPI '신청' 캡션의 제외 건수 클릭 → 모달(시트 행 번호·사유·마스킹 미리보기·[시트에서 고치기]). `SheetSourceRow.invalid` → `invalid_reason` 3종
+  - T4 **'응답률' → '확정률'** — 등록 보드 KPI 한정. `SheetRegistrationStats.response_rate` → `confirm_rate`(§24.4 기록). S9 ⑥등록 통계는 RSVP 기준 유지 + 시트 연결 중 스냅숏 캡션
+  - T5 **KPI 캡션 항등식** — `시트 행 = 신청 + 제외 + 반영 대기 추가 − 반영 대기 제거`를 캡션이 전부 드러내고 테스트로 고정
+  - T6 **S9 섹션 번호 정본 확정** — 화면(코드 `PLAN_SECTION_ORDER`) 채택, 설계서 §10 S9 행·§10.2 정정
+  - T7 align-registration 콜드런 플레이크 해소 / T8 설계서 v2.6 승격·§24 첫머리 정정·§10 S-12·§6.1 권한·CLAUDE.md
+  - **DataProvider 메서드 수 120 불변** — 반환 타입 확장만(시그니처 추가 없음)
+
 ### 서버 스프린트 (v2.3 설계 완료 — **착수 대기: 사용자가 지시할 때 개시**(2026-08-27 우선순위 변경). dev 3키는 착수 시 사용자에게 대화로 요청)
 - **Phase 4 — Supabase 이식** (설계서 v2.3 §4 DDL 전체 기준, 검증 DB = dev 프로젝트)
   - 4a 마이그레이션+RLS+seed (에이전트 D): §4 순서대로 + **v2.4 스키마(§21.1 — kind·partner_tiers·partners·partner_tokens·quote_imports·확장 컬럼) 포함**, RLS는 §6.2 전체(quotes·profiles·compliance_cards·settlement_*·vendors·landing·partner_* 포함). **산출 규약: `supabase/migrations/*.sql` + 통합 `supabase/setup.sql`(신규 프로젝트 SQL 에디터 1회 실행으로 전체 구축 — 멱등, 2회 실행 무해를 테스트로 증명, 말미에 첫 admin 승격 SQL 1줄 주석 동봉) + `supabase/seed.sql`(데모 픽스처 4행사, 선택 실행)**
@@ -266,6 +278,8 @@ Phase 3.8과 3.9는 **별도 커밋·별도 PR**로 분리한다(3.8 = 타입·�
 42. (v2.6) **시트 단방향**: 앱에서 시트로 쓰는 경로가 0건 — 명단 필드에 편집 UI 부재, 체크인·비고만 앱 소유. `grep -rn "sheet.*write\|writeSheet\|updateSheetRow" src` 0건 (테스트로 증명)
 43. (v2.6 §24.3) **시트 동시 접속**: `checkSheetUpdates`는 데이터를 반영하지 않고 상태·버전만 갱신하며, 낡은 `snapshotVersion`으로 `applySheetDiff`를 부르면 **409**로 거부되고 화면이 조용히 덮어써지지 않음 (테스트로 증명)
 44. (v2.6 §24.1) **시트 삭제·마스킹**: 시트에서 사라진 행이 하드 삭제되지 않고 `sheet_status='removed'`로 남으며, 연락처가 기본 마스킹으로 렌더됨 (테스트로 증명)
+45. (v2.6 §10) **S-12 분리**: 현장 체크인 화면에 명단 편집·시트 설정·내보내기 경로가 0건이고, 등록 보드 탭에서 체크인 조작 UI가 제거됐으며, 두 화면이 같은 snapshot_at을 각자 표기한다 (테스트로 증명)
+46. (v2.6 §24) **제외 가시성**: 시트 행 = 반영 + 제외 + 미확인 항등식이 화면 수치로 성립하고, 제외 목록이 1클릭으로 열리며 사유 3종이 각각 뜬다 (테스트로 증명)
 
 ### 상시 grep 가드 (매 세션 종료 시 0건 확인 — 위 DoD와 별개로 항상 검사)
 | 가드 | 명령 | 근거 |
@@ -275,6 +289,7 @@ Phase 3.8과 3.9는 **별도 커밋·별도 PR**로 분리한다(3.8 = 타입·�
 | **행사 스코프 유도** | `grep -rn "user\.project_id\|currentUser()\.project_id" src --include=*.ts --include=*.tsx` | **v2.1 §4-21 — 랜딩 결함 재발 방지. 예외는 `scope-exempt:` 주석 + 테스트의 화이트리스트 둘 다 필요(무설명 예외 금지)** |
 | 금액 비노출 | `grep -rn "total_amount\|breakdown\|ordered_amount\|actual_amount\|markup\|margin\|settlement\|contract_amount" src/pages/Client* src/pages/Landing* src/pages/Partner* src/lib/landing* src/components/plan src/components/client src/components/partner` | **DoD 23·30·32 (v2.4 — contract_amount 키·Partner 경로 확대)** |
 | 온보딩 플래그 | `grep -rn "onboarding_completed" src` | DoD 16 |
+| **공개 링크 공유 문구** | `grep -rn "링크가 있는 모든" src` — 금지문(`공유하지 마세요`) 밖에서 0건 | **3.17.1 T2 — 참가자 실명·연락처 시트를 링크 공개로 권하는 문구 금지** |
 
 앞의 3종은 `src/test/dod-project-scope-guard.test.ts`·기존 DoD 테스트가 상시 자동 검증한다 — 셸 grep은 이중 확인용이다.
 

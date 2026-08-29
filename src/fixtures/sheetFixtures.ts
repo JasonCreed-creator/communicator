@@ -8,6 +8,7 @@
 // 상태: 시안과 같은 **'갱신 있음'(stale)** — 대기 중 차이는 추가 2 · 변경 1 · 제거 1.
 // 차이는 저장된 숫자가 아니라 **원본 행(sheet_source_rows) ↔ 참관객(attendees) 비교**로 계산된다.
 import type { Attendee, SheetConnection, SheetSourceRow } from '../types/entities'
+import type { SheetInvalidReason } from '../types/enums'
 import type { MockState } from './sampleProject'
 import { PROJECT_ID_REBUILD27 } from './rebuildFixtures'
 
@@ -84,6 +85,8 @@ const CHECKED_IN = 214
 const CANCELLED_AFTER_CONFIRM = 11
 /** 원본 시트의 무효 행(중복·형식 오류) — 앱에 적재하지 않고 KPI의 '제외'로만 보인다 */
 const INVALID_ROWS = 6
+/** 중복 사유 행이 들고 있는 이메일 — 이미 적재된 첫 행과 같은 값이라 중복으로 걸린다 */
+const DUPLICATE_EMAIL = 'sheet-dup@example.com'
 
 const GROUPS = ['VIP', '연사', '바이어', '일반', '스태프']
 
@@ -232,20 +235,34 @@ export function seedSheetFixtures(state: MockState): void {
     })
   }
 
-  // 중복·형식 오류 행 — 적재되지 않고 KPI의 '제외'로만 집계된다
+  // 중복·형식 오류 행 — 적재되지 않고 KPI의 '제외'로만 집계된다.
+  // 3.17.1 T3: 사유 3종을 모두 깔아 제외 목록이 사유별로 뜨는지 화면에서 확인할 수 있게 한다.
+  const INVALID_REASONS: SheetInvalidReason[] = [
+    'no_email',
+    'duplicate_email',
+    'missing_required',
+  ]
   for (let i = 0; i < INVALID_ROWS; i++) {
+    const reason = INVALID_REASONS[i % INVALID_REASONS.length]
     sourceRows.push({
       project_id: SHEET_PROJECT_ID,
       sheet_row_id: `row-0950-${i + 1}`,
-      name: i % 2 === 0 ? '' : `참가자 ${pad(i + 1)}`,
-      org: null,
+      // 필수 항목 누락 행은 이름 자체가 비어 있다 — 목록에서 '(이름 없음)'으로 뜬다
+      name: reason === 'missing_required' ? '' : `참가자 ${pad(i + 1)}`,
+      org: reason === 'missing_required' ? null : `가상기업 ${pad(i + 1)}`,
       title: null,
-      email: i % 2 === 0 ? `sheet${i + 1}@example.com` : null,
-      phone: null,
+      // 중복 행은 이미 적재된 행과 같은 이메일을 들고 있다
+      email:
+        reason === 'no_email'
+          ? null
+          : reason === 'duplicate_email'
+            ? DUPLICATE_EMAIL
+            : `sheet${i + 1}@example.com`,
+      phone: `010-0000-${pad(i + 1)}${pad(i + 1)}`,
       group_tag: null,
       registered_at: isoAt(8, i),
       status: 'applied',
-      invalid: true,
+      invalid_reason: reason,
     })
   }
 

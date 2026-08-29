@@ -136,6 +136,18 @@ export const SHEET_CONNECTION_STATES = ['disconnected', 'connected', 'stale', 'r
 export type SheetConnectionState = (typeof SHEET_CONNECTION_STATES)[number]
 
 /** 차이 표의 구분 — 추가 / 변경 / 시트에서 제거(하드 삭제 금지, §24.1-4) */
+// v2.6 §24 / 3.17.1 T3 — 시트 행이 앱에 적재되지 못한 사유.
+// 이메일 필수 결정을 유지하는 대신 **탈락한 행을 화면에서 볼 수 있어야** 한다 —
+// 그러지 않으면 시트엔 있는데 앱엔 없는 사람이 D-Day에 발견된다.
+export const SHEET_INVALID_REASONS = ['no_email', 'duplicate_email', 'missing_required'] as const
+export type SheetInvalidReason = (typeof SHEET_INVALID_REASONS)[number]
+
+export const SHEET_INVALID_REASON_LABELS: Record<SheetInvalidReason, string> = {
+  no_email: '이메일 없음',
+  duplicate_email: '이메일 중복',
+  missing_required: '필수 항목 누락',
+}
+
 export const SHEET_DIFF_KINDS = ['added', 'changed', 'removed'] as const
 export type SheetDiffKind = (typeof SHEET_DIFF_KINDS)[number]
 

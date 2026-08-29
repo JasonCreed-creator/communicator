@@ -136,8 +136,8 @@ check(
   `${docCountBefore} → ${docRequests.length}`,
 )
 
-// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — 3.17c: 등록 보드 시트 연결 카드 →
-//     '갱신 있음' 배지로 인라인 차이 펼침 → 체크인 탭 이동(결정 A) ──
+// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — 3.17.1: 등록 보드 시트 연결 카드 →
+//     '갱신 있음' 배지로 인라인 차이 펼침 → **S-12 현장 체크인 별도 화면**(결정 B) ──
 await tab.getByRole('link', { name: /^등록$/ }).click()
 await tab.waitForURL(/#\/registration/, { timeout: 10_000 })
 
@@ -170,12 +170,21 @@ check(
   `명단 ${inRoster}건 / 차이 표 ${inDiff}건`,
 )
 
-// 체크인 탭은 등록 보드 안에 있다(별도 라우트를 만들지 않았다 — 결정 A)
-await tab.getByRole('button', { name: '체크인' }).first().click()
+// 등록 보드 참관객 표에는 체크인 조작 UI가 없다 — 경로는 S-12 하나(3.17.1 T1)
+const rosterCheckinButtons = await roster.getByRole('button', { name: '체크인' }).count()
+check(rosterCheckinButtons === 0, '등록 보드 — 체크인 조작 UI 부재(경로 단일화)', `${rosterCheckinButtons}개`)
+
+// S-12는 사이드바의 **별도 화면**이다(결정 B — 게이트 뒤에 숨기지 않는다)
+await tab.getByRole('link', { name: /^현장 체크인$/ }).click()
+await tab.waitForURL(/#\/checkin/, { timeout: 10_000 })
 await tab.getByPlaceholder(/이름 · 소속 · 뱃지번호/).waitFor({ timeout: 10_000 })
 const denseToggle = await tab.getByRole('button', { name: /밀집 모드|기본 밀도/ }).count()
-check(denseToggle === 0, '체크인 탭 — 밀집 모드 토글 부재(현장 터치 44 고정)', `${denseToggle}개`)
-await tab.screenshot({ path: resolve(SHOTS, '03b-checkin-tab.png') })
+check(denseToggle === 0, 'S-12 현장 체크인 — 밀집 모드 토글 부재(현장 터치 44 고정)', `${denseToggle}개`)
+
+// 현장 담당에게 열리면 안 되는 관리 경로가 이 화면에 없다(DoD 45)
+const adminPaths = await tab.getByRole('button', { name: /연결 설정|지금 동기화|내보내기/ }).count()
+check(adminPaths === 0, 'S-12 — 시트 설정·내보내기 경로 부재', `${adminPaths}개`)
+await tab.screenshot({ path: resolve(SHOTS, '03b-onsite-checkin.png') })
 
 await browser.close()
 server.close()

@@ -72,6 +72,8 @@ const NAV_OPS = [
   { to: '/board/design', label: '디자인 보드', icon: 'M4 4h7v7H4zM13 4h7v4h-7zM13 11h7v9h-7zM4 14h7v6H4z' },
   { to: '/board/ops', label: '운영 보드', icon: 'M4 6h16M4 12h16M4 18h10' },
   { to: '/registration', label: '등록', icon: 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM19 8v6M22 11h-6' },
+  // v2.6 §10 S-12 — 등록 **다음**. 현장 접수 담당에게 등록 보드를 열지 않기 위한 별도 진입점(3.17.1 T1)
+  { to: '/checkin', label: '현장 체크인', icon: 'M9 12l2 2 4-4M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Z' },
   { to: '/schedule', label: '일정', icon: 'M8 2v4M16 2v4M3 9h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z' },
   { to: '/plan', label: '운영계획서', icon: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M9 13h6M9 17h6' },
   // v2.2 S-10 — 운영 그룹 **마지막**. 견적 메뉴와 달리 app_role 게이트가 없다(멤버 전원)

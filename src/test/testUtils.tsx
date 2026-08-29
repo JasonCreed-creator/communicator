@@ -26,6 +26,7 @@ import ProjectListPage from '../pages/ProjectListPage'
 import QuoteEditorPage from '../pages/QuoteEditorPage'
 import QuotesPage from '../pages/QuotesPage'
 import RegistrationPage from '../pages/RegistrationPage'
+import OnsiteCheckinPage from '../pages/OnsiteCheckinPage'
 import SchedulePage from '../pages/SchedulePage'
 import SettingsPage from '../pages/SettingsPage'
 import SettlementPage from '../pages/SettlementPage'
@@ -76,6 +77,8 @@ export function renderRoute(path: string) {
               <Route path="/board/:area" element={<AreaBoardPage />} />
               <Route path="/items/:itemId" element={<ItemDetailPage />} />
               <Route path="/registration" element={<RegistrationPage />} />
+            {/* S-12 현장 체크인 — v2.6 §10 (App.tsx와 동일 구성) */}
+            <Route path="/checkin" element={<OnsiteCheckinPage />} />
               <Route path="/schedule" element={<SchedulePage />} />
               <Route path="/plan" element={<PlanDocPage />} />
               {/* v2.2 S-10 정산보드 */}
