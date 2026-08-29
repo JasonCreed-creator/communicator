@@ -164,6 +164,9 @@ import { buildGuideSeedSections } from '../../lib/guideAssembly'
 import { buildCuesFromScenario, scenarioCueCandidates } from '../../lib/scenario'
 import { SCENARIO_KIND_LABELS } from '../../lib/labels'
 
+/** 3.18.1 §2 — 발주처 담당자 블록의 스태프 정렬(PM을 맨 위로). 표시 순서일 뿐 권한과 무관하다. */
+const CLIENT_STAFF_ROLE_ORDER: readonly MemberRole[] = ['pm', 'design', 'ops', 'reg']
+
 const UPLOADABLE_STATUSES: readonly DeliverableStatus[] = [
   'requested', // v1.2: 첫 버전 업로드 시 draft 자동 전이
   'draft',
@@ -519,13 +522,20 @@ export class MockProvider implements DataProvider {
       throw new ProviderError('validation', '이름과 이메일은 필수입니다.')
     }
     // §4-2 invites: unique(project_id, lower(email)) — mock은 즉시 멤버라 멤버 기준으로 검증
+    // 3.18.1 §2 담당자 노출 계약 — 직함·전화는 확인 표에서 사람이 고친 값이므로 그대로 받아 적는다.
+    const title = input.title?.trim() || null
+    const phone = input.phone?.trim() || null
     let profile = this.state.users.find((u) => u.email?.toLowerCase() === email)
     if (profile && this.state.members.some((m) => m.project_id === projectId && m.user_id === profile!.id)) {
       throw new ProviderError('conflict', '이미 이 행사의 담당자입니다.')
     }
     if (!profile) {
-      profile = { id: this.nextId('usr'), name, email: input.email.trim() }
+      profile = { id: this.nextId('usr'), name, email: input.email.trim(), title, phone }
       this.state.users.push(profile)
+    } else {
+      // 같은 사람이 다른 행사에도 있는 경우 — 빈 칸만 채운다(다른 행사에서 확인한 값을 덮어쓰지 않는다)
+      if (title && !profile.title) profile.title = title
+      if (phone && !profile.phone) profile.phone = phone
     }
     const member: ProjectMember = { project_id: projectId, user_id: profile.id, role: input.role }
     this.state.members.push(member)
@@ -4269,6 +4279,23 @@ export class MockProvider implements DataProvider {
   async getClientStatus(token: string): Promise<ClientStatusData> {
     const t = this.resolveToken(token)
     const project = this.mustFindProject(t.project_id)
+    // 3.18.1 §2 담당자 노출 계약 — 담당자(내부 스태프·발주처 담당자)는 발주처 지면에서도 가리지 않는다.
+    // 넓어지는 것은 '담당자 표기'뿐이다: 금액·타 파트너·참가자 명단은 이 메서드가 계속 싣지 않는다.
+    const staff = this.state.members
+      .filter((m) => m.project_id === t.project_id)
+      .sort((a, b) => CLIENT_STAFF_ROLE_ORDER.indexOf(a.role) - CLIENT_STAFF_ROLE_ORDER.indexOf(b.role))
+      .map((m) => {
+        const profile = this.mustFindUser(m.user_id)
+        return {
+          user_id: m.user_id,
+          display_name: profile.name,
+          role: m.role,
+          title: profile.title ?? null,
+          email: profile.email,
+          phone: profile.phone ?? null,
+        }
+      })
+    const contact = this.state.client_contacts.find((c) => c.id === t.contact_id)
     const finals = this.state.deliverables
       .filter((d) => d.project_id === t.project_id && d.status === 'final')
       .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
@@ -4276,6 +4303,10 @@ export class MockProvider implements DataProvider {
     return {
       project_name: project.name,
       event_date: project.event_date,
+      staff,
+      client_contact: contact
+        ? { name: contact.name, org: contact.org, email: contact.email }
+        : null,
       area_progress: this.areaProgress(t.project_id),
       milestones: this.state.milestones
         .filter((m) => m.project_id === t.project_id)

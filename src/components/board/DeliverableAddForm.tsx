@@ -183,7 +183,7 @@ function AddFormBody({
               value={assigneeId}
               onChange={(e) => setAssigneeId(e.target.value)}
               required={guideMode}
-              className="ui-input w-36"
+              className="ui-input ui-select w-36"
             >
               <option value="">{guideMode ? '담당자 선택…' : '미배정'}</option>
               {members.data?.map((m) => (
@@ -200,12 +200,12 @@ function AddFormBody({
         </div>
 
         {isPm && (
-          <label className="flex items-center gap-2 text-sm text-ink-sub">
+          <label className="ui-check-row items-center text-sm text-ink-sub">
             <input
               type="checkbox"
               checked={guideMode}
               onChange={(e) => setGuideMode(e.target.checked)}
-              className="size-4"
+              className="ui-check"
             />
             제작 가이드 포함
             <InfoTip text={GUIDE_TOGGLE_HELP} />
@@ -255,7 +255,7 @@ function AddFormBody({
                   placeholder={hints.qty ?? ''}
                   value={specQty}
                   onChange={(e) => setSpecQty(e.target.value)}
-                  className="ui-input"
+                  className="ui-input ui-input-num"
                 />
               </label>
               <label className="flex flex-col gap-1 t-caption">
@@ -324,7 +324,7 @@ function CategoryPicker({
           onChange(e.target.value)
         }}
         required
-        className="ui-input w-40"
+        className="ui-input ui-select w-40"
       >
         <option value="">항목 선택…</option>
         {[...new Set(preset.categories.map((c) => c.phase))].map((phase) => (

@@ -167,7 +167,7 @@ export default function SettlementPage() {
                 <div className="flex flex-wrap items-center justify-center gap-2">
                   <select
                     aria-label="기준 견적"
-                    className="ui-input"
+                    className="ui-input ui-select"
                     value={pickedQuote}
                     onChange={(e) => setPickedQuote(e.target.value)}
                   >
@@ -180,7 +180,7 @@ export default function SettlementPage() {
                   </select>
                   <button
                     type="button"
-                    className="btn btn-accent"
+                    className="btn btn-primary"
                     disabled={!pickedQuote || createBoard.pending}
                     onClick={async () => {
                       const ok = await createBoard.run(pickedQuote)
@@ -254,7 +254,7 @@ export default function SettlementPage() {
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <select
               aria-label="갱신할 견적"
-              className="ui-input"
+              className="ui-input ui-select"
               value={pickedQuote}
               onChange={(e) => setPickedQuote(e.target.value)}
             >

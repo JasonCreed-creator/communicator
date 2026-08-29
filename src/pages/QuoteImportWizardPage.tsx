@@ -6,6 +6,7 @@ import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import InfoTip from '../components/internal/InfoTip'
 import PageHeader from '../components/internal/PageHeader'
+import { LevelBadge } from '../components/internal/StatusBadge'
 import QuoteGate from '../components/quote/QuoteGate'
 import { fmtWon } from '../components/quote/quoteFormState'
 import { useProject } from '../context/ProjectContext'
@@ -312,7 +313,7 @@ function WizardBody() {
                         </td>
                         <td className="px-3 py-2.5">
                           <select
-                            className="ui-input"
+                            className="ui-input ui-select"
                             aria-label={`${row.section} 버킷`}
                             value={row.bucket}
                             onChange={(e) =>
@@ -369,19 +370,19 @@ function WizardBody() {
             견적은 이미 등록되었습니다 — 나머지는 선택입니다.
           </p>
           <div className="mt-4 space-y-3">
-            <label className="flex gap-3 rounded-md bg-track px-3 py-2.5">
-              <input type="checkbox" checked disabled aria-label="견적 등록" className="mt-1" />
+            <div className="flex items-start gap-3 rounded-md bg-track px-3 py-2.5">
+              <LevelBadge level="positive" label="완료" className="mt-0.5" />
               <span>
                 <span className="font-semibold text-ink">견적 등록 (필수)</span>
                 <span className="block text-sm text-ink-sub">
                   {quote.title} · v{quote.version} — 목록에 '임포트' 배지로 표시됩니다.
                 </span>
               </span>
-            </label>
-            <label className="flex gap-3 px-3">
+            </div>
+            <label className="ui-check-row px-3">
               <input
                 type="checkbox"
-                className="mt-1"
+                className="ui-check"
                 checked={targets.project_prefill || targets.settlement_base || targets.board_seed}
                 disabled={targets.settlement_base || targets.board_seed}
                 onChange={(e) => setTargets((t) => ({ ...t, project_prefill: e.target.checked }))}
@@ -393,10 +394,10 @@ function WizardBody() {
                 </span>
               </span>
             </label>
-            <label className="flex gap-3 px-3">
+            <label className="ui-check-row px-3">
               <input
                 type="checkbox"
-                className="mt-1"
+                className="ui-check"
                 checked={targets.settlement_base}
                 onChange={(e) => setTargets((t) => ({ ...t, settlement_base: e.target.checked }))}
               />
@@ -407,10 +408,10 @@ function WizardBody() {
                 </span>
               </span>
             </label>
-            <label className="flex gap-3 px-3">
+            <label className="ui-check-row px-3">
               <input
                 type="checkbox"
-                className="mt-1"
+                className="ui-check"
                 checked={targets.board_seed}
                 onChange={(e) => setTargets((t) => ({ ...t, board_seed: e.target.checked }))}
               />

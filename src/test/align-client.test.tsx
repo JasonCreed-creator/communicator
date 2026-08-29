@@ -144,6 +144,18 @@ describe('발주처 보드 정렬', () => {
     expect(document.querySelector('.opacity-75')).toBeTruthy()
   })
 
+  it('담당자 블록: 발주처 담당자를 마스킹 없이 이름 그대로 노출한다', async () => {
+    // Phase 3.18.1 §2 — 담당자(내부 스태프·발주처 담당자)는 /c에서 가리지 않는다.
+    const p = getDataProvider() as MockProvider
+    const queue = await p.getClientQueue('demo')
+    expect(queue.contact_name).toBeTruthy() // 대조군: 계약이 담당자 이름을 싣고 있다
+    renderClient('/c/demo/status')
+    const section = (await screen.findByRole('heading', { name: '담당자' })).closest('section')!
+    expect(within(section).getByText(queue.contact_name!)).toBeTruthy()
+    expect(within(section).getByText('발주처 담당자')).toBeTruthy()
+    expect(section.textContent).not.toMatch(/[*●]/) // 마스킹 흔적 없음
+  })
+
   it('비공개 원칙: 금액·WBS 코드·역할 컬러·파트너·지연 태스크가 세 탭 어디에도 없다', async () => {
     // 각 탭의 본문 마커를 기다려 '데이터가 실린 뒤'를 보장한 다음 검사한다
     const marks: [string, RegExp][] = [

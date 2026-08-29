@@ -6,6 +6,8 @@ import {
   SOUVENIR_UNIT_PRICE,
 } from '../../modules/quote/engine/calcEstimate'
 import type { QuoteOutputs } from '../../modules/quote/engine/quoteInput'
+import Field from '../internal/Field'
+import MoneyField from '../internal/MoneyField'
 import {
   fmtMoney,
   fmtWon,
@@ -135,32 +137,29 @@ export default function StepOptions({
       {form.options.souvenir && (
         <div className="ui-card border-accent/40 p-4">
           <p className="mb-3 text-sm font-bold text-ink">🎁 {t.souvenirPriceLabel} · {t.souvenirQtyLabel}</p>
-          <div className="flex flex-wrap items-end gap-4">
-            <label className="block">
-              <span className="t-caption">{t.souvenirPriceLabel}</span>
-              <input
-                type="number"
-                step={5000}
-                min={0}
-                className="ui-input mt-1 w-36 text-right"
-                value={form.souvenirPrice}
-                placeholder={String(SOUVENIR_UNIT_PRICE)}
-                onChange={(e) => onField('souvenirPrice', e.target.value === '' ? '' : Math.max(0, Math.round(+e.target.value || 0)))}
-              />
-            </label>
-            <label className="block">
-              <span className="t-caption">{t.souvenirQtyLabel}</span>
+          {/* 금액 필드는 힌트 줄에 에코가 붙어 높이가 한 줄 늘어난다 — 합계는 행에 끼우지 않고 아래로 내린다.
+              에코는 한글 축약(`1,200만원`) 고정이라 영문 모드에서는 끈다(`echo={null}`) — 영문 축약 표기는 정본에 없다 */}
+          <div className="flex flex-wrap items-start gap-4">
+            <MoneyField
+              label={t.souvenirPriceLabel}
+              value={form.souvenirPrice === '' ? null : form.souvenirPrice}
+              onChange={(v) => onField('souvenirPrice', v == null ? '' : Math.max(0, Math.round(v)))}
+              placeholder={String(SOUVENIR_UNIT_PRICE)}
+              inputClassName="w-36"
+              echo={en ? null : undefined}
+            />
+            <Field label={t.souvenirQtyLabel} align="right">
               <input
                 type="number"
                 min={0}
-                className="ui-input mt-1 w-28 text-right"
+                className="ui-input ui-input-num w-28"
                 value={form.souvenirQty}
                 placeholder={String(form.target)}
                 onChange={(e) => onField('souvenirQty', e.target.value === '' ? '' : Math.max(0, Math.round(+e.target.value || 0)))}
               />
-            </label>
-            <span className="pb-2 text-sm font-bold text-accent-deep">= {fmtWon(souvQty * souvUnit, en)}</span>
+            </Field>
           </div>
+          <p className="mt-3 text-sm font-bold text-accent-deep">= {fmtWon(souvQty * souvUnit, en)}</p>
           <p className="mt-2 text-xs text-ink-cap">{t.souvenirLinkNote}</p>
         </div>
       )}
@@ -171,50 +170,52 @@ export default function StepOptions({
       {([
         { key: 'boothCount' as const, priceKey: 'boothUnitPrice' as const, icon: '🏬', title: t.boothStdTitle, desc: t.boothStdDesc, count: form.boothCount, unit: boothStdUnit, def: BOOTH_UNIT_PRICE },
         { key: 'boothPremiumCount' as const, priceKey: 'boothPremiumUnitPrice' as const, icon: '🏛️', title: t.boothPremTitle, desc: t.boothPremDesc, count: form.boothPremiumCount, unit: boothPremUnit, def: BOOTH_PREMIUM_UNIT_PRICE },
-      ]).map((b) => (
-        <div key={b.key} className={`ui-card p-4 ${b.count > 0 ? 'border-accent' : ''}`}>
-          <div className="mb-3 flex items-center gap-3">
-            <span aria-hidden className="text-lg">{b.icon}</span>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-ink">{b.title}</p>
-              <p className="text-xs text-ink-cap">{b.desc}</p>
+      ]).map((b) => {
+        // 계산 키로 인덱싱한 값은 좁혀지지 않는다 — 지역 변수로 한 번 받아 MoneyField 계약(number|null)에 맞춘다
+        const unitPrice = form[b.priceKey]
+        return (
+          <div key={b.key} className={`ui-card p-4 ${b.count > 0 ? 'border-accent' : ''}`}>
+            <div className="mb-3 flex items-center gap-3">
+              <span aria-hidden className="text-lg">{b.icon}</span>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-ink">{b.title}</p>
+                <p className="text-xs text-ink-cap">{b.desc}</p>
+              </div>
+              <span className="text-sm text-accent-deep">
+                {b.count > 0 ? `${b.count} × ${fmtMoney(b.unit, en)} = ${fmtMoney(b.count * b.unit, en)}` : t.boothUnselected}
+              </span>
             </div>
-            <span className="text-sm text-accent-deep">
-              {b.count > 0 ? `${b.count} × ${fmtMoney(b.unit, en)} = ${fmtMoney(b.count * b.unit, en)}` : t.boothUnselected}
-            </span>
-          </div>
-          <div className="flex flex-wrap items-center gap-2.5">
-            <button type="button" className="btn btn-ghost btn-sm" onClick={() => onField(b.key, Math.max(0, (b.count || 0) - 1))}>−</button>
-            <input
-              type="number"
-              min={0}
-              max={50}
-              className="ui-input w-20 text-center font-semibold"
-              value={b.count || 0}
-              onChange={(e) => {
-                const v = +e.target.value
-                if (!Number.isNaN(v)) onField(b.key, Math.max(0, Math.min(50, v)))
-              }}
-              aria-label={`${b.title} ${t.boothCountLabel}`}
-            />
-            <button type="button" className="btn btn-ghost btn-sm" onClick={() => onField(b.key, Math.min(50, (b.count || 0) + 1))}>＋</button>
-            <span className="text-xs text-ink-cap">{t.boothCountLabel}</span>
-            <div className="ml-auto flex items-center gap-2">
-              <span className="text-xs text-ink-cap">{t.boothUnitLabel}</span>
+            <div className="flex flex-wrap items-center gap-2.5">
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => onField(b.key, Math.max(0, (b.count || 0) - 1))}>−</button>
+              {/* − / ＋ 사이 값이라 가운데 정렬이 의도다 — 우측정렬(ui-input-num)을 붙이지 않는다 */}
               <input
                 type="number"
-                step={100000}
                 min={0}
-                className="ui-input w-32 text-right text-sm"
-                value={form[b.priceKey]}
+                max={50}
+                className="ui-input w-20 text-center font-semibold"
+                value={b.count || 0}
+                onChange={(e) => {
+                  const v = +e.target.value
+                  if (!Number.isNaN(v)) onField(b.key, Math.max(0, Math.min(50, v)))
+                }}
+                aria-label={`${b.title} ${t.boothCountLabel}`}
+              />
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => onField(b.key, Math.min(50, (b.count || 0) + 1))}>＋</button>
+              <span className="text-xs text-ink-cap">{t.boothCountLabel}</span>
+              <MoneyField
+                label={t.boothUnitLabel}
+                span="ml-auto"
+                value={unitPrice === '' ? null : unitPrice}
+                onChange={(v) => onField(b.priceKey, v == null ? '' : Math.max(0, Math.round(v)))}
                 placeholder={String(b.def)}
-                onChange={(e) => onField(b.priceKey, e.target.value === '' ? '' : Math.max(0, Math.round(+e.target.value || 0)))}
-                aria-label={`${b.title} ${t.boothUnitLabel}`}
+                ariaLabel={`${b.title} ${t.boothUnitLabel}`}
+                inputClassName="w-32"
+                echo={en ? null : undefined}
               />
             </div>
           </div>
-        </div>
-      ))}
+        )
+      })}
 
       {p.ot > 0 && (
         <div className="ui-card flex items-center justify-between p-4">

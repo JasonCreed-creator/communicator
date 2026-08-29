@@ -339,7 +339,7 @@ function RsvpRow({ rsvp, onChanged }: { rsvp: RsvpContact; onChanged: () => void
           value={rsvp.invite_status}
           onChange={handleStatusChange}
           disabled={updateStatus.pending}
-          className="ui-input text-xs"
+          className="ui-input ui-select text-xs"
         >
           {(Object.keys(INVITE_STATUS_LABELS) as InviteStatus[]).map((s) => (
             <option key={s} value={s}>
@@ -795,7 +795,7 @@ function CsvImportPanel({
                         onChange={(e) =>
                           setMapping((m) => ({ ...m, [i]: e.target.value as keyof CsvImportRow | 'ignore' }))
                         }
-                        className="ui-input text-xs"
+                        className="ui-input ui-select text-xs"
                       >
                         {FIELD_OPTIONS.map((opt) => (
                           <option key={opt.value} value={opt.value}>

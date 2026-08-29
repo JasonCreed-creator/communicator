@@ -251,7 +251,7 @@ export default function SheetConnectionCard({
                     id="sheet-auto-check"
                     value={autoMinutes}
                     onChange={(e) => handleAutoChange(Number(e.target.value))}
-                    className="ui-input text-sm"
+                    className="ui-input ui-select text-sm"
                   >
                     {AUTO_CHECK_OPTIONS.map((m) => (
                       <option key={m} value={m}>

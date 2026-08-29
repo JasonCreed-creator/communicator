@@ -174,6 +174,25 @@ MICE 프로젝트 협업 허브 — 역할별(디자인·운영·등록) 산출�
   - 금지: conference 견적 경로 파일 무접촉(골든 벡터 0원 일치가 DoD) · S-10에 주최형 매출 버킷 주입 금지(§19.1 항등식 보호) · `/p`·발주처에 `tier.price`·타 파트너 정보 노출 금지 · 브라우저 E2E 신규 금지(vitest+RTL만)
   - **시각안 없이 진행** — 사용자 지시로 생략. 판단으로 이탈한 지점은 전부 체크아웃 보고에 "이탈" 명시
 
+- **Phase 3.19 — 폼 정본 + 3.18.1 후속 (서버 0, 디자인 핸드오프 `패턴 기준 시트` §10 신설 · 2026-08-29)**
+  - 정본 = 핸드오프 `패턴 기준 시트.dc.html` **§10 입력 폼** + `폼 정본 폴리싱.dc.html`(결함 7건 before/after).
+    문서 정본은 **디자인지시서 §5-1**. 배경: 지시서 v1과 기준 시트 01–09가 **입력 폼을 규정하지 않아**
+    컨트롤 81개가 브라우저 기본값 위에 서 있었다(체크·라디오 브라우저 파랑 = §1 "파랑·보라 계열 금지" 우회)
+  - 3.19a 공통 정본(메인 직접): `index.css` base `accent-color` **1회 선언** + `.ui-input` 형제 9종
+    (`ui-input-num`·`ui-select`·`ui-input-error`·`ui-input:disabled`·`ui-input-readonly`·`ui-check`·
+    `ui-check-lg`·`ui-check-row`·`ui-check-row-touch`) + 인쇄 변형. 프리미티브 2종 신설
+    (`components/internal/Field.tsx`·`MoneyField.tsx`) + `lib/numberFormat.ts`(`krwShort` 승격 · `krwEcho`·`parseKrw`·`formatKrw`)
+  - 3.19b 화면 정렬(에이전트 병렬 10건): 판매 플래너 결함 1~4 · 온보딩 ③ 결함 5~7 · 견적 · 정산 ·
+    파트너 · 행사 설정 · 보드/WBS/운영 · 등록/홈 · 랜딩/임포트 · 외부 지면. **표시 계층만** —
+    데이터·provider·상태 머신·픽스처·견적 엔진 무변경
+  - 3.19c **3.18.1 후속**: 담당자 **전자명함 붙여넣기 파싱 임포트**(`lib/contactCard.ts` — 순수 함수,
+    추측 채움 금지) + **담당자 노출 계약**(내부·발주처 `/c` 양쪽 노출, 마스킹 없음 — 사용자 확정 신규 계약.
+    금액·타 파트너·참가자 명단 PII 가드는 **무관하며 건드리지 않는다**) + 문서 정정 m1·m2·§25.6 보류
+  - **DataProvider 120메서드 불변** — 새 메서드 0건. 명함 임포트는 기존 `addMember`를 탄다.
+    `importVendorQuote`는 **v12 예약**(v11은 3.18로 소진 — 3.18.1 m2 정정). 만들지 말 것
+  - 금지: 새 npm 의존성 · 새 색 토큰 · `src/modules/quote/` 엔진 파일 무접촉(골든 벡터 0원 일치) ·
+    `components/partner/**`·`components/client/**`에 금액 식별자 유입 · 인라인 `accentColor` 되칠하기
+
 ### 서버 스프린트 (v2.3 설계 완료 — **착수 대기: 사용자가 지시할 때 개시**(2026-08-27 우선순위 변경). dev 3키는 착수 시 사용자에게 대화로 요청)
 - **Phase 4 — Supabase 이식** (설계서 v2.3 §4 DDL 전체 기준, 검증 DB = dev 프로젝트)
   - 4a 마이그레이션+RLS+seed (에이전트 D): §4 순서대로 + **v2.4 스키마(§21.1 — kind·partner_tiers·partners·partner_tokens·quote_imports·확장 컬럼) 포함**, RLS는 §6.2 전체(quotes·profiles·compliance_cards·settlement_*·vendors·landing·partner_* 포함). **산출 규약: `supabase/migrations/*.sql` + 통합 `supabase/setup.sql`(신규 프로젝트 SQL 에디터 1회 실행으로 전체 구축 — 멱등, 2회 실행 무해를 테스트로 증명, 말미에 첫 admin 승격 SQL 1줄 주석 동봉) + `supabase/seed.sql`(데모 픽스처 4행사, 선택 실행)**
@@ -296,6 +315,11 @@ Phase 3.8과 3.9는 **별도 커밋·별도 PR**로 분리한다(3.8 = 타입·�
 45. (v2.6 §10) **S-12 분리**: 현장 체크인 화면에 명단 편집·시트 설정·내보내기 경로가 0건이고, 등록 보드 탭에서 체크인 조작 UI가 제거됐으며, 두 화면이 같은 snapshot_at을 각자 표기한다 (테스트로 증명)
 46. (v2.6 §24) **제외 가시성**: 시트 행 = 반영 + 제외 + 미확인 항등식이 화면 수치로 성립하고, 제외 목록이 1클릭으로 열리며 사유 3종이 각각 뜬다 (테스트로 증명)
 
+50. (v2.6 §10) **폼 정본 — 컨트롤**: `accent-color: var(--accent)`가 base 레이어에 **1회만** 선언되고 화면 코드에 인라인 `accentColor` 0건이며, `type="checkbox"|type="radio"` 전부가 `.ui-check`를, `<select>` 전부가 `.ui-select`를 단다 — 예외는 사유가 붙은 화이트리스트에만 있고 죽은 예외는 실패한다 (테스트로 증명)
+51. (v2.6 §10-C) **폼 정본 — 필드 상태**: `Field`에서 `error`가 `hint`를 **대체**하고(두 줄로 쌓지 않는다) 필수 표시가 정확히 1개이며, `MoneyField`가 천단위 표시·편집 중 raw·blur 재포맷·빈 칸 `null`(0과 구분)·소수점 무반올림·억/만 경계(99,999,999 / 100,000,000)를 지킨다 (테스트로 증명)
+52. (v2.6 §10) **폼 정본 — 버튼 위계**: 판매 플래너 등급 카드 저장이 `btn-ghost btn-sm` · 라벨 `저장` · dirty 전 비활성 · 성공 시 `저장됨 HH:mm` 캡션이고, 화면의 `btn-primary`/`btn-accent`는 전진 버튼 1개뿐이며 선택 카드의 `선택` 필이 0건이다 (테스트로 증명)
+53. (3.18.1) **담당자 카드**: 전자명함 텍스트 파싱이 정상·부분 실패·빈 입력·복수 카드·전화 표기 정규화를 처리하고(실패 필드는 빈 칸 — 추측 채움 0건), 담당자 이름·직함·연락처가 내부와 발주처(`/c`) 양쪽에 노출되며, 같은 화면에서 금액 키·타 파트너·참가자 명단 PII는 계속 0건이다 (테스트로 증명)
+
 ### 상시 grep 가드 (매 세션 종료 시 0건 확인 — 위 DoD와 별개로 항상 검사)
 | 가드 | 명령 | 근거 |
 |---|---|---|
@@ -305,6 +329,7 @@ Phase 3.8과 3.9는 **별도 커밋·별도 PR**로 분리한다(3.8 = 타입·�
 | 금액 비노출 | `grep -rn "total_amount\|breakdown\|ordered_amount\|actual_amount\|markup\|margin\|settlement\|contract_amount" src/pages/Client* src/pages/Landing* src/pages/Partner* src/lib/landing* src/components/plan src/components/client src/components/partner` | **DoD 23·30·32 (v2.4 — contract_amount 키·Partner 경로 확대)** |
 | 온보딩 플래그 | `grep -rn "onboarding_completed" src` | DoD 16 |
 | **공개 링크 공유 문구** | `grep -rn "링크가 있는 모든" src` — 금지문(`공유하지 마세요`) 밖에서 0건 | **3.17.1 T2 — 참가자 실명·연락처 시트를 링크 공개로 권하는 문구 금지** |
+| **폼 정본 우회** | `grep -rn "accentColor\|accent-color" src --include=*.tsx` 0건 + `dod50-form-canon` 소스 가드(체크·라디오 `ui-check` / 셀렉트 `ui-select`) | **DoD 50 — 컨트롤이 다시 브라우저 기본값으로 갈라지는 것을 막는다** |
 
 앞의 3종은 `src/test/dod-project-scope-guard.test.ts`·기존 DoD 테스트가 상시 자동 검증한다 — 셸 grep은 이중 확인용이다.
 

@@ -166,13 +166,14 @@ export default function StepReview({
                 </div>
                 <div className="flex items-center gap-1.5">
                   <button type="button" className="btn btn-ghost btn-sm" onClick={() => onAdjust(k, d - 100000)} aria-label={`${label} 10만원 감액`}>−</button>
+                  {/* − / ＋ 사이 인라인 컨트롤이라 라벨·힌트 자리가 없다 — MoneyField 대신 숫자 규격만 단다(§2) */}
                   <input
                     type="number"
                     step={10000}
                     value={d === 0 ? '' : d}
                     placeholder="0"
                     onChange={(e) => onAdjust(k, e.target.value)}
-                    className="ui-input w-32 text-right"
+                    className="ui-input ui-input-num w-32"
                     aria-label={`${label} 조정`}
                   />
                   <button type="button" className="btn btn-ghost btn-sm" onClick={() => onAdjust(k, d + 100000)} aria-label={`${label} 10만원 증액`}>＋</button>

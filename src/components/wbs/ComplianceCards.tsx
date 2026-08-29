@@ -56,13 +56,13 @@ export default function ComplianceCards() {
             <ul className="space-y-1.5">
               {card.items.map((item, idx) => (
                 <li key={idx}>
-                  <label className="flex cursor-pointer items-start gap-2 text-sm">
+                  <label className="ui-check-row text-sm">
                     <input
                       type="checkbox"
                       checked={item.checked}
                       onChange={() => void toggle(card, idx)}
                       disabled={update.pending}
-                      className="mt-0.5"
+                      className="ui-check"
                     />
                     <span className={item.checked ? 'text-ink-cap line-through' : 'text-ink-sub'}>{item.text}</span>
                   </label>

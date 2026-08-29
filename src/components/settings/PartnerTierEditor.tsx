@@ -2,6 +2,7 @@
 // 명칭·설명·정원 편집 + 등급 추가. 삭제는 그 등급을 쓰는 파트너가 있으면 provider가 409.
 import { useState, type FormEvent } from 'react'
 import ErrorAlert from '../internal/ErrorAlert'
+import Field from '../internal/Field'
 import { useAsync, useMutation } from '../../hooks/useAsync'
 import { getDataProvider } from '../../providers'
 import type { PartnerTier, UUID } from '../../types/entities'
@@ -48,6 +49,13 @@ function TierRow({
   const [name, setName] = useState(tier.name)
   const [description, setDescription] = useState(tier.description ?? '')
   const [capacity, setCapacity] = useState(tier.capacity != null ? String(tier.capacity) : '')
+  const [nameError, setNameError] = useState<string | null>(null)
+
+  // §3 — 행 단위 저장은 바뀐 게 있을 때만 열린다
+  const dirty =
+    name !== tier.name ||
+    description !== (tier.description ?? '') ||
+    capacity !== (tier.capacity != null ? String(tier.capacity) : '')
 
   const save = useMutation(() =>
     provider.upsertPartnerTier(tier.project_id, {
@@ -62,7 +70,11 @@ function TierRow({
 
   const handleSave = async (e: FormEvent) => {
     e.preventDefault()
-    if (!name.trim()) return
+    if (!name.trim()) {
+      setNameError('명칭을 입력하세요.')
+      return
+    }
+    setNameError(null)
     const result = await save.run()
     if (result) {
       setEditing(false)
@@ -80,26 +92,31 @@ function TierRow({
     return (
       <li className="rounded-md border border-accent/30 bg-canvas p-3">
         <form onSubmit={handleSave} className="flex flex-wrap items-end gap-2">
-          <label className="flex flex-col gap-1 t-caption">
-            명칭
-            <input value={name} onChange={(e) => setName(e.target.value)} className="ui-input w-32" />
-          </label>
-          <label className="flex flex-col gap-1 t-caption">
-            설명
+          <Field label="명칭" required error={nameError}>
+            <input
+              value={name}
+              onChange={(e) => {
+                setName(e.target.value)
+                if (nameError) setNameError(null)
+              }}
+              aria-invalid={nameError ? true : undefined}
+              className={`ui-input w-32${nameError ? ' ui-input-error' : ''}`}
+            />
+          </Field>
+          <Field label="설명">
             <input value={description} onChange={(e) => setDescription(e.target.value)} className="ui-input w-56" />
-          </label>
-          <label className="flex flex-col gap-1 t-caption">
-            정원
+          </Field>
+          <Field label="정원" align="right">
             <input
               type="number"
               min={0}
               placeholder="무제한"
               value={capacity}
               onChange={(e) => setCapacity(e.target.value)}
-              className="ui-input w-24"
+              className="ui-input ui-input-num w-24"
             />
-          </label>
-          <button type="submit" disabled={save.pending} className="btn btn-primary btn-sm">
+          </Field>
+          <button type="submit" disabled={save.pending || !dirty} className="btn btn-ghost btn-sm">
             저장
           </button>
           <button type="button" onClick={() => setEditing(false)} className="btn btn-ghost btn-sm">
@@ -147,16 +164,19 @@ function AddTierForm({
 }) {
   const [code, setCode] = useState('')
   const [name, setName] = useState('')
+  // §10-C — 미입력은 필드 줄이 말한다. create.error(블록)는 서버 거절(중복 코드 등) 자리로 남긴다
+  const [errors, setErrors] = useState<{ code?: string; name?: string }>({})
   const create = useMutation(() =>
     provider.upsertPartnerTier(projectId, { code: code.trim(), name: name.trim(), sort: nextSort }),
   )
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
-    if (!code.trim() || !name.trim()) {
-      create.setError('등급 코드와 명칭은 필수입니다.')
-      return
-    }
+    const next: { code?: string; name?: string } = {}
+    if (!code.trim()) next.code = '코드를 입력하세요.'
+    if (!name.trim()) next.name = '명칭을 입력하세요.'
+    setErrors(next)
+    if (next.code || next.name) return
     const result = await create.run()
     if (result) {
       setCode('')
@@ -167,15 +187,31 @@ function AddTierForm({
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-2 border-t border-border pt-3">
-      <label className="flex flex-col gap-1 t-caption">
-        코드
-        <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="platinum" className="ui-input w-28" />
-      </label>
-      <label className="flex flex-col gap-1 t-caption">
-        명칭
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="PLATINUM" className="ui-input w-32" />
-      </label>
-      <button type="submit" disabled={create.pending} className="btn btn-primary btn-sm">
+      <Field label="코드" required error={errors.code}>
+        <input
+          value={code}
+          onChange={(e) => {
+            setCode(e.target.value)
+            if (errors.code) setErrors((prev) => ({ ...prev, code: undefined }))
+          }}
+          placeholder="platinum"
+          aria-invalid={errors.code ? true : undefined}
+          className={`ui-input w-28${errors.code ? ' ui-input-error' : ''}`}
+        />
+      </Field>
+      <Field label="명칭" required error={errors.name}>
+        <input
+          value={name}
+          onChange={(e) => {
+            setName(e.target.value)
+            if (errors.name) setErrors((prev) => ({ ...prev, name: undefined }))
+          }}
+          placeholder="PLATINUM"
+          aria-invalid={errors.name ? true : undefined}
+          className={`ui-input w-32${errors.name ? ' ui-input-error' : ''}`}
+        />
+      </Field>
+      <button type="submit" disabled={create.pending} className="btn btn-ghost btn-sm">
         등급 추가
       </button>
       <ErrorAlert message={create.error} />

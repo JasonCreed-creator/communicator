@@ -27,6 +27,8 @@ export default function BoardFilterBar({
 }) {
   const labelClass = `flex items-center gap-1.5 ${compact ? 'text-xs' : 'text-sm'} text-ink-sub`
   const inputClass = `ui-input ${compact ? 'h-8 py-0 text-xs' : ''}`
+  // 셰브론(.ui-select)은 셀렉트에만 — 같은 재질을 쓰는 제목 검색 input과 클래스를 나눈다
+  const selectClass = `${inputClass} ui-select`
 
   return (
     <div className={`flex flex-wrap items-center ${compact ? 'gap-2' : 'gap-3'}`}>
@@ -35,7 +37,7 @@ export default function BoardFilterBar({
         <select
           value={statusFilter}
           onChange={(e) => onStatusChange(e.target.value as DeliverableStatus | '')}
-          className={inputClass}
+          className={selectClass}
         >
           <option value="">전체</option>
           {(Object.keys(STATUS_LABELS) as DeliverableStatus[]).map((s) => (
@@ -50,7 +52,7 @@ export default function BoardFilterBar({
         <select
           value={assigneeFilter}
           onChange={(e) => onAssigneeChange(e.target.value)}
-          className={inputClass}
+          className={selectClass}
         >
           <option value="">전체</option>
           {members.map((m) => (

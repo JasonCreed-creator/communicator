@@ -397,7 +397,7 @@ function InboxCard({ inbox, loading, error, deliverables, onChanged }: InboxCard
             <p className="text-xs text-ink-cap">{f.detected_folder ?? '위치 미상'}</p>
             <div className="mt-2 flex items-center gap-2">
               <select
-                className="ui-input min-w-0 flex-1 text-xs"
+                className="ui-input ui-select min-w-0 flex-1 text-xs"
                 value={selected[f.id] ?? ''}
                 onChange={(e) => setSelected((s) => ({ ...s, [f.id]: e.target.value }))}
               >

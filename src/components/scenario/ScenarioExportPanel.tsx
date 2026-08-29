@@ -57,7 +57,7 @@ export default function ScenarioExportPanel({
           setResultCount(null)
         }}
         aria-label="대상 큐시트"
-        className="ui-input w-auto text-xs"
+        className="ui-input ui-select w-auto text-xs"
       >
         {list.map((d) => (
           <option key={d.id} value={d.id}>

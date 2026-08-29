@@ -97,8 +97,19 @@ export default function PartnerPortalPage() {
                 이 링크는 귀사의 제출 현황만 표시합니다. 다른 파트너사의 정보는 이 화면에 포함되지
                 않습니다.
               </p>
-              {/* P2(3.15.1, 감수 M2) — 값이 없으면 미노출 */}
-              {data.contact_email && <p>문의: {data.contact_email}</p>}
+              {/* P2(3.15.1, 감수 M2) — 값이 없으면 미노출.
+                  창구 주소는 가리지 않고 바로 누를 수 있게 mailto로 건다(모바일 지면 · 터치 44) */}
+              {data.contact_email && (
+                <p>
+                  문의:{' '}
+                  <a
+                    href={`mailto:${data.contact_email}`}
+                    className="inline-flex min-h-11 items-center underline"
+                  >
+                    {data.contact_email}
+                  </a>
+                </p>
+              )}
             </div>
           </div>
         )}

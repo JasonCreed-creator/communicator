@@ -8,6 +8,7 @@
 // 온보딩 완료 후(=이미 WBS가 전개된 뒤) format을 바꾸면 재전개가 필요하므로 확인을 받는다(§25.1).
 import { useState } from 'react'
 import ErrorAlert from '../internal/ErrorAlert'
+import Field from '../internal/Field'
 import { LevelBadge } from '../internal/StatusBadge'
 import { useMutation } from '../../hooks/useAsync'
 import { getDataProvider } from '../../providers'
@@ -83,7 +84,7 @@ export default function FormatStep({
           return (
             <label
               key={key}
-              className={`flex cursor-pointer items-start gap-2.5 rounded-lg p-3.5 text-sm transition-colors ${
+              className={`ui-check-row rounded-lg p-3.5 text-sm transition-colors ${
                 selected
                   ? 'border border-accent bg-accent-tint'
                   : 'border border-border bg-card hover:border-border-strong'
@@ -96,20 +97,14 @@ export default function FormatStep({
                 checked={selected}
                 onChange={() => handleCard(key)}
                 disabled={save.pending}
-                className="mt-0.5"
+                className="ui-check"
               />
               <span className="min-w-0 flex-1">
                 <span className="flex items-center justify-between gap-2">
                   <span className="font-semibold text-ink">{p.cardLabel}</span>
-                  <span className="flex shrink-0 items-center gap-1">
-                    {/* 실측 근거가 1건이거나 미검증인 프리셋은 화면에서도 '가정'으로 밝힌다(§25.3) */}
-                    {p.assumed && <LevelBadge level="neutral" label="가정" />}
-                    {selected && (
-                      <span className="inline-flex shrink-0 items-center rounded-full bg-accent px-1.5 py-0.5 text-[11px] font-semibold text-white">
-                        선택
-                      </span>
-                    )}
-                  </span>
+                  {/* 선택 표시는 보더·틴트 두 겹까지다(§10-B) — 배지 자리는 정보 전용으로 남긴다.
+                      실측 근거가 1건이거나 미검증인 프리셋은 화면에서도 '가정'으로 밝힌다(§25.3) */}
+                  {p.assumed && <LevelBadge level="neutral" label="가정" className="shrink-0" />}
                 </span>
                 <span className="mt-1 block text-xs leading-relaxed text-ink-sub">{p.cardBlurb}</span>
               </span>
@@ -119,13 +114,13 @@ export default function FormatStep({
       </fieldset>
 
       {/* PSA 옵션 — 모듈 자체는 3.18c 미착수라 값만 기록한다는 사실을 숨기지 않는다 */}
-      <label className="flex items-start gap-2.5 rounded-lg border border-border bg-card p-3.5 text-sm">
+      <label className="ui-check-row rounded-lg border border-border bg-card p-3.5 text-sm">
         <input
           type="checkbox"
           checked={project.psa_enabled}
           onChange={(e) => apply({ psa_enabled: e.target.checked })}
           disabled={save.pending}
-          className="mt-0.5"
+          className="ui-check"
         />
         <span className="min-w-0">
           <span className="font-semibold text-ink">비즈매칭(PSA) 사용</span>
@@ -139,17 +134,15 @@ export default function FormatStep({
       {/* 세부 토글 — 카드가 시드한 값을 그대로 보여주고 각각 독립 수정할 수 있게 한다(§25.1) */}
       <div className="rounded-lg border border-border bg-card p-3.5">
         <p className="text-sm font-semibold text-ink">세부 설정</p>
-        <p className="mt-1 text-xs leading-relaxed text-ink-sub">
-          카드가 채운 기본값입니다. 필요하면 각각 바꿀 수 있고, 바꿔도 위 카드 선택은 유지됩니다.
-        </p>
+        {/* 안내는 각 필드의 힌트 줄이 대신한다 — 같은 말을 카드 상단에서 한 번 더 하지 않는다 */}
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          <label className="block">
-            <span className="t-caption">행사 성격</span>
+          <Field id="fmt-kind" label="행사 성격" hint="카드가 시드한 값">
             <select
+              id="fmt-kind"
               value={project.kind}
               onChange={(e) => apply({ kind: e.target.value as ProjectKind })}
               disabled={save.pending}
-              className="ui-input mt-1 w-full"
+              className="ui-input ui-select w-full"
               aria-label="행사 성격"
             >
               {KIND_OPTIONS.map((k) => (
@@ -158,14 +151,14 @@ export default function FormatStep({
                 </option>
               ))}
             </select>
-          </label>
-          <label className="block">
-            <span className="t-caption">모객 유형</span>
+          </Field>
+          <Field id="fmt-event-type" label="모객 유형" hint="바꿔도 카드 선택은 유지">
             <select
+              id="fmt-event-type"
               value={project.event_type}
               onChange={(e) => apply({ event_type: e.target.value as EventType })}
               disabled={save.pending}
-              className="ui-input mt-1 w-full"
+              className="ui-input ui-select w-full"
               aria-label="모객 유형"
             >
               {EVENT_TYPE_OPTIONS.map((t) => (
@@ -174,7 +167,7 @@ export default function FormatStep({
                 </option>
               ))}
             </select>
-          </label>
+          </Field>
         </div>
       </div>
 
