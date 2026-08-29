@@ -3,6 +3,26 @@
 > 가변 상태 파일. 매 세션 체크아웃 시 에이전트가 갱신한다 (CLAUDE.md §9 리추얼).
 
 ## 1. 상태 요약
+- **완료: 배포 준비(Vercel) — 레포 쪽 전부. 계정·DNS 단계만 사용자 몫**(2026-08-29, 사용자 지시
+  "버셀연결까지 진행해 도메인 연결"). §18-5·§20 T2는 "`vercel.json` 동봉 — 설정 무변경"을
+  전제하는데 **그 파일이 레포에 없었다**(Phase 4e 산출물인데 Phase 4 미착수). 그 병목을 없앴다.
+  ① `vercel.json` — SPA rewrites(앱은 `BrowserRouter`라 이게 없으면 `/schedule` 새로고침이 전부 404다) ·
+  보안 헤더 5종 · **`/c`·`/p` 토큰 지면은 `noindex` + `no-referrer` + `no-store`**
+  (URL 자체가 자격증명이라 검색 색인·외부 리퍼러로 새면 그 토큰은 끝난다) · 해시 자산 immutable 캐시
+  ② `.env.production.example` — 지금 넣을 변수는 `VITE_DATA_PROVIDER=mock` **하나뿐**이다.
+  `supabase`를 넣으면 `providers/index.ts`가 예외를 던져 앱이 아예 뜨지 않는다(Phase 4 미착수).
+  `VITE_*`는 빌드 타임에 구워지므로 env 수정 후 재배포 필요 — 둘 다 파일에 명시
+  ③ `scripts/vercel-check.mjs` + `npm run deploy:check` — **vercel.json을 직접 파싱해** Vercel의
+  서빙 규칙(파일 우선 → rewrite → 헤더 겹침)을 로컬에서 재현한다. 사본을 두지 않으므로 설정과
+  검증이 갈라지지 않는다. **27항목 통과** — 딥링크 9 · 자산 3 · 보안 헤더 3 · 토큰 지면 6 +
+  대조군 1 · 실브라우저 렌더 3 · 옛 라우트 `/configurator`→`/quotes` · 새로고침 유지 · 예외 0
+  ④ 설계서 **§18a 신설** — Vercel 연결 S1~S6, 도메인은 (가) Vercel 내부 이전(DNS 무변경) /
+  (나) 외부 등록기관 A·CNAME 두 갈래로 나눠 기술
+  **Code가 할 수 없는 것**: Vercel 로그인·프로젝트 import·도메인 추가·DNS 레코드 — 계정 접근이
+  필요하다(§18의 ■ 게이트). 이 컨테이너에 Vercel CLI·토큰 없음을 확인했다.
+  **미결(사용자 결정)**: Phase 4 전이라 이 배포는 **mock 데모**다(새로고침하면 변경 소실·로그인 없음).
+  운영 apex(`rmb-mice.com`)를 지금 붙일지, 데모 서브도메인을 먼저 붙일지 — §18a S5. 권장은 후자
+
 - **완료: Phase 3.19 — 폼 정본(패턴 기준 시트 §10 신설) + 3.18.1 후속**(2026-08-29 · 디자인 핸드오프
   `폼 정본 폴리싱.dc.html` + `패턴 기준 시트.dc.html` §10 채택. Claude Design MCP는 이 원격 세션에서
   인가 불가라 사용자가 첨부한 번들 zip으로 임포트 — 도구 안내가 명시한 대체 경로다).

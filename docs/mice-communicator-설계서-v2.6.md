@@ -1103,6 +1103,54 @@ UI 공통: 한국어, 데스크톱 우선 + 반응형(발주처 화면은 모바
 6. 옛 Vercel 프로젝트(jsx-easy-shift)는 도메인 제거 후 1주 유지 → 삭제 ■. GitHub jsx-easy-shift는 README 상단에 "아카이브 — communicator로 통합(2026-xx-xx)" 1줄 커밋 후 Archive ■. 옛 Supabase 프로젝트는 임포트 검증 후 Pause → 30일 뒤 삭제 ■.
 7. 롤백: 5단계까지는 도메인을 옛 프로젝트로 되돌리면 즉시 복구. 6단계 이후는 아카이브 해제로 복구.
 
+### 18a. Vercel 연결·도메인 실행 절차 (2026-08-29 추가 — 레포 준비 완료 상태 기준)
+
+> §18-5·§20 T2가 "`vercel.json` 동봉 — 설정 무변경"을 전제하는데 그 파일이 없었다. 이제 있다.
+> 아래 ■ 표시는 **계정·DNS 접근이 필요해 Code가 수행할 수 없는** 단계다.
+
+**레포 쪽 준비물(완료)**: `vercel.json`(SPA rewrites + 보안 헤더 + `/c`·`/p` 색인·리퍼러·캐시 차단) ·
+`.env.production.example` · `npm run deploy:check`(Vercel 서빙 규칙을 로컬에서 재현해 딥링크·헤더·
+옛 라우트 리다이렉트를 검증 — 27항목).
+
+**S1. 프로젝트 연결** ■ — vercel.com에 GitHub 계정으로 로그인 → Add New → Project →
+`JasonCreed-creator/communicator` Import. **Framework Preset·Build Command·Output Directory는
+건드리지 않는다** — `vercel.json`이 `vite`·`npm run build`·`dist`를 이미 지정한다.
+
+**S2. 환경 변수** ■ — Settings → Environment Variables. 지금 넣을 것은 **하나뿐**이다:
+
+| 변수 | 값 | 대상 |
+|---|---|---|
+| `VITE_DATA_PROVIDER` | `mock` | Production · Preview |
+
+**`supabase`를 지금 넣으면 앱이 아예 뜨지 않는다** — `providers/index.ts`가 mock 외의 값에 예외를
+던진다(Phase 4 미착수). Supabase 3키는 Phase 4 이식이 끝난 뒤 §20 T2에서 함께 넣는다.
+`VITE_*`는 **빌드 타임**에 번들로 구워지므로, env를 고친 뒤에는 반드시 재배포해야 반영된다.
+
+**S3. 배포 확인** ■ — Deploy → `*.vercel.app` URL에서 다음 4가지를 직접 눌러 본다(로컬
+`deploy:check`가 이미 통과시킨 항목과 같다): ① `/schedule` 새로고침 ② `/c/demo/status`
+③ `/p/demo-partner` ④ `/configurator`가 `/quotes`로 튀는지.
+
+**S4. 도메인 연결** ■ — Settings → Domains. 두 갈래다:
+
+- **(가) 도메인이 이미 다른 Vercel 프로젝트에 붙어 있을 때**(§18-5의 `rmb-mice.com` 전제):
+  옛 프로젝트(jsx-easy-shift) → Settings → Domains에서 **제거** → 새 프로젝트에 **추가**.
+  **DNS 변경이 없다**(Vercel 내부 이전). 전파 대기도 없다. 되돌리려면 반대로 하면 끝이다.
+- **(나) 외부 등록기관에만 있고 Vercel에 처음 붙일 때**: 새 프로젝트에 도메인 추가 →
+  Vercel이 표시하는 레코드를 등록기관 DNS에 넣는다. apex(`rmb-mice.com`)는 **A → `76.76.21.21`**,
+  서브도메인(`www`·`app`)은 **CNAME → `cname.vercel-dns.com`**. 전파는 보통 수 분~수 시간.
+  Vercel이 인증서를 자동 발급하므로 별도 SSL 설정은 없다.
+  ※ 위 IP·CNAME 값은 Vercel 대시보드가 표시하는 값을 **정본으로 삼는다** — 아래 값과 다르면 대시보드를 따른다.
+
+**S5. 판단이 필요한 지점** — Phase 4 전에는 이 배포가 **mock 데모**다. 새로고침하면 변경이 사라지고
+로그인도 없다. 그래서 운영 도메인(`rmb-mice.com` apex)을 지금 붙일지, 아니면 데모용 서브도메인
+(`demo.rmb-mice.com`)을 먼저 붙이고 apex는 Phase 4 이후로 미룰지는 **사용자 결정**이다.
+권장은 후자 — apex를 미리 붙이면 사내에 "이게 실서비스"라는 오해가 생기고, 되돌리는 비용이
+전환 자체보다 크다.
+
+**S6. 배포 후 확인** — 도메인이 붙으면 §18-5 말미의 "옛 라우트 리다이렉트(§10 표) 동작 확인"을
+실도메인에서 한 번 더 한다. `npm run deploy:check`가 같은 항목을 로컬에서 검사하므로,
+실도메인에서 어긋나면 원인은 코드가 아니라 도메인·캐시 설정이다.
+
 ---
 
 ## 19. 부록 — 정산보드 정본 (v2.2, S-10)
