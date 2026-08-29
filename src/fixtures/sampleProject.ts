@@ -186,6 +186,10 @@ const FIXTURE: MockState = {
     quote_id: FINAL_QUOTE_ID,
     drive_root_folder_id: 'drv-root-stc26',
     slack_webhook_url: null,
+    // v2.6 §25 — 대행형 기존 행사는 기본값 conference로 마이그레이션(§25.1 픽스처 규칙)
+    format: 'conference',
+    psa_enabled: false,
+    audience_model: null,
     event_type: 'recruiting', // v1.3 — 픽스처는 RSVP 파이프라인을 쓰는 모객형
     // v1.2 행사개요 — S9 §행사개요 소스 (전부 가상 명칭)
     theme: '연결, 다음 단계로',
@@ -719,6 +723,10 @@ export function createFixtureState(): MockState {
       quote_id: null,
       drive_root_folder_id: null,
       slack_webhook_url: null,
+      // v2.6 §25 — 대행형 기존 행사는 기본값 conference로 마이그레이션(§25.1 픽스처 규칙)
+      format: 'conference',
+      psa_enabled: false,
+      audience_model: null,
       event_type: 'general',
       theme: '함께 여는 다음 분기',
       venue: '본사 대강당',
@@ -752,6 +760,10 @@ export function createFixtureState(): MockState {
       quote_id: null,
       drive_root_folder_id: null,
       slack_webhook_url: null,
+      // v2.6 §25 — 대행형 기존 행사는 기본값 conference로 마이그레이션(§25.1 픽스처 규칙)
+      format: 'conference',
+      psa_enabled: false,
+      audience_model: null,
       event_type: 'general',
       theme: null,
       venue: '가상트레이닝센터 오디토리움(가안)', // ③=개요만 입력(온보딩 1/3): PM 미지정·완료 전
@@ -784,6 +796,10 @@ export function createFixtureState(): MockState {
       quote_id: null,
       drive_root_folder_id: null,
       slack_webhook_url: null,
+      // v2.6 §25 — 대행형 기존 행사는 기본값 conference로 마이그레이션(§25.1 픽스처 규칙)
+      format: 'conference',
+      psa_enabled: false,
+      audience_model: null,
       event_type: 'recruiting',
       theme: 'AI, 실전으로',
       venue: '가상컨벤션센터 5F 오디토리움',

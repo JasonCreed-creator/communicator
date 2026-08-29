@@ -8,7 +8,7 @@ import BrandLogo from '../components/BrandLogo'
 import ErrorAlert from '../components/internal/ErrorAlert'
 import ProgressBar from '../components/internal/ProgressBar'
 import CompletionNotice from '../components/onboarding/CompletionNotice'
-import EventTypeStep from '../components/onboarding/EventTypeStep'
+import FormatStep from '../components/onboarding/FormatStep'
 import StepIndicator, { type WizardStep } from '../components/onboarding/StepIndicator'
 import { missingRequired } from '../components/settings/requiredFields'
 import ClientContactsEditor from '../components/settings/ClientContactsEditor'
@@ -149,7 +149,7 @@ export default function OnboardingPage() {
 
                   <div className="rounded-lg bg-canvas p-4">
                     <h3 className="t-card-title mb-3">행사 유형</h3>
-                    <EventTypeStep projectId={projectId} project={project.data} onChanged={project.reload} />
+                    <FormatStep projectId={projectId} project={project.data} onChanged={project.reload} />
                   </div>
 
                   <div className="rounded-lg bg-canvas p-4 text-sm text-ink">

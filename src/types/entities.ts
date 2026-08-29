@@ -5,6 +5,8 @@ import type {
   ApprovalDecision,
   AttendeeChannel,
   AttendeeSheetStatus,
+  AudienceModel,
+  EventFormat,
   SheetInvalidReason,
   CommentVisibility,
   ComplianceKind,
@@ -95,6 +97,12 @@ export interface Project {
   slack_webhook_url: string | null
   /** v1.3 — S0 온보딩에서 선택. general이면 등록 모듈 경량 모드(표시 계층 토글) */
   event_type: EventType
+  /** v2.6 §25 — 행사 유형 4분류. 시드이지 잠금이 아니다(이후 kind·event_type 독립 변경 가능) */
+  format: EventFormat
+  /** v2.6 §25 — 비즈매칭(PSA) 옵션. 모듈 자체는 3.18c 미착수 */
+  psa_enabled: boolean
+  /** v2.6 §25 — 'invite'|'open'. dms 기본 'invite'. 초청제 게이트는 §25.6 열린 질문(미구현) */
+  audience_model: AudienceModel | null
   // v1.2 행사개요 (운영계획서 §행사개요 소스)
   theme: string | null
   venue: string | null

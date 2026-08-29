@@ -159,6 +159,19 @@ MICE 프로젝트 협업 허브 — 역할별(디자인·운영·등록) 산출�
   - T7 align-registration 콜드런 플레이크 해소 / T8 설계서 v2.6 승격·§24 첫머리 정정·§10 S-12·§6.1 권한·CLAUDE.md
   - **DataProvider 메서드 수 120 불변** — 반환 타입 확장만(시그니처 추가 없음)
 
+- **Phase 3.18 — v2.6 증분: 행사 유형 4분류 × 프리셋 (설계서 §25 정본, 2026-08-29)**
+  - **format 축**: `projects.format`(conference/dms/exhibition) + `psa_enabled` + `audience_model`.
+    **format의 권한은 3가지뿐** — ①온보딩 시드 ②견적 모델 결정 ③전용 화면의 복합 게이트 구성요소.
+    **상시 모듈 게이트는 기존 축이 유지**(파트너 보드=kind · 등록 깊이=event_type · PSA=psa_enabled) — format이 상시 토글의 두 번째 주인이 되지 않는다(§10 진입점 원칙 무충돌)
+  - 3.18a format 축·`src/fixtures/formatPresets.ts`(프리셋 **단일 소스**)·S0 ③ 4카드+PSA 체크박스·S6 ① format 그룹·픽스처 마이그레이션
+  - 3.18b 판매 플래너(`calcRevenue.ts` 신설 — **calcEstimate·kpiRules·quoteMode 무접촉**) 3스텝·S-11 상단 탭·partner_tiers 확장·partners 부스·program_sessions.track·category 'benefit'
+  - 3.18c PSA — **미착수**(3.17.2 명단 식별 확정이 선행 조건). 설계만 §25.5에 문서화
+  - 3.18d 전시회 프리셋(EX WBS 템플릿·데모 픽스처 1건) — **전부 '가정' 표기 유지**
+  - **DataProvider v11 재동결** — v10(120메서드)은 3.17c에서 소진. `importVendorQuote`는 계속 예약(만들지 말 것)
+  - **초청제 모드는 구현하지 않는다** — 기존 RSVP `InviteStatus`가 반대 방향이라 '승인 대기'를 표현할 수 없다(§25.6 열린 질문). 추측 구현 금지
+  - 금지: conference 견적 경로 파일 무접촉(골든 벡터 0원 일치가 DoD) · S-10에 주최형 매출 버킷 주입 금지(§19.1 항등식 보호) · `/p`·발주처에 `tier.price`·타 파트너 정보 노출 금지 · 브라우저 E2E 신규 금지(vitest+RTL만)
+  - **시각안 없이 진행** — 사용자 지시로 생략. 판단으로 이탈한 지점은 전부 체크아웃 보고에 "이탈" 명시
+
 ### 서버 스프린트 (v2.3 설계 완료 — **착수 대기: 사용자가 지시할 때 개시**(2026-08-27 우선순위 변경). dev 3키는 착수 시 사용자에게 대화로 요청)
 - **Phase 4 — Supabase 이식** (설계서 v2.3 §4 DDL 전체 기준, 검증 DB = dev 프로젝트)
   - 4a 마이그레이션+RLS+seed (에이전트 D): §4 순서대로 + **v2.4 스키마(§21.1 — kind·partner_tiers·partners·partner_tokens·quote_imports·확장 컬럼) 포함**, RLS는 §6.2 전체(quotes·profiles·compliance_cards·settlement_*·vendors·landing·partner_* 포함). **산출 규약: `supabase/migrations/*.sql` + 통합 `supabase/setup.sql`(신규 프로젝트 SQL 에디터 1회 실행으로 전체 구축 — 멱등, 2회 실행 무해를 테스트로 증명, 말미에 첫 admin 승격 SQL 1줄 주석 동봉) + `supabase/seed.sql`(데모 픽스처 4행사, 선택 실행)**

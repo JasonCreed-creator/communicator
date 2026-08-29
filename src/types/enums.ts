@@ -85,6 +85,23 @@ export const LANDING_SUBMIT_TARGETS = ['registration', 'external'] as const
 export type LandingSubmitTarget = (typeof LANDING_SUBMIT_TARGETS)[number]
 
 // v2.4 §21: 주최형(파트너) 확장 — kind는 event_type과 직교하는 축(표시 계층 토글, R-H1)
+// v2.6 §25 — 행사 유형 4분류의 format 축.
+// **format의 권한은 3가지뿐**: ①온보딩 시드 ②견적 모델 결정 ③전용 화면의 복합 게이트 구성요소.
+// 상시 모듈 표시 게이트는 기존 축이 유지한다(파트너 보드=kind · 등록 깊이=event_type · PSA=psa_enabled) —
+// format이 상시 토글의 두 번째 주인이 되면 §10 진입점 원칙과 충돌한다(감수 C1).
+export const EVENT_FORMATS = ['conference', 'dms', 'exhibition'] as const
+export type EventFormat = (typeof EVENT_FORMATS)[number]
+
+export const EVENT_FORMAT_LABELS: Record<EventFormat, string> = {
+  conference: '컨퍼런스',
+  dms: 'DMS',
+  exhibition: '전시회',
+}
+
+/** 청중 모델 — dms 기본 'invite'(초청제). 초청제 **게이트 자체는 미구현**(§25.6 열린 질문) */
+export const AUDIENCE_MODELS = ['invite', 'open'] as const
+export type AudienceModel = (typeof AUDIENCE_MODELS)[number]
+
 export const PROJECT_KINDS = ['agency', 'host'] as const
 export type ProjectKind = (typeof PROJECT_KINDS)[number]
 

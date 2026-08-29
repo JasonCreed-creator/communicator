@@ -39,6 +39,8 @@ import type {
   ProjectKind,
   ProjectStatus,
   ScenarioBlockKind,
+  AudienceModel,
+  EventFormat,
   SheetDiffKind,
   SheetInvalidReason,
   SheetMappedField,
@@ -306,6 +308,10 @@ export interface ProjectPatch {
   kind?: ProjectKind
   event_date?: IsoDate | null
   event_type?: EventType
+  /** v2.6 §25 — format 전환은 확인 다이얼로그 + WBS 재전개(§4-15 보존 규칙)를 호출부가 동반한다 */
+  format?: EventFormat
+  psa_enabled?: boolean
+  audience_model?: AudienceModel | null
   // v1.5 — 행사 설정 ① 개요 전 필드 (§8 PATCH /projects/{id})
   event_end_date?: IsoDate | null
   start_time?: string | null
@@ -333,6 +339,10 @@ export interface ProjectPatch {
  *  "새 행사 만들기"는 빈 입력으로 호출해 자리표시 행사를 만든 뒤 S0에서 채운다. */
 export interface ProjectCreateInput {
   name?: string
+  /** v2.6 §25 — 미지정이면 'conference'. S0 ③ 4카드가 이 값과 kind·event_type을 함께 시드한다 */
+  format?: EventFormat
+  psa_enabled?: boolean
+  audience_model?: AudienceModel | null
   code?: string
   event_date?: IsoDate | null
   event_end_date?: IsoDate | null

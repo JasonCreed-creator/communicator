@@ -460,6 +460,10 @@ export class MockProvider implements DataProvider {
       id: this.nextId('prj'),
       name: input.name?.trim() || '새 행사',
       code,
+      // v2.6 §25 — format은 시드축이다. 미지정이면 conference(기존 동작과 동일).
+      format: input.format ?? 'conference',
+      psa_enabled: input.psa_enabled ?? false,
+      audience_model: input.audience_model ?? null,
       kind: 'agency', // v2.4 §21 — S0 위저드로 만드는 행사는 기본 대행형(행사 설정에서 전환 가능)
       event_date: input.event_date ?? null,
       event_end_date: input.event_end_date ?? null,
@@ -1661,6 +1665,12 @@ export class MockProvider implements DataProvider {
     if (patch.kind !== undefined) project.kind = patch.kind
     if (patch.event_date !== undefined) project.event_date = patch.event_date
     if (patch.event_type !== undefined) project.event_type = patch.event_type
+    // v2.6 §25.1 — format은 시드 축이다: 값을 바꿔도 여기서 WBS를 다시 전개하지 않는다.
+    // 재전개는 S5 '템플릿 재전개'(§4-15 보존 규칙)의 몫이고, S0 ③ 카드는 확인 다이얼로그로
+    // 그 사실을 알린 뒤 이 patch를 보낸다 — 저장이 조용히 태스크를 갈아엎지 않게 한다.
+    if (patch.format !== undefined) project.format = patch.format
+    if (patch.psa_enabled !== undefined) project.psa_enabled = patch.psa_enabled
+    if (patch.audience_model !== undefined) project.audience_model = patch.audience_model
     if (patch.event_end_date !== undefined) project.event_end_date = patch.event_end_date
     if (patch.start_time !== undefined) project.start_time = patch.start_time
     if (patch.end_time !== undefined) project.end_time = patch.end_time
@@ -2875,6 +2885,10 @@ export class MockProvider implements DataProvider {
     }
     const project: Project = {
       id: this.nextId('prj'),
+      // §16 핸드오프는 conference 경로만 해당한다(§25.2) — 스냅샷의 format은 'conference' 고정
+      format: 'conference',
+      psa_enabled: false,
+      audience_model: null,
       name: draft.name,
       code,
       kind: 'agency', // v2.4 §21 — 핸드오프로 만든 행사는 기본 대행형(행사 설정에서 전환 가능)

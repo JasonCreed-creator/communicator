@@ -106,6 +106,10 @@ const REBUILD26_PROJECT: Project = {
   quote_id: null,
   drive_root_folder_id: 'drv-root-rb26',
   slack_webhook_url: null,
+  // v2.6 §25 — 대행형 기존 행사는 기본값 conference로 마이그레이션(§25.1 픽스처 규칙)
+  format: 'conference',
+  psa_enabled: false,
+  audience_model: null,
   event_type: 'recruiting',
   theme: 'AI 시대, 새롭게 세우는 B2B 성장 공식',
   venue: '어린이대공원 파이팩토리 (서울 광진구 광나루로 441)',
@@ -149,6 +153,10 @@ const REBUILD27_PROJECT: Project = {
   quote_id: null,
   drive_root_folder_id: 'drv-root-rb27',
   slack_webhook_url: null,
+  // v2.6 §25 — 대행형 기존 행사는 기본값 conference로 마이그레이션(§25.1 픽스처 규칙)
+  format: 'conference',
+  psa_enabled: false,
+  audience_model: null,
   event_type: 'recruiting',
   theme: '(가안) 다시, 성장의 공식',
   venue: '어린이대공원 파이팩토리 (후보 · 계약 전)',

@@ -103,6 +103,10 @@ export function seedHostFixtures(state: MockState): void {
     quote_id: null,
     drive_root_folder_id: null,
     slack_webhook_url: null,
+    // v2.6 §25 — 주최형 데모 행사는 format:'dms'로 승격(§25.1 픽스처 규칙)
+    format: 'dms',
+    psa_enabled: false,
+    audience_model: 'invite',
     event_type: 'recruiting', // §21.3: 주최형 × 모객형
     theme: '파트너와 함께 여는 다음 시장',
     venue: '가상엑스포센터 2홀',
