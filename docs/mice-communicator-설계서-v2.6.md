@@ -1579,7 +1579,7 @@ DMS = dms·host·recruiting / 전시회 = exhibition·host·recruiting.
 | partner_tiers | `session_slots` · `booth_included` · `staff_cap` · `price`(내부 전용) |
 | partners | 부스 필드 그룹(번호·규격·전력·인터넷) |
 | program_sessions | `track`(text null) — 감수 M3 |
-| deliverables | 카테고리 `'benefit'` 추가 |
+| deliverables | 혜택 제출 카테고리 추가 — 화면에 그대로 나가는 라벨이라 한국어 `'경품·이용권'`으로 구현했다(§6 UI 한국어 규약). HT-3만 이 값으로 전개되고 나머지 파트너 제출물은 `'파트너 제출'` 그대로다 |
 | 신설 [설계만 — 3.18c 미착수] | `psa_slots` · `psa_requests`(attendee_id FK) · `psa_meetings` |
 | 알림(§9) [설계만] | PSA 3행 |
 | 비노출 가드 | `/p`·발주처 경로에 `tier.price`·타 파트너 정보 비노출(dod 테스트) |
@@ -1617,9 +1617,18 @@ create table psa_meetings (
   note text );
 ```
 
-**DataProvider v11 재동결** — v10(120메서드)은 Phase 3.17c에서 이미 소진됐으므로 본 증분은 **v11**이다
-(원 지시문의 "v10 재동결"은 3.17.1 동결을 반영하기 전 표기 — 사실대로 정정한다).
-`importVendorQuote`는 계속 예약(만들지 말 것).
+**DataProvider v11 재동결 = 120메서드(불변)** — v10(120메서드)은 Phase 3.17c에서 이미 소진됐으므로
+본 증분은 **v11**이다(원 지시문의 "v10 재동결"은 3.17.1 동결을 반영하기 전 표기 — 사실대로 정정한다).
+
+구현 결과 **새 메서드는 0건**이다. 원 지시문은 "프리셋 조회 1 + 판매 플래너 3 내외"를 예상했으나,
+판매 플래너가 필요로 하는 데이터는 전부 기존 메서드로 닿는다 — 등급은 `listPartnerTiers`·
+`upsertPartnerTier`, 파트너는 `listPartners`·`updatePartner`, 트랙은 `listProgramSessions`·
+`updateProgramSession`, 프리셋은 서버 상태가 아니라 `src/fixtures/formatPresets.ts` 상수다.
+매출 계산은 순수 함수(`calcRevenue`)라 provider를 거치지 않는다. **닿는 데이터에 새 메서드를
+얹지 않는다** — 인터페이스는 시그니처 확장(`PartnerTierInput`·`PartnerInput`·`ProgramSessionInput`에
+필드 추가)만으로 끝난다. `importVendorQuote`는 계속 예약(만들지 말 것).
+
+PSA 6메서드는 3.18c가 **미착수**라 존재하지 않는다(§0 선행 조건 — 3.17.2 명단 식별 확정 대기).
 
 ### 25.6 열린 질문 — 초청제 모드 (구현하지 않음)
 
@@ -1635,6 +1644,12 @@ DMS 등록의 "신청 → 주최 승인 → 확정" 게이트를 **기존 RSVP �
 어느 쪽이든 상태 머신 개정이라 **사용자 승인 + 설계서 개정**이 선행해야 한다.
 
 ### 25.7 전시회 프리셋 [전부 가정 — 첫 실전 전 확정 게이트]
+
+구현 상태(Phase 3.18d): EX 템플릿 12건(`EXHIBITION_TEMPLATE`)과 데모 행사 1건(`prj-virtual-expo`,
+가상 명칭·무료입장 전제)이 들어갔다. 주최형 안에서 어느 템플릿을 쓸지는 `hostTemplateFor(format)`이
+고르고(§25.1 권한 ①), 파트너별 전개 규칙은 HT와 동일하다. **화면·데이터 양쪽에서 '가정' 표기를
+유지한다** — R&R·컴플라이언스는 주최형 세트를 그대로 쓰고, §25.3 표의 '시공 감리' 카드는 근거가
+없어 만들지 않았다.
 
 - 참가업체 = `partners` 일반화(tier는 부스 규격 중심), 참관객 = 모객형 등록 모듈 재사용,
   **무료입장 전제**(등록 모듈에 결제 없음, 유료화는 2차).

@@ -28,11 +28,15 @@ describe('홈(S1) — 주최형은 "파트너 검토 대기"로 대체 (감수 M
     renderRoute('/')
     await screen.findByRole('heading', { name: '홈 대시보드' })
 
-    expect(screen.queryByRole('heading', { name: '미결 컨펌' })).toBeNull()
+    // 큐 3종은 대시보드·파트너 두 비동기 호출이 각각 끝나야 자리를 잡는다. 콜드 런에서는
+    // 두 프라미스의 해소 순서가 뒤집혀 "먼저 findBy로 기다린 뒤 나머지를 동기 getBy로 읽는"
+    // 방식이 중간 렌더를 잡는다(3.17.1 T7과 같은 원인) — 전부 findBy로 기다린다.
     expect(await screen.findByRole('heading', { name: '지연' })).toBeTruthy()
-    expect(screen.getByRole('heading', { name: '임박' })).toBeTruthy()
+    expect(await screen.findByRole('heading', { name: '임박' })).toBeTruthy()
     // 행사 D-day는 KPI 타일이 아니라 페이지 헤더 우측 단일 pill에 있다
-    expect(screen.getByTestId('event-dday').textContent).toMatch(/D[-+]|D-day|일정 미정/)
+    expect((await screen.findByTestId('event-dday')).textContent).toMatch(/D[-+]|D-day|일정 미정/)
+    // 대체 규칙은 "다 그려진 뒤에도 없다"가 의미다 — 아직 안 그려져서 없는 것과 구분한다
+    expect(screen.queryByRole('heading', { name: '미결 컨펌' })).toBeNull()
 
     const reviewQueue = (
       await screen.findByRole('heading', { name: '파트너 검토 대기' })

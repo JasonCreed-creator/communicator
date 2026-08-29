@@ -14,8 +14,8 @@ import { defaultConsents, defaultFormFields, defaultSections } from '../../lib/l
 import {
   HOST_ROLE_CHARTER_TEMPLATE,
   HOST_SUBMIT_CATEGORY,
-  HOST_TEMPLATE,
   ROLE_CHARTER_TEMPLATES,
+  hostTemplateFor,
   wbsTemplateFor,
 } from '../../fixtures/wbsTemplates'
 import { FORMAT_PRESETS, presetCardOf } from '../../fixtures/formatPresets'
@@ -2178,7 +2178,10 @@ export class MockProvider implements DataProvider {
 
     const expanded: WbsTask[] = []
     let sortOrder = 1
-    for (const tpl of HOST_TEMPLATE) {
+    // v2.6 §25.1 권한 ① — 주최형 안에서 어느 템플릿을 쓸지는 format이 고른다(전시회=EX, 그 외=HT).
+    // 재전개는 code+partner_id 매칭이라 format을 바꾼 뒤 다시 전개하면 코드가 갈려 새로 깔린다 —
+    // S0 ③이 확인 다이얼로그를 띄우는 이유가 이것이다.
+    for (const tpl of hostTemplateFor(project.format)) {
       const direction = tpl.direction ?? 'internal'
       const instances: (Partner | null)[] = direction === 'partner_submit' ? activePartners : [null]
       for (const partner of instances) {

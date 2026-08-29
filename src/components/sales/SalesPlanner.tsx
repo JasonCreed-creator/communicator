@@ -43,6 +43,18 @@ function krw(n: number | null): string {
   return n == null ? '-' : `${n.toLocaleString('ko-KR')}원`
 }
 
+/** KPI 타일용 축약 표기 — 억/만 단위. 원 단위 정확값은 같은 타일의 보조 줄과 표가 그대로 보여준다.
+ *  (전각 숫자열이 타일 폭을 넘겨 잘리는 것을 막는 목적이라 반올림하지 않고 절사·분해만 한다) */
+function krwShort(n: number): string {
+  if (n === 0) return '0원'
+  const eok = Math.floor(n / 100_000_000)
+  const man = Math.floor((n % 100_000_000) / 10_000)
+  const won = n % 10_000
+  if (eok > 0) return man > 0 ? `${eok}억 ${man.toLocaleString('ko-KR')}만` : `${eok}억`
+  if (man > 0) return won > 0 ? `${man.toLocaleString('ko-KR')}만+` : `${man.toLocaleString('ko-KR')}만`
+  return `${n.toLocaleString('ko-KR')}원`
+}
+
 function pct(v: number | null): string {
   return v == null ? '-' : `${Math.round(v * 100)}%`
 }
@@ -263,8 +275,14 @@ function SimulationStep({
   plan: ReturnType<typeof calcRevenue>
   slotDemand: number
 }) {
-  const soldCount = plan.lines.reduce((sum, l) => sum + l.sold, 0)
-  const capacityTotal = plan.lines.reduce((sum, l) => sum + (l.capacity ?? 0), 0)
+  // '판매 현황'은 분자·분모의 기준을 맞춘다 — 정원 무제한 등급의 판매를 정원 있는 등급의
+  // 분모와 섞으면 5/4 같은 수치가 나온다(분모에 없는 판매가 분자에 들어간다).
+  const cappedLines = plan.lines.filter((l) => l.capacity != null)
+  const cappedSold = cappedLines.reduce((sum, l) => sum + l.sold, 0)
+  const capacityTotal = cappedLines.reduce((sum, l) => sum + (l.capacity ?? 0), 0)
+  const uncappedSold = plan.lines
+    .filter((l) => l.capacity == null)
+    .reduce((sum, l) => sum + l.sold, 0)
 
   return (
     <div className="space-y-4">
@@ -277,17 +295,25 @@ function SimulationStep({
       </div>
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatTile label="만석 기준 매출" value={krw(plan.target_total)} />
+        <StatTile
+          label="만석 기준 매출"
+          value={krwShort(plan.target_total)}
+          support={krw(plan.target_total)}
+        />
         <StatTile
           label="확정 매출"
-          value={krw(plan.sold_total)}
+          value={krwShort(plan.sold_total)}
           tone={plan.achievement != null && plan.achievement < 0.5 ? 'accent' : 'default'}
-          support={`달성률 ${pct(plan.achievement)}`}
+          support={`${krw(plan.sold_total)} · 달성률 ${pct(plan.achievement)}`}
         />
         <StatTile
           label="판매 현황"
-          value={capacityTotal > 0 ? `${soldCount}/${capacityTotal}` : String(soldCount)}
-          support={capacityTotal > 0 ? '정원 있는 등급 기준' : '정원 무제한'}
+          value={capacityTotal > 0 ? `${cappedSold}/${capacityTotal}` : String(uncappedSold)}
+          support={
+            capacityTotal > 0
+              ? `정원 있는 등급 기준${uncappedSold > 0 ? ` · 무제한 등급 ${uncappedSold}건 별도` : ''}`
+              : '전 등급 정원 무제한'
+          }
         />
         <StatTile
           label="세션 슬롯 수요"

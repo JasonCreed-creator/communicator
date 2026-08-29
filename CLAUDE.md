@@ -164,10 +164,12 @@ MICE 프로젝트 협업 허브 — 역할별(디자인·운영·등록) 산출�
     **format의 권한은 3가지뿐** — ①온보딩 시드 ②견적 모델 결정 ③전용 화면의 복합 게이트 구성요소.
     **상시 모듈 게이트는 기존 축이 유지**(파트너 보드=kind · 등록 깊이=event_type · PSA=psa_enabled) — format이 상시 토글의 두 번째 주인이 되지 않는다(§10 진입점 원칙 무충돌)
   - 3.18a format 축·`src/fixtures/formatPresets.ts`(프리셋 **단일 소스**)·S0 ③ 4카드+PSA 체크박스·S6 ① format 그룹·픽스처 마이그레이션
-  - 3.18b 판매 플래너(`calcRevenue.ts` 신설 — **calcEstimate·kpiRules·quoteMode 무접촉**) 3스텝·S-11 상단 탭·partner_tiers 확장·partners 부스·program_sessions.track·category 'benefit'
+  - 3.18b 판매 플래너(`calcRevenue.ts` 신설 — **calcEstimate·kpiRules·quoteMode 무접촉**) 3스텝·S-11 상단 탭·partner_tiers 확장·partners 부스·program_sessions.track·혜택 카테고리(HT-3 = '경품·이용권').
+    화면은 `src/components/sales/`에 둔다 — `components/partner/**`는 dod23 금액 비노출 가드 경로라 매출을 다루는 내부 도구를 넣으면 가드 의미가 흐려진다
   - 3.18c PSA — **미착수**(3.17.2 명단 식별 확정이 선행 조건). 설계만 §25.5에 문서화
-  - 3.18d 전시회 프리셋(EX WBS 템플릿·데모 픽스처 1건) — **전부 '가정' 표기 유지**
-  - **DataProvider v11 재동결** — v10(120메서드)은 3.17c에서 소진. `importVendorQuote`는 계속 예약(만들지 말 것)
+  - 3.18d 전시회 프리셋(EX WBS 템플릿 12건·데모 픽스처 1건 `prj-virtual-expo`) — **전부 '가정' 표기 유지**. 주최형 템플릿 선택 = `hostTemplateFor(format)`
+  - **DataProvider v11 재동결 = 120메서드(불변, 새 메서드 0건)** — 판매 플래너가 쓰는 데이터는 전부 기존 메서드로 닿고, 프리셋은 상수·매출 계산은 순수 함수다.
+    인터페이스 변경은 입력 타입 필드 확장뿐. v10(120메서드)은 3.17c에서 소진. `importVendorQuote`는 계속 예약(만들지 말 것)
   - **초청제 모드는 구현하지 않는다** — 기존 RSVP `InviteStatus`가 반대 방향이라 '승인 대기'를 표현할 수 없다(§25.6 열린 질문). 추측 구현 금지
   - 금지: conference 견적 경로 파일 무접촉(골든 벡터 0원 일치가 DoD) · S-10에 주최형 매출 버킷 주입 금지(§19.1 항등식 보호) · `/p`·발주처에 `tier.price`·타 파트너 정보 노출 금지 · 브라우저 E2E 신규 금지(vitest+RTL만)
   - **시각안 없이 진행** — 사용자 지시로 생략. 판단으로 이탈한 지점은 전부 체크아웃 보고에 "이탈" 명시

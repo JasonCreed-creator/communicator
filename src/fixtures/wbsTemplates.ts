@@ -2,7 +2,7 @@
 // 모객형 37태스크는 표를 그대로 옮긴 것(코드·기간·역할·origin_role 보존 — Configurator v0.2 호환).
 // 일반형 28태스크: §15가 코드 단위로 명시한 제외 집합(3.1~3.5 + 4.1~4.5·4.7, 4.6 존치)을
 //   제외하고 3G 2건을 추가 — GENERAL_EXCLUDED_CODES·GENERAL_EXTRA_TASKS가 §15의 정본 구현.
-import type { EventType, MemberRole, WbsDirection } from '../types/enums'
+import type { EventFormat, EventType, MemberRole, WbsDirection } from '../types/enums'
 
 export interface WbsTemplateTask {
   phase_no: number
@@ -168,6 +168,33 @@ export const HOST_TEMPLATE: readonly WbsTemplateTask[] = [
   ht('HT-11', '참관 등록 리드 데이터 제공(암호화)', 7, 7, 'reg', 'host_notice', 6),
   ht('HT-12', '결과 리포트 발송', 14, 14, 'pm', 'host_notice', 6),
 ]
+
+// ── v2.6 §25.7 — 전시회(EX) WBS 템플릿 [전부 가정] ────────────────────────────
+// 근거 행사 0건이다. 설계서 §25.7의 순서(참가업체 모집 D-90 → 부스 판매 마감 D-45 →
+// 배치도 확정 통지 D-40 → 그래픽·장치 신청 D-21 → 참관객 등록 오픈 D-30 → 시공 D-2~D-1 →
+// 운영 D0 → 철거 D0~D+1 → 리드 제공 D+7 → 리포트 D+14)를 그대로 옮기고, 그 사이를 메우는
+// 항목(전기·인터넷 추가 신청, 반입 동선 통지)은 HT의 대응 항목에서 유추했다.
+// **첫 실전 전에 확정 게이트를 거쳐야 한다** — 화면도 이 프리셋을 '가정'으로 표기한다.
+// 파트너별 전개 규칙은 HT와 동일하다(partner_submit이 참가업체 수만큼 인스턴스가 된다).
+export const EXHIBITION_TEMPLATE: readonly WbsTemplateTask[] = [
+  ht('EX-1', '참가업체 모집 오픈 — 참가 안내서·신청 양식 배포', -90, -90, 'pm', 'internal', 1),
+  ht('EX-2', '참가 신청서·계약서 제출', -45, -45, 'pm', 'partner_submit', 1),
+  ht('EX-3', '부스 배치도 확정 통지', -40, -40, 'pm', 'host_notice', 1),
+  ht('EX-4', '참관객 등록 오픈(무료입장)', -30, -30, 'reg', 'internal', 3),
+  ht('EX-5', '부스 그래픽·장치 신청 제출', -21, -21, 'design', 'partner_submit', 2),
+  ht('EX-6', '전기·인터넷·비품 추가 신청 제출', -14, -14, 'ops', 'partner_submit', 5),
+  ht('EX-7', '반입 동선·시공 일정 통지', -7, -7, 'ops', 'host_notice', 5),
+  ht('EX-8', '부스 시공·검수', -2, -1, 'ops', 'internal', 5),
+  ht('EX-9', '개장 운영', 0, 0, 'ops', 'internal', 5),
+  ht('EX-10', '철거·반출', 0, 1, 'ops', 'internal', 5),
+  ht('EX-11', '참관객 리드 데이터 제공(암호화)', 7, 7, 'reg', 'host_notice', 6),
+  ht('EX-12', '결과 리포트 발송', 14, 14, 'pm', 'host_notice', 6),
+]
+
+/** v2.6 §25.1 권한 ① — 주최형 WBS는 format이 고른다. 그 외 format은 HT를 쓴다 */
+export function hostTemplateFor(format: EventFormat): readonly WbsTemplateTask[] {
+  return format === 'exhibition' ? EXHIBITION_TEMPLATE : HOST_TEMPLATE
+}
 
 // R&R 카드 템플릿 — §15 역할 매핑 원칙(계약·정산·컨펌 게이트=pm / 랜딩·제작물=design /
 // 현장 운영·리허설·결과보고=ops / 리드젠·모객·RSVP·등록=reg) 기반 서술(가상 명칭, 가정)

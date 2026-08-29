@@ -21,6 +21,8 @@ import { EVENT_FORMATS } from '../types/enums'
 const DRAFT_PROJECT = 'prj-forum-h2'
 /** §21.3 주최형 데모 — v2.6에서 format:'dms'로 승격 */
 const HOST_PROJECT = 'prj-virtual-summit'
+/** §25.7 전시회 데모 [전부 가정] */
+const EXPO_PROJECT = 'prj-virtual-expo'
 
 afterEach(cleanup)
 
@@ -39,17 +41,21 @@ describe('DoD 47 format 축 (v2.6 §25)', () => {
     localStorage.setItem('communicator.currentProjectId', DRAFT_PROJECT)
   })
 
-  it('(a) 픽스처 마이그레이션 — 대행형 기존 행사는 conference, 주최형 데모는 dms다', async () => {
+  it('(a) 픽스처 마이그레이션 — 대행형 기존 행사는 conference, 주최형 데모만 판매형 포맷이다', async () => {
     const provider = mockProvider()
     const projects = await provider.listProjects()
     expect(projects.length).toBeGreaterThan(0)
+    // 주최형 데모 2건만 판매형 포맷이고, 나머지 대행형 행사는 전부 기본값으로 마이그레이션된다
+    const EXPECTED: Record<string, string> = { [HOST_PROJECT]: 'dms', [EXPO_PROJECT]: 'exhibition' }
     for (const summary of projects) {
       const p = await provider.getProject(summary.id)
       expect(EVENT_FORMATS).toContain(p.format)
-      expect(p.format).toBe(p.id === HOST_PROJECT ? 'dms' : 'conference')
+      expect(p.format, `${p.name}의 format`).toBe(EXPECTED[p.id] ?? 'conference')
+      expect(p.format === 'conference' ? p.kind : 'host').toBe(p.kind)
       // 초청제 게이트는 미구현이므로 conference 행사에 audience_model이 붙어선 안 된다(§25.6)
       if (p.format === 'conference') expect(p.audience_model).toBeNull()
     }
+    expect(Object.keys(EXPECTED).every((id) => projects.some((s) => s.id === id))).toBe(true)
   })
 
   it('(b) S0 ③에 4카드가 정의 순서대로 렌더되고, 근거가 약한 프리셋만 "가정"으로 표기된다', async () => {

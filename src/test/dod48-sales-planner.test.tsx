@@ -75,6 +75,11 @@ describe('DoD 48 판매 플래너 (v2.6 §25)', () => {
     expect(within(table).getAllByText('200,000,000원').length).toBeGreaterThan(0)
     // 제외된 등급을 숨기지 않고 이유를 적는다
     expect(screen.getByTestId('planner-excluded-note').textContent).toContain('silver')
+
+    // '판매 현황'의 분자·분모 기준이 같다 — 무제한 등급 판매는 분모에 없으니 분자에도 넣지 않는다
+    const soldTile = screen.getByText('판매 현황').closest('.ui-card') as HTMLElement
+    expect(within(soldTile).getByText('2/4')).toBeTruthy()
+    expect(soldTile.textContent).toContain('무제한 등급 3건 별도')
   })
 
   it('③ 프리셋 확인이 DMS 운영 프리셋 5줄을 보여주고 트랙을 저장한다', async () => {

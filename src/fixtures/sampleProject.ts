@@ -58,6 +58,7 @@ import {
   PROJECT_ID_HOST,
   seedHostFixtures,
 } from './hostFixtures'
+import { seedExhibitionFixtures } from './exhibitionFixtures'
 
 /** `/c/demo` 데모 라우트용 토큰 값 (CLAUDE.md §4 Phase 3) */
 export const DEMO_TOKEN = 'demo'
@@ -943,6 +944,8 @@ export function createFixtureState(): MockState {
 
   // ── v2.4 §21.3 — 주최형(파트너) 데모 행사 ──
   seedHostFixtures(state)
+  // v2.6 §25.7 — 전시회 데모 [전부 가정]
+  seedExhibitionFixtures(state)
 
   // ── v2.6 §24 — 등록 명단 시트 연동('갱신 있음' 상태). 데모 기본 행사 1건에만 붙는다 ──
   seedSheetFixtures(state)

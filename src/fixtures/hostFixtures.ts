@@ -134,6 +134,16 @@ export function seedHostFixtures(state: MockState): void {
     ...TIERS.map((t) => ({ ...t, project_id: PROJECT_ID_HOST })),
   )
 
+  // v2.6 §25.4 — DMS는 세션 단위로 정원을 잡고 트랙으로 나눈다(실물: 오전 Back-office ·
+  // 오후 Front-office). 판매 플래너 ③ 트랙 편성이 편집하는 대상이 이 행들이다.
+  // 마지막 한 건은 track=null로 남겨 '미편성' 상태를 화면에서 확인할 수 있게 한다.
+  state.program_sessions.push(
+    { id: 'pgs-vst-1', project_id: PROJECT_ID_HOST, section: '오전', start_time: '10:00', end_time: '10:40', title: '파트너 세션 A — 업무 자동화 도입기', speaker_name: null, speaker_title: null, speaker_org: null, note: '파트너 발표', track: 'Back-office', sort_order: 1 },
+    { id: 'pgs-vst-2', project_id: PROJECT_ID_HOST, section: '오전', start_time: '10:50', end_time: '11:30', title: '파트너 세션 B — 데이터 기반 구매', speaker_name: null, speaker_title: null, speaker_org: null, note: '파트너 발표', track: 'Back-office', sort_order: 2 },
+    { id: 'pgs-vst-3', project_id: PROJECT_ID_HOST, section: '오후', start_time: '14:00', end_time: '14:40', title: '파트너 세션 C — 고객 접점 재설계', speaker_name: null, speaker_title: null, speaker_org: null, note: '파트너 발표', track: 'Front-office', sort_order: 3 },
+    { id: 'pgs-vst-4', project_id: PROJECT_ID_HOST, section: '오후', start_time: '14:50', end_time: '15:30', title: '파트너 세션 D — 현장 운영 자동화', speaker_name: null, speaker_title: null, speaker_org: null, note: '파트너 발표', track: null, sort_order: 4 },
+  )
+
   const partners: Partner[] = PARTNERS.map((p) => ({
     id: p.id,
     project_id: PROJECT_ID_HOST,

@@ -7,6 +7,7 @@
 //   ① InfoTip 호버 1곳 표시 + 뷰포트 내 완전 노출 (가장 오른쪽 ⓘ로 클램프를 강제)
 //   ② 사이드바 링크 클릭 → aria-current 갱신 + 전체 리로드 0 (SPA 내비 증명)
 //   ③ 해당 세션이 바꾼 화면의 핵심 클릭 경로 1개 — 세션마다 아래 "③" 블록을 교체한다
+//      (3.18: 판매 플래너 3스텝 · S0 ③ 유형 4카드)
 // 캡처는 dist-demo/shots-interaction/ 에 남긴다. 실패 시 exit 1.
 import { createServer } from 'node:http'
 import { readFileSync, mkdirSync } from 'node:fs'
@@ -136,55 +137,93 @@ check(
   `${docCountBefore} → ${docRequests.length}`,
 )
 
-// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — 3.17.1: 등록 보드 시트 연결 카드 →
-//     '갱신 있음' 배지로 인라인 차이 펼침 → **S-12 현장 체크인 별도 화면**(결정 B) ──
-await tab.getByRole('link', { name: /^등록$/ }).click()
-await tab.waitForURL(/#\/registration/, { timeout: 10_000 })
+// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — 3.18: **행사 유형 4분류**.
+//     주최형(DMS) 행사로 전환 → 파트너 보드 **판매 플래너 탭** 3스텝 왕복 →
+//     세팅 미완료 행사의 S0 ③ **4카드** 확인. 전부 이번 회차에 새로 생긴 경로다. ──
 
-// 연결 카드는 탭 위 상시 노출 — 단방향 고지가 화면에 있어야 한다
-await tab.getByText('시트 → 앱 단방향 · 시트가 정본').first().waitFor({ timeout: 10_000 })
+// 데모 안내 칩은 우하단 고정이라 셀렉터 드롭다운 하단 행과 겹친다 — 사용자와 똑같이 닫고 시작한다
+const notice = tab.getByRole('button', { name: '안내 닫기' })
+if (await notice.count()) await notice.click()
 
-// 차이 표는 '갱신 있음'이면 기본 펼침(목업 기준) — 확인 전까지 반영되지 않는다
-await tab.getByRole('button', { name: /변경 \d+건 반영/ }).waitFor({ timeout: 10_000 })
-const diffRows = await tab.getByText(/^(추가|변경|제거)$/).count()
-check(diffRows >= 4, '인라인 차이 표 — 구분 열(추가·변경·제거)', `${diffRows}행`)
-const snapshotNotice = await tab.getByText(/자동 덮어쓰기는 하지 않습니다/).count()
-check(snapshotNotice >= 1, '확인 전까지 스냅숏 유지 고지', `${snapshotNotice}건`)
-await tab.screenshot({ path: resolve(SHOTS, '03a-sheet-diff-inline.png') })
+/** 사이드바 셀렉터로 현재 행사를 바꾼다 — 실제 사용자 경로 그대로(직접 URL 주입 아님) */
+async function switchProject(name) {
+  await tab.getByRole('button', { name: /현재 행사/ }).click()
+  await tab.getByRole('button', { name: new RegExp(name) }).first().click()
+  await tab.getByText(name).first().waitFor({ timeout: 10_000 })
+}
 
-// 배지 클릭으로 접히고 다시 펼쳐진다(핸드오프 §2.12 — 배지가 토글)
-const staleBadge = tab.getByRole('button', { name: /갱신 있음/ }).first()
-await staleBadge.click()
-await tab.getByRole('button', { name: /변경 \d+건 반영/ }).waitFor({ state: 'hidden', timeout: 10_000 })
-await staleBadge.click()
-await tab.getByRole('button', { name: /변경 \d+건 반영/ }).waitFor({ timeout: 10_000 })
-check(true, '갱신 있음 배지 토글 — 접힘 → 펼침 왕복', '차이 표 재노출')
+await switchProject('가상 서밋 2026')
+await tab.getByRole('link', { name: /^파트너 보드$/ }).click()
+await tab.waitForURL(/#\/partners/, { timeout: 10_000 })
 
-// 반영 전에는 명단이 직전 스냅숏 기준을 유지한다 — 새 행은 차이 표에만 있고 명단에는 없어야 한다
-const roster = tab.getByRole('table', { name: '참관객 명단' })
-const inRoster = await roster.getByText('서지안').count()
-const inDiff = await tab.getByRole('table', { name: '시트 차이' }).getByText(/서지안/).count()
+// 판매 플래너 탭은 복합 게이트(주최형 + 판매형 포맷)를 통과한 행사에만 뜬다
+const plannerTab = tab.getByRole('button', { name: '판매 플래너' })
+await plannerTab.waitFor({ timeout: 10_000 })
+await plannerTab.click()
+
+// ① 상품 정의 — 등급 카드에 판매 단가 입력이 있다(내부 전용)
+await tab.getByRole('heading', { name: /① 상품 정의/ }).waitFor({ timeout: 10_000 })
+const priceInputs = await tab.getByLabel('판매 단가 (내부)').count()
+check(priceInputs >= 3, '① 상품 정의 — 등급별 판매 단가 입력', `${priceInputs}개`)
+await tab.screenshot({ path: resolve(SHOTS, '03a-planner-step1.png') })
+
+// ② 목표 시뮬레이션 — 만석 기준 합계와 '왜 빠졌는지'가 함께 보인다
+await tab.getByRole('button', { name: '다음' }).click()
+await tab.getByRole('table', { name: '등급별 판매 계획' }).waitFor({ timeout: 10_000 })
+const targetCells = await tab.getByText('200,000,000원').count()
+check(targetCells >= 1, '② 시뮬레이션 — 만석 기준 매출 Σ(정원×단가)', `${targetCells}곳`)
+const excludedNote = await tab.getByTestId('planner-excluded-note').innerText()
 check(
-  inRoster === 0 && inDiff >= 1,
-  '확인 전 스냅숏 유지 — 신규 행은 차이 표에만, 명단에는 없음',
-  `명단 ${inRoster}건 / 차이 표 ${inDiff}건`,
+  /silver/.test(excludedNote),
+  '② 합계에서 빠진 등급을 숨기지 않고 이유를 적는다',
+  excludedNote.trim().slice(0, 40),
 )
+await tab.screenshot({ path: resolve(SHOTS, '03b-planner-step2.png') })
 
-// 등록 보드 참관객 표에는 체크인 조작 UI가 없다 — 경로는 S-12 하나(3.17.1 T1)
-const rosterCheckinButtons = await roster.getByRole('button', { name: '체크인' }).count()
-check(rosterCheckinButtons === 0, '등록 보드 — 체크인 조작 UI 부재(경로 단일화)', `${rosterCheckinButtons}개`)
+// ③ 프리셋 확인 — DMS 운영 프리셋 5줄 + 트랙 편성
+await tab.getByRole('button', { name: '다음' }).click()
+await tab.getByTestId('planner-ops-notes').waitFor({ timeout: 10_000 })
+const opsNotes = await tab.getByTestId('planner-ops-notes').locator('li').count()
+check(opsNotes === 5, '③ 프리셋 확인 — DMS 운영 프리셋 5줄', `${opsNotes}줄`)
+const trackTable = await tab.getByRole('table', { name: '트랙 편성' }).count()
+check(trackTable >= 1, '③ 트랙 편성 표', `${trackTable}개`)
+await tab.screenshot({ path: resolve(SHOTS, '03c-planner-step3.png') })
 
-// S-12는 사이드바의 **별도 화면**이다(결정 B — 게이트 뒤에 숨기지 않는다)
-await tab.getByRole('link', { name: /^현장 체크인$/ }).click()
-await tab.waitForURL(/#\/checkin/, { timeout: 10_000 })
-await tab.getByPlaceholder(/이름 · 소속 · 뱃지번호/).waitFor({ timeout: 10_000 })
-const denseToggle = await tab.getByRole('button', { name: /밀집 모드|기본 밀도/ }).count()
-check(denseToggle === 0, 'S-12 현장 체크인 — 밀집 모드 토글 부재(현장 터치 44 고정)', `${denseToggle}개`)
+// 대행형 행사로 돌아가면 탭 자체가 사라진다 — format 단독 게이트가 아님을 실행으로 확인
+await switchProject('샘플 테크 컨퍼런스')
+await tab.getByRole('heading', { name: '파트너 보드' }).waitFor({ timeout: 10_000 })
+const plannerOnAgency = await tab.getByRole('button', { name: '판매 플래너' }).count()
+check(plannerOnAgency === 0, '대행형에서는 판매 플래너 탭 부재(복합 게이트)', `${plannerOnAgency}개`)
 
-// 현장 담당에게 열리면 안 되는 관리 경로가 이 화면에 없다(DoD 45)
-const adminPaths = await tab.getByRole('button', { name: /연결 설정|지금 동기화|내보내기/ }).count()
-check(adminPaths === 0, 'S-12 — 시트 설정·내보내기 경로 부재', `${adminPaths}개`)
-await tab.screenshot({ path: resolve(SHOTS, '03b-onsite-checkin.png') })
+// S0 ③ — 세팅 미완료 행사의 유형 4카드
+await switchProject('리더십 포럼 하반기')
+await tab.evaluate(() => {
+  window.location.hash = '#/onboarding'
+})
+await tab.getByRole('heading', { name: '① 행사개요' }).waitFor({ timeout: 10_000 })
+await tab.getByRole('button', { name: '다음' }).click()
+await tab.getByRole('heading', { name: '② 담당자' }).waitFor({ timeout: 10_000 })
+await tab.getByRole('button', { name: '다음' }).click()
+await tab.getByRole('heading', { name: '③ 유형·확인' }).waitFor({ timeout: 10_000 })
+const cards = await tab.getByRole('radio').count()
+check(cards === 4, 'S0 ③ — 유형 4카드', `${cards}장`)
+const assumedBadges = await tab.getByText('가정', { exact: true }).count()
+check(assumedBadges === 2, "근거가 약한 프리셋만 '가정' 표기(DMS·전시회)", `${assumedBadges}개`)
+await tab.screenshot({ path: resolve(SHOTS, '03d-onboarding-format-cards.png') })
+
+// 전시회 데모 — EX 템플릿이 실제로 전개돼 일정에 EX 코드로 보인다(3.18d, 전부 '가정')
+// S0는 사이드바가 없는 독립 화면이라 셀렉터를 쓰려면 먼저 본체로 돌아온다
+await tab.evaluate(() => {
+  window.location.hash = '#/'
+})
+await tab.getByRole('button', { name: /현재 행사/ }).waitFor({ timeout: 10_000 })
+await switchProject('가상산업박람회 2026')
+await tab.getByRole('link', { name: /^일정$/ }).click()
+await tab.waitForURL(/#\/schedule/, { timeout: 10_000 })
+await tab.getByText(/EX-1\b/).first().waitFor({ timeout: 10_000 })
+const exCodes = await tab.getByText(/^EX-\d+$/).count()
+check(exCodes >= 10, '전시회 — EX WBS 템플릿 전개', `${exCodes}개 코드`)
+await tab.screenshot({ path: resolve(SHOTS, '03e-exhibition-ex-wbs.png') })
 
 await browser.close()
 server.close()
