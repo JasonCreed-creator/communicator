@@ -137,6 +137,11 @@ describe('DoD 50 폼 정본 — 소스 가드 (§10)', () => {
     expect(css).toMatch(/accent-color:\s*var\(--accent\)/)
     expect(css.match(/accent-color:/g) ?? []).toHaveLength(1)
 
+    // 스캔 범위가 앱 소스로 묶여 있어야 한다. 자동 탐지로 되돌리면 `.md` 문서에 적은 클래스 이름이
+    // 진짜 유틸리티가 되어 "1회 선언"이 출하 CSS에서 깨진다 — 3.19에서 두 번(가드 정규식·PROGRESS 문장) 재현했다
+    expect(css).toMatch(/@import\s+['"]tailwindcss['"]\s+source\(none\)/)
+    expect(css).toMatch(/@source\s+['"]\.\/['"]/)
+
     // 화면 코드가 인라인 accentColor / accent-color 로 되칠하지 않는다
     const offenders: string[] = []
     for (const [file, src] of sourceEntries()) {

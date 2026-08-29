@@ -1,14 +1,16 @@
-@import 'tailwindcss';
+@import 'tailwindcss' source(none);
 @import './styles/tokens.css';
 
-/* 데모 아티팩트 빌드용 demo/ 디렉터리는 Tailwind 스캔에서 제외한다.
-   (스캔에 들면 demo/ 안의 문자열이 앱 CSS에 유틸리티로 새어 들어 앱 번들이 커진다.)
-   따라서 demo/ 컴포넌트는 Tailwind 클래스 대신 tokens.css 변수를 인라인 스타일로 쓴다. */
-@source not '../demo';
+/* ── 유틸리티 후보 스캔 범위는 **앱 소스로 한정한다** ──
+   Tailwind v4의 기본값은 프로젝트 루트 자동 탐지라 `.md` 문서까지 훑는다. 그래서 클래스처럼 생긴
+   문자열을 **글로 적기만 해도** 진짜 유틸리티가 생성된다 — 3.19에서 두 번 실측했다:
+   ① dod50 가드의 정규식 리터럴이 `.accent-*` 2건을 만들었고,
+   ② 그 결함을 설명한 PROGRESS.md 문장이 같은 2건을 되살렸다.
+   `source(none)` + 명시 `@source`로 탐지를 끄면 문서가 CSS에 영향을 줄 길이 없다.
 
-/* 테스트 파일도 스캔에서 제외한다. 단언에 쓰는 클래스 문자열(그리고 소스 가드의 정규식 리터럴)이
-   앱 CSS에 실제 유틸리티로 새어 들어간다 — jsdom 테스트는 CSS를 적용하지 않으므로 필요도 없다.
-   (3.19에서 실측: dod50 가드의 패턴 문자열이 `.accent-*` 유틸리티 2건을 생성했다.) */
+   제외되는 것들: demo/(tokens.css 변수를 인라인 스타일로 쓴다) · docs/·*.md(문서) ·
+   src/test(jsdom은 CSS를 적용하지 않는다). index.html 2종에는 유틸리티가 없다(root div뿐). */
+@source './';
 @source not './test';
 
 /* ── 전역 베이스 — 디자인지시서 v1 §1·§2 ── */
