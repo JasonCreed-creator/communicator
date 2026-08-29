@@ -329,7 +329,7 @@ Phase 3.8과 3.9는 **별도 커밋·별도 PR**로 분리한다(3.8 = 타입·�
 | 금액 비노출 | `grep -rn "total_amount\|breakdown\|ordered_amount\|actual_amount\|markup\|margin\|settlement\|contract_amount" src/pages/Client* src/pages/Landing* src/pages/Partner* src/lib/landing* src/components/plan src/components/client src/components/partner` | **DoD 23·30·32 (v2.4 — contract_amount 키·Partner 경로 확대)** |
 | 온보딩 플래그 | `grep -rn "onboarding_completed" src` | DoD 16 |
 | **공개 링크 공유 문구** | `grep -rn "링크가 있는 모든" src` — 금지문(`공유하지 마세요`) 밖에서 0건 | **3.17.1 T2 — 참가자 실명·연락처 시트를 링크 공개로 권하는 문구 금지** |
-| **폼 정본 우회** | `grep -rn "accentColor\|accent-color" src --include=*.tsx` 0건 + `dod50-form-canon` 소스 가드(체크·라디오 `ui-check` / 셀렉트 `ui-select`) | **DoD 50 — 컨트롤이 다시 브라우저 기본값으로 갈라지는 것을 막는다** |
+| **폼 정본 우회** | `dod50-form-canon` 소스 가드 — accent 재선언 3형(인라인 `accentColor` · CSS `accent-color` · Tailwind 축약 `accent-*`) 0건 + 체크·라디오 `ui-check` / 셀렉트 `ui-select` | **DoD 50 — 컨트롤이 다시 브라우저 기본값으로 갈라지는 것을 막는다. Tailwind 축약도 같은 재선언이라 함께 막는다(3.19 실측: 슬라이더 2곳)** |
 
 앞의 3종은 `src/test/dod-project-scope-guard.test.ts`·기존 DoD 테스트가 상시 자동 검증한다 — 셸 grep은 이중 확인용이다.
 

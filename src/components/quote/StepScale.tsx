@@ -119,7 +119,7 @@ export default function StepScale({
           step={10}
           value={Math.min(form.target, TARGET_MAX)}
           onChange={(e) => onField('target', +e.target.value)}
-          className="mt-2 w-full accent-(--accent)"
+          className="mt-2 w-full"
           aria-label={`${t.attendeeLabel} 슬라이더`}
         />
         <div className="flex justify-between text-xs text-ink-cap">
@@ -203,7 +203,7 @@ export default function StepScale({
               const snapped = Math.max(LEAD_MIN, Math.min(form.target, Math.round(raw / 10) * 10 || LEAD_MIN))
               onField('guarantee', snapped)
             }}
-            className="mt-3 w-full accent-(--accent)"
+            className="mt-3 w-full"
             aria-label={`${t.guaranteeLabel} 슬라이더`}
           />
         </div>

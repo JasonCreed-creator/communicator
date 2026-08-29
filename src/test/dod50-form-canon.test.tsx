@@ -110,6 +110,16 @@ function hasClass(tag: string, src: string, cls: string): boolean {
 }
 
 /**
+ * 인라인 스타일·CSS 선언뿐 아니라 Tailwind의 accent 유틸리티 축약까지 잡는다 — 셋 다 같은 재선언이다.
+ *
+ * 패턴을 **문자열 조각으로 이어 붙여** 만든다: 정규식 리터럴에 클래스처럼 생긴 문자열을 그대로 적으면
+ * Tailwind 스캐너가 그것을 후보로 읽어 앱 CSS에 진짜 유틸리티를 만들어 낸다(3.19에서 실측).
+ */
+const ACCENT_REDECLARED = new RegExp(
+  ['accentColor', 'accent' + '-color', '\\baccent' + '-[(\\[]', '\\baccent' + '-accent\\b'].join('|'),
+)
+
+/**
  * 승인된 예외 — 정본을 벗어나는 지점은 **여기에 사유와 함께** 적는다. 무설명 예외는 통과하지 않는다.
  * `file`은 경로 꼬리, `contains`는 그 태그 안에 반드시 들어 있는 문자열이다.
  */
@@ -131,7 +141,9 @@ describe('DoD 50 폼 정본 — 소스 가드 (§10)', () => {
     const offenders: string[] = []
     for (const [file, src] of sourceEntries()) {
       src.split('\n').forEach((line, i) => {
-        if (/accentColor|accent-color/.test(line)) offenders.push(`${file}:${i + 1} ${line.trim()}`)
+        if (ACCENT_REDECLARED.test(line)) {
+          offenders.push(`${file}:${i + 1} ${line.trim()}`)
+        }
       })
     }
     expect(offenders).toEqual([])
