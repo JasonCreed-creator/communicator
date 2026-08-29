@@ -5,7 +5,11 @@
 //
 // 금액은 전부 부가세 별도로 저장한다. 포함으로 받은 값은 저장 직전에 분리하고,
 // 사용자에게는 "받은 금액 → 저장 금액"을 그대로 보여준다(§19.4 · R-S3).
+//
+// 금액 칸은 MoneyField다 — 자릿수 한 자리가 마진을 열 배로 틀리므로 저장 값을 `number | null`로
+// 잡고(빈 칸 = 미정, 0과 구분) 한글 에코로 사람 눈이 자릿수를 검산하게 한다.
 import { useState } from 'react'
+import MoneyField from '../internal/MoneyField'
 import { toVatExcluded } from '../../lib/settlement'
 import type { SettlementItem, SettlementItemStatus, Vendor } from '../../types/entities'
 import type { MemberWithProfile } from '../../types/views'
@@ -30,17 +34,8 @@ function krw(n: number | null): string {
   return n == null ? '—' : `${n.toLocaleString('ko-KR')}원`
 }
 
-/** 숫자 입력 — 빈 문자열은 null(미입력), 숫자가 아니면 null */
-function toAmount(raw: string): number | null {
-  const cleaned = raw.replace(/[,\s]/g, '')
-  if (cleaned === '') return null
-  const n = Number(cleaned)
-  return Number.isFinite(n) ? n : null
-}
-
 /** 부가세 토글 미리보기 — "받은 금액 1,320,000(포함) → 저장 1,200,000(별도)" */
-function VatPreview({ raw, vatIncluded }: { raw: string; vatIncluded: boolean }) {
-  const amount = toAmount(raw)
+function VatPreview({ amount, vatIncluded }: { amount: number | null; vatIncluded: boolean }) {
   if (amount == null) return null
   return (
     <p className="text-xs text-ink-sub" data-testid="vat-preview">
@@ -54,8 +49,8 @@ function VatPreview({ raw, vatIncluded }: { raw: string; vatIncluded: boolean })
 }
 
 interface AmountFormValue {
-  ordered: string
-  actual: string
+  ordered: number | null
+  actual: number | null
   vatIncluded: boolean
   status: SettlementItemStatus
   evidence: string
@@ -63,8 +58,8 @@ interface AmountFormValue {
 
 function amountFormOf(item: SettlementItem): AmountFormValue {
   return {
-    ordered: item.ordered_amount == null ? '' : String(item.ordered_amount),
-    actual: item.actual_amount == null ? '' : String(item.actual_amount),
+    ordered: item.ordered_amount,
+    actual: item.actual_amount,
     vatIncluded: false,
     status: item.status,
     evidence: item.evidence ?? '',
@@ -86,7 +81,7 @@ function VendorPicker({
     <div className="flex flex-col gap-1.5">
       <select
         aria-label="협력사"
-        className="ui-input"
+        className="ui-input ui-select"
         value={value}
         onChange={(e) => onChange({ value: e.target.value, freeName })}
       >
@@ -109,6 +104,17 @@ function VendorPicker({
       )}
     </div>
   )
+}
+
+interface ItemDraft {
+  title: string
+  spec: string
+  vendor: string
+  vendorName: string
+  assignee: string
+  ordered: number | null
+  actual: number | null
+  vatIncluded: boolean
 }
 
 export interface SettlementItemsProps {
@@ -143,14 +149,14 @@ export default function SettlementItems({
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState<AmountFormValue | null>(null)
   const [adding, setAdding] = useState(false)
-  const [draft, setDraft] = useState({
+  const [draft, setDraft] = useState<ItemDraft>({
     title: '',
     spec: '',
     vendor: '',
     vendorName: '',
     assignee: '',
-    ordered: '',
-    actual: '',
+    ordered: null,
+    actual: null,
     vatIncluded: false,
   })
   const [busy, setBusy] = useState(false)
@@ -176,8 +182,8 @@ export default function SettlementItems({
       evidence: form.evidence.trim() === '' ? null : form.evidence.trim(),
     }
     if (hasCost) {
-      patch.ordered_amount = toAmount(form.ordered)
-      patch.actual_amount = toAmount(form.actual)
+      patch.ordered_amount = form.ordered
+      patch.actual_amount = form.actual
       patch.vat_included_input = form.vatIncluded
     }
     const ok = await onUpdate(item.id, patch)
@@ -201,15 +207,15 @@ export default function SettlementItems({
       assignee_id: draft.assignee === '' ? null : draft.assignee,
     }
     if (hasCost) {
-      input.ordered_amount = toAmount(draft.ordered)
-      input.actual_amount = toAmount(draft.actual)
+      input.ordered_amount = draft.ordered
+      input.actual_amount = draft.actual
       input.vat_included_input = draft.vatIncluded
     }
     const created = await onCreate(input)
     setBusy(false)
     if (created !== undefined) {
       setAdding(false)
-      setDraft({ title: '', spec: '', vendor: '', vendorName: '', assignee: '', ordered: '', actual: '', vatIncluded: false })
+      setDraft({ title: '', spec: '', vendor: '', vendorName: '', assignee: '', ordered: null, actual: null, vatIncluded: false })
     }
   }
 
@@ -283,31 +289,23 @@ export default function SettlementItems({
           </p>
           <div className="mt-2 grid gap-3 sm:grid-cols-2">
             {hasCost && (
-              <label className="flex flex-col gap-1">
-                <span className="t-caption">발주액</span>
-                <input
-                  className="ui-input"
-                  inputMode="numeric"
-                  value={form.ordered}
-                  onChange={(e) => setForm({ ...form, ordered: e.target.value })}
-                />
-              </label>
+              <MoneyField
+                label="발주액"
+                value={form.ordered}
+                onChange={(next) => setForm({ ...form, ordered: next })}
+              />
             )}
             {hasCost && (
-              <label className="flex flex-col gap-1">
-                <span className="t-caption">실집행</span>
-                <input
-                  className="ui-input"
-                  inputMode="numeric"
-                  value={form.actual}
-                  onChange={(e) => setForm({ ...form, actual: e.target.value })}
-                />
-              </label>
+              <MoneyField
+                label="실집행"
+                value={form.actual}
+                onChange={(next) => setForm({ ...form, actual: next })}
+              />
             )}
             <label className="flex flex-col gap-1">
               <span className="t-caption">상태</span>
               <select
-                className="ui-input"
+                className="ui-input ui-select"
                 value={form.status}
                 onChange={(e) => setForm({ ...form, status: e.target.value as SettlementItemStatus })}
               >
@@ -330,15 +328,16 @@ export default function SettlementItems({
           </div>
           {hasCost && (
             <div className="mt-2 flex flex-wrap items-center gap-3">
-              <label className="flex items-center gap-2 text-sm text-ink-sub">
+              <label className="ui-check-row text-sm text-ink-sub">
                 <input
                   type="checkbox"
+                  className="ui-check"
                   checked={form.vatIncluded}
                   onChange={(e) => setForm({ ...form, vatIncluded: e.target.checked })}
                 />
                 부가세 포함 금액으로 입력
               </label>
-              <VatPreview raw={form.actual || form.ordered} vatIncluded={form.vatIncluded} />
+              <VatPreview amount={form.actual ?? form.ordered} vatIncluded={form.vatIncluded} />
             </div>
           )}
           <div className="mt-3 flex gap-2">
@@ -418,7 +417,7 @@ export default function SettlementItems({
               <label className="flex flex-col gap-1">
                 <span className="t-caption">담당</span>
                 <select
-                  className="ui-input"
+                  className="ui-input ui-select"
                   value={draft.assignee}
                   onChange={(e) => setDraft({ ...draft, assignee: e.target.value })}
                 >
@@ -431,39 +430,32 @@ export default function SettlementItems({
                 </select>
               </label>
               {hasCost && (
-                <label className="flex flex-col gap-1">
-                  <span className="t-caption">발주액</span>
-                  <input
-                    className="ui-input"
-                    inputMode="numeric"
-                    value={draft.ordered}
-                    onChange={(e) => setDraft({ ...draft, ordered: e.target.value })}
-                  />
-                </label>
+                <MoneyField
+                  label="발주액"
+                  value={draft.ordered}
+                  onChange={(next) => setDraft({ ...draft, ordered: next })}
+                />
               )}
               {hasCost && (
-                <label className="flex flex-col gap-1">
-                  <span className="t-caption">실집행</span>
-                  <input
-                    className="ui-input"
-                    inputMode="numeric"
-                    value={draft.actual}
-                    onChange={(e) => setDraft({ ...draft, actual: e.target.value })}
-                  />
-                </label>
+                <MoneyField
+                  label="실집행"
+                  value={draft.actual}
+                  onChange={(next) => setDraft({ ...draft, actual: next })}
+                />
               )}
             </div>
             {hasCost && (
               <div className="mt-2 flex flex-wrap items-center gap-3">
-                <label className="flex items-center gap-2 text-sm text-ink-sub">
+                <label className="ui-check-row text-sm text-ink-sub">
                   <input
                     type="checkbox"
+                    className="ui-check"
                     checked={draft.vatIncluded}
                     onChange={(e) => setDraft({ ...draft, vatIncluded: e.target.checked })}
                   />
                   부가세 포함 금액으로 입력
                 </label>
-                <VatPreview raw={draft.actual || draft.ordered} vatIncluded={draft.vatIncluded} />
+                <VatPreview amount={draft.actual ?? draft.ordered} vatIncluded={draft.vatIncluded} />
               </div>
             )}
             <div className="mt-3 flex gap-2">

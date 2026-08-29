@@ -222,12 +222,12 @@ export default function SheetConnectWizard({
                   />
                 ))}
               </ul>
-              <label className="flex items-center gap-2 text-sm text-ink">
+              <label className="ui-check-row text-sm text-ink">
                 <input
                   type="checkbox"
                   checked={firstRowIsHeader}
                   onChange={(e) => setFirstRowIsHeader(e.target.checked)}
-                  className="size-4 accent-accent"
+                  className="ui-check"
                 />
                 첫 행을 헤더로 사용
               </label>
@@ -294,7 +294,7 @@ export default function SheetConnectWizard({
                                   [p.column]: e.target.value as SheetMappedField | 'ignore',
                                 }))
                               }
-                              className="ui-input w-full text-xs"
+                              className="ui-input ui-select w-full text-xs"
                             >
                               {FIELD_OPTIONS.map((o) => (
                                 <option key={o.value} value={o.value}>
@@ -376,13 +376,9 @@ function TabOption({
             {tab.rows.toLocaleString()}행 · {tab.columns}열{tab.note ? ` · ${tab.note}` : headers}
           </span>
         </span>
-        {!tab.selectable ? (
-          <LevelBadge level="neutral" label="선택 불가" />
-        ) : selected ? (
-          <LevelBadge level="attention" label="선택됨" />
-        ) : (
-          <span className="shrink-0 text-sm text-ink-cap">선택</span>
-        )}
+        {/* §10-B — 선택은 보더·틴트(＋aria-pressed)로 끝낸다. 우측은 '선택 불가'처럼
+            누를 수 없는 이유를 말하는 정보 배지 자리다. */}
+        {!tab.selectable && <LevelBadge level="neutral" label="선택 불가" />}
       </button>
     </li>
   )

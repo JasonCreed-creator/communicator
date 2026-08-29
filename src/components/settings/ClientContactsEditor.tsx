@@ -4,6 +4,7 @@
 // readOnly=true(비 pm)면 추가 폼·발급/회수 버튼을 숨기고 표시(조회·복사)만 남긴다.
 import { useState, type FormEvent } from 'react'
 import ErrorAlert from '../internal/ErrorAlert'
+import Field from '../internal/Field'
 import { useAsync, useMutation } from '../../hooks/useAsync'
 import { getDataProvider } from '../../providers'
 import type { ClientToken, UUID } from '../../types/entities'
@@ -176,13 +177,19 @@ function AddContactForm({ projectId, onCreated }: { projectId: UUID; onCreated: 
   const [name, setName] = useState('')
   const [org, setOrg] = useState('')
   const [email, setEmail] = useState('')
+  // §10-C — 이름 미입력은 그 줄에서 말한다(전에는 조용히 무시했다). 블록은 서버 거절 자리다
+  const [nameError, setNameError] = useState<string | null>(null)
   const create = useMutation(() =>
     provider.createClientContact({ project_id: projectId, name, org: org || undefined, email: email || undefined }),
   )
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
-    if (!name.trim()) return
+    if (!name.trim()) {
+      setNameError('이름을 입력하세요.')
+      return
+    }
+    setNameError(null)
     const result = await create.run()
     if (result) {
       setName('')
@@ -194,19 +201,24 @@ function AddContactForm({ projectId, onCreated }: { projectId: UUID; onCreated: 
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-3 border-t border-border pt-3">
-      <label className="flex flex-col gap-1 t-caption">
-        이름
-        <input value={name} onChange={(e) => setName(e.target.value)} className="ui-input w-32" />
-      </label>
-      <label className="flex flex-col gap-1 t-caption">
-        소속
+      <Field label="이름" required error={nameError}>
+        <input
+          value={name}
+          onChange={(e) => {
+            setName(e.target.value)
+            if (nameError) setNameError(null)
+          }}
+          aria-invalid={nameError ? true : undefined}
+          className={`ui-input w-32${nameError ? ' ui-input-error' : ''}`}
+        />
+      </Field>
+      <Field label="소속">
         <input value={org} onChange={(e) => setOrg(e.target.value)} className="ui-input w-32" />
-      </label>
-      <label className="flex flex-col gap-1 t-caption">
-        이메일
+      </Field>
+      <Field label="이메일">
         <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="ui-input w-44" />
-      </label>
-      <button type="submit" disabled={create.pending} className="btn btn-primary btn-sm">
+      </Field>
+      <button type="submit" disabled={create.pending} className="btn btn-ghost btn-sm">
         연락처 추가
       </button>
       <ErrorAlert message={create.error} />

@@ -210,9 +210,10 @@ export default function LandingEditorPage() {
                     <button type="button" className="btn px-2 py-1 text-xs" onClick={() => moveSection(s.id, 1)}>
                       ↓
                     </button>
-                    <label className="ml-2 flex items-center gap-1 text-xs text-ink-sub">
+                    <label className="ui-check-row ml-2 items-center text-xs text-ink-sub">
                       <input
                         type="checkbox"
+                        className="ui-check"
                         checked={s.visible}
                         onChange={(e) => patchSection(s.id, (x) => ({ ...x, visible: e.target.checked }))}
                       />
@@ -245,9 +246,10 @@ export default function LandingEditorPage() {
                 </div>
 
                 {SECTION_SUPPORTS_AUTOFILL[s.type] && (
-                  <label className="mt-2 flex items-center gap-2 text-xs text-ink-sub">
+                  <label className="ui-check-row mt-2 items-center text-xs text-ink-sub">
                     <input
                       type="checkbox"
+                      className="ui-check"
                       checked={s.autofill}
                       onChange={(e) => patchSection(s.id, (x) => ({ ...x, autofill: e.target.checked }))}
                     />
@@ -384,9 +386,10 @@ export default function LandingEditorPage() {
                 onChange={(e) => patch((p) => ({ ...p, cta_label: e.target.value }))}
               />
             </label>
-            <label className="flex items-center gap-2 text-xs text-ink-sub">
+            <label className="ui-check-row items-center text-xs text-ink-sub">
               <input
                 type="checkbox"
+                className="ui-check"
                 checked={page.sticky_nav}
                 onChange={(e) => patch((p) => ({ ...p, sticky_nav: e.target.checked }))}
               />
@@ -395,7 +398,7 @@ export default function LandingEditorPage() {
             <label className="flex flex-col gap-1 t-caption">
               폼 제출 대상
               <select
-                className="ui-input"
+                className="ui-input ui-select"
                 value={page.submit_target}
                 onChange={(e) =>
                   patch((p) => ({ ...p, submit_target: e.target.value as LandingPage['submit_target'] }))

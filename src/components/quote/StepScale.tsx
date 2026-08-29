@@ -83,7 +83,7 @@ export default function StepScale({
         </div>
         <label className="block">
           <span className="t-caption">{t.natureLabel}</span>
-          <select className="ui-input mt-1 w-full" value={form.eventNature} onChange={(e) => onField('eventNature', e.target.value)}>
+          <select className="ui-input ui-select mt-1 w-full" value={form.eventNature} onChange={(e) => onField('eventNature', e.target.value)}>
             {EVENT_TYPE_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>{o.label}</option>
             ))}
@@ -95,6 +95,7 @@ export default function StepScale({
       <div>
         <span className="t-caption">{t.attendeeLabel}</span>
         <div className="mt-1 flex items-center gap-3">
+          {/* 슬라이더와 한 쌍인 초점 숫자라 가운데 정렬이 의도다 — 우측정렬(ui-input-num)을 붙이지 않는다 */}
           <input
             type="number"
             min={TARGET_MIN}
@@ -118,7 +119,7 @@ export default function StepScale({
           step={10}
           value={Math.min(form.target, TARGET_MAX)}
           onChange={(e) => onField('target', +e.target.value)}
-          className="mt-2 w-full accent-(--accent)"
+          className="mt-2 w-full"
           aria-label={`${t.attendeeLabel} 슬라이더`}
         />
         <div className="flex justify-between text-xs text-ink-cap">
@@ -164,6 +165,7 @@ export default function StepScale({
         <div>
           <span className="t-caption">{t.guaranteeLabel}</span>
           <div className="mt-1 flex flex-wrap items-center gap-3">
+            {/* 위 참석인원과 같은 슬라이더 짝 — 가운데 정렬 유지 */}
             <input
               type="number"
               min={LEAD_MIN}
@@ -201,7 +203,7 @@ export default function StepScale({
               const snapped = Math.max(LEAD_MIN, Math.min(form.target, Math.round(raw / 10) * 10 || LEAD_MIN))
               onField('guarantee', snapped)
             }}
-            className="mt-3 w-full accent-(--accent)"
+            className="mt-3 w-full"
             aria-label={`${t.guaranteeLabel} 슬라이더`}
           />
         </div>
@@ -217,6 +219,7 @@ export default function StepScale({
           <p className="mb-3 text-xs leading-relaxed text-ink-sub">{t.genDesc}</p>
           <div className="flex flex-wrap items-center gap-2.5">
             <button type="button" className="btn btn-ghost btn-sm" onClick={() => onField('genAttendees', Math.max(0, (form.genAttendees || 0) - 10))}>−10</button>
+            {/* −10 / +10 사이 값이라 가운데 정렬이 의도다 */}
             <input
               type="number"
               min={0}

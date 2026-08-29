@@ -17,6 +17,8 @@ import { useMemo, useState } from 'react'
 import Card from '../internal/Card'
 import EmptyState from '../internal/EmptyState'
 import ErrorAlert from '../internal/ErrorAlert'
+import Field from '../internal/Field'
+import MoneyField from '../internal/MoneyField'
 import ProgressBar from '../internal/ProgressBar'
 import StatTile from '../internal/StatTile'
 import { LevelBadge } from '../internal/StatusBadge'
@@ -29,6 +31,7 @@ import {
   totalSessionSlots,
 } from '../../modules/quote/engine/calcRevenue'
 import { getDataProvider } from '../../providers'
+import { krwShort } from '../../lib/numberFormat'
 import type { PartnerTier, Project, UUID } from '../../types/entities'
 
 const provider = getDataProvider()
@@ -41,18 +44,6 @@ const STEPS: WizardStep[] = [
 
 function krw(n: number | null): string {
   return n == null ? '-' : `${n.toLocaleString('ko-KR')}원`
-}
-
-/** KPI 타일용 축약 표기 — 억/만 단위. 원 단위 정확값은 같은 타일의 보조 줄과 표가 그대로 보여준다.
- *  (전각 숫자열이 타일 폭을 넘겨 잘리는 것을 막는 목적이라 반올림하지 않고 절사·분해만 한다) */
-function krwShort(n: number): string {
-  if (n === 0) return '0원'
-  const eok = Math.floor(n / 100_000_000)
-  const man = Math.floor((n % 100_000_000) / 10_000)
-  const won = n % 10_000
-  if (eok > 0) return man > 0 ? `${eok}억 ${man.toLocaleString('ko-KR')}만` : `${eok}억`
-  if (man > 0) return won > 0 ? `${man.toLocaleString('ko-KR')}만+` : `${man.toLocaleString('ko-KR')}만`
-  return `${n.toLocaleString('ko-KR')}원`
 }
 
 function pct(v: number | null): string {
@@ -159,6 +150,23 @@ function TierStep({
   )
 }
 
+/** 폼 상태 ← 등급 값. dirty 판정이 저장 로직과 같은 기준을 쓰도록 한 곳에 묶는다. */
+function formOf(tier: PartnerTier) {
+  return {
+    capacity: tier.capacity == null ? '' : String(tier.capacity),
+    session_slots: String(tier.session_slots),
+    booth_included: tier.booth_included,
+    staff_cap: tier.staff_cap == null ? '' : String(tier.staff_cap),
+    // 금액만 number|null 원본 그대로 — 표기·파싱은 MoneyField가 맡는다
+    price: tier.price,
+  }
+}
+
+/** 저장 캡션용 24시간 표기. 성공을 배지·토스트가 아니라 버튼 옆 한 줄로만 알린다(§10 버튼 위계). */
+function savedStamp(d: Date): string {
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
 function TierCard({
   projectId,
   tier,
@@ -168,13 +176,10 @@ function TierCard({
   tier: PartnerTier
   onSaved: () => void
 }) {
-  const [form, setForm] = useState({
-    capacity: tier.capacity == null ? '' : String(tier.capacity),
-    session_slots: String(tier.session_slots),
-    booth_included: tier.booth_included,
-    staff_cap: tier.staff_cap == null ? '' : String(tier.staff_cap),
-    price: tier.price == null ? '' : String(tier.price),
-  })
+  const [form, setForm] = useState(() => formOf(tier))
+  const [savedAt, setSavedAt] = useState<string | null>(null)
+  // 저장 성공 후 tiers가 reload되면 tier prop이 폼 값을 따라와 dirty가 저절로 풀린다
+  const dirty = JSON.stringify(form) !== JSON.stringify(formOf(tier))
   const save = useMutation(() =>
     provider.upsertPartnerTier(projectId, {
       code: tier.code,
@@ -184,17 +189,27 @@ function TierCard({
       session_slots: Number(form.session_slots || 0),
       booth_included: form.booth_included,
       staff_cap: form.staff_cap === '' ? null : Number(form.staff_cap),
-      price: form.price === '' ? null : Number(form.price),
+      price: form.price,
     }),
   )
 
   const handleSave = async () => {
-    if (await save.run()) onSaved()
+    if (await save.run()) {
+      setSavedAt(savedStamp(new Date()))
+      onSaved()
+    }
   }
 
   return (
-    <Card title={tier.name} action={<span className="t-caption">{tier.code}</span>}>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+    <Card
+      title={tier.name}
+      action={
+        <span className="rounded border border-border bg-canvas px-1.5 py-0.5 text-[11px] tracking-wider text-ink-sub">
+          {tier.code}
+        </span>
+      }
+    >
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <NumField
           label="정원"
           hint="비우면 무제한"
@@ -212,28 +227,40 @@ function TierCard({
           value={form.staff_cap}
           onChange={(v) => setForm((f) => ({ ...f, staff_cap: v }))}
         />
-        <NumField
+        <MoneyField
           label="판매 단가 (내부)"
           hint="비우면 미정"
           value={form.price}
           onChange={(v) => setForm((f) => ({ ...f, price: v }))}
         />
-        <label className="flex flex-col gap-1 t-caption">
-          <span>부스 포함</span>
-          <span className="flex h-9 items-center">
-            <input
-              type="checkbox"
-              checked={form.booth_included}
-              onChange={(e) => setForm((f) => ({ ...f, booth_included: e.target.checked }))}
-              aria-label={`${tier.name} 부스 포함`}
-            />
-          </span>
-        </label>
       </div>
+      {/* 체크박스는 숫자 그리드 밖으로 — 13px 컨트롤이 숫자 열 한 칸을 차지하면 열 폭이 어긋난다 */}
+      <label className="ui-check-row t-caption mt-3 border-t border-border pt-3">
+        <input
+          type="checkbox"
+          checked={form.booth_included}
+          onChange={(e) => setForm((f) => ({ ...f, booth_included: e.target.checked }))}
+          aria-label={`${tier.name} 부스 포함`}
+          className="ui-check"
+        />
+        <span className="flex flex-col gap-0.5">
+          <span>부스 포함</span>
+          <span className="text-[11px] font-normal text-ink-cap">
+            판매 단가에 부스 시공비가 들어 있습니다
+          </span>
+        </span>
+      </label>
       <ErrorAlert message={save.error} />
-      <div className="mt-3 flex justify-end">
-        <button type="button" onClick={handleSave} disabled={save.pending} className="btn btn-primary btn-sm">
-          {tier.name} 저장
+      <div className="mt-3 flex items-center justify-end gap-3">
+        {savedAt && <span className="text-[11px] font-normal text-ink-cap">저장됨 {savedAt}</span>}
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={save.pending || !dirty}
+          aria-label={`${tier.name} 저장`}
+          className="btn btn-ghost btn-sm"
+        >
+          저장
         </button>
       </div>
     </Card>
@@ -252,18 +279,16 @@ function NumField({
   onChange: (v: string) => void
 }) {
   return (
-    <label className="flex flex-col gap-1 t-caption">
-      <span>{label}</span>
+    <Field label={label} hint={hint} align="right">
       <input
         type="number"
         min={0}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         aria-label={label}
-        className="ui-input"
+        className="ui-input ui-input-num"
       />
-      {hint && <span className="text-[11px] text-ink-cap">{hint}</span>}
-    </label>
+    </Field>
   )
 }
 

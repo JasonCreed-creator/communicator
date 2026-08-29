@@ -36,7 +36,7 @@ export default function ScenarioBlockForm({
         <select
           value={values.session_id}
           onChange={(e) => onChange({ session_id: e.target.value })}
-          className="ui-input w-44 text-xs"
+          className="ui-input ui-select w-44 text-xs"
         >
           <option value="">공통/수동 블록</option>
           {sessions.map((s) => (
@@ -61,7 +61,7 @@ export default function ScenarioBlockForm({
         <select
           value={values.kind}
           onChange={(e) => onChange({ kind: e.target.value as ScenarioBlockFormValues['kind'] })}
-          className="ui-input w-24 text-xs"
+          className="ui-input ui-select w-24 text-xs"
         >
           {SCENARIO_BLOCK_KINDS.map((k) => (
             <option key={k} value={k}>

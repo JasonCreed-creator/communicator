@@ -235,7 +235,7 @@ export default function PartnerDetailPanel({
                                     [r.deliverable_id]: e.target.value as ReceiptChannel,
                                   }))
                                 }
-                                className="ui-input h-7 min-h-0 py-0 text-xs"
+                                className="ui-input ui-select h-7 min-h-0 py-0 text-xs"
                               >
                                 <option value="">{RECEIPT_UNRECORDED_LABEL}</option>
                                 {RECEIPT_CHANNELS.map((c) => (
@@ -418,7 +418,7 @@ function ReceiptRecordForm({
           <select
             value={channel ?? ''}
             onChange={(e) => onChannel(e.target.value as ReceiptChannel)}
-            className="ui-input w-32"
+            className="ui-input ui-select w-32"
           >
             <option value="">{RECEIPT_UNRECORDED_LABEL}</option>
             {RECEIPT_CHANNELS.map((c) => (

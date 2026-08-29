@@ -195,7 +195,12 @@ describe('P2(3.15.1, 감수 M2) — 참가 가이드 버튼·문의 안내', () 
     expect(guideLink.getAttribute('href')).toBe('https://example.com/vst26-guide')
     expect(guideLink.getAttribute('target')).toBe('_blank')
     expect(guideLink.getAttribute('rel')).toBe('noreferrer')
-    expect(await screen.findByText('문의: partners@example.com')).toBeTruthy()
+    // 3.19 — 창구 주소는 mailto 링크로 노출된다(문구는 동일, 이제 바로 누를 수 있다)
+    const contact = (await screen.findByRole('link', {
+      name: 'partners@example.com',
+    })) as HTMLAnchorElement
+    expect(contact.getAttribute('href')).toBe('mailto:partners@example.com')
+    expect(contact.closest('p')?.textContent).toBe('문의: partners@example.com')
   })
 
   it('값이 없으면 버튼·문의 안내 둘 다 렌더되지 않는다', async () => {

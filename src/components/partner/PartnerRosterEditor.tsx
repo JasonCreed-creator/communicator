@@ -153,7 +153,7 @@ function PartnerRow({
             value={partner.tier_id ?? ''}
             onChange={(e) => handleTierChange(e.target.value)}
             disabled={updateTier.pending}
-            className="ui-input min-h-8 py-1 text-xs"
+            className="ui-input ui-select min-h-8 py-1 text-xs"
           >
             <option value="">미배정</option>
             {tiers.map((t) => (
@@ -239,7 +239,7 @@ function AddPartnerForm({
       </label>
       <label className="flex flex-col gap-1 t-caption">
         등급
-        <select value={tierId} onChange={(e) => setTierId(e.target.value)} className="ui-input w-32">
+        <select value={tierId} onChange={(e) => setTierId(e.target.value)} className="ui-input ui-select w-32">
           <option value="">미배정</option>
           {tiers.map((t) => (
             <option key={t.id} value={t.id}>

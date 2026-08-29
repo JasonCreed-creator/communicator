@@ -6,6 +6,11 @@
    따라서 demo/ 컴포넌트는 Tailwind 클래스 대신 tokens.css 변수를 인라인 스타일로 쓴다. */
 @source not '../demo';
 
+/* 테스트 파일도 스캔에서 제외한다. 단언에 쓰는 클래스 문자열(그리고 소스 가드의 정규식 리터럴)이
+   앱 CSS에 실제 유틸리티로 새어 들어간다 — jsdom 테스트는 CSS를 적용하지 않으므로 필요도 없다.
+   (3.19에서 실측: dod50 가드의 패턴 문자열이 `.accent-*` 유틸리티 2건을 생성했다.) */
+@source not './test';
+
 /* ── 전역 베이스 — 디자인지시서 v1 §1·§2 ── */
 @layer base {
   html {
@@ -16,6 +21,16 @@
   body {
     background: var(--canvas);
     color: var(--ink);
+  }
+
+  /* 패턴 기준 시트 §10 — 네이티브 컨트롤 색.
+     tokens.css가 "파랑·보라 계열 임의 사용 금지"를 못 박아도 checkbox·radio·range 같은
+     네이티브 컨트롤은 CSS로 덮지 않으면 그 규칙 밖(브라우저 파랑)에서 움직인다.
+     이 한 줄이 레포의 컨트롤 전부를 정본 안으로 넣는다. */
+  input,
+  select,
+  textarea {
+    accent-color: var(--accent);
   }
 }
 
@@ -152,6 +167,87 @@
     outline: none;
     border-color: var(--accent);
     box-shadow: 0 0 0 1.5px var(--accent);
+  }
+
+  /* ── 폼 정본 — 패턴 기준 시트 §10 (컨트롤 6종 · 필드 상태 5종 · 체크/라디오) ──
+     §10은 .ui-input을 고치지 않고 형제 클래스로만 확장한다. 기존 호출부는 무변경으로 살아 있고,
+     숫자·셀렉트·오류·비활성·읽기전용만 각자의 클래스를 덧붙인다. */
+
+  /* §10-A 숫자 — 우측정렬 · tabular · 스피너 제거.
+     스피너는 폭을 먹고(열 하나가 13px 컨트롤에 잘린다) 자릿수 오타를 못 막는다. */
+  .ui-input-num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+
+  .ui-input-num::-webkit-outer-spin-button,
+  .ui-input-num::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  /* §10-A 셀렉트 — OS 화살표 제거 + ink-cap 셰브론(브라우저마다 다른 화살표를 하나로 고정) */
+  .ui-select {
+    appearance: none;
+    padding-right: 32px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 6 6.5l5-5' fill='none' stroke='%238c867a' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    background-size: 12px 8px;
+  }
+
+  /* §10-C 오류 — 힌트 줄을 **대체**한다(두 줄로 쌓지 않는다 — 필드 높이가 폼마다 달라진다) */
+  .ui-input-error {
+    border-color: var(--negative);
+  }
+
+  .ui-input-error:focus {
+    border-color: var(--negative);
+    box-shadow: 0 0 0 1.5px var(--negative);
+  }
+
+  /* §10-C 비활성 · 읽기전용 — 비활성은 '지금 못 쓴다', 읽기전용은 '값만 보여준다' */
+  .ui-input:disabled {
+    background: var(--track);
+    color: var(--ink-cap);
+    cursor: not-allowed;
+  }
+
+  .ui-input-readonly {
+    border-color: transparent;
+    background: transparent;
+    padding-inline: 0;
+    font-weight: 600;
+  }
+
+  /* §10-B 체크·라디오 — 내부 16 · 외부 지면 20 */
+  .ui-check {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    flex: 0 0 auto;
+  }
+
+  .ui-check-lg {
+    width: 20px;
+    height: 20px;
+  }
+
+  /* §10-B 클릭 영역은 컨트롤이 아니라 라벨 행 전체.
+     /c·/p·현장 체크인은 -touch로 44 고정 — §09 터치 규정은 버튼만의 규정이 아니다. */
+  .ui-check-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 9px;
+    min-height: 36px;
+    cursor: pointer;
+  }
+
+  .ui-check-row-touch {
+    min-height: 44px;
+    align-items: center;
   }
 
   /* ── 테이블 헤더 셀 — §5: 캡션 스타일 + 하단 1px --border-strong (행 높이 44·hover는 유틸리티로) ── */
@@ -349,6 +445,19 @@
   /* KPI 카드: 면·그림자 제거, 보조 수치 구분선만 남김 */
   .ui-card {
     box-shadow: none;
+  }
+
+  /* 폼(§10): 셰브론 이미지는 잉크를 먹기만 하고 종이에서는 누를 수 없다 —
+     화살표를 지우고 그 자리 여백도 되돌린다. 입력 면은 종이 그대로 두고 보더만 남긴다. */
+  .ui-select {
+    background-image: none;
+    padding-right: 10px;
+  }
+
+  .ui-input,
+  .ui-input-readonly {
+    border-color: var(--border);
+    background: transparent;
   }
 
   .plan-section {

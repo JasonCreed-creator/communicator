@@ -9,6 +9,7 @@ import {
 } from '../../modules/quote/data/venuedb'
 import { calcVenueRental, VENUE_PER_PAX_5STAR } from '../../modules/quote/engine/calcEstimate'
 import { clampVenueIndex } from '../../modules/quote/engine/venueOptions'
+import MoneyField from '../internal/MoneyField'
 import { fmtMoney, fmtWon, newEditorVenue, type EditorVenue, type QuoteFormState } from './quoteFormState'
 import type { QuoteStrings } from './quoteStrings'
 
@@ -84,7 +85,7 @@ export default function StepVenue({
           <p className="t-card-title">🏨 {t.dbTitle}</p>
           <label className="flex items-center gap-2 text-xs text-ink-cap">
             {t.dbFilterRegion}
-            <select className="ui-input min-h-8 py-1 text-xs" value={region} onChange={(e) => setRegion(e.target.value)}>
+            <select className="ui-input ui-select min-h-8 py-1 text-xs" value={region} onChange={(e) => setRegion(e.target.value)}>
               <option value="">{t.dbFilterAll}</option>
               {regions.map((r) => (
                 <option key={r} value={r}>{r}</option>
@@ -213,15 +214,16 @@ export default function StepVenue({
                   </label>
                 </div>
                 <div className="mt-3">
-                  <span className="t-caption">{t.rentalLabel}</span>
-                  <div className="mt-1 flex flex-wrap items-center gap-2">
-                    <input
-                      type="number"
-                      step={500000}
-                      className="ui-input w-44 text-right"
+                  {/* 값 되읽기는 MoneyField 에코 한 줄로 모은다 — 만원 단위로 반올림하던 옆 칸과 두 번 말하지 않는다.
+                      에코 문구는 한글 축약 고정이라 영문 모드에서는 끈다(`echo={null}`) — 대체 영문 문구는 지어내지 않는다 */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <MoneyField
+                      label={t.rentalLabel}
                       value={venue.rental}
-                      onChange={(e) => updateVenue(vi, { rental: Math.max(0, Math.round(+e.target.value || 0)) })}
-                      aria-label={t.rentalLabel}
+                      onChange={(v) => updateVenue(vi, { rental: v == null ? 0 : Math.max(0, Math.round(v)) })}
+                      ariaLabel={t.rentalLabel}
+                      inputClassName="w-44"
+                      echo={en ? null : undefined}
                     />
                     <button
                       type="button"
@@ -231,7 +233,6 @@ export default function StepVenue({
                     >
                       {t.autoCalcBtn}
                     </button>
-                    <span className="text-xs text-ink-cap">{fmtMoney(venue.rental, en)}</span>
                   </div>
                   <p className="mt-1 text-xs text-ink-cap">{t.rentalCap}</p>
                 </div>

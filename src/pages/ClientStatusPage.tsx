@@ -6,6 +6,7 @@ import { useCallback } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import AreaProgressRow from '../components/client/AreaProgressRow'
 import ClientActionCard from '../components/client/ClientActionCard'
+import ClientContactCard, { type ClientContactPerson } from '../components/client/ClientContactCard'
 import ClientMessage from '../components/client/ClientMessage'
 import ClientProgressHeader from '../components/client/ClientProgressHeader'
 import ClientScheduleRow from '../components/client/ClientScheduleRow'
@@ -21,6 +22,15 @@ import EmptyState from '../components/internal/EmptyState'
 import { LevelBadge } from '../components/internal/StatusBadge'
 import { ddayLabel } from '../lib/labels'
 import { getDataProvider } from '../providers'
+import type { MemberRole } from '../types/enums'
+
+/** 발주처 지면의 역할 표기 — 내부 약칭(ROLE_LABELS) 대신 "누구에게 연락하면 되는지"가 읽히는 말로 적는다. */
+const CLIENT_ROLE_LABELS: Record<MemberRole, string> = {
+  pm: '담당 PM',
+  design: '디자인 담당',
+  ops: '운영 담당',
+  reg: '등록 담당',
+}
 
 export default function ClientStatusPage() {
   const { token = '' } = useParams()
@@ -67,6 +77,30 @@ export default function ClientStatusPage() {
   const schedule = deriveClientSchedule(queue, status)
   const nextDue = earliestDueAt(queue)
   const nextDueLabel = nextDue ? ddayLabel(nextDue) : null
+  // 담당자는 발주처 지면에서 가리지 않는다(Phase 3.18.1 §2) — 이름·직함·이메일·전화를 그대로 적는다.
+  // 이 링크를 받은 발주처 담당자를 맨 위에 두고 내부 스태프(PM→디자인→운영→등록)를 잇는다.
+  // 마스킹은 참가자 명단(§24)의 규칙이지 담당자 표기의 규칙이 아니다 — 두 규칙을 섞지 않는다.
+  const contacts: ClientContactPerson[] = [
+    ...(status.client_contact
+      ? [
+          {
+            id: 'client-contact',
+            name: status.client_contact.name,
+            role: '발주처 담당자',
+            org: status.client_contact.org,
+            email: status.client_contact.email,
+          },
+        ]
+      : []),
+    ...status.staff.map((person) => ({
+      id: person.user_id,
+      name: person.display_name,
+      role: CLIENT_ROLE_LABELS[person.role],
+      org: person.title,
+      email: person.email,
+      phone: person.phone,
+    })),
+  ]
 
   return (
     <div className="px-4 py-4 pb-10">
@@ -150,6 +184,13 @@ export default function ClientStatusPage() {
             </ul>
           )}
         </section>
+
+        {contacts.length > 0 && (
+          <section>
+            <h2 className="mb-2.5 text-sm font-semibold text-ink-sub">담당자</h2>
+            <ClientContactCard people={contacts} />
+          </section>
+        )}
 
         <p className="rounded-md border border-steel/20 bg-steel-tint px-3 py-2 text-xs leading-relaxed text-steel">
           문의 사항은 담당 PM에게 알려주세요. 이 링크는 담당 PM이 회수하기 전까지 유효합니다.{' '}

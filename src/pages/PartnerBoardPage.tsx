@@ -270,7 +270,7 @@ export default function PartnerBoardPage() {
               id="partner-status-filter"
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-              className="ui-input h-7 min-h-0 py-0 text-xs"
+              className="ui-input ui-select h-7 min-h-0 py-0 text-xs"
             >
               <option value="all">전체 상태</option>
               <option value="active">{PARTNER_STATUS_LABELS.active}</option>

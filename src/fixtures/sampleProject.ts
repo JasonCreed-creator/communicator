@@ -142,11 +142,14 @@ const NO_BRIEF = {
 }
 
 const FIXTURE: MockState = {
+  // 3.18.1 §2 담당자 노출 계약 — 직함·전화는 내부·발주처 지면 모두에 그대로 적힌다.
+  // 전 값이 가상이다(#RULE-NO-COMPANY): 전화는 010-0000-* 예약 대역만 쓰되, 담당자는 -1001번대로
+  // 참가자 명단(-0001번대)과 겹치지 않게 둔다 — PII 비노출 테스트가 두 값을 구별할 수 있어야 한다.
   users: [
-    { id: 'usr-pm', name: '김기획', email: 'pm@example.com' },
-    { id: 'usr-design', name: '이디자', email: 'design@example.com' },
-    { id: 'usr-ops', name: '박운영', email: 'ops@example.com' },
-    { id: 'usr-reg', name: '최등록', email: 'reg@example.com' },
+    { id: 'usr-pm', name: '김기획', email: 'pm@example.com', title: '기획팀 팀장', phone: '010-0000-1001' },
+    { id: 'usr-design', name: '이디자', email: 'design@example.com', title: '디자인팀 대리', phone: '010-0000-1002' },
+    { id: 'usr-ops', name: '박운영', email: 'ops@example.com', title: '운영팀 과장', phone: '010-0000-1003' },
+    { id: 'usr-reg', name: '최등록', email: 'reg@example.com', title: '등록운영 매니저', phone: '010-0000-1004' },
   ],
   current_user_id: 'usr-pm',
   // v2.0 — 현재 사용자(김기획)는 sales: 견적 메뉴·API 접근 가능 (mock 토글 setAppRole로 전환)

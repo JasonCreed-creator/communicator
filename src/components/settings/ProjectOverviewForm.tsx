@@ -2,9 +2,11 @@
 // 저장은 updateProject 단일 호출로 개요 전 필드를 patch한다(pm 전용, §8 PATCH /projects/{id}).
 // 필수 4(행사명·코드·시작일·장소) 중 시작일·장소만 클라이언트에서 막고, 행사명·코드가 비면
 // updateProject를 그대로 호출해 서버 검증 메시지('행사명은 비울 수 없습니다.' 등)를 그대로 노출한다.
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
+// 앞의 둘은 필드 줄 오류, 뒤의 둘은 서버 응답이라 블록 경고 — §10-C의 두 갈래가 그대로 나뉜다.
+import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import ErrorAlert from '../internal/ErrorAlert'
+import Field from '../internal/Field'
 import { canUseQuotes } from '../quote/QuoteGate'
 import { useAsync, useMutation } from '../../hooks/useAsync'
 import {
@@ -80,6 +82,14 @@ function valuesFrom(project: Project): FormValues {
   }
 }
 
+/** 클라이언트에서 막는 필수 항목 — 행사명·코드는 서버 메시지를 그대로 쓴다(파일 머리 주석) */
+type RequiredKey = 'eventDate' | 'venue'
+
+const REQUIRED_MESSAGES: Record<RequiredKey, string> = {
+  eventDate: '시작일을 입력하세요.',
+  venue: '장소를 입력하세요.',
+}
+
 interface ProjectOverviewFormProps {
   projectId: UUID
   /** 저장 성공 시 호출 — 설정: 요약 갱신 / S0: 다음 단계 진행 */
@@ -98,6 +108,8 @@ export default function ProjectOverviewForm({
 }: ProjectOverviewFormProps) {
   const project = useAsync(() => provider.getProject(projectId), [projectId])
   const [values, setValues] = useState<FormValues | null>(null)
+  // §10-C — 필수 미입력은 그 줄에서 말한다. 블록 경고(ErrorAlert)는 저장 실패(서버·권한) 몫으로 비워 둔다.
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<RequiredKey, string>>>({})
   const save = useMutation((patch: ProjectPatch) => provider.updateProject(projectId, patch))
   // v2.0 — 견적 연결 상태·액션(admin·sales)용
   const me = useAsync(() => provider.getCurrentUser(), [])
@@ -120,8 +132,21 @@ export default function ProjectOverviewForm({
     return <ErrorAlert message={project.error} />
   }
 
-  const set = <K extends keyof FormValues>(key: K, v: FormValues[K]) =>
+  const set = <K extends keyof FormValues>(key: K, v: FormValues[K]) => {
     setValues((prev) => (prev ? { ...prev, [key]: v } : prev))
+    // 입력을 고치는 순간 그 줄의 오류는 낡는다 — 저장까지 붉게 남겨 두지 않는다
+    const touched: RequiredKey | null =
+      key === 'eventDate' ? 'eventDate' : key === 'venue' ? 'venue' : null
+    if (!touched) return
+    setFieldErrors((prev) => {
+      if (!prev[touched]) return prev
+      const next = { ...prev }
+      delete next[touched]
+      return next
+    })
+  }
+
+  const errorClass = (key: RequiredKey) => (fieldErrors[key] ? ' ui-input-error' : '')
 
   // v2.0 §16 — 견적에서 생성된 행사의 S0 ① 프리필 표시: 주황 틴트(--accent-tint)·수정 가능.
   // 온보딩 완료 후에는 일반 표시로 돌아간다.
@@ -154,15 +179,17 @@ export default function ProjectOverviewForm({
 
   const handleReset = () => {
     if (project.data) setValues(valuesFrom(project.data))
+    setFieldErrors({})
     save.setError(null)
   }
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
-    if (!values.eventDate || !values.venue.trim()) {
-      save.setError('필수 항목(행사명·코드·시작일·장소)을 입력하세요.')
-      return
-    }
+    const missing: Partial<Record<RequiredKey, string>> = {}
+    if (!values.eventDate) missing.eventDate = REQUIRED_MESSAGES.eventDate
+    if (!values.venue.trim()) missing.venue = REQUIRED_MESSAGES.venue
+    setFieldErrors(missing)
+    if (Object.keys(missing).length > 0) return
     const patch: ProjectPatch = {
       name: values.name.trim(),
       code: values.code.trim(),
@@ -221,24 +248,28 @@ export default function ProjectOverviewForm({
             className={`ui-input disabled:opacity-60${tintClass('code')}`}
           />
         </Field>
-        <Field id="ov-event-type" label="행사 유형">
+        <Field
+          id="ov-event-type"
+          label="행사 유형"
+          hint="행사 유형을 바꿔도 등록 데이터는 삭제되지 않습니다(표시 계층만 전환). WBS 재전개는 일정 화면에서 실행하세요."
+        >
           <select
             id="ov-event-type"
             value={values.eventType}
             onChange={(e) => set('eventType', e.target.value as EventType)}
             disabled={readOnly}
-            className="ui-input disabled:opacity-60"
+            className="ui-input ui-select disabled:opacity-60"
           >
             <option value="general">일반형</option>
             <option value="recruiting">모객형</option>
           </select>
-          <p className="mt-1 text-[11px] leading-snug text-ink-cap">
-            행사 유형을 바꿔도 등록 데이터는 삭제되지 않습니다(표시 계층만 전환). WBS 재전개는 일정
-            화면에서 실행하세요.
-          </p>
         </Field>
         {/* v2.6 §25 — format은 읽기 표시. 전환은 WBS 재전개를 부르므로 S0 ③ 유형 카드가 확인을 받고 처리한다 */}
-        <Field id="ov-format" label="행사 포맷">
+        <Field
+          id="ov-format"
+          label="행사 포맷"
+          hint="포맷 전환은 WBS 재전개를 동반하므로 온보딩 ③ 유형 화면에서 확인을 거쳐 바꿉니다."
+        >
           <p
             id="ov-format"
             data-testid="format-display"
@@ -248,19 +279,18 @@ export default function ProjectOverviewForm({
             {EVENT_FORMAT_LABELS[project.data?.format ?? 'conference']}
             {project.data?.psa_enabled && <LevelBadge level="progress" label="비즈매칭" />}
           </p>
-          <p className="mt-1 text-[11px] leading-snug text-ink-cap">
-            포맷 전환은 WBS 재전개를 동반하므로 온보딩 ③ 유형 화면에서 확인을 거쳐 바꿉니다.
-          </p>
         </Field>
 
-        <Field id="ov-start-date" label="시작일" required>
+        <Field id="ov-start-date" label="시작일" required error={fieldErrors.eventDate}>
+          {/* type="date"는 네이티브 피커·YYYY-MM-DD 표기를 그대로 쓴다(§10-A) — ui-input-num 미적용 */}
           <input
             id="ov-start-date"
             type="date"
             value={values.eventDate}
             onChange={(e) => set('eventDate', e.target.value)}
             disabled={readOnly}
-            className={`ui-input disabled:opacity-60${tintClass('eventDate')}`}
+            aria-invalid={fieldErrors.eventDate ? true : undefined}
+            className={`ui-input disabled:opacity-60${tintClass('eventDate')}${errorClass('eventDate')}`}
           />
         </Field>
         <Field id="ov-end-date" label="종료일">
@@ -294,16 +324,17 @@ export default function ProjectOverviewForm({
           />
         </Field>
 
-        <Field id="ov-venue" label="장소" required span="sm:col-span-2">
+        <Field id="ov-venue" label="장소" required span="sm:col-span-2" error={fieldErrors.venue}>
           <input
             id="ov-venue"
             value={values.venue}
             onChange={(e) => set('venue', e.target.value)}
             disabled={readOnly}
-            className={`ui-input disabled:opacity-60${tintClass('venue')}`}
+            aria-invalid={fieldErrors.venue ? true : undefined}
+            className={`ui-input disabled:opacity-60${tintClass('venue')}${errorClass('venue')}`}
           />
         </Field>
-        <Field id="ov-headcount" label="예상 인원">
+        <Field id="ov-headcount" label="예상 인원" align="right">
           <input
             id="ov-headcount"
             type="number"
@@ -311,7 +342,7 @@ export default function ProjectOverviewForm({
             value={values.expectedHeadcount}
             onChange={(e) => set('expectedHeadcount', e.target.value)}
             disabled={readOnly}
-            className={`ui-input disabled:opacity-60${tintClass('expectedHeadcount')}`}
+            className={`ui-input ui-input-num disabled:opacity-60${tintClass('expectedHeadcount')}`}
           />
         </Field>
         <Field id="ov-seating" label="좌석 형태">
@@ -320,7 +351,7 @@ export default function ProjectOverviewForm({
             value={values.seating}
             onChange={(e) => set('seating', e.target.value)}
             disabled={readOnly}
-            className="ui-input disabled:opacity-60"
+            className="ui-input ui-select disabled:opacity-60"
           >
             <option value="">선택 안 함</option>
             {SEATING_OPTIONS.map((opt) => (
@@ -377,13 +408,13 @@ export default function ProjectOverviewForm({
           >
             <p className="t-card-title mb-3">DMS 전용</p>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <Field id="ov-audience-model" label="청중 모델">
+              <Field
+                id="ov-audience-model"
+                label="청중 모델"
+                hint="초청제 승인 게이트는 아직 구현되지 않았습니다 — 등록은 현재 모객형 파이프라인으로 동작합니다(설계서 §25.6)."
+              >
                 <p id="ov-audience-model" className="ui-input flex items-center bg-card">
                   {project.data.audience_model === 'invite' ? '초청제' : '공개 모집'}
-                </p>
-                <p className="mt-1 text-[11px] leading-snug text-ink-cap">
-                  초청제 승인 게이트는 아직 구현되지 않았습니다 — 등록은 현재 모객형 파이프라인으로
-                  동작합니다(설계서 §25.6).
                 </p>
               </Field>
               <div className="sm:col-span-2 lg:col-span-3 self-end text-[11px] leading-relaxed text-ink-cap">
@@ -418,7 +449,7 @@ export default function ProjectOverviewForm({
               )}
             </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Field id="ov-guarantee" label="보장 인원(게런티)">
+              <Field id="ov-guarantee" label="보장 인원(게런티)" align="right">
                 <input
                   id="ov-guarantee"
                   type="number"
@@ -426,10 +457,10 @@ export default function ProjectOverviewForm({
                   value={values.guaranteePax}
                   onChange={(e) => set('guaranteePax', e.target.value)}
                   disabled={readOnly}
-                  className={`ui-input disabled:opacity-60${tintClass('guaranteePax')}`}
+                  className={`ui-input ui-input-num disabled:opacity-60${tintClass('guaranteePax')}`}
                 />
               </Field>
-              <Field id="ov-kpi" label="쇼업 KPI (%)">
+              <Field id="ov-kpi" label="쇼업 KPI (%)" align="right">
                 <input
                   id="ov-kpi"
                   type="number"
@@ -438,7 +469,7 @@ export default function ProjectOverviewForm({
                   value={values.kpiShowRate}
                   onChange={(e) => set('kpiShowRate', e.target.value)}
                   disabled={readOnly}
-                  className={`ui-input disabled:opacity-60${tintClass('kpiShowRate')}`}
+                  className={`ui-input ui-input-num disabled:opacity-60${tintClass('kpiShowRate')}`}
                 />
               </Field>
             </div>
@@ -552,7 +583,13 @@ function QuoteLinkAction({ projectId, onLinked }: { projectId: UUID; onLinked: (
   }
   return (
     <span className="flex flex-wrap items-center gap-2">
-      <select className="ui-input min-h-8 py-1 text-xs" value={quoteId} onChange={(e) => setQuoteId(e.target.value)} aria-label="연결할 견적">
+      {/* 액션 줄 인라인 셀렉트 — Field로 감싸지 않되 컨트롤 재질(셰브론)은 정본을 따른다(§2) */}
+      <select
+        className="ui-input ui-select min-h-8 py-1 text-xs"
+        value={quoteId}
+        onChange={(e) => setQuoteId(e.target.value)}
+        aria-label="연결할 견적"
+      >
         <option value="">확정 견적 선택…</option>
         {(candidates.data ?? []).map((q) => (
           <option key={q.id} value={q.id}>
@@ -568,33 +605,5 @@ function QuoteLinkAction({ projectId, onLinked }: { projectId: UUID; onLinked: (
       </button>
       <ErrorAlert message={link.error} />
     </span>
-  )
-}
-
-function Field({
-  id,
-  label,
-  required,
-  span,
-  children,
-}: {
-  id: string
-  label: string
-  required?: boolean
-  span?: string
-  children: ReactNode
-}) {
-  return (
-    <div className={`flex flex-col gap-1 t-caption ${span ?? ''}`}>
-      <span className="flex items-baseline gap-0.5">
-        <label htmlFor={id}>{label}</label>
-        {required && (
-          <span aria-hidden="true" className="text-accent-deep">
-            *
-          </span>
-        )}
-      </span>
-      {children}
-    </div>
   )
 }

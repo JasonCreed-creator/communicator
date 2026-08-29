@@ -24,10 +24,13 @@ describe('DoD-19 행사 설정 3탭', () => {
     expect(screen.getByRole('button', { name: '온보딩 이어서 하기' })).toBeTruthy()
 
     // 필수인 장소를 비우고 저장 → 클라이언트 검증이 거부
+    // (3.19 §10-C) 거부 사유는 블록 경고가 아니라 그 필드 줄에 붙는다 — 어느 칸이 문제인지 화면이 가리킨다
     const venueInput = (await screen.findByLabelText('장소')) as HTMLInputElement
     await userEvent.clear(venueInput)
     await userEvent.click(screen.getByRole('button', { name: '저장' }))
-    expect(await screen.findByText('필수 항목(행사명·코드·시작일·장소)을 입력하세요.')).toBeTruthy()
+    expect(await screen.findByText('장소를 입력하세요.')).toBeTruthy()
+    expect(venueInput.className).toContain('ui-input-error')
+    expect(venueInput.getAttribute('aria-invalid')).toBe('true')
     const draft = await mockProvider().getProject('prj-forum-h2')
     expect(draft.venue).not.toBeNull() // 저장이 실행되지 않아 기존 값 유지
   })

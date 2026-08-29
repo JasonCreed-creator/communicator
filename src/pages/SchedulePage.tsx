@@ -243,13 +243,14 @@ function MilestoneRow({ milestone, onChanged }: { milestone: Milestone; onChange
   return (
     <tr>
       <td>
-        <label className="inline-flex items-center gap-2 text-xs text-ink-cap">
+        <label className="ui-check-row items-center text-xs text-ink-cap">
           <input
             type="checkbox"
             checked={milestone.done}
             onChange={handleToggle}
             disabled={toggleDone.pending}
             aria-label={`${milestone.title} 완료`}
+            className="ui-check"
           />
           {milestone.done ? '완료' : ''}
         </label>
@@ -344,7 +345,7 @@ function MilestoneForm({ onCreated }: { onCreated: () => void }) {
         </label>
         <label className="flex flex-col gap-1 t-caption">
           영역
-          <select value={area} onChange={(e) => setArea(e.target.value as AreaFilter)} className="ui-input w-32">
+          <select value={area} onChange={(e) => setArea(e.target.value as AreaFilter)} className="ui-input ui-select w-32">
             {FILTER_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>
                 {opt.label}

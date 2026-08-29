@@ -920,7 +920,7 @@ function StatusActionBar({
                       <select
                         value={versionId}
                         onChange={(e) => setVersionId(e.target.value)}
-                        className="ui-input w-64"
+                        className="ui-input ui-select w-64"
                       >
                         <option value="">버전 선택…</option>
                         {versions.map((v) => (
@@ -1161,8 +1161,13 @@ function CommentThread({
           className="ui-input w-full"
         />
         <div className="flex items-center justify-between">
-          <label className="flex items-center gap-2 text-xs text-ink-sub">
-            <input type="checkbox" checked={shared} onChange={(e) => setShared(e.target.checked)} />
+          <label className="ui-check-row items-center text-xs text-ink-sub">
+            <input
+              type="checkbox"
+              checked={shared}
+              onChange={(e) => setShared(e.target.checked)}
+              className="ui-check"
+            />
             발주처에 공유(shared) — 기본은 내부(internal)
           </label>
           <button type="submit" disabled={add.pending} className="btn btn-primary">

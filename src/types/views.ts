@@ -53,6 +53,10 @@ export interface UserRef {
   id: UUID
   name: string
   email: string | null
+  /** 3.18.1 §2 담당자 노출 계약 — 직함('기획팀 팀장'). 미입력이면 null */
+  title?: string | null
+  /** 3.18.1 §2 담당자 노출 계약 — 담당자 전화. 마스킹 대상이 아니다(참가자 명단 PII와 다른 규칙) */
+  phone?: string | null
 }
 
 export interface CurrentUser extends UserRef {
@@ -190,6 +194,17 @@ export interface ClientStatusData {
   area_progress: AreaProgress[]
   milestones: Milestone[]
   recent_finals: ClientFinalItem[]
+  /** 3.18.1 §2 담당자 노출 계약 — 이 행사의 내부 담당자. 발주처가 누구에게 연락할지 화면에서 바로 알아야 한다(마스킹 없음) */
+  staff: {
+    user_id: UUID
+    display_name: string
+    role: MemberRole
+    title: string | null
+    email: string | null
+    phone: string | null
+  }[]
+  /** 3.18.1 §2 담당자 노출 계약 — 이 링크를 받은 발주처 담당자(토큰의 contact_id). 연결된 연락처가 없으면 null */
+  client_contact: { name: string; org: string | null; email: string | null } | null
 }
 
 // ── 입력 타입 ──────────────────────────────────────────────────────
@@ -367,6 +382,10 @@ export interface MemberInput {
   display_name: string
   email: string
   role: MemberRole
+  /** 3.18.1 §2 담당자 노출 계약 — 전자명함 임포트가 인식한 직함을 그대로 저장한다 */
+  title?: string | null
+  /** 3.18.1 §2 담당자 노출 계약 — 전자명함 임포트가 인식한 전화를 그대로 저장한다 */
+  phone?: string | null
 }
 
 /** v1.5 — GET /projects 요약(§8): 프로젝트 셀렉터·S-1 행사 목록 공용 */

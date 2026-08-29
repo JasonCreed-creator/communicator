@@ -67,7 +67,7 @@ export default function WbsTaskEditForm({
       </label>
       <label className="flex flex-col gap-1 t-caption">
         담당 역할
-        <select value={role} onChange={(e) => setRole(e.target.value as MemberRole)} className="ui-input">
+        <select value={role} onChange={(e) => setRole(e.target.value as MemberRole)} className="ui-input ui-select">
           {MEMBER_ROLES.map((r) => (
             <option key={r} value={r}>
               {ROLE_LABELS[r]}
@@ -81,7 +81,7 @@ export default function WbsTaskEditForm({
       </label>
       <label className="flex flex-col gap-1 t-caption">
         연결 산출물
-        <select value={linkedId} onChange={(e) => setLinkedId(e.target.value)} className="ui-input w-48">
+        <select value={linkedId} onChange={(e) => setLinkedId(e.target.value)} className="ui-input ui-select w-48">
           <option value="">연결 없음</option>
           {deliverables.map((d) => (
             <option key={d.id} value={d.id}>

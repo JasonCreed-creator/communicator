@@ -35,7 +35,7 @@ export default function RegistrationSearchBar<S extends string>({
         value={statusValue}
         onChange={(e) => onStatusChange(e.target.value as S)}
         aria-label={statusLabel}
-        className="ui-input w-36"
+        className="ui-input ui-select w-36"
       >
         {statusOptions.map((opt) => (
           <option key={opt.value} value={opt.value}>

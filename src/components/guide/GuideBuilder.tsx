@@ -152,11 +152,12 @@ export default function GuideBuilder({
           onSent={handleSent}
           actions={
             <>
-              <label className="flex items-center gap-1.5 text-xs text-ink-sub">
+              <label className="ui-check-row items-center text-xs text-ink-sub">
                 <input
                   type="checkbox"
                   checked={includeContacts}
                   onChange={(e) => setIncludeContacts(e.target.checked)}
+                  className="ui-check"
                 />
                 연락망 포함(인쇄)
               </label>
