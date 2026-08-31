@@ -21,16 +21,20 @@ const PARTNER_STATUS_CLASSES: Record<PartnerWithProgress['status'], string> = {
 export default function PartnerRosterEditor({
   projectId,
   readOnly = false,
+  onChanged,
 }: {
   projectId: UUID
   readOnly?: boolean
-}) {
+  /** 이 편집기 밖에서 같은 파트너 목록을 보고 있는 화면이 있을 때(파트너 보드 접수 표) 함께 갱신한다 */
+  onChanged?: () => void
+})  {
   const partners = useAsync(() => provider.listPartners(projectId), [projectId])
   const tiers = useAsync(() => provider.listPartnerTiers(projectId), [projectId])
   const [copiedToken, setCopiedToken] = useState<string | null>(null)
 
   const reloadAll = () => {
     partners.reload()
+    onChanged?.()
   }
 
   const handleCopy = async (token: string) => {

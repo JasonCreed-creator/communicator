@@ -12,11 +12,18 @@ const provider = getDataProvider()
 export default function PartnerTierEditor({
   projectId,
   readOnly = false,
+  onChanged,
 }: {
   projectId: UUID
   readOnly?: boolean
+  /** 등급 목록을 옆에서 읽는 화면(판매 플래너 ① 상품 카드)이 있을 때 함께 갱신한다 */
+  onChanged?: () => void
 }) {
   const tiers = useAsync(() => provider.listPartnerTiers(projectId), [projectId])
+  const reloadAll = () => {
+    tiers.reload()
+    onChanged?.()
+  }
 
   return (
     <div className="space-y-3">
@@ -24,14 +31,14 @@ export default function PartnerTierEditor({
       {tiers.data && (
         <ul className="space-y-2">
           {tiers.data.map((t) => (
-            <TierRow key={t.id} tier={t} readOnly={readOnly} onChanged={tiers.reload} />
+            <TierRow key={t.id} tier={t} readOnly={readOnly} onChanged={reloadAll} />
           ))}
           {tiers.data.length === 0 && (
             <li className="text-xs text-ink-cap">등록된 등급이 없습니다 — 아래에서 추가하세요.</li>
           )}
         </ul>
       )}
-      {!readOnly && <AddTierForm projectId={projectId} nextSort={(tiers.data?.length ?? 0) + 1} onCreated={tiers.reload} />}
+      {!readOnly && <AddTierForm projectId={projectId} nextSort={(tiers.data?.length ?? 0) + 1} onCreated={reloadAll} />}
     </div>
   )
 }

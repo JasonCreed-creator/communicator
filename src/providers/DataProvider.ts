@@ -123,6 +123,10 @@ import type {
   IssueTokenInput,
   MemberInput,
   MemberWithProfile,
+  PersonInput,
+  PersonPatch,
+  PersonWithAssignments,
+  UserRef,
   MilestoneInput,
   OnboardingStatus,
   PartnerInput,
@@ -177,6 +181,18 @@ export interface DataProvider {
   removeMember(projectId: UUID, memberId: UUID): Promise<void>
   /** v1.3 §8 PATCH /projects/{id} — 행사 유형·기본정보 수정 (pm). v1.5: 개요 전 필드 */
   updateProject(projectId: UUID, patch: ProjectPatch): Promise<Project>
+
+  // ── 담당자 마스터 (v12 · Phase 3.20) ──────────────────────────────
+  // 행사에 배정하기 전에 사람을 한 번 등록해 두고, 이후로는 골라 쓴다.
+  // 배정 자체는 기존 addMember가 그대로 한다 — 이메일로 같은 사람을 알아보고 프로필을 재사용한다.
+  /** 주소록 전체 + 각자의 행사 배정 현황(삭제 차단 사유를 화면이 그대로 쓴다) */
+  listPeople(): Promise<PersonWithAssignments[]>
+  /** 주소록 등록 (pm). 이름·이메일 필수, 이메일 중복이면 409 */
+  createPerson(input: PersonInput): Promise<UserRef>
+  /** 주소록 수정 (pm). 고친 값은 이 사람이 올라간 **모든 행사**와 발주처 화면에 함께 반영된다 */
+  updatePerson(personId: UUID, patch: PersonPatch): Promise<UserRef>
+  /** 주소록 삭제 (pm). 배정된 행사가 하나라도 있으면 **409** — 어느 행사인지 메시지에 담는다 */
+  removePerson(personId: UUID): Promise<void>
 
   // ── v1.3 S0 온보딩 ────────────────────────────────────────────────
   /** 완료 전 본체 라우트는 위저드로 차단 — 라우트 가드가 이 값을 본다.

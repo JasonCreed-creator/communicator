@@ -14,6 +14,7 @@ import NotFoundPage from './pages/NotFoundPage'
 import OnboardingPage from './pages/OnboardingPage'
 import PartnerBoardPage from './pages/PartnerBoardPage'
 import PartnerPortalPage from './pages/PartnerPortalPage'
+import PeoplePage from './pages/PeoplePage'
 import PlanDocPage from './pages/PlanDocPage'
 import ProjectListPage from './pages/ProjectListPage'
 import QuoteImportWizardPage from './pages/QuoteImportWizardPage'
@@ -62,6 +63,10 @@ export function AppRoutes() {
               (가드가 /settings로 유도하는 구조라 가드 안에 두면 무한 루프) */}
           <Route path="/projects" element={<ProjectListPage />} />
           <Route path="/settings" element={<SettingsPage />} />
+
+          {/* S-13 담당자 마스터 — 행사와 무관한 전역 주소록이라 특정 행사의 온보딩 완료 여부에
+              묶이지 않는다. /projects와 같은 계층(OnboardingGuard 밖) */}
+          <Route path="/people" element={<PeoplePage />} />
 
           {/* v2.0 S-2 견적 — 행사 없이도 접근(견적→행사 생성이 첫 단계)하므로 가드 밖.
               app_role 게이트(admin·sales)는 페이지 내부(QuoteGate)가 수행 — staff는 403 화면 */}

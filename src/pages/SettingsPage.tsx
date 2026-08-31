@@ -14,6 +14,7 @@ import Card from '../components/internal/Card'
 import EmptyState from '../components/internal/EmptyState'
 import ErrorAlert from '../components/internal/ErrorAlert'
 import PageHeader from '../components/internal/PageHeader'
+import PermissionNotice from '../components/internal/PermissionNotice'
 import PartnerRosterEditor from '../components/partner/PartnerRosterEditor'
 import ClientContactsEditor from '../components/settings/ClientContactsEditor'
 import MembersEditor from '../components/settings/MembersEditor'
@@ -24,8 +25,10 @@ import ProjectOverviewForm from '../components/settings/ProjectOverviewForm'
 import { REQUIRED_FIELDS, filledRequired } from '../components/settings/requiredFields'
 import { useProject } from '../context/ProjectContext'
 import { useAsync } from '../hooks/useAsync'
+import { externalViewUrl } from '../lib/externalLink'
 import { EVENT_TYPE_LABELS, ROLE_BAR_CLASSES, ROLE_LABELS, formatDate } from '../lib/labels'
 import { getDataProvider } from '../providers'
+import type { ClientContact, ClientToken } from '../types/entities'
 import type { MemberRole } from '../types/enums'
 
 const provider = getDataProvider()
@@ -41,6 +44,49 @@ const TABS: { id: Tab; label: string }[] = [
 interface TabGap {
   required: number
   optional: number
+}
+
+/** 3.20 — 발급된 발주처 링크를 **열어볼 수 있는** 자리. 복사만으로는 발주처가 무엇을 보는지 모른다.
+ *  회수·만료된 토큰은 열 수 없으므로 목록에서 뺀다(열면 410 화면이라 확인 목적에 맞지 않는다). */
+function ClientViewLinks({
+  contacts,
+  tokens,
+}: {
+  contacts: ClientContact[]
+  tokens: ClientToken[]
+}) {
+  const now = Date.now()
+  const openable = tokens
+    .filter((t) => !t.revoked_at && (!t.expires_at || new Date(t.expires_at).getTime() > now))
+    .map((t) => ({ token: t, contact: contacts.find((c) => c.id === t.contact_id) ?? null }))
+
+  return (
+    <div data-testid="client-view-links" className="space-y-2.5">
+      <p className="text-xs leading-relaxed text-ink-sub">
+        발급된 링크를 받은 사람은 <strong>로그인 없이</strong> 이 행사의 컨펌 화면을 봅니다. 금액은
+        어느 항목도 실리지 않습니다.
+      </p>
+      {openable.length === 0 ? (
+        <EmptyState message="발급된 발주처 링크가 없습니다 — 위 표에서 발급하면 여기서 열어볼 수 있습니다." />
+      ) : (
+        <ul className="flex flex-wrap gap-2">
+          {openable.map(({ token, contact }) => (
+            <li key={token.token}>
+              <a
+                href={externalViewUrl(`/c/${token.token}`)}
+                target="_blank"
+                rel="noreferrer"
+                className="btn btn-ghost btn-sm"
+                title="무로그인 링크 — 받은 사람은 로그인 없이 발주처 화면을 봅니다"
+              >
+                {contact?.name ?? '이름 미상'} 화면 열기
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
 }
 
 const ROLE_PREVIEW: { role: MemberRole; blurb: string }[] = [
@@ -60,6 +106,11 @@ export default function SettingsPage() {
   const members = useAsync(() => provider.listMembers(projectId), [projectId])
   const contacts = useAsync(() => provider.listClientContacts(projectId), [projectId])
   const isPm = currentUser.data?.role === 'pm'
+  // 토큰 조회는 pm 전용(provider assertPm) — 아니면 호출 자체를 하지 않는다(무의미한 오류 방지)
+  const clientTokens = useAsync(
+    () => (isPm ? provider.listClientTokens(projectId) : Promise.resolve([])),
+    [projectId, isPm],
+  )
 
   const filled = project.data ? filledRequired(project.data) : new Set<string>()
   const missingCount = REQUIRED_FIELDS.length - filled.size
@@ -95,8 +146,16 @@ export default function SettingsPage() {
     project.reload()
     members.reload()
     contacts.reload()
+    clientTokens.reload()
     reloadSummaries()
   }
+
+  /** 발주처 연락처·토큰만 다시 읽는다 — 아래 '발주처 화면 열기' 목록이 같은 토큰을 본다 */
+  const refreshContacts = () => {
+    contacts.reload()
+    clientTokens.reload()
+  }
+
 
   return (
     <section className="space-y-6 p-6">
@@ -242,9 +301,30 @@ export default function SettingsPage() {
                     <PartnerRosterEditor projectId={projectId} readOnly={!isPm} />
                   </Card>
                 ) : (
-                  <Card title="발주처 연락처·토큰">
-                    <ClientContactsEditor projectId={projectId} readOnly={!isPm} />
-                  </Card>
+                  <>
+                    <Card title="발주처 연락처·토큰">
+                      {/* 발급·회수가 아래 '발주처 화면 열기' 목록에 바로 반영되게 콜백을 받는다 */}
+                      <ClientContactsEditor
+                        projectId={projectId}
+                        readOnly={!isPm}
+                        onChanged={refreshContacts}
+                      />
+                    </Card>
+                    {/* 3.20 — 발주처가 보는 화면으로 가는 경로. 토큰이 있는 자리 바로 아래 둔다 */}
+                    <Card title="발주처 화면 열기">
+                      {isPm ? (
+                        <ClientViewLinks
+                          contacts={contacts.data ?? []}
+                          tokens={clientTokens.data ?? []}
+                        />
+                      ) : (
+                        <PermissionNotice
+                          reason="발주처 링크는 PM만 발급·조회할 수 있습니다."
+                          howToRequest="이 행사의 PM에게 링크 발급을 요청하면 여기서 발주처 화면을 열어볼 수 있습니다."
+                        />
+                      )}
+                    </Card>
+                  </>
                 )}
                 <Card title="R&R 미리보기">
                   <ul className="space-y-2 text-sm">

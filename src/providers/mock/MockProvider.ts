@@ -102,6 +102,9 @@ import type {
   IssueTokenInput,
   MemberInput,
   MemberWithProfile,
+  PersonInput,
+  PersonPatch,
+  PersonWithAssignments,
   MilestoneInput,
   OnboardingStatus,
   PartnerInput,
@@ -544,6 +547,97 @@ export class MockProvider implements DataProvider {
       role: input.role,
     })
     return { ...member, profile }
+  }
+
+  // ── 담당자 마스터 (v12 · Phase 3.20) ──────────────────────────────
+  // 저장소는 이미 있었다 — `state.users`가 곧 주소록이고, addMember가 이메일로 같은 사람을
+  // 알아봐 프로필을 행사 간에 재사용해 왔다. 없던 것은 그것을 **보여주고 고치는 경로**뿐이다.
+
+  async listPeople(): Promise<PersonWithAssignments[]> {
+    return this.state.users
+      .map((u) => ({
+        ...u,
+        assignments: this.state.members
+          .filter((m) => m.user_id === u.id)
+          .map((m) => ({
+            project_id: m.project_id,
+            project_name: this.state.projects.find((p) => p.id === m.project_id)?.name ?? '(삭제된 행사)',
+            role: m.role,
+          })),
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'ko-KR'))
+  }
+
+  async createPerson(input: PersonInput): Promise<UserRef> {
+    this.assertPm()
+    const name = input.name.trim()
+    const email = input.email.trim()
+    if (!name || !email) throw new ProviderError('validation', '이름과 이메일은 필수입니다.')
+    if (this.state.users.some((u) => u.email?.toLowerCase() === email.toLowerCase())) {
+      throw new ProviderError('conflict', '이미 등록된 이메일입니다.')
+    }
+    const person: UserRef = {
+      id: this.nextId('usr'),
+      name,
+      email,
+      title: input.title?.trim() || null,
+      phone: input.phone?.trim() || null,
+    }
+    this.state.users.push(person)
+    return { ...person }
+  }
+
+  async updatePerson(personId: UUID, patch: PersonPatch): Promise<UserRef> {
+    this.assertPm()
+    const person = this.state.users.find((u) => u.id === personId)
+    if (!person) throw new ProviderError('not_found', '담당자를 찾을 수 없습니다.')
+    if (patch.name !== undefined) {
+      const name = patch.name.trim()
+      if (!name) throw new ProviderError('validation', '이름은 비울 수 없습니다.')
+      person.name = name
+    }
+    if (patch.email !== undefined) {
+      const email = patch.email.trim()
+      if (!email) throw new ProviderError('validation', '이메일은 비울 수 없습니다.')
+      const taken = this.state.users.some(
+        (u) => u.id !== personId && u.email?.toLowerCase() === email.toLowerCase(),
+      )
+      if (taken) throw new ProviderError('conflict', '이미 등록된 이메일입니다.')
+      person.email = email
+    }
+    // 직함·전화는 비우는 것도 뜻이 있는 편집이라 빈 문자열을 null로 받아 적는다
+    if (patch.title !== undefined) person.title = patch.title?.trim() || null
+    if (patch.phone !== undefined) person.phone = patch.phone?.trim() || null
+    // profiles의 표시 이름도 함께 따라간다 — 두 곳이 갈라지면 화면마다 다른 이름이 나온다
+    const profile = this.state.profiles.find((p) => p.id === personId)
+    if (profile) {
+      profile.display_name = person.name
+      if (person.email) profile.email = person.email
+    }
+    return { ...person }
+  }
+
+  async removePerson(personId: UUID): Promise<void> {
+    this.assertPm()
+    const idx = this.state.users.findIndex((u) => u.id === personId)
+    if (idx < 0) throw new ProviderError('not_found', '담당자를 찾을 수 없습니다.')
+    // 배정이 남아 있으면 지우지 않는다 — 행사 담당자가 조용히 사라지는 쪽이 훨씬 나쁘다.
+    // 어느 행사인지 메시지에 담아, 화면이 "먼저 여기서 빼세요"를 그대로 말할 수 있게 한다.
+    const assigned = this.state.members
+      .filter((m) => m.user_id === personId)
+      .map((m) => this.state.projects.find((p) => p.id === m.project_id)?.name ?? m.project_id)
+    if (assigned.length > 0) {
+      throw new ProviderError(
+        'conflict',
+        `배정된 행사가 있어 삭제할 수 없습니다 — ${assigned.join(' · ')}. 각 행사의 담당자에서 먼저 빼주세요.`,
+      )
+    }
+    if (personId === this.state.current_user_id) {
+      throw new ProviderError('conflict', '지금 로그인한 본인은 삭제할 수 없습니다.')
+    }
+    this.state.users.splice(idx, 1)
+    const p = this.state.profiles.findIndex((x) => x.id === personId)
+    if (p >= 0) this.state.profiles.splice(p, 1)
   }
 
   async removeMember(projectId: UUID, memberId: UUID): Promise<void> {

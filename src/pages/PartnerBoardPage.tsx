@@ -21,17 +21,24 @@ import TableSkeleton from '../components/internal/TableSkeleton'
 import { LevelBadge } from '../components/internal/StatusBadge'
 import PartnerDeadlineTimeline from '../components/partner/PartnerDeadlineTimeline'
 import PartnerDetailPanel from '../components/partner/PartnerDetailPanel'
+import PartnerRosterEditor from '../components/partner/PartnerRosterEditor'
 import PartnerTable, { partnerBoardStatus } from '../components/partner/PartnerTable'
 import SalesPlanner from '../components/sales/SalesPlanner'
-import { currentSubmitGroup, groupHostTasks } from '../components/partner/partnerBoardUtils'
+import {
+  currentSubmitGroup,
+  groupHostTasks,
+  partnerLinkStatus,
+} from '../components/partner/partnerBoardUtils'
 import { buildMailto } from '../components/partner/partnerReceipt'
 import { useProject } from '../context/ProjectContext'
 import { useAsync } from '../hooks/useAsync'
+import { externalViewUrl } from '../lib/externalLink'
 import { BOARD_HELP, PARTNER_KPI_HELP } from '../lib/helpTexts'
 import { PARTNER_STATUS_LABELS, ddayLabel, formatDate } from '../lib/labels'
 import { usesRevenueModel } from '../fixtures/formatPresets'
 import { getDataProvider } from '../providers'
 import type { PartnerStatus } from '../types/enums'
+import type { PartnerWithProgress } from '../types/views'
 
 const provider = getDataProvider()
 
@@ -54,6 +61,41 @@ function daysSince(iso: string): number {
   return Math.max(0, Math.floor(diff / 86_400_000))
 }
 
+/** 3.20 — 발급된 제출 링크를 **열어볼 수 있는** 자리. 복사만으로는 "파트너가 뭘 보는지"를 알 수 없다.
+ *  무로그인 지면이라는 사실을 한 줄로 밝힌다(격리 계약 자체는 포털이 지킨다 — dod32). */
+function PartnerPortalLinks({ partners }: { partners: PartnerWithProgress[] }) {
+  const openable = partners.filter((p) => partnerLinkStatus(p.token) === '발급됨')
+  return (
+    <div data-testid="partner-portal-links" className="rounded-md bg-canvas px-3 py-2.5">
+      <p className="t-caption">제출 포털 미리 보기</p>
+      <p className="mt-1 text-xs leading-relaxed text-ink-sub">
+        제출 링크를 받은 사람은 <strong>로그인 없이</strong> 그 파트너의 화면을 봅니다. 화면에는 자기
+        제출물만 담기고 다른 파트너 정보·금액은 담기지 않습니다.
+      </p>
+      {openable.length === 0 ? (
+        <p className="mt-2 text-xs text-ink-cap">
+          아직 발급된 제출 링크가 없습니다 — 위 표에서 발급하면 여기서 열어볼 수 있습니다.
+        </p>
+      ) : (
+        <ul className="mt-2 flex flex-wrap gap-2">
+          {openable.map((p) => (
+            <li key={p.id}>
+              <a
+                href={externalViewUrl(`/p/${p.token!.token}`)}
+                target="_blank"
+                rel="noreferrer"
+                className="btn btn-ghost btn-sm"
+              >
+                {p.name} 포털 열기
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
 export default function PartnerBoardPage() {
   const { projectId } = useProject()
   const [searchParams] = useSearchParams()
@@ -64,6 +106,9 @@ export default function PartnerBoardPage() {
   const deliverables = useAsync(() => provider.listDeliverables(projectId), [projectId])
   const [selectedPartnerId, setSelectedPartnerId] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  // 3.20 — 파트너 등록·수정·철회·링크 발급을 이 보드에서 바로 한다(§10 진입점 원칙:
+  // "행사 설정 ②에서 하세요"로 보내지 않는다). 기본은 접힘 — 보드의 기본 화면은 접수 현황이다.
+  const [rosterOpen, setRosterOpen] = useState(false)
   // v2.6 §25.1 권한 ③ — 판매 플래너는 **복합 게이트**다: 주최형이면서 판매형 포맷일 때만.
   // format 단독으로 화면을 켜지 않는다(대행형 dms 같은 조합에 팔 상품이 없다).
   const [tab, setTab] = useState<'board' | 'planner'>('board')
@@ -285,6 +330,14 @@ export default function PartnerBoardPage() {
                 미접수처 일괄 요청 메일
               </button>
             )}
+            <button
+              type="button"
+              onClick={() => setRosterOpen((v) => !v)}
+              aria-expanded={rosterOpen}
+              className="btn btn-ghost btn-sm"
+            >
+              파트너 관리
+            </button>
           </div>
         }
       >
@@ -294,7 +347,19 @@ export default function PartnerBoardPage() {
           <LoadFailedState message={partners.error} onRetry={partners.reload} />
         )}
         {!partners.loading && !partners.error && partnerList.length === 0 && (
-          <EmptyState message="등록된 파트너가 없습니다 — 행사 설정 ② 담당자에서 파트너를 추가하세요." />
+          // 다른 화면으로 보내는 안내가 아니라 여기서 여는 CTA(빈 상태 ② — accent CTA 금지, ghost)
+          <EmptyState
+            message="등록된 파트너가 없습니다."
+            action={
+              <button
+                type="button"
+                onClick={() => setRosterOpen(true)}
+                className="btn btn-ghost btn-sm"
+              >
+                파트너 추가하기
+              </button>
+            }
+          />
         )}
         {!partners.loading && !partners.error && partnerList.length > 0 && shownPartners.length === 0 && (
           <FilterEmptyState
@@ -319,6 +384,29 @@ export default function PartnerBoardPage() {
             onSelect={(id) => setSelectedPartnerId((cur) => (cur === id ? null : id))}
           />
         )}
+
+        {/* 3.20 파트너 관리 — 위 표(접수 현황)와 역할이 갈린다: 저기는 '무엇이 안 들어왔나',
+            여기는 '누가 참여하고 어떤 링크를 갖는가'. 명부 편집기는 행사 설정 ②와 같은
+            컴포넌트를 그대로 쓴다(props만 — 컴포넌트 자체는 손대지 않는다). */}
+        {rosterOpen && (
+          <div data-testid="partner-roster" className="mt-4 space-y-3 border-t border-border pt-4">
+            <div>
+              <h3 className="t-section-title">파트너 관리</h3>
+              <p className="mt-1 text-xs leading-relaxed text-ink-sub">
+                파트너 추가·등급 변경·철회와 제출 링크 발급·회수를 여기서 합니다. 등급 자체를 만들고
+                고치는 곳은 {plannerAvailable ? '판매 플래너 ① 상품 정의' : '행사 설정 ③ 유형·연동'}
+                입니다.
+              </p>
+            </div>
+            {/* 명부에서 바뀐 것이 위 접수 표에도 바로 반영되게 편집기의 변경 콜백을 받는다 */}
+            <PartnerRosterEditor
+              projectId={projectId}
+              readOnly={me.data?.role !== 'pm'}
+              onChanged={partners.reload}
+            />
+            <PartnerPortalLinks partners={partnerList} />
+          </div>
+        )}
       </Card>
 
       {selectedPartner && (
@@ -326,7 +414,7 @@ export default function PartnerBoardPage() {
           <Card
             title={`파트너 상세 — ${selectedPartner.name}`}
             action={
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 {(() => {
                   const s = partnerBoardStatus(selectedPartner)
                   return <LevelBadge level={s.level} label={s.label} />
@@ -335,6 +423,20 @@ export default function PartnerBoardPage() {
                   <span className="t-caption">
                     다음 마감 {formatDate(selectedPartner.next_deadline.end_date)}
                   </span>
+                )}
+                {/* 3.20 — 이 파트너가 실제로 보는 화면을 연다(복사만으로는 확인할 수 없다) */}
+                {partnerLinkStatus(selectedPartner.token) === '발급됨' ? (
+                  <a
+                    href={externalViewUrl(`/p/${selectedPartner.token!.token}`)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="btn btn-ghost btn-sm"
+                    title="무로그인 링크 — 받은 사람은 로그인 없이 이 파트너의 제출 화면을 봅니다"
+                  >
+                    제출 포털 열기
+                  </a>
+                ) : (
+                  <span className="t-caption">제출 링크를 발급하면 포털을 열 수 있습니다</span>
                 )}
               </div>
             }

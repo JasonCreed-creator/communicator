@@ -32,7 +32,9 @@ export default function PlanCover({
   const line = eventLine(project)
 
   return (
-    <div className="flex min-h-[520px] flex-col justify-between pb-2">
+    // 520은 A4 표지가 한 쪽을 채우기 위한 높이다 — **인쇄에서만** 준다.
+    // 화면에서도 강제하면 제목과 메타 줄 사이에 빈 띠가 생겨 다음 섹션이 저 아래로 밀린다.
+    <div className="flex flex-col justify-between gap-10 pb-2 print:min-h-[520px] print:gap-0">
       <div>
         <div className="flex items-center gap-2.5">
           <span aria-hidden className="h-[2.5px] w-[26px] rounded-sm bg-accent" />
