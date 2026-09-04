@@ -45,7 +45,7 @@ export default function OnboardingPage() {
     const ok = await complete.run()
     if (ok) {
       reloadSummaries()
-      navigate('/', { replace: true })
+      navigate('/home', { replace: true })
     }
   }
 

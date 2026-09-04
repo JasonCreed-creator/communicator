@@ -9,6 +9,7 @@ import ClientMaterialsPage from './pages/ClientMaterialsPage'
 import ClientStatusPage from './pages/ClientStatusPage'
 import HomeDashboardPage from './pages/HomeDashboardPage'
 import ItemDetailPage from './pages/ItemDetailPage'
+import LauncherPage from './pages/LauncherPage'
 import LegacyGonePage from './pages/LegacyGonePage'
 import NotFoundPage from './pages/NotFoundPage'
 import OnboardingPage from './pages/OnboardingPage'
@@ -54,6 +55,10 @@ function LegacySocRedirect() {
 export function AppRoutes() {
   return (
     <Routes>
+      {/* S-00 제품 런처 — 도메인 루트. 견적 컨피규레이터(/quotes)와 MICE 커뮤니케이터(/home) 중 골라 들어간다.
+          어느 제품에도 속하지 않는 중립 지면이라 ProjectScope·InternalLayout 둘 다 밖(2026-09-04) */}
+      <Route path="/" element={<LauncherPage />} />
+
       <Route element={<ProjectScope />}>
         {/* S0 온보딩 위저드 — 가드 대상 제외 */}
         <Route path="/onboarding" element={<OnboardingPage />} />
@@ -82,7 +87,8 @@ export function AppRoutes() {
 
           {/* 내부 화면 S1~S6 — 온보딩 미완료 시 OnboardingGuard가 /settings로 유도 */}
           <Route element={<OnboardingGuard />}>
-            <Route path="/" element={<HomeDashboardPage />} />
+            {/* S1 홈 — 루트가 제품 런처가 되면서 /home으로 이동(커뮤니케이터의 첫 화면) */}
+            <Route path="/home" element={<HomeDashboardPage />} />
             <Route path="/board/:area" element={<AreaBoardPage />} />
             <Route path="/items/:itemId" element={<ItemDetailPage />} />
             <Route path="/registration" element={<RegistrationPage />} />

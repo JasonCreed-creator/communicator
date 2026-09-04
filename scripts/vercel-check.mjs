@@ -82,7 +82,8 @@ console.log(`\n배포 설정 검증 — ${ORIGIN} (vercel.json 규칙 재현)\n`
 
 // ── A. 딥링크: BrowserRouter는 rewrites 없이는 전부 404다 ──
 const DEEP_LINKS = [
-  ['/', '홈(S1)'],
+  ['/', '제품 런처(S-00)'],
+  ['/home', '홈(S1)'],
   ['/schedule', '일정(S5)'],
   ['/settlement', '정산보드(S-10)'],
   ['/partners', '파트너 보드(S-11)'],
@@ -160,6 +161,7 @@ if (chromium) {
   tab.on('pageerror', (e) => errors.push(String(e)))
 
   for (const [path, heading] of [
+    ['/home', /홈 대시보드/],
     ['/schedule', /일정|WBS/],
     ['/settlement', /정산/],
     ['/c/demo/status', /진행 현황|담당자/],
@@ -169,6 +171,31 @@ if (chromium) {
     const notFound = /찾을 수 없|NotFound/.test(text)
     check(heading.test(text) && !notFound, `실브라우저 렌더 ${path}`, text.slice(0, 28).replace(/\n/g, ' '))
   }
+
+  // S-00 제품 런처 — 도메인 루트에서 두 제품을 골라 들어간다(2026-09-04). 도메인이 붙은 뒤
+  // rmb-mice.com 첫 화면이 이것이므로, 두 카드가 각자의 제품 첫 화면에 실제로 닿는지 클릭으로 본다.
+  await tab.goto(`${ORIGIN}/`, { waitUntil: 'networkidle' })
+  const launcher = await tab.locator('body').innerText()
+  check(
+    /견적 컨피규레이터/.test(launcher) && /MICE 커뮤니케이터/.test(launcher),
+    '루트(/) = 제품 런처 — 두 제품 카드',
+    launcher.slice(0, 28).replace(/\n/g, ' '),
+  )
+  await tab.getByRole('link', { name: '견적 컨피규레이터 들어가기' }).click()
+  await tab.waitForURL(/\/quotes$/, { timeout: 10_000 })
+  check(
+    new URL(tab.url()).pathname === '/quotes' && /견적/.test(await tab.locator('h1').first().innerText()),
+    '런처 → 견적 컨피규레이터(/quotes)',
+    new URL(tab.url()).pathname,
+  )
+  await tab.goto(`${ORIGIN}/`, { waitUntil: 'networkidle' })
+  await tab.getByRole('link', { name: 'MICE 커뮤니케이터 들어가기' }).click()
+  await tab.waitForURL(/\/home$/, { timeout: 10_000 })
+  check(
+    new URL(tab.url()).pathname === '/home' && /홈 대시보드/.test(await tab.locator('body').innerText()),
+    '런처 → MICE 커뮤니케이터(/home)',
+    new URL(tab.url()).pathname,
+  )
 
   // §10 옛 라우트 → 새 라우트로 튄다(§18-5가 전환 후 확인하라고 지정한 항목)
   await tab.goto(`${ORIGIN}/configurator`, { waitUntil: 'networkidle' })

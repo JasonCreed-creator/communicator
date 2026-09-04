@@ -3,6 +3,38 @@
 > 가변 상태 파일. 매 세션 체크아웃 시 에이전트가 갱신한다 (CLAUDE.md §9 리추얼).
 
 ## 1. 상태 요약
+- **완료: Phase 3.21 — 제품 런처(S-00) + 도메인 루트 정정**(2026-09-04, 사용자 지시 "견적 컨피규레이터와
+  MICE 커뮤니케이터를 같은 도메인(rmb-mice.com)에서 선택하여 각각 진입할 수 있는 루트 · 완료되면 커밋 · 버셀 연동").
+  ① **루트 `/` = 제품 런처** `src/pages/LauncherPage.tsx` — ProjectScope·InternalLayout **밖**의 중립 지면.
+  카드 2장(견적 컨피규레이터 → `/quotes` · MICE 커뮤니케이터 → `/home`), 카드 전체가 링크(accent 버튼 0개 —
+  §5 CTA 원칙), 자동 리다이렉트 없음(딥링크 전부 불변). DataProvider 호출 0건 — 금액·행사 데이터가 흐를 자리가 없다
+  ② **S1 홈 `/` → `/home`** — 사이드바 "홈"·`navigate('/')` 호출부 4곳(행사 목록·견적 목록·견적 에디터·온보딩 완료)·
+  테스트 `renderRoute('/')` 21건 전부 `/home`. 사이드바 로고 = 런처 복귀 링크(`aria-label="제품 선택으로"`) —
+  제품을 갈아타는 자리다. 404 화면 링크도 런처로
+  ③ **두 제품 = 한 Vercel 프로젝트·한 도메인** — 견적을 별도 프로젝트·서브도메인으로 쪼개지 않는다.
+  `vercel.json` **무변경**(SPA rewrite가 `/`·`/home`을 이미 덮는다 — `deploy:check`가 증명). 옛 Configurator
+  라우트 리다이렉트(§10 표)는 런처를 거치지 않고 `/quotes`로 간다
+  ④ 검증 갱신: `deploy:check` 34항목(런처 클릭 경로 3 + `/home` 딥링크·렌더 추가) · 데모 4단
+  (`browser-check` 첫 화면=런처 → 카드 클릭 → 홈, `routing.check` 런처/`#/home` 분리, `interaction-smoke` ③ 블록 =
+  런처 경로 12항목) · 신규 `src/test/launcher.test.tsx` 5케이스(DoD 56)
+  ⑤ **날짜 드리프트 테스트 2건 정정**(origin/main에서도 오늘 실패 — 이 PR 원인 아님, 스크래치 워크트리로 확인):
+  `align-schedule` ⑤는 마일스톤 `mls-001` due가 **오늘(09-04)**이라 'D-day' 배지가 열 헤더와 중복 매치 →
+  `getByRole('columnheader')`로. `partner-board` KPI는 HT-1(D-45=08-31) 마감이 지나 '이번 마감'이 HT-3으로 옮겨감 →
+  시계를 픽스처 가정일(2026-08-27)에 고정(`vi.useFakeTimers({toFake:['Date']})`, 타이머는 실제)
+  **Vercel 연동 — 레포 쪽은 완료, 계정 단계는 §18a S1~S4(사용자)**: GitHub 체크런·커밋 상태가 0건이라
+  Vercel GitHub 연동이 아직 **미연결**임을 확인했다(연결돼 있으면 push마다 Vercel 상태가 붙는다). 이 컨테이너에
+  Vercel CLI·토큰 없음(2026-08-29와 동일). 연결 즉시 브랜치 PR은 Preview, main 머지는 Production으로 자동 배포된다.
+  **Vercel 실배포 1차 실패 → 원인 확정·수정**(2026-09-04 저녁, 사용자가 §18a S1~S2를 수행하고 배포 → `main` 2회 실패).
+  대시보드 로그는 `tsc --noEmit && vite build` 줄에서 끊겨 보였지만, 사용자가 발급한 1일 API 토큰으로 이벤트 로그를
+  읽자 **tsc TS2307 `Cannot find module 'node:fs'`·TS2580 `process`** 7건(`dod26-rebuild-fixtures`·`dod50-form-canon`
+  테스트 파일)과 `exited with 2`가 있었다. **원인 = `@types/node`가 lockfile에 vite·vitest의 optional peer로만 있었고
+  (`dev·peer·optional`), Vercel의 Node 24 + npm 11.16은 optional peer를 설치하지 않는다**(265 vs 로컬 267 = `@types/node`+
+  `undici-types`). 로컬 npm 10은 설치해 줘서 한 번도 드러나지 않았다. **수정 = `@types/node@^26.2.0`을 devDependency로 명시**
+  (트리·버전 무변경, lockfile 플래그만 dev로). 로컬에서 두 패키지를 지워 같은 7건을 재현한 뒤 통과 확인.
+  프로젝트 설정 확인: Node 24.x · framework vite · env는 `VITE_DATA_PROVIDER`(sensitive) 1건뿐(Supabase 2건 삭제됨) ·
+  도메인은 `communicator-rho.vercel.app`만(apex 미연결). Node 24로도 로컬 빌드 통과 — 버전 고정은 불필요.
+  결과: vitest **931**(100파일) · tsc · demo tsc · build · `deploy:check` 34 · demo 4단 · 스모크 · 가드 0건(기준선과 동일).
+  정본: 설계서 §10 S-00 행·S1 `/home`·§18a S3 ⑤·S4(가), CLAUDE.md Phase 3.21·DoD 56, README 진입 구조
 - **완료: Phase 3.20 — 담당자 마스터 + 진입점 정정**(2026-08-29, 사용자 실측 요청 1 + 지적 4).
   ① **담당자 마스터**(§4-2b) — "매번 입력하는 번거로움 없이 사전 등록된 담당자를 배정".
   조사해 보니 **저장소는 이미 있었다**: `state.users`가 곧 주소록이고 `addMember`가 이메일로 같은
@@ -973,6 +1005,11 @@ DoD-29뿐 아니라 **실물 검산 2건에서 바로** 잡힌다(위 표의 "2 
   (설계서 v1.4.1 §4-15·§8·§15 정본화 — 열린 질문 ①~⑤ 전부 종결)
 
 ## 4. 다음 스텝
+- **(2026-09-04) Phase 3.21 PR 검수 → 머지 → Vercel 연결(사용자, §18a)**: S1 `JasonCreed-creator/communicator`
+  Import(설정 무변경 — `vercel.json`) → S2 env `VITE_DATA_PROVIDER=mock` → S3 `*.vercel.app`에서 ⑤ 루트 런처
+  카드 2장 클릭 확인 → S4(가) `rmb-mice.com`을 옛 jsx-easy-shift 프로젝트에서 제거 → 새 프로젝트에 추가(DNS 무변경).
+  **S5 판단**: 런처가 두 제품을 한 도메인에서 여는 구조이므로 apex를 붙이는 쪽이 지시와 맞다 — 단 Phase 4 전이라
+  mock 데모(새로고침 시 변경 소실)라는 점은 그대로다
 - **① PR #32(Phase 3.17) 챗 검수 → 머지.** 검수 시 함께 볼 것:
   ⓐ **미결 3건 확정 결과**(체크인 = 등록 보드 탭 / 시트 동기화 = 주기 자동 감지 + 확인 후 반영 /
   파트너 포털 현행 유지)가 의도와 맞는지
@@ -1440,6 +1477,27 @@ DoD-29뿐 아니라 **실물 검산 2건에서 바로** 잡힌다(위 표의 "2 
   표 min-w 820→936 상향(열 규격 합계와 일치 — 1280 콘텐츠 폭 958 안에서 무스크롤 실측)
 
 ## 6. 세션 로그
+- **2026-09-04 (Phase 3.21 — 제품 런처 + 도메인 루트)**. 사용자 지시 "견적 컨피규레이터와 MICE 커뮤니케이터를
+  같은 도메인(rmb-mice.com)에서 선택하여 각각 진입할 수 있는 루트 · 커밋 · 버셀 연동". 자율 실행 환경이라 브리프
+  카드 승인 없이 착수(계약 이탈 사유: 명시적 완료 지시 + 실시간 응답 불가 — 가정은 PR 본문에 표기).
+  **해석**: 견적 컨피규레이터 = v2.0에서 흡수한 S-2(`/quotes`) — 옛 jsx-easy-shift를 되살리지 않는다(§18-5·§18a S4(가)
+  방향 그대로). 별도 서브도메인·별도 Vercel 프로젝트도 만들지 않는다 — 한 앱의 루트가 두 제품을 여는 것이 "같은
+  도메인에서 선택"의 가장 단순한 형태이고, 도메인 이전(옛 프로젝트 → 새 프로젝트)이 한 번으로 끝난다.
+  **홈을 `/home`으로 옮긴 이유**: 루트에 런처를 두면서 홈을 남기려면 "마지막 선택 기억 → 자동 이동" 같은 상태가
+  필요한데, 그건 딥링크와 새로고침 동작을 상태에 종속시킨다. 경로를 하나 옮기는 쪽이 값싸고 예측 가능하다.
+  참조 갱신은 grep으로 전수(`navigate('/'`·`to="/"`·`renderRoute('/')`) — 온보딩 완료의 `navigate('/', {replace})`는
+  첫 grep 패턴(`navigate('/')`)에 안 걸려 dod10·dod20이 잡아냈다. 교훈: 루트 경로 grep은 닫는 괄호 없이.
+  **Vercel 연동 판정**: PR #35 체크런 0·커밋 상태 0 → GitHub 연동 미연결. 레포는 import만으로 동작하는 상태
+  (`deploy:check` 34항목)이고 계정 단계는 §18a. 데모 `browser-check`는 전체 Chromium으로 돌리면 `/favicon.ico`
+  요청 1건이 "서버가 받은 요청 1건" 검사를 깨뜨린다 — 이전 세션과 같이 `chromium_headless_shell`로 돌리면 통과
+  (환경 차이, 코드 무관). 결과: vitest 931(100파일) · 가드 0건 · deploy:check 34 · demo 4단 · 스모크 12항목.
+  **같은 날 저녁 — Vercel 첫 배포 실패 처리**. 사용자가 Import·env까지 마치고 `main`을 배포했으나 2회 연속 실패.
+  대시보드가 보여준 로그는 빌드 명령 줄에서 끝나 있었고("나한테 출력된 전부임"), 로컬에서는 Node 22·24, CI env,
+  스크립트 차단 조건까지 전부 통과해 원인을 못 잡았다. 사용자가 "직접 들어가서 처리해봐"라고 해 **1일 만료 Vercel API
+  토큰**을 받아 `/v3/deployments/{id}/events`를 읽었다 — 대시보드 복사본에 빠져 있던 tsc 오류 7줄이 거기 있었다.
+  교훈 두 가지: ① **대시보드 로그 복사는 정본이 아니다** — 실패 원인은 `errorCode`·`errorMessage`(API)나 이벤트 로그로
+  본다 ② **lockfile에 optional peer로만 있는 타입 패키지는 npm 버전에 따라 설치되지 않는다** — 테스트가 쓰는 `node:*`
+  타입은 devDependency로 명시해야 한다. 토큰은 셸 env로만 썼고 어디에도 기록하지 않았다(사용자가 삭제할 것).
 - **2026-08-29 (Phase 3.20 — 담당자 마스터 + 진입점 정정)**. 사용자 실측 요청 1건("사전 등록된
   담당자를 배정, 매번 입력하는 번거로움 없이") + 화면을 쓰다 나온 지적 4건.
   **조사가 먼저였다** — 지적 4건 중 3건은 "기능이 없다"가 아니라 **진입점이 틀렸다**였다.

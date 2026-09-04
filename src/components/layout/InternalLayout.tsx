@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
 import BrandLogo from '../BrandLogo'
 import ErrorAlert from '../internal/ErrorAlert'
 import { canUseQuotes } from '../quote/QuoteGate'
@@ -74,7 +74,8 @@ const NAV_PARTNER_BOARD = {
 }
 
 const NAV_OPS = [
-  { to: '/', label: '홈', end: true, icon: 'M3 10.5 12 3l9 7.5M5 9.5V21h14V9.5' },
+  // S1 홈은 /home — 루트(/)는 제품 런처(S-00)가 차지한다(2026-09-04)
+  { to: '/home', label: '홈', end: true, icon: 'M3 10.5 12 3l9 7.5M5 9.5V21h14V9.5' },
   { to: '/board/design', label: '디자인 보드', icon: 'M4 4h7v7H4zM13 4h7v4h-7zM13 11h7v9h-7zM4 14h7v6H4z' },
   { to: '/board/ops', label: '운영 보드', icon: 'M4 6h16M4 12h16M4 18h10' },
   { to: '/registration', label: '등록', icon: 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM19 8v6M22 11h-6' },
@@ -321,7 +322,10 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <div className="flex h-full flex-col">
       <div className="px-5 pb-3 pt-6">
-        <BrandLogo variant="offwhite" className="h-5 w-auto" />
+        {/* 로고 = 제품 런처(S-00)로 돌아가는 유일한 사이드바 경로 — 견적 컨피규레이터로 갈아타는 자리 */}
+        <Link to="/" aria-label="제품 선택으로" title="제품 선택으로" className="inline-block" onClick={onNavigate}>
+          <BrandLogo variant="offwhite" className="h-5 w-auto" />
+        </Link>
       </div>
       <ProjectSelector onNavigate={onNavigate} canQuotes={canQuotes} />
       <nav className="flex-1 space-y-0.5 overflow-y-auto py-1">

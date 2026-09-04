@@ -38,7 +38,7 @@ describe('아티팩트 중첩 경로 라우팅', () => {
     expect(await screen.findByText('페이지를 찾을 수 없습니다')).toBeTruthy()
   })
 
-  it('HashRouter는 같은 경로에서 홈 대시보드(S1)를 렌더한다', async () => {
+  it('HashRouter는 같은 경로에서 제품 런처(S-00)를 렌더한다', async () => {
     expect(window.location.hash).toBe('') // 해시 없음 = 아티팩트 첫 진입 상태
     render(
       <HashRouter>
@@ -46,6 +46,20 @@ describe('아티팩트 중첩 경로 라우팅', () => {
       </HashRouter>,
     )
     // 초기 위치를 location.hash에서만 읽으므로(빈 해시 → '/') 경로에 독립적이다.
+    // 루트는 제품 런처 — 두 제품 카드가 각자의 첫 화면(#/quotes · #/home)을 가리킨다.
+    expect(await screen.findByRole('heading', { name: '어떤 도구로 시작할까요?' })).toBeTruthy()
+    expect(screen.getByRole('link', { name: '견적 컨피규레이터 들어가기' }).getAttribute('href')).toBe('#/quotes')
+    expect(screen.getByRole('link', { name: 'MICE 커뮤니케이터 들어가기' }).getAttribute('href')).toBe('#/home')
+    expect(screen.queryByText('페이지를 찾을 수 없습니다')).toBeNull()
+  })
+
+  it('HashRouter #/home 은 홈 대시보드(S1)를 렌더한다', async () => {
+    window.location.hash = '#/home'
+    render(
+      <HashRouter>
+        <AppRoutes />
+      </HashRouter>,
+    )
     // 데모 기본 행사 = RE:BUILD 27 — 미결 컨펌 카드와 마일스톤이 그 행사 것으로 렌더된다.
     expect(await screen.findByText('외관 대형 현수막')).toBeTruthy()
     expect(screen.getByText('베뉴 계약 확정')).toBeTruthy()
@@ -58,6 +72,8 @@ describe('아티팩트 중첩 경로 라우팅', () => {
     base.setAttribute('href', ARTIFACT_DIR)
     document.head.appendChild(base)
 
+    // 사이드바(내부 셸)의 링크까지 전부 검사하려면 홈에서 시작한다 — 런처는 링크가 두 개뿐이다.
+    window.location.hash = '#/home'
     render(
       <HashRouter>
         <AppRoutes />

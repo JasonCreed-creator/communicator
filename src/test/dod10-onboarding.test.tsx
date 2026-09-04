@@ -14,7 +14,7 @@ afterEach(cleanup)
 describe('DoD-10 온보딩 위저드·라우트 가드', () => {
   it('(a) v1.5: 온보딩 미완료 시 "/"는 행사 설정으로 유도된다(차단 아님)', async () => {
     mockProvider().resetOnboarding()
-    renderRoute('/')
+    renderRoute('/home')
 
     expect(await screen.findByRole('heading', { name: '행사 설정' })).toBeTruthy()
     expect(screen.queryByRole('heading', { name: '홈 대시보드' })).toBeNull()

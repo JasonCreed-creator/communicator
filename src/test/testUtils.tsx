@@ -17,6 +17,7 @@ import ClientMaterialsPage from '../pages/ClientMaterialsPage'
 import ClientStatusPage from '../pages/ClientStatusPage'
 import HomeDashboardPage from '../pages/HomeDashboardPage'
 import ItemDetailPage from '../pages/ItemDetailPage'
+import LauncherPage from '../pages/LauncherPage'
 import NotFoundPage from '../pages/NotFoundPage'
 import OnboardingPage from '../pages/OnboardingPage'
 import PartnerBoardPage from '../pages/PartnerBoardPage'
@@ -59,6 +60,9 @@ export function renderRoute(path: string) {
   return render(
     <MemoryRouter initialEntries={[path]}>
       <Routes>
+        {/* S-00 제품 런처 — App.tsx와 동일하게 ProjectScope·InternalLayout 밖 */}
+        <Route path="/" element={<LauncherPage />} />
+
         <Route element={<ProjectScope />}>
           {/* S0 온보딩 위저드 — 가드 대상 제외 (App.tsx와 동일 구성) */}
           <Route path="/onboarding" element={<OnboardingPage />} />
@@ -77,7 +81,7 @@ export function renderRoute(path: string) {
             <Route path="/quotes/:quoteId/edit" element={<QuoteEditorPage />} />
 
             <Route element={<OnboardingGuard />}>
-              <Route path="/" element={<HomeDashboardPage />} />
+              <Route path="/home" element={<HomeDashboardPage />} />
               <Route path="/board/:area" element={<AreaBoardPage />} />
               <Route path="/items/:itemId" element={<ItemDetailPage />} />
               <Route path="/registration" element={<RegistrationPage />} />

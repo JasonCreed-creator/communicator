@@ -71,8 +71,12 @@ tab.on('request', (r) => r.resourceType() === 'document' && docRequests.push(r.u
 
 console.log(`\n상호작용 스모크 — ${ORIGIN}${DIR} (charset 미선언 서빙)\n`)
 await tab.goto(`${ORIGIN}${DIR}`, { waitUntil: 'networkidle' })
+await tab.getByRole('link', { name: '견적 컨피규레이터 들어가기' }).waitFor({ timeout: 10_000 })
+check(true, '제품 런처(S-00) 렌더', 'charset 미선언 조건에서 한글 정상')
+await tab.getByRole('link', { name: 'MICE 커뮤니케이터 들어가기' }).click()
+await tab.waitForURL(/#\/home$/, { timeout: 10_000 })
 await tab.getByText('외관 대형 현수막').first().waitFor({ timeout: 10_000 })
-check(true, '홈(S1) 렌더', 'charset 미선언 조건에서 한글 정상')
+check(true, '런처 → 홈(S1) 렌더', '커뮤니케이터 카드가 홈 대시보드에 닿는다')
 
 // ── ① InfoTip 호버 — 가장 오른쪽 ⓘ에서 뷰포트 내 완전 노출 ──
 // 3.16.3 T1 재현 화면: 운영 보드 헤더 우측 ⓘ(실측 x1244+w240=1484>1440로 잘렸던 곳)
@@ -137,195 +141,54 @@ check(
   `${docCountBefore} → ${docRequests.length}`,
 )
 
-// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — 3.19: **폼 정본(패턴 기준 시트 §10)**.
-//     정적 스크린샷은 컨트롤의 '색'만 보여 준다. 폼 정본이 실제로 지키는 것은 **입력 중 동작**이라
-//     여기서만 증명된다: 금액 에코가 타이핑을 따라오는가 · dirty 전 저장이 잠겨 있는가 ·
-//     저장 후 캡션이 배지가 아니라 한 줄로 뜨는가 · 셀렉트 화살표가 OS 것이 아닌가.
-//     경로: 판매 플래너 ① 금액·저장 → 온보딩 ③ 선택 카드·셀렉트 → 행사 설정 ② 전자명함 임포트. ──
+// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — S-00 **제품 런처**(도메인 루트, 2026-09-04).
+//     "같은 도메인에서 선택하여 각각 진입"이 실제로 도는지: 런처 → 견적 컨피규레이터(#/quotes) →
+//     사이드바 로고로 런처 복귀 → MICE 커뮤니케이터(#/home) → 사이드바 '홈'이 /home으로 활성. ──
 
-// 데모 안내 칩은 우하단 고정이라 셀렉터 드롭다운 하단 행과 겹친다 — 사용자와 똑같이 닫고 시작한다
+// 데모 안내 칩은 우하단 고정이라 카드 하단과 겹칠 수 있다 — 사용자와 똑같이 닫고 시작한다
 const notice = tab.getByRole('button', { name: '안내 닫기' })
 if (await notice.count()) await notice.click()
 
-/** 사이드바 셀렉터로 현재 행사를 바꾼다 — 실제 사용자 경로 그대로(직접 URL 주입 아님) */
-async function switchProject(name) {
-  await tab.getByRole('button', { name: /현재 행사/ }).click()
-  await tab.getByRole('button', { name: new RegExp(name) }).first().click()
-  await tab.getByText(name).first().waitFor({ timeout: 10_000 })
-}
+// 사이드바 로고 = 런처 복귀 경로(제품을 갈아타는 자리)
+const logoLink = tab.locator('aside a[aria-label="제품 선택으로"]')
+check((await logoLink.count()) === 1, '사이드바 로고가 제품 선택(런처) 링크', `${await logoLink.count()}개`)
+await logoLink.click()
+await tab.waitForURL(/#\/$/, { timeout: 10_000 })
+await tab.getByRole('heading', { name: '어떤 도구로 시작할까요?' }).waitFor({ timeout: 10_000 })
+const shellOnLauncher = await tab.locator('aside nav').count()
+check(shellOnLauncher === 0, '런처는 제품 셸(사이드바) 밖의 중립 지면', `nav ${shellOnLauncher}개`)
+const ctaOnLauncher = await tab.locator('.btn-accent, .btn-primary').count()
+check(ctaOnLauncher === 0, '런처 CTA — 카드 전체가 링크(accent 버튼 0개)', `${ctaOnLauncher}개`)
+await tab.screenshot({ path: resolve(SHOTS, '03a-launcher.png') })
 
-await switchProject('가상 서밋 2026')
-await tab.getByRole('link', { name: /^파트너 보드$/ }).click()
-await tab.waitForURL(/#\/partners/, { timeout: 10_000 })
+// 견적 컨피규레이터 카드 → S-2 (mock 사용자 = sales, QuoteGate 통과)
+const docBeforeQuote = docRequests.length
+await tab.getByRole('link', { name: '견적 컨피규레이터 들어가기' }).click()
+await tab.waitForURL(/#\/quotes$/, { timeout: 10_000 })
+await tab.getByRole('heading', { name: '견적' }).waitFor({ timeout: 10_000 })
+check(true, '런처 → 견적 컨피규레이터(#/quotes)', '견적(S-2) 헤딩 확인')
+check(docRequests.length === docBeforeQuote, '런처 → 견적 전환에 전체 리로드 0', `${docBeforeQuote} → ${docRequests.length}`)
+const quoteNavActive = await tab.locator('aside nav a[aria-current="page"]').innerText()
+check(/견적/.test(quoteNavActive), '견적 진입 후 사이드바 활성 항목 = 견적', quoteNavActive.trim())
+await tab.screenshot({ path: resolve(SHOTS, '03b-launcher-to-quotes.png') })
 
-// 판매 플래너 탭은 복합 게이트(주최형 + 판매형 포맷)를 통과한 행사에만 뜬다
-const plannerTab = tab.getByRole('button', { name: '판매 플래너' })
-await plannerTab.waitFor({ timeout: 10_000 })
-await plannerTab.click()
+// 로고로 런처 복귀 → MICE 커뮤니케이터 카드 → S1 홈, 사이드바 '홈'(/home) 활성
+await tab.locator('aside a[aria-label="제품 선택으로"]').click()
+await tab.getByRole('link', { name: 'MICE 커뮤니케이터 들어가기' }).waitFor({ timeout: 10_000 })
+await tab.getByRole('link', { name: 'MICE 커뮤니케이터 들어가기' }).click()
+await tab.waitForURL(/#\/home$/, { timeout: 10_000 })
+await tab.getByRole('heading', { name: '홈 대시보드' }).waitFor({ timeout: 10_000 })
+const homeLink = tab.locator('aside nav a', { hasText: '홈' }).first()
+check((await homeLink.getAttribute('href') ?? '').endsWith('#/home'), "사이드바 '홈' 링크 = #/home", await homeLink.getAttribute('href'))
+check((await homeLink.getAttribute('aria-current')) === 'page', "런처 → 커뮤니케이터 후 '홈' aria-current=page")
+await tab.screenshot({ path: resolve(SHOTS, '03c-launcher-to-home.png') })
 
-// ① 상품 정의 — 등급 카드에 판매 단가 입력이 있다(내부 전용)
-await tab.getByRole('heading', { name: /① 상품 정의/ }).waitFor({ timeout: 10_000 })
-const priceInputs = await tab.getByLabel('판매 단가 (내부)').count()
-check(priceInputs >= 3, '① 상품 정의 — 등급별 판매 단가 입력', `${priceInputs}개`)
-
-// §10-A 금액 — 표시는 천단위, 편집 중에는 raw, blur 시 재포맷. 에코가 타이핑을 따라온다
-const priceField = tab.getByLabel('판매 단가 (내부)').first()
-const priceShown = await priceField.inputValue()
-check(/,/.test(priceShown), '§10-A 금액 — 천단위 구분 표시', priceShown)
-const priceAlign = await priceField.evaluate((el) => getComputedStyle(el).textAlign)
-check(priceAlign === 'right', '§10-A 금액 — 우측정렬(.ui-input-num)', priceAlign)
-
-// §10 버튼 위계 — 변경 전에는 저장이 잠겨 있다
-const saveBtn = tab.getByRole('button', { name: /부스 저장$|존 저장$|저장$/ }).first()
-check(await saveBtn.isDisabled(), '§10 버튼 위계 — 변경 전 저장 비활성')
-const saveClass = (await saveBtn.getAttribute('class')) ?? ''
-check(
-  /btn-ghost/.test(saveClass) && !/btn-primary|btn-accent/.test(saveClass),
-  '§10 버튼 위계 — 카드 저장은 ghost(주 버튼은 전진 하나)',
-  saveClass.trim(),
-)
-
-await priceField.click()
-const priceRaw = await priceField.inputValue()
-check(!/,/.test(priceRaw), '§10-A 금액 — 편집 중에는 raw(쉼표가 커서를 튀게 하지 않는다)', priceRaw)
-await priceField.fill('123456789')
-await tab.waitForTimeout(120)
-const echoLive = await tab.getByText('1억 2,345만 6,789원').count()
-check(echoLive >= 1, '§10-A 금액 — 한글 에코가 타이핑을 따라온다', `${echoLive}곳`)
-check(!(await saveBtn.isDisabled()), '§10 버튼 위계 — 변경 후 저장 활성')
-await tab.screenshot({ path: resolve(SHOTS, '03a-planner-money-echo.png') })
-
-await priceField.blur()
-const priceReformatted = await priceField.inputValue()
-check(priceReformatted === '123,456,789', '§10-A 금액 — blur 시 재포맷', priceReformatted)
-
-await saveBtn.click()
-await tab.getByText(/^저장됨 \d{2}:\d{2}$/).first().waitFor({ timeout: 10_000 })
-check(true, "§10 버튼 위계 — 저장 결과는 토스트가 아니라 '저장됨 hh:mm' 캡션")
-await tab.screenshot({ path: resolve(SHOTS, '03a-planner-step1.png') })
-
-// 원래 단가로 되돌린다 — 이 스모크는 데모 상태를 남기지 않는다(아래 ② 합계가 픽스처 값을 본다)
-await priceField.click()
-await priceField.fill(priceShown.replace(/,/g, ''))
-await priceField.blur()
-await saveBtn.click()
-await tab.waitForTimeout(200)
-const priceRestored = await priceField.inputValue()
-check(priceRestored === priceShown, '스모크가 데모 상태를 되돌린다', priceRestored)
-
-// ② 목표 시뮬레이션 — 만석 기준 합계와 '왜 빠졌는지'가 함께 보인다
-await tab.getByRole('button', { name: '다음' }).click()
-await tab.getByRole('table', { name: '등급별 판매 계획' }).waitFor({ timeout: 10_000 })
-const targetCells = await tab.getByText('200,000,000원').count()
-check(targetCells >= 1, '② 시뮬레이션 — 만석 기준 매출 Σ(정원×단가)', `${targetCells}곳`)
-const excludedNote = await tab.getByTestId('planner-excluded-note').innerText()
-check(
-  /silver/.test(excludedNote),
-  '② 합계에서 빠진 등급을 숨기지 않고 이유를 적는다',
-  excludedNote.trim().slice(0, 40),
-)
-await tab.screenshot({ path: resolve(SHOTS, '03b-planner-step2.png') })
-
-// ③ 프리셋 확인 — DMS 운영 프리셋 5줄 + 트랙 편성
-await tab.getByRole('button', { name: '다음' }).click()
-await tab.getByTestId('planner-ops-notes').waitFor({ timeout: 10_000 })
-const opsNotes = await tab.getByTestId('planner-ops-notes').locator('li').count()
-check(opsNotes === 5, '③ 프리셋 확인 — DMS 운영 프리셋 5줄', `${opsNotes}줄`)
-const trackTable = await tab.getByRole('table', { name: '트랙 편성' }).count()
-check(trackTable >= 1, '③ 트랙 편성 표', `${trackTable}개`)
-await tab.screenshot({ path: resolve(SHOTS, '03c-planner-step3.png') })
-
-// 대행형 행사로 돌아가면 탭 자체가 사라진다 — format 단독 게이트가 아님을 실행으로 확인
-await switchProject('샘플 테크 컨퍼런스')
-await tab.getByRole('heading', { name: '파트너 보드' }).waitFor({ timeout: 10_000 })
-const plannerOnAgency = await tab.getByRole('button', { name: '판매 플래너' }).count()
-check(plannerOnAgency === 0, '대행형에서는 판매 플래너 탭 부재(복합 게이트)', `${plannerOnAgency}개`)
-
-// S0 ③ — 세팅 미완료 행사의 유형 4카드
-await switchProject('리더십 포럼 하반기')
+// 옛 견적 주소는 런처를 거치지 않는다(§10 리다이렉트 표 불변)
 await tab.evaluate(() => {
-  window.location.hash = '#/onboarding'
+  window.location.hash = '#/configurator'
 })
-await tab.getByRole('heading', { name: '① 행사개요' }).waitFor({ timeout: 10_000 })
-await tab.getByRole('button', { name: '다음' }).click()
-await tab.getByRole('heading', { name: '② 담당자' }).waitFor({ timeout: 10_000 })
-await tab.getByRole('button', { name: '다음' }).click()
-await tab.getByRole('heading', { name: '③ 유형·확인' }).waitFor({ timeout: 10_000 })
-const cards = await tab.getByRole('radio').count()
-check(cards === 4, 'S0 ③ — 유형 4카드', `${cards}장`)
-const assumedBadges = await tab.getByText('가정', { exact: true }).count()
-check(assumedBadges === 2, "근거가 약한 프리셋만 '가정' 표기(DMS·전시회)", `${assumedBadges}개`)
-
-// §10-B 선택 카드 — 표시는 보더·틴트 두 겹까지. '선택' 필은 사라졌다
-const pills = await tab.getByText('선택', { exact: true }).count()
-check(pills === 0, "§10-B 선택 카드 — '선택' 필 0건", `${pills}개`)
-
-// §10-B 체크·라디오 — 16px + 브랜드 accent(브라우저 파랑 아님)
-const radio = tab.getByRole('radio').first()
-const radioSpec = await radio.evaluate((el) => {
-  const cs = getComputedStyle(el)
-  return { w: cs.width, accent: cs.accentColor }
-})
-check(radioSpec.w === '16px', '§10-B 라디오 16px(내부 지면)', radioSpec.w)
-check(
-  /235|eb6f2a/i.test(radioSpec.accent),
-  '§10-B accent-color가 브랜드 오렌지(브라우저 파랑 아님)',
-  radioSpec.accent,
-)
-
-// §10-A 셀렉트 — OS 화살표 제거 + 자체 셰브론
-const kindSelect = tab.getByLabel('행사 성격')
-const selectSpec = await kindSelect.evaluate((el) => {
-  const cs = getComputedStyle(el)
-  return { appearance: cs.appearance, image: cs.backgroundImage, pad: cs.paddingRight }
-})
-check(selectSpec.appearance === 'none', '§10-A 셀렉트 — OS 화살표 제거', selectSpec.appearance)
-check(selectSpec.image.startsWith('url('), '§10-A 셀렉트 — ink-cap 셰브론 자체 렌더')
-check(selectSpec.pad === '32px', '§10-A 셀렉트 — 우측 여백 32', selectSpec.pad)
-const hintLine = await tab.getByText('카드가 시드한 값').count()
-check(hintLine === 1, '§10-C 힌트 한 줄이 카드와의 관계를 말한다', `${hintLine}곳`)
-await tab.screenshot({ path: resolve(SHOTS, '03d-onboarding-format-cards.png') })
-
-// 전시회 데모 — EX 템플릿이 실제로 전개돼 일정에 EX 코드로 보인다(3.18d, 전부 '가정')
-// S0는 사이드바가 없는 독립 화면이라 셀렉터를 쓰려면 먼저 본체로 돌아온다
-await tab.evaluate(() => {
-  window.location.hash = '#/'
-})
-await tab.getByRole('button', { name: /현재 행사/ }).waitFor({ timeout: 10_000 })
-await switchProject('가상산업박람회 2026')
-await tab.getByRole('link', { name: /^일정$/ }).click()
-await tab.waitForURL(/#\/schedule/, { timeout: 10_000 })
-await tab.getByText(/EX-1\b/).first().waitFor({ timeout: 10_000 })
-const exCodes = await tab.getByText(/^EX-\d+$/).count()
-check(exCodes >= 10, '전시회 — EX WBS 템플릿 전개', `${exCodes}개 코드`)
-await tab.screenshot({ path: resolve(SHOTS, '03e-exhibition-ex-wbs.png') })
-
-// 행사 설정 ② — 전자명함 붙여넣기 임포트(3.18.1 §2). 파싱 → 확인 표 → 저장까지 실제로 도는지.
-// 가상 명함 텍스트다(#RULE-NO-COMPANY — 실명·실회사·실번호 금지).
-await tab.evaluate(() => {
-  window.location.hash = '#/'
-})
-await tab.getByRole('button', { name: /현재 행사/ }).waitFor({ timeout: 10_000 })
-await switchProject('샘플 테크 컨퍼런스')
-await tab.evaluate(() => {
-  window.location.hash = '#/settings'
-})
-await tab.getByRole('button', { name: /담당자/ }).first().click()
-await tab.getByRole('button', { name: '전자명함 붙여넣기' }).click()
-await tab
-  .getByLabel('명함·서명 텍스트')
-  .fill('가상기획\n홍길동 팀장\nhong@example.com\n010-0000-0000')
-await tab.getByRole('button', { name: '인식', exact: true }).click()
-
-const parsedName = await tab.getByLabel('1번째 이름').inputValue()
-check(parsedName === '홍길동', '전자명함 — 이름 인식', parsedName)
-const parsedTitle = await tab.getByLabel('1번째 직함').inputValue()
-check(parsedTitle === '팀장', '전자명함 — 직함 인식', parsedTitle)
-const parsedPhone = await tab.getByLabel('1번째 전화').inputValue()
-check(parsedPhone === '010-0000-0000', '전자명함 — 전화 표기 정규화', parsedPhone)
-const parsedEmail = await tab.getByLabel('1번째 이메일').inputValue()
-check(parsedEmail === 'hong@example.com', '전자명함 — 이메일 인식', parsedEmail)
-await tab.screenshot({ path: resolve(SHOTS, '03f-contact-card-import.png') })
+await tab.waitForURL(/#\/quotes$/, { timeout: 10_000 })
+check(true, '옛 주소 #/configurator → #/quotes (런처 경유 없음)')
 
 await browser.close()
 server.close()

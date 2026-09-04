@@ -119,7 +119,9 @@ describe('S5 마일스톤 목록 — 같은 표 정본', () => {
 
     const table = timeline.querySelector('table.ui-table') as HTMLTableElement
     expect(table).toBeTruthy()
-    expect(within(table).getByText('D-day')).toBeTruthy()
+    // 열 헤더를 역할로 집는다 — 마일스톤 due_date가 오늘이면 D-day 배지가 같은 문자열로 한 번 더 그려져
+    // getByText('D-day')가 중복 매치로 깨진다(2026-09-04 실측: mls-001 due 2026-09-04)
+    expect(within(table).getByRole('columnheader', { name: 'D-day' })).toBeTruthy()
 
     // 월 그룹 헤더행 — 'YYYY년 M월' + 건수
     const groupRows = table.querySelectorAll('tr.ui-table-group')

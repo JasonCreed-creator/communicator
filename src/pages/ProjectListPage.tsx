@@ -41,12 +41,12 @@ export default function ProjectListPage() {
 
   const openActive = (s: ProjectSummary) => {
     setProject(s.id)
-    navigate(s.onboarded ? '/' : '/settings')
+    navigate(s.onboarded ? '/home' : '/settings')
   }
 
   const openClosed = (s: ProjectSummary) => {
     setProject(s.id)
-    navigate('/')
+    navigate('/home')
   }
 
   const continueOnboarding = (s: ProjectSummary) => {

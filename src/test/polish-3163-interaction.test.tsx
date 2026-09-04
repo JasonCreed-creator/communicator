@@ -67,7 +67,7 @@ describe('T1 — InfoTip 컴포넌트 클램프 적용', () => {
 describe('T2 — hover 하이라이트 클래스 계약', () => {
   it('사이드바 비활성 메뉴 항목에 hover 배경·transition 토큰이 있다(활성 항목은 현행 유지)', async () => {
     localStorage.setItem('communicator.currentProjectId', PROJECT_ID)
-    renderRoute('/')
+    renderRoute('/home')
     await screen.findByRole('heading', { name: '홈 대시보드' })
     const nav = document.querySelector('aside nav')
     expect(nav).not.toBeNull()
