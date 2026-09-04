@@ -5,11 +5,24 @@
 // 미제출 1(requested).
 import { cleanup, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PROJECT_ID_HOST } from '../fixtures/sampleProject'
 import { renderRoute } from './testUtils'
 
 afterEach(cleanup)
+
+// 주최형 데모 픽스처(hostFixtures.ts)는 EVENT_DATE='2026-10-15' 고정 + "≈D-49" 가정으로 짜여 있다.
+// HT-1(D-45 = 08-31) 마감이 지나면 '이번 마감'이 HT-3으로 옮겨가 KPI 기대값(4/5)이 어긋난다
+// (2026-09-04 실측 — origin/main에서도 같은 실패). 시계를 픽스처 가정일에 고정한다.
+// Date만 가짜로 — 타이머는 실제여야 findBy·userEvent 대기가 산다. 토큰 만료·회수 일자도 이 날짜 기준으로 일관된다.
+const FIXTURE_TODAY = new Date('2026-08-27T09:00:00')
+beforeAll(() => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(FIXTURE_TODAY)
+})
+afterAll(() => {
+  vi.useRealTimers()
+})
 
 describe('S-11 파트너 보드', () => {
   it('KPI 4·파트너 5행·검토 필요 1건이 렌더된다', async () => {
