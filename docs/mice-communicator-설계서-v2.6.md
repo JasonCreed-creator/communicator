@@ -1173,6 +1173,9 @@ UI 공통: 한국어, 데스크톱 우선 + 반응형(발주처 화면은 모바
 `deploy:check`가 이미 통과시킨 항목과 같다): ① `/schedule` 새로고침 ② `/c/demo/status`
 ③ `/p/demo-partner` ④ `/configurator`가 `/quotes`로 튀는지 ⑤ 루트 `/`가 **제품 런처(S-00)** —
 견적 컨피규레이터·MICE 커뮤니케이터 카드 2장 — 이고 각 카드가 `/quotes`·`/home`에 닿는지(2026-09-04).
+**빌드가 `Command "npm run build" exited with 2`로 실패하면 tsc 타입 오류다**(2026-09-04 실측: Vercel의 npm 11이
+optional peer `@types/node`를 설치하지 않아 `node:fs`·`process` 타입이 없었다 → devDependency 명시로 해결). 대시보드의
+로그 복사본에는 오류 줄이 빠질 수 있으니 실패 원인은 배포 상세의 `errorMessage`나 API 이벤트 로그로 본다.
 
 **S4. 도메인 연결** ■ — Settings → Domains. 두 갈래다:
 

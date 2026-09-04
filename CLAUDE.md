@@ -216,6 +216,7 @@ MICE 프로젝트 협업 허브 — 역할별(디자인·운영·등록) 산출�
   - **S1 홈 `/` → `/home`** — 사이드바 "홈"·`navigate('/')` 호출부(행사 목록·견적 목록·견적 에디터)·테스트 `renderRoute('/')` 21건 전부 `/home`. 사이드바 로고 = 런처 복귀 링크(`aria-label="제품 선택으로"`)
   - **두 제품 = 한 Vercel 프로젝트·한 도메인** — 견적을 별도 프로젝트·서브도메인으로 쪼개지 않는다. `vercel.json` 무변경(SPA rewrite가 `/`·`/home`을 이미 덮는다). 옛 Configurator 라우트 리다이렉트(§10 표) 불변 — 런처를 거치지 않고 `/quotes`로 간다
   - 검증: `deploy:check`에 런처 클릭 경로 3항목·`/home` 딥링크 추가, 데모 4단(`browser-check`·`routing.check`·`interaction-smoke` ③ 블록 = 런처 경로) 갱신. 정본 = 설계서 §10 S-00 행·§18a S3 ⑤·S4(가)
+  - **Vercel 실배포 함정(2026-09-04 실측)**: Vercel(Node 24·npm 11)은 lockfile에 **optional peer**로만 있는 패키지를 설치하지 않는다 — `@types/node`가 그래서 빠져 `tsc --noEmit`이 `node:fs`·`process`로 `exited with 2`. 테스트가 쓰는 Node 타입은 **devDependency로 명시**한다. 대시보드 로그 복사본에는 이 오류 줄이 빠져 있었다 — 실패 원인은 API의 `errorMessage`/이벤트 로그가 정본
   - 금지: 런처에 금액·행사 데이터 노출(중립 지면 — DataProvider 호출 0건) · 루트 자동 리다이렉트(마지막 선택 기억 등) · 제품별 별도 도메인
 
 ### 서버 스프린트 (v2.3 설계 완료 — **착수 대기: 사용자가 지시할 때 개시**(2026-08-27 우선순위 변경). dev 3키는 착수 시 사용자에게 대화로 요청)

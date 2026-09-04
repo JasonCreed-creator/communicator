@@ -24,6 +24,15 @@
   **Vercel 연동 — 레포 쪽은 완료, 계정 단계는 §18a S1~S4(사용자)**: GitHub 체크런·커밋 상태가 0건이라
   Vercel GitHub 연동이 아직 **미연결**임을 확인했다(연결돼 있으면 push마다 Vercel 상태가 붙는다). 이 컨테이너에
   Vercel CLI·토큰 없음(2026-08-29와 동일). 연결 즉시 브랜치 PR은 Preview, main 머지는 Production으로 자동 배포된다.
+  **Vercel 실배포 1차 실패 → 원인 확정·수정**(2026-09-04 저녁, 사용자가 §18a S1~S2를 수행하고 배포 → `main` 2회 실패).
+  대시보드 로그는 `tsc --noEmit && vite build` 줄에서 끊겨 보였지만, 사용자가 발급한 1일 API 토큰으로 이벤트 로그를
+  읽자 **tsc TS2307 `Cannot find module 'node:fs'`·TS2580 `process`** 7건(`dod26-rebuild-fixtures`·`dod50-form-canon`
+  테스트 파일)과 `exited with 2`가 있었다. **원인 = `@types/node`가 lockfile에 vite·vitest의 optional peer로만 있었고
+  (`dev·peer·optional`), Vercel의 Node 24 + npm 11.16은 optional peer를 설치하지 않는다**(265 vs 로컬 267 = `@types/node`+
+  `undici-types`). 로컬 npm 10은 설치해 줘서 한 번도 드러나지 않았다. **수정 = `@types/node@^26.2.0`을 devDependency로 명시**
+  (트리·버전 무변경, lockfile 플래그만 dev로). 로컬에서 두 패키지를 지워 같은 7건을 재현한 뒤 통과 확인.
+  프로젝트 설정 확인: Node 24.x · framework vite · env는 `VITE_DATA_PROVIDER`(sensitive) 1건뿐(Supabase 2건 삭제됨) ·
+  도메인은 `communicator-rho.vercel.app`만(apex 미연결). Node 24로도 로컬 빌드 통과 — 버전 고정은 불필요.
   결과: vitest **931**(100파일) · tsc · demo tsc · build · `deploy:check` 34 · demo 4단 · 스모크 · 가드 0건(기준선과 동일).
   정본: 설계서 §10 S-00 행·S1 `/home`·§18a S3 ⑤·S4(가), CLAUDE.md Phase 3.21·DoD 56, README 진입 구조
 - **완료: Phase 3.20 — 담당자 마스터 + 진입점 정정**(2026-08-29, 사용자 실측 요청 1 + 지적 4).
@@ -1482,6 +1491,13 @@ DoD-29뿐 아니라 **실물 검산 2건에서 바로** 잡힌다(위 표의 "2 
   (`deploy:check` 34항목)이고 계정 단계는 §18a. 데모 `browser-check`는 전체 Chromium으로 돌리면 `/favicon.ico`
   요청 1건이 "서버가 받은 요청 1건" 검사를 깨뜨린다 — 이전 세션과 같이 `chromium_headless_shell`로 돌리면 통과
   (환경 차이, 코드 무관). 결과: vitest 931(100파일) · 가드 0건 · deploy:check 34 · demo 4단 · 스모크 12항목.
+  **같은 날 저녁 — Vercel 첫 배포 실패 처리**. 사용자가 Import·env까지 마치고 `main`을 배포했으나 2회 연속 실패.
+  대시보드가 보여준 로그는 빌드 명령 줄에서 끝나 있었고("나한테 출력된 전부임"), 로컬에서는 Node 22·24, CI env,
+  스크립트 차단 조건까지 전부 통과해 원인을 못 잡았다. 사용자가 "직접 들어가서 처리해봐"라고 해 **1일 만료 Vercel API
+  토큰**을 받아 `/v3/deployments/{id}/events`를 읽었다 — 대시보드 복사본에 빠져 있던 tsc 오류 7줄이 거기 있었다.
+  교훈 두 가지: ① **대시보드 로그 복사는 정본이 아니다** — 실패 원인은 `errorCode`·`errorMessage`(API)나 이벤트 로그로
+  본다 ② **lockfile에 optional peer로만 있는 타입 패키지는 npm 버전에 따라 설치되지 않는다** — 테스트가 쓰는 `node:*`
+  타입은 devDependency로 명시해야 한다. 토큰은 셸 env로만 썼고 어디에도 기록하지 않았다(사용자가 삭제할 것).
 - **2026-08-29 (Phase 3.20 — 담당자 마스터 + 진입점 정정)**. 사용자 실측 요청 1건("사전 등록된
   담당자를 배정, 매번 입력하는 번거로움 없이") + 화면을 쓰다 나온 지적 4건.
   **조사가 먼저였다** — 지적 4건 중 3건은 "기능이 없다"가 아니라 **진입점이 틀렸다**였다.
