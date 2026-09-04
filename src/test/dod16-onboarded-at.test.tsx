@@ -16,7 +16,7 @@ describe('DoD-16 온보딩 완료 = onboarded_at 파생 (v1.4.1)', () => {
     p.resetOnboarding()
     expect((await p.getOnboardingStatus('prj-stc26')).onboarded_at).toBeNull()
 
-    renderRoute('/')
+    renderRoute('/home')
     expect(await screen.findByRole('heading', { name: '행사 설정' })).toBeTruthy()
   })
 

@@ -8,7 +8,7 @@ afterEach(cleanup)
 
 describe('DoD-5 홈 대시보드', () => {
   it('미결 컨펌·인박스·마일스톤·진행률·활동이 픽스처로 렌더된다', async () => {
-    renderRoute('/')
+    renderRoute('/home')
 
     // 미결 컨펌 (apr-001 → dlv-001)
     expect(await screen.findByText('메인 키비주얼')).toBeTruthy()

@@ -87,11 +87,16 @@ tab.on('pageerror', (e) => pageErrors.push(String(e)))
 console.log(`\n브라우저 런타임 검증 — ${ORIGIN}${DIR}\n`)
 await tab.goto(`${ORIGIN}${DIR}`, { waitUntil: 'networkidle' })
 
-// ── 1. 첫 화면이 홈 대시보드(S1)인가 ──
+// ── 1. 첫 화면이 제품 런처(S-00)이고, 커뮤니케이터 카드가 홈 대시보드(S1)에 닿는가 ──
 const notFound = await tab.getByText('페이지를 찾을 수 없습니다').count()
 check(notFound === 0, '첫 화면이 404가 아님', `NotFound 노드 ${notFound}개`)
+await tab.getByRole('link', { name: '견적 컨피규레이터 들어가기' }).waitFor({ timeout: 10_000 })
+check(true, '제품 런처(S-00) 렌더', '견적 컨피규레이터 · MICE 커뮤니케이터 두 카드')
+await tab.screenshot({ path: resolve(SHOTS, '00-launcher.png'), fullPage: false })
+await tab.getByRole('link', { name: 'MICE 커뮤니케이터 들어가기' }).click()
+await tab.waitForURL(/#\/home$/, { timeout: 10_000 })
 await tab.getByText('외관 대형 현수막').first().waitFor({ timeout: 10_000 })
-check(true, '홈 대시보드(S1) 렌더', '데모 기본 행사(RE:BUILD 27)의 미결 컨펌 카드 확인')
+check(true, '런처 → 홈 대시보드(S1) 렌더', '데모 기본 행사(RE:BUILD 27)의 미결 컨펌 카드 확인')
 
 // ── 2. 네트워크 요청이 문서 1건뿐인가 ──
 check(requests.length === 1, '브라우저 네트워크 요청', `${requests.length}건 → ${requests.join(' | ')}`)
@@ -147,8 +152,11 @@ const ncErrors = []
 ncTab.on('pageerror', (e) => ncErrors.push(String(e)))
 await ncTab.setViewportSize({ width: 1440, height: 900 })
 await ncTab.goto(`${ORIGIN}${NC_DIR}`, { waitUntil: 'networkidle' })
+await ncTab.getByRole('link', { name: '견적 컨피규레이터 들어가기' }).waitFor({ timeout: 10_000 })
+check(true, 'no-charset 서빙: 제품 런처(S-00) 렌더', '프리스캔 1KB 안의 <meta charset>이 인코딩을 확정')
+await ncTab.goto(`${ORIGIN}${NC_DIR}#/home`, { waitUntil: 'networkidle' })
 await ncTab.getByText('외관 대형 현수막').first().waitFor({ timeout: 10_000 })
-check(true, 'no-charset 서빙: 홈(S1) 렌더', '프리스캔 1KB 안의 <meta charset>이 인코딩을 확정')
+check(true, 'no-charset 서빙: 홈(S1) 렌더', '해시 딥링크 #/home')
 await ncTab.goto(`${ORIGIN}${NC_DIR}#/schedule`, { waitUntil: 'networkidle' })
 await ncTab.getByText(/컴플라이언스|R&R|체크리스트/).first().waitFor({ timeout: 10_000 })
 check(true, 'no-charset 서빙: 일정(S5) 렌더', '해시 라우팅 정상')

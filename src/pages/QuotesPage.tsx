@@ -236,7 +236,7 @@ function QuotesBody() {
                     className="btn btn-ghost btn-sm"
                     onClick={() => {
                       setProject(projectId)
-                      navigate('/')
+                      navigate('/home')
                     }}
                   >
                     행사로 이동 →

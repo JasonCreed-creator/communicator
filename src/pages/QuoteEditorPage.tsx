@@ -334,7 +334,7 @@ function EditorBody({ quoteId, initialStep }: { quoteId: string | null; initialS
               onGoProject={() => {
                 if (savedQuote?.project_id) {
                   setProject(savedQuote.project_id)
-                  navigate('/')
+                  navigate('/home')
                 }
               }}
             />

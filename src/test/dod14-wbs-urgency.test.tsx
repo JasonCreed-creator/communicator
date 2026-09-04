@@ -57,7 +57,7 @@ describe('DoD-14 WBS 지연/임박 UI 반영', () => {
   // 홈은 3분할 액션 큐로 재편됐다(시안: 홈 대시보드) — 집계는 합산 위젯이 아니라 각 큐 헤더의
   // 건수 배지가 말하고, 해당 태스크는 큐 안(히어로·기한순 행)에 코드와 함께 남는다. 의미는 동일.
   it('홈 대시보드의 지연·임박 큐에 건수 배지와 해당 태스크가 렌더된다', async () => {
-    renderRoute('/')
+    renderRoute('/home')
 
     const delayed = (await screen.findByRole('heading', { name: '지연' })).closest(
       '.ui-card',

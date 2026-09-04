@@ -14,7 +14,7 @@ afterEach(cleanup)
 describe('홈(S1) — 대행형은 무변경 (회귀)', () => {
   it('세 번째 큐가 여전히 "미결 컨펌"이고, "파트너 검토 대기"는 어디에도 없다', async () => {
     localStorage.setItem('communicator.currentProjectId', PROJECT_ID)
-    renderRoute('/')
+    renderRoute('/home')
     await screen.findByRole('heading', { name: '홈 대시보드' })
 
     expect(await screen.findByRole('heading', { name: '미결 컨펌' })).toBeTruthy()
@@ -25,7 +25,7 @@ describe('홈(S1) — 대행형은 무변경 (회귀)', () => {
 describe('홈(S1) — 주최형은 "파트너 검토 대기"로 대체 (감수 M3)', () => {
   it('큐 3종이 지연·임박·파트너 검토 대기이고 "미결 컨펌"이 없다', async () => {
     localStorage.setItem('communicator.currentProjectId', PROJECT_ID_HOST)
-    renderRoute('/')
+    renderRoute('/home')
     await screen.findByRole('heading', { name: '홈 대시보드' })
 
     // 큐 3종은 대시보드·파트너 두 비동기 호출이 각각 끝나야 자리를 잡는다. 콜드 런에서는
@@ -48,7 +48,7 @@ describe('홈(S1) — 주최형은 "파트너 검토 대기"로 대체 (감수 M
 
   it('"파트너 검토 대기" 큐에 파트너명·항목명·마감이 렌더되고, 열면 파트너 보드에서 해당 파트너가 자동 선택된다', async () => {
     localStorage.setItem('communicator.currentProjectId', PROJECT_ID_HOST)
-    renderRoute('/')
+    renderRoute('/home')
     await screen.findByRole('heading', { name: '홈 대시보드' })
 
     const widget = (await screen.findByRole('heading', { name: '파트너 검토 대기' })).closest(

@@ -31,7 +31,7 @@ describe('성격 카드 — 확인 다이얼로그 후 전환 (R-H1)', () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true)
 
     // 시작 상태 — 주최형: 사이드바에 파트너 보드 메뉴가 있다
-    renderRoute('/')
+    renderRoute('/home')
     await screen.findByRole('heading', { name: '홈 대시보드' })
     expect(await screen.findByRole('link', { name: '파트너 보드' })).toBeTruthy()
     cleanup()
@@ -45,7 +45,7 @@ describe('성격 카드 — 확인 다이얼로그 후 전환 (R-H1)', () => {
     cleanup()
 
     // 대행형에서는 파트너 보드 메뉴가 사라진다
-    renderRoute('/')
+    renderRoute('/home')
     await screen.findByRole('heading', { name: '홈 대시보드' })
     expect(screen.queryByRole('link', { name: '파트너 보드' })).toBeNull()
     cleanup()
@@ -61,7 +61,7 @@ describe('성격 카드 — 확인 다이얼로그 후 전환 (R-H1)', () => {
     await waitFor(async () => expect((await mockProvider().getProject(PROJECT_ID_HOST)).kind).toBe('host'))
     cleanup()
 
-    renderRoute('/')
+    renderRoute('/home')
     await screen.findByRole('heading', { name: '홈 대시보드' })
     expect(await screen.findByRole('link', { name: '파트너 보드' })).toBeTruthy()
 

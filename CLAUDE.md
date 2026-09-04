@@ -211,6 +211,13 @@ MICE 프로젝트 협업 허브 — 역할별(디자인·운영·등록) 산출�
   - 금지: 배정 전용 메서드 신설(기존 `addMember`가 한다) · 주소록을 행사 스코프로 만들기 ·
     삭제 시 배정 동반 제거
 
+- **Phase 3.21 — 제품 런처(S-00) + 도메인 루트 정정 (서버 0, 사용자 지시 2026-09-04 "견적 컨피규레이터와 MICE 커뮤니케이터를 같은 도메인(rmb-mice.com)에서 선택하여 각각 진입")**
+  - **루트 `/` = 제품 런처** `src/pages/LauncherPage.tsx` — ProjectScope·InternalLayout **밖**의 중립 지면. 카드 2장(견적 컨피규레이터 → `/quotes` · MICE 커뮤니케이터 → `/home`), 카드 전체가 링크(accent 버튼 0개), 자동 리다이렉트 없음
+  - **S1 홈 `/` → `/home`** — 사이드바 "홈"·`navigate('/')` 호출부(행사 목록·견적 목록·견적 에디터)·테스트 `renderRoute('/')` 21건 전부 `/home`. 사이드바 로고 = 런처 복귀 링크(`aria-label="제품 선택으로"`)
+  - **두 제품 = 한 Vercel 프로젝트·한 도메인** — 견적을 별도 프로젝트·서브도메인으로 쪼개지 않는다. `vercel.json` 무변경(SPA rewrite가 `/`·`/home`을 이미 덮는다). 옛 Configurator 라우트 리다이렉트(§10 표) 불변 — 런처를 거치지 않고 `/quotes`로 간다
+  - 검증: `deploy:check`에 런처 클릭 경로 3항목·`/home` 딥링크 추가, 데모 4단(`browser-check`·`routing.check`·`interaction-smoke` ③ 블록 = 런처 경로) 갱신. 정본 = 설계서 §10 S-00 행·§18a S3 ⑤·S4(가)
+  - 금지: 런처에 금액·행사 데이터 노출(중립 지면 — DataProvider 호출 0건) · 루트 자동 리다이렉트(마지막 선택 기억 등) · 제품별 별도 도메인
+
 ### 서버 스프린트 (v2.3 설계 완료 — **착수 대기: 사용자가 지시할 때 개시**(2026-08-27 우선순위 변경). dev 3키는 착수 시 사용자에게 대화로 요청)
 - **Phase 4 — Supabase 이식** (설계서 v2.3 §4 DDL 전체 기준, 검증 DB = dev 프로젝트)
   - 4a 마이그레이션+RLS+seed (에이전트 D): §4 순서대로 + **v2.4 스키마(§21.1 — kind·partner_tiers·partners·partner_tokens·quote_imports·확장 컬럼) 포함**, RLS는 §6.2 전체(quotes·profiles·compliance_cards·settlement_*·vendors·landing·partner_* 포함). **산출 규약: `supabase/migrations/*.sql` + 통합 `supabase/setup.sql`(신규 프로젝트 SQL 에디터 1회 실행으로 전체 구축 — 멱등, 2회 실행 무해를 테스트로 증명, 말미에 첫 admin 승격 SQL 1줄 주석 동봉) + `supabase/seed.sql`(데모 픽스처 4행사, 선택 실행)**
@@ -335,6 +342,7 @@ Phase 3.8과 3.9는 **별도 커밋·별도 PR**로 분리한다(3.8 = 타입·�
 
 54. (v2.7 §4-2b) **담당자 마스터**: 주소록이 행사와 무관하고(`listPeople()`이 projectId를 받지 않음), 등록→수정→삭제가 왕복하며, 이메일 중복은 409, 주소록에서 고른 사람의 직함·전화가 배정에 그대로 따라오고, 수정이 그 사람의 **모든 행사**에 반영되며, 배정이 남은 사람의 삭제는 **409이고 사유에 행사명이 들어간다** (테스트로 증명)
 55. (v2.7 §4-2c) **진입점**: 파트너 보드가 빈 상태에서 다른 화면 이름을 안내로 주지 않고 그 자리에서 여는 CTA를 주며, 판매 플래너 ①에서 등급을 만들 수 있고, 토큰이 있는 자리에서 `/c`·`/p`를 새 탭으로 열 수 있다 (테스트로 증명)
+56. (Phase 3.21 §10 S-00) **제품 런처**: 루트 `/`가 사이드바·셀렉터 없는 중립 지면에 제품 카드 2장만 렌더하고(accent/primary 버튼 0개), 견적 카드 → `/quotes`(S-2 헤딩) · 커뮤니케이터 카드 → `/home`(홈 대시보드, 사이드바 "홈" `aria-current`), 사이드바 로고가 `/`로 되돌아가며, `/configurator`는 런처를 거치지 않고 `/quotes`로 간다 (테스트로 증명 — `src/test/launcher.test.tsx`) + `deploy:check` 런처 클릭 3항목 통과
 
 50. (v2.6 §10) **폼 정본 — 컨트롤**: `accent-color: var(--accent)`가 base 레이어에 **1회만** 선언되고 화면 코드에 인라인 `accentColor` 0건이며, `type="checkbox"|type="radio"` 전부가 `.ui-check`를, `<select>` 전부가 `.ui-select`를 단다 — 예외는 사유가 붙은 화이트리스트에만 있고 죽은 예외는 실패한다 (테스트로 증명)
 51. (v2.6 §10-C) **폼 정본 — 필드 상태**: `Field`에서 `error`가 `hint`를 **대체**하고(두 줄로 쌓지 않는다) 필수 표시가 정확히 1개이며, `MoneyField`가 천단위 표시·편집 중 raw·blur 재포맷·빈 칸 `null`(0과 구분)·소수점 무반올림·억/만 경계(99,999,999 / 100,000,000)를 지킨다 (테스트로 증명)

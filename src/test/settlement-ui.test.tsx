@@ -86,7 +86,7 @@ describe('S-10 정산보드 화면', () => {
 
 describe('S1 홈 — 정산 초과 경보', () => {
   it('초과 버킷이 있으면 홈에 건수 카드가 뜬다', async () => {
-    renderRoute('/')
+    renderRoute('/home')
     expect(await screen.findByText(/정산 · 견적 초과 버킷 \d+건/)).toBeTruthy()
   })
 })

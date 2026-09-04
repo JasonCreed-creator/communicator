@@ -61,7 +61,7 @@ describe('DoD-7 가이드 발행 흐름', () => {
 
   it('(b) design 사용자 홈에 받은 가이드로 해당 항목이 노출된다', async () => {
     mockProvider().switchUser('usr-design')
-    renderRoute('/')
+    renderRoute('/home')
 
     const widget = (await screen.findByRole('heading', { name: '받은 가이드' })).closest('div')!.parentElement!
     expect(within(widget).getByText('입구 사이니지')).toBeTruthy()

@@ -11,7 +11,7 @@ afterEach(cleanup)
 
 describe('DoD-18 다중 행사 — 셀렉터 전환·localStorage 유지', () => {
   it('(a) 셀렉터로 행사를 전환하면 홈·등록이 해당 행사 데이터로 바뀐다', async () => {
-    renderRoute('/')
+    renderRoute('/home')
     // 기본 선택 = ① 샘플 테크 — ① 전용 인박스 파일이 홈에 렌더
     expect(await screen.findByRole('heading', { name: '홈 대시보드' })).toBeTruthy()
     expect(await screen.findByText('리플렛 시안 수정본.pdf')).toBeTruthy()

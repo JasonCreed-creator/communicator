@@ -88,7 +88,7 @@ describe('S-11 파트너 보드', () => {
 
   it('대행형 행사에서는 사이드바에 파트너 보드 메뉴가 없다', async () => {
     localStorage.setItem('communicator.currentProjectId', 'prj-stc26')
-    renderRoute('/')
+    renderRoute('/home')
     await screen.findByRole('heading', { name: '홈 대시보드' })
     expect(screen.queryByRole('link', { name: '파트너 보드' })).toBeNull()
   })

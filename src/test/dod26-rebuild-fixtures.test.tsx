@@ -124,7 +124,7 @@ describe('DoD-26 (b) RE:BUILD 27 — 진행 중·데모 기본', () => {
     expect(dashboard.wbs_delayed.length).toBe(delayed.length)
 
     localStorage.setItem('communicator.currentProjectId', RB27)
-    renderRoute('/')
+    renderRoute('/home')
     await screen.findByRole('heading', { name: '홈 대시보드' })
     // 홈은 3분할 액션 큐 — 지연 건수는 KPI 타일이 아니라 '지연' 큐 헤더 배지가 말한다(시안).
     const delayQueue = (await screen.findByRole('heading', { name: '지연' })).closest(

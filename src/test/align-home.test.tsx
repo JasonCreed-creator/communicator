@@ -32,7 +32,7 @@ function useSampleProject() {
 describe('홈(S1) 정렬 — 숫자 나열 대신 3분할 액션 큐', () => {
   it('(1) KPI 4타일이 사라지고 (2) 행사 D-day는 헤더 우측 단일 dark pill이다', async () => {
     useSampleProject()
-    const { container } = renderRoute('/')
+    const { container } = renderRoute('/home')
     await screen.findByTestId('event-dday')
 
     // KPI 타일 제거 — 숫자 31/650 타일(.kpi-num)이 한 개도 없다
@@ -51,7 +51,7 @@ describe('홈(S1) 정렬 — 숫자 나열 대신 3분할 액션 큐', () => {
 
   it('(3) 지연·임박·미결 컨펌 큐가 건수 배지와 "가장 급한 1건" 히어로를 갖는다', async () => {
     useSampleProject()
-    const { container } = renderRoute('/')
+    const { container } = renderRoute('/home')
     await screen.findByTestId('event-dday')
 
     const delayed = (screen.getByRole('heading', { name: '지연' })).closest(
@@ -79,7 +79,7 @@ describe('홈(S1) 정렬 — 숫자 나열 대신 3분할 액션 큐', () => {
 
   it('(4)(5) accent CTA는 화면 전체에 1개(가장 오래된 지연 건)이고, 리마인드는 숨기지 않고 안내한다', async () => {
     useSampleProject()
-    const { container } = renderRoute('/')
+    const { container } = renderRoute('/home')
     await screen.findByTestId('event-dday')
     const delayed = (screen.getByRole('heading', { name: '지연' })).closest(
       '.ui-card',
@@ -98,7 +98,7 @@ describe('홈(S1) 정렬 — 숫자 나열 대신 3분할 액션 큐', () => {
 
   it('(6)(7) D-day 스트립이 전체 폭 카드로 가로 스크롤을 유지하고, 보조 3열은 큐 아래에 온다', async () => {
     useSampleProject()
-    const { container } = renderRoute('/')
+    const { container } = renderRoute('/home')
     await screen.findByTestId('event-dday')
 
     const strip = (screen.getByRole('heading', { name: '마감 타임라인' })).closest(

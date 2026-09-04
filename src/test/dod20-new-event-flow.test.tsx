@@ -57,7 +57,7 @@ describe('DoD-20 새 행사 흐름·유도', () => {
 
   it('(b) 세팅 미완료 행사로 본체 진입 시 /settings 유도 + 온보딩 이어서 하기 동선', async () => {
     localStorage.setItem('communicator.currentProjectId', 'prj-forum-h2')
-    renderRoute('/')
+    renderRoute('/home')
 
     expect(await screen.findByRole('heading', { name: '행사 설정' })).toBeTruthy()
     expect(screen.queryByRole('heading', { name: '홈 대시보드' })).toBeNull()
