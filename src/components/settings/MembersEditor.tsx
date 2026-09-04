@@ -23,7 +23,7 @@ const DEFAULT_ROLE: MemberRole = 'design'
 function RolePill({ role }: { role: MemberRole }) {
   return (
     <span
-      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${ROLE_BAR_CLASSES[role]} ${
+      className={`inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${ROLE_BAR_CLASSES[role]} ${
         role === 'reg' ? 'text-ink' : 'text-white'
       }`}
     >
@@ -95,15 +95,15 @@ export default function MembersEditor({
             <tbody className="divide-y divide-border">
               {members.data.map((m) => (
                 <tr key={m.user_id}>
-                  <td className="py-2 pr-4 text-ink">{m.profile.name}</td>
-                  <td className="py-2 pr-4 text-ink-sub">{m.profile.title || '-'}</td>
-                  <td className="py-2 pr-4 text-ink-sub">{m.profile.email ?? '-'}</td>
-                  <td className="py-2 pr-4 text-ink-sub">{m.profile.phone || '-'}</td>
-                  <td className="py-2 pr-4">
+                  <td className="whitespace-nowrap py-2 pl-3 pr-4 text-ink">{m.profile.name}</td>
+                  <td className="py-2 pl-3 pr-4 text-ink-sub">{m.profile.title || '-'}</td>
+                  <td className="py-2 pl-3 pr-4 text-ink-sub">{m.profile.email ?? '-'}</td>
+                  <td className="whitespace-nowrap py-2 pl-3 pr-4 text-ink-sub">{m.profile.phone || '-'}</td>
+                  <td className="whitespace-nowrap py-2 pl-3 pr-4">
                     <RolePill role={m.role} />
                   </td>
                   {!readOnly && (
-                    <td className="py-2">
+                    <td className="py-2 pl-3">
                       <button
                         type="button"
                         onClick={() => handleRemove(m.user_id, m.profile.name)}

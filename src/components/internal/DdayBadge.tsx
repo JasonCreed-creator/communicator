@@ -6,7 +6,7 @@ export default function DdayBadge({ isoDate }: { isoDate: string }) {
   const overdue = label.startsWith('D+')
   return (
     <span
-      className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+      className={`inline-flex shrink-0 items-center whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${
         overdue ? 'bg-negative-tint text-negative' : 'bg-track text-ink-sub'
       }`}
     >

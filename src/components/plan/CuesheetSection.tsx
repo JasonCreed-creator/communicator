@@ -44,13 +44,14 @@ export default function CuesheetSection({
                 <tbody className="divide-y divide-border">
                   {cuesheet.cues.map((c) => (
                     <tr key={c.id}>
-                      <td className="py-2 pr-3 text-ink-sub">{c.time_at ?? '—'}</td>
-                      <td className="py-2 pr-3 font-medium text-ink">{c.cue_no ?? '—'}</td>
-                      <td className="py-2 pr-3 text-ink-sub">{c.segment ?? '—'}</td>
-                      <td className="py-2 pr-3 text-ink-sub">{summaryLine(c.body)}</td>
-                      <td className="py-2 pr-3 text-ink-cap">{c.console_audio ?? '—'}</td>
-                      <td className="py-2 pr-3 text-ink-cap">{c.console_light ?? '—'}</td>
-                      <td className="py-2 text-ink-cap">{c.console_screen ?? '—'}</td>
+                      {/* 시간·큐·구분은 짧은 식별 칸 — 한 줄 고정. 내용·콘솔 3채널만 접힌다(상단 정렬) */}
+                      <td className="whitespace-nowrap px-3 py-2 align-top text-ink-sub">{c.time_at ?? '—'}</td>
+                      <td className="whitespace-nowrap px-3 py-2 align-top font-medium text-ink">{c.cue_no ?? '—'}</td>
+                      <td className="whitespace-nowrap px-3 py-2 align-top text-ink-sub">{c.segment ?? '—'}</td>
+                      <td className="px-3 py-2 align-top text-ink-sub">{summaryLine(c.body)}</td>
+                      <td className="px-3 py-2 align-top text-ink-cap">{c.console_audio ?? '—'}</td>
+                      <td className="px-3 py-2 align-top text-ink-cap">{c.console_light ?? '—'}</td>
+                      <td className="px-3 py-2 align-top text-ink-cap">{c.console_screen ?? '—'}</td>
                     </tr>
                   ))}
                 </tbody>

@@ -1186,6 +1186,10 @@ optional peer `@types/node`를 설치하지 않아 `node:fs`·`process` 타입�
   컨피규레이터"로 들어가고, 북마크(`/quote`·`/configurator`)는 §10 표대로 `/quotes`로 자동 이동한다.
   **두 제품이 한 도메인·한 Vercel 프로젝트에 산다**(2026-09-04 사용자 지시) — 견적을 별도 프로젝트·
   서브도메인으로 쪼개지 않는다.
+  **실행 완료(2026-09-04)**: 사용자 승인 후 Vercel API로 `rmb-mice.com`(308 → www)·`www.rmb-mice.com`을
+  jsx-easy-shift에서 제거하고 communicator에 추가했다(DNS 무변경, 가비아 A레코드 그대로). 순서 주의 —
+  apex가 www로 리다이렉트 중이면 **www를 먼저 지울 수 없다**(`domain_is_redirect`): apex 제거 → www 제거 →
+  www 추가 → apex(redirect=www) 추가. 옛 프로젝트에는 `jsx-easy-shift.vercel.app`만 남는다(§18-6 아카이브는 미수행).
 - **(나) 외부 등록기관에만 있고 Vercel에 처음 붙일 때**: 새 프로젝트에 도메인 추가 →
   Vercel이 표시하는 레코드를 등록기관 DNS에 넣는다. apex(`rmb-mice.com`)는 **A → `76.76.21.21`**,
   서브도메인(`www`·`app`)은 **CNAME → `cname.vercel-dns.com`**. 전파는 보통 수 분~수 시간.

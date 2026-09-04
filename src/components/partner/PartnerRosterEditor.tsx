@@ -148,8 +148,8 @@ function PartnerRow({
 
   return (
     <tr>
-      <td className="py-2 pr-4 align-top text-ink">{partner.name}</td>
-      <td className="py-2 pr-4 align-top">
+      <td className="py-2 pl-3 pr-4 align-top text-ink">{partner.name}</td>
+      <td className="py-2 pl-3 pr-4 align-top">
         {readOnly ? (
           <span className="text-ink-sub">{partner.tier?.name ?? '미배정'}</span>
         ) : (
@@ -168,10 +168,10 @@ function PartnerRow({
           </select>
         )}
       </td>
-      <td className="py-2 pr-4 align-top">
+      <td className="py-2 pl-3 pr-4 align-top">
         <div className="flex items-center gap-2">
           <span
-            className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${PARTNER_STATUS_CLASSES[partner.status]}`}
+            className={`inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${PARTNER_STATUS_CLASSES[partner.status]}`}
           >
             {PARTNER_STATUS_LABELS[partner.status]}
           </span>
@@ -182,10 +182,10 @@ function PartnerRow({
           )}
         </div>
       </td>
-      <td className="py-2 align-top">
+      <td className="py-2 pl-3 align-top">
         <div className="flex flex-wrap items-center gap-2">
           <span
-            className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${PARTNER_LINK_STATUS_CLASSES[linkStatus]}`}
+            className={`inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${PARTNER_LINK_STATUS_CLASSES[linkStatus]}`}
           >
             {linkStatus}
           </span>

@@ -108,13 +108,13 @@ export default function ClientContactsEditor({
                 const status = statusOf(latest)
                 return (
                   <tr key={c.id}>
-                    <td className="min-w-[72px] whitespace-nowrap py-2 pr-4 align-top text-ink">{c.name}</td>
-                    <td className="min-w-[96px] max-w-[160px] truncate py-2 pr-4 align-top text-ink-sub" title={c.org ?? undefined}>
+                    <td className="min-w-[72px] whitespace-nowrap py-2 pl-3 pr-4 align-top text-ink">{c.name}</td>
+                    <td className="min-w-[96px] max-w-[160px] truncate py-2 pl-3 pr-4 align-top text-ink-sub" title={c.org ?? undefined}>
                       {c.org ?? '-'}
                     </td>
-                    <td className="max-w-[180px] truncate py-2 pr-4 align-top text-ink-sub">{c.email ?? '-'}</td>
-                    <td className="py-2 pr-4 align-top">
-                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_CLASSES[status]}`}>
+                    <td className="max-w-[180px] truncate py-2 pl-3 pr-4 align-top text-ink-sub">{c.email ?? '-'}</td>
+                    <td className="py-2 pl-3 pr-4 align-top">
+                      <span className={`inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_CLASSES[status]}`}>
                         {status}
                       </span>
                       {latest?.expires_at && (
@@ -123,7 +123,7 @@ export default function ClientContactsEditor({
                         </span>
                       )}
                     </td>
-                    <td className="w-[140px] whitespace-nowrap py-2 align-top">
+                    <td className="w-[140px] whitespace-nowrap py-2 pl-3 align-top">
                       <div className="flex flex-nowrap items-center gap-2">
                         {status === '활성' && latest ? (
                           <>

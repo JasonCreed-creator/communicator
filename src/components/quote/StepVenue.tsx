@@ -119,7 +119,7 @@ export default function StepVenue({
                         <span className="min-w-0 text-sm text-ink">
                           {hall.name}
                           <span
-                            className={`ml-2 rounded-full px-2 py-0.5 text-xs font-medium ${
+                            className={`ml-2 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${
                               hall.fit === 'best'
                                 ? 'bg-positive-tint text-positive'
                                 : hall.fit === 'small'

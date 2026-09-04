@@ -45,7 +45,7 @@ export default function ComplianceCards() {
         return (
           <div key={card.id} className="rounded-[10px] border border-border p-4">
             <div className="mb-2 flex flex-wrap items-center gap-2">
-              <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${KIND_PILL[card.kind]}`}>
+              <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ${KIND_PILL[card.kind]}`}>
                 {KIND_LABELS[card.kind]}
               </span>
               <p className="t-card-title">{card.title}</p>

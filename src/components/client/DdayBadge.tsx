@@ -13,7 +13,7 @@ export default function DdayBadge({ dueAt }: { dueAt: string }) {
   const label = ddayLabel(dueAt)
   return (
     <span
-      className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-semibold ${toneFor(label)}`}
+      className={`inline-flex shrink-0 items-center whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ${toneFor(label)}`}
     >
       {label}
     </span>
