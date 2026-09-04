@@ -277,7 +277,7 @@ function ProgramRow({
   if (editing) {
     return (
       <tr className="plan-print-hidden">
-        <td colSpan={colSpan} className="py-2">
+        <td colSpan={colSpan} className="px-3 py-2">
           <ProgramFieldsForm
             values={values}
             onChange={(p) => setValues((v) => ({ ...v, ...p }))}
@@ -295,10 +295,10 @@ function ProgramRow({
   return (
     <>
       <tr>
-        <td className="py-2 pr-3 align-top text-ink-sub">{timeRangeLabel(session)}</td>
-        <td className="py-2 pr-3 align-top font-medium text-ink">{session.title}</td>
-        <td className="py-2 pr-3 align-top text-ink-sub">{speakerLabel(session)}</td>
-        <td className="py-2 pr-3 align-top text-ink-cap">
+        <td className="whitespace-nowrap px-3 py-2 align-top text-ink-sub">{timeRangeLabel(session)}</td>
+        <td className="px-3 py-2 align-top font-medium text-ink">{session.title}</td>
+        <td className="px-3 py-2 align-top text-ink-sub">{speakerLabel(session)}</td>
+        <td className="px-3 py-2 align-top text-ink-cap">
           {session.note && <span className="rounded-full bg-track px-2 py-0.5 text-xs text-ink-sub">{session.note}</span>}
           {blocks.length > 0 && (
             <button
@@ -311,7 +311,7 @@ function ProgramRow({
           )}
         </td>
         {canEdit && (
-          <td className="plan-print-hidden py-2 pr-3 align-top">
+          <td className="plan-print-hidden px-3 py-2 align-top">
             <div className="flex gap-2">
               <button type="button" onClick={handleEdit} className="text-xs text-ink-sub underline">
                 수정

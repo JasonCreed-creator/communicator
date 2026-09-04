@@ -35,7 +35,7 @@ import NotFoundPage from './NotFoundPage'
 function HostStatusBadge({ status }: { status: DeliverableStatus }) {
   return (
     <span
-      className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_BADGE_CLASSES[status]}`}
+      className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_BADGE_CLASSES[status]}`}
     >
       {status === 'pending_approval' && <span aria-hidden className="size-1.5 rounded-full bg-accent" />}
       {HOST_STATUS_LABELS[status]}
@@ -1064,7 +1064,7 @@ function VersionItem({
             <span className="text-sm font-medium text-ink">v{version.version_no}</span>
             {isLatest && (
               <span
-                className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium text-card ${
+                className={`inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium text-card ${
                   isFinal ? 'bg-positive' : 'bg-accent'
                 }`}
               >
@@ -1139,7 +1139,7 @@ function CommentThread({
                 {c.author_token ? '발주처' : memberName(c.author_user_id)}
               </span>
               <span
-                className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                className={`inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${
                   c.visibility === 'shared' ? 'bg-steel-tint text-steel' : 'bg-track text-ink-sub'
                 }`}
               >

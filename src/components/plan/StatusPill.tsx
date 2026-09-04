@@ -6,7 +6,7 @@ import type { DeliverableStatus } from '../../types/enums'
 export default function StatusPill({ status }: { status: DeliverableStatus }) {
   return (
     <span
-      className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_BADGE_CLASSES[status]}`}
+      className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_BADGE_CLASSES[status]}`}
     >
       {status === 'pending_approval' && (
         <span aria-hidden className="size-1.5 rounded-full bg-accent" />

@@ -157,7 +157,7 @@ function ProjectRow({
         <span className="block truncate text-xs text-ink-sub">{selectorSubtitle(summary)}</span>
       </span>
       <span
-        className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${
+        className={`shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${
           isCurrent ? 'bg-accent-tint text-accent-deep' : 'bg-track text-ink-sub'
         }`}
       >

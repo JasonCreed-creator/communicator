@@ -23,23 +23,25 @@ export default function ProductionSection({
                 <th className="ui-th">카테고리</th>
                 <th className="ui-th">품명</th>
                 <th className="ui-th">규격</th>
-                <th className="ui-th">수량</th>
+                <th className="ui-th ui-num">수량</th>
                 <th className="ui-th">위치</th>
                 <th className="ui-th">종류</th>
                 <th className="ui-th">최신 시안</th>
                 <th className="ui-th">상태</th>
               </tr>
             </thead>
+            {/* 문서형 표 — 긴 본문 칸(품명·규격·위치·종류)만 접히고 짧은 라벨 칸은 한 줄을 지킨다.
+                셀은 상단 정렬(02 프로그램 표와 동일)이라 두 줄 행에서도 라벨·배지가 첫 줄에 붙는다 */}
             <tbody className="divide-y divide-border">
               {items.map((item) => (
                 <tr key={item.deliverable_id}>
-                  <td className="py-2 pr-3 text-ink-cap">{item.category}</td>
-                  <td className="py-2 pr-3 font-medium text-ink">{item.title}</td>
-                  <td className="py-2 pr-3 text-ink-sub">{item.spec_size ?? '—'}</td>
-                  <td className="py-2 pr-3 text-ink-sub">{item.spec_qty ?? '—'}</td>
-                  <td className="py-2 pr-3 text-ink-sub">{item.spec_location ?? '—'}</td>
-                  <td className="py-2 pr-3 text-ink-sub">{item.spec_type ?? '—'}</td>
-                  <td className="py-2 pr-3 text-ink-sub">
+                  <td className="whitespace-nowrap px-3 py-2 align-top text-ink-cap">{item.category}</td>
+                  <td className="px-3 py-2 align-top font-medium text-ink">{item.title}</td>
+                  <td className="px-3 py-2 align-top text-ink-sub">{item.spec_size ?? '—'}</td>
+                  <td className="ui-num whitespace-nowrap px-3 py-2 align-top text-ink-sub">{item.spec_qty ?? '—'}</td>
+                  <td className="px-3 py-2 align-top text-ink-sub">{item.spec_location ?? '—'}</td>
+                  <td className="px-3 py-2 align-top text-ink-sub">{item.spec_type ?? '—'}</td>
+                  <td className="whitespace-nowrap px-3 py-2 align-top text-ink-sub">
                     {item.latest_version ? (
                       item.latest_version.preview_url ? (
                         <a
@@ -57,7 +59,7 @@ export default function ProductionSection({
                       '—'
                     )}
                   </td>
-                  <td className="py-2 pr-3">
+                  <td className="whitespace-nowrap px-3 py-2 align-top">
                     <StatusPill status={item.status} />
                   </td>
                 </tr>

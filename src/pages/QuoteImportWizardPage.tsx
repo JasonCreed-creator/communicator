@@ -308,7 +308,7 @@ function WizardBody() {
                     return (
                       <tr key={row.section} className={`border-b border-border ${low ? 'bg-accent-tint' : ''}`}>
                         <td className="px-3 py-2.5 text-ink">{row.section}</td>
-                        <td className="px-3 py-2.5 text-right text-ink-sub">
+                        <td className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums text-ink-sub">
                           {fmtWon(sectionAmount.get(row.section) ?? 0, false)}
                         </td>
                         <td className="px-3 py-2.5">
@@ -334,7 +334,7 @@ function WizardBody() {
                         </td>
                         <td className="px-3 py-2.5">
                           {low ? (
-                            <span className="rounded-full bg-card px-2.5 py-0.5 text-xs font-semibold text-accent-deep">
+                            <span className="whitespace-nowrap rounded-full bg-card px-2.5 py-0.5 text-xs font-semibold text-accent-deep">
                               확인 필요
                             </span>
                           ) : (

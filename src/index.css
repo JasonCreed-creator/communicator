@@ -263,6 +263,9 @@
     border-bottom: 2px solid var(--border-strong);
     text-align: left;
     padding: 8px 12px;
+    /* 헤더 라벨은 짧은 명사다 — 칸이 좁아져도 한글이 글자 단위로 끊기지 않게 한다("카테고 리" 방지).
+       .ui-table 밖의 일반 표(운영계획서 인쇄·편집기)도 같은 보호를 받아야 하므로 .ui-th 자체에 둔다 */
+    white-space: nowrap;
   }
 
   /* ── 표 정본 — 패턴 기준 시트 §05 (규칙 10 + 조건 4) ──

@@ -219,6 +219,12 @@ MICE 프로젝트 협업 허브 — 역할별(디자인·운영·등록) 산출�
   - **Vercel 실배포 함정(2026-09-04 실측)**: Vercel(Node 24·npm 11)은 lockfile에 **optional peer**로만 있는 패키지를 설치하지 않는다 — `@types/node`가 그래서 빠져 `tsc --noEmit`이 `node:fs`·`process`로 `exited with 2`. 테스트가 쓰는 Node 타입은 **devDependency로 명시**한다. 대시보드 로그 복사본에는 이 오류 줄이 빠져 있었다 — 실패 원인은 API의 `errorMessage`/이벤트 로그가 정본
   - 금지: 런처에 금액·행사 데이터 노출(중립 지면 — DataProvider 호출 0건) · 루트 자동 리다이렉트(마지막 선택 기억 등) · 제품별 별도 도메인
 
+- **Phase 3.21.1 — 표 줄바꿈 정본 (서버 0, 사용자 실측 지적 2026-09-04 "단락 정렬 제대로 필요함 · 전체 페이지 전수조사")**
+  - 계기: 운영계획서 인쇄본 05 제작물 리스트에서 헤더("카테고 리"·"최신 시 안")·배지("컨펌대 기")·짧은 칸이 글자 단위로 끊김. `.ui-table`은 정본 CSS가 nowrap이지만 **일반 표 13개**(S9 3·편집기·등록·정산 항목·임포트)와 배지 컴포넌트는 보호 밖이었다
+  - 정본 = 디자인지시서 §7-1.3 규칙 11: ① `.ui-th` 전역 `white-space: nowrap` ② 배지 컴포넌트(`StatusBadge`/`LevelBadge`·`StatusPill`·`DdayBadge` 2종)와 인라인 배지 span 전부 `whitespace-nowrap` ③ 문서형 표(S9 제작물·큐시트·프로그램)는 짧은 식별 칸만 nowrap + 전 칸 `align-top`, 수량은 `ui-num` ④ 나머지 일반 표는 짧은 칸(이름·전화·금액·상태)만 nowrap ⑤ 일반 표 본문 칸에 좌측 패딩(`px-3`/`pl-3`)을 줘 `.ui-th`(12px)와 기준선을 맞춘다 — 기존 `py-2 pr-*`만 있던 칸은 헤더보다 12px 왼쪽에서 시작하고 있었다
+  - 검증: `src/test/table-wrap.test.tsx`(DoD 57) + 인쇄 미디어 A4 실측(헤더 33px·배지 20px = 한 줄)
+  - 금지: `.ui-table` 07(전 칸 nowrap+…처리)을 문서형 표에 통째로 적용(인쇄물은 본문 칸이 접혀야 한다) · 새 색 토큰 · 데이터·provider 변경
+
 ### 서버 스프린트 (v2.3 설계 완료 — **착수 대기: 사용자가 지시할 때 개시**(2026-08-27 우선순위 변경). dev 3키는 착수 시 사용자에게 대화로 요청)
 - **Phase 4 — Supabase 이식** (설계서 v2.3 §4 DDL 전체 기준, 검증 DB = dev 프로젝트)
   - 4a 마이그레이션+RLS+seed (에이전트 D): §4 순서대로 + **v2.4 스키마(§21.1 — kind·partner_tiers·partners·partner_tokens·quote_imports·확장 컬럼) 포함**, RLS는 §6.2 전체(quotes·profiles·compliance_cards·settlement_*·vendors·landing·partner_* 포함). **산출 규약: `supabase/migrations/*.sql` + 통합 `supabase/setup.sql`(신규 프로젝트 SQL 에디터 1회 실행으로 전체 구축 — 멱등, 2회 실행 무해를 테스트로 증명, 말미에 첫 admin 승격 SQL 1줄 주석 동봉) + `supabase/seed.sql`(데모 픽스처 4행사, 선택 실행)**
@@ -343,6 +349,7 @@ Phase 3.8과 3.9는 **별도 커밋·별도 PR**로 분리한다(3.8 = 타입·�
 
 54. (v2.7 §4-2b) **담당자 마스터**: 주소록이 행사와 무관하고(`listPeople()`이 projectId를 받지 않음), 등록→수정→삭제가 왕복하며, 이메일 중복은 409, 주소록에서 고른 사람의 직함·전화가 배정에 그대로 따라오고, 수정이 그 사람의 **모든 행사**에 반영되며, 배정이 남은 사람의 삭제는 **409이고 사유에 행사명이 들어간다** (테스트로 증명)
 55. (v2.7 §4-2c) **진입점**: 파트너 보드가 빈 상태에서 다른 화면 이름을 안내로 주지 않고 그 자리에서 여는 CTA를 주며, 판매 플래너 ①에서 등급을 만들 수 있고, 토큰이 있는 자리에서 `/c`·`/p`를 새 탭으로 열 수 있다 (테스트로 증명)
+57. (Phase 3.21.1 디자인지시서 §7-1.3 규칙 11) **표 줄바꿈**: `.ui-th` 정의 블록에 `white-space: nowrap`이 있고, 배지 컴포넌트 4종이 `whitespace-nowrap`을 달며, S9 05 제작물 리스트의 카테고리·수량·최신 시안·상태 칸과 03 큐시트의 시간·큐·구분 칸은 nowrap + 상단 정렬, 본문 칸은 nowrap이 아니다 (테스트로 증명 — `src/test/table-wrap.test.tsx`)
 56. (Phase 3.21 §10 S-00) **제품 런처**: 루트 `/`가 사이드바·셀렉터 없는 중립 지면에 제품 카드 2장만 렌더하고(accent/primary 버튼 0개), 견적 카드 → `/quotes`(S-2 헤딩) · 커뮤니케이터 카드 → `/home`(홈 대시보드, 사이드바 "홈" `aria-current`), 사이드바 로고가 `/`로 되돌아가며, `/configurator`는 런처를 거치지 않고 `/quotes`로 간다 (테스트로 증명 — `src/test/launcher.test.tsx`) + `deploy:check` 런처 클릭 3항목 통과
 
 50. (v2.6 §10) **폼 정본 — 컨트롤**: `accent-color: var(--accent)`가 base 레이어에 **1회만** 선언되고 화면 코드에 인라인 `accentColor` 0건이며, `type="checkbox"|type="radio"` 전부가 `.ui-check`를, `<select>` 전부가 `.ui-select`를 단다 — 예외는 사유가 붙은 화이트리스트에만 있고 죽은 예외는 실패한다 (테스트로 증명)

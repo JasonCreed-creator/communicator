@@ -329,12 +329,12 @@ function RsvpRow({ rsvp, onChanged }: { rsvp: RsvpContact; onChanged: () => void
 
   return (
     <tr className="h-11 hover:bg-accent-tint/30">
-      <td className="py-2 pr-4 text-ink">{rsvp.name}</td>
-      <td className="py-2 pr-4 text-ink-sub">{rsvp.org ?? '-'}</td>
-      <td className="py-2 pr-4 text-ink-sub">{rsvp.title ?? '-'}</td>
-      <td className="py-2 pr-4 text-ink-sub">{rsvp.email ?? '-'}</td>
-      <td className="py-2 pr-4 text-ink-sub">{rsvp.group_tag ?? '-'}</td>
-      <td className="py-2 pr-4">
+      <td className="whitespace-nowrap py-2 pl-3 pr-4 text-ink">{rsvp.name}</td>
+      <td className="py-2 pl-3 pr-4 text-ink-sub">{rsvp.org ?? '-'}</td>
+      <td className="py-2 pl-3 pr-4 text-ink-sub">{rsvp.title ?? '-'}</td>
+      <td className="py-2 pl-3 pr-4 text-ink-sub">{rsvp.email ?? '-'}</td>
+      <td className="py-2 pl-3 pr-4 text-ink-sub">{rsvp.group_tag ?? '-'}</td>
+      <td className="py-2 pl-3 pr-4">
         <select
           value={rsvp.invite_status}
           onChange={handleStatusChange}
@@ -349,8 +349,8 @@ function RsvpRow({ rsvp, onChanged }: { rsvp: RsvpContact; onChanged: () => void
         </select>
         <ErrorAlert message={updateStatus.error} />
       </td>
-      <td className="py-2 pr-4 max-w-40 truncate text-ink-cap">{rsvp.memo ?? '-'}</td>
-      <td className="py-2">
+      <td className="py-2 pl-3 pr-4 max-w-40 truncate text-ink-cap">{rsvp.memo ?? '-'}</td>
+      <td className="whitespace-nowrap py-2 pl-3">
         <button type="button" onClick={handleConvert} disabled={convert.pending} className="btn btn-ghost btn-sm">
           참관객 전환
         </button>
@@ -788,8 +788,8 @@ function CsvImportPanel({
               <tbody className="divide-y divide-border">
                 {parsed.headers.map((h, i) => (
                   <tr key={i}>
-                    <td className="py-2 pr-4 text-ink-sub">{h || `(열 ${i + 1})`}</td>
-                    <td className="py-2">
+                    <td className="py-2 pl-3 pr-4 text-ink-sub">{h || `(열 ${i + 1})`}</td>
+                    <td className="py-2 pl-3">
                       <select
                         value={mapping[i] ?? 'ignore'}
                         onChange={(e) =>

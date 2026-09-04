@@ -11,7 +11,7 @@ import type { DeliverableStatus } from '../../types/enums'
 
 /** 배지 공용 규격 — 패턴 기준 시트 §03: inline-flex · rounded-full · px-2 py-0.5 · text-xs font-medium */
 export const BADGE_BASE =
-  'ui-badge inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium'
+  'ui-badge inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium'
 
 /** 의미 4단계 + 중립 배지 — 계열(컨펌·WBS·파트너·정산·시트)은 색이 아니라 접두 라벨로 구분한다.
  *  색만으로 구분하지 않으므로 label은 필수다. dot은 '내 행동을 기다리는' 상태에만 붙인다(§03). */
