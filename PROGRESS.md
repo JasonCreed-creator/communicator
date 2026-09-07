@@ -3,6 +3,56 @@
 > 가변 상태 파일. 매 세션 체크아웃 시 에이전트가 갱신한다 (CLAUDE.md §9 리추얼).
 
 ## 1. 상태 요약
+- **진행 중: Phase 4 — Supabase 이식 (1·2·3단 완료 — dev DB 실검증 83/83 · 사용자 게이트 3건·챗 검수 대기)**(2026-09-07, 사용자 지시
+  "supabase를 서버로 하는 형태로 우선 만들어봐야" → 범위 게이트 [B] 3단 분할 승인). 사용자 결정 5건(결정 로그 참조):
+  [B] 분할 · 시트 감지 **폴링 유지** · `profiles.title/phone/org`+`client_contacts.phone` 추가 · `sheet_status` 매핑 추가 ·
+  **서버 함수 = Vercel Functions**(Edge Functions 대체).
+  ① **1단 스키마**: `supabase/migrations` 17개(0100 타입 → 0200 core → 0300 app 도우미 → 0400~1200 표 → 1300 트리거 →
+  1400 RLS → 1500 grants → 1600·1700 RPC) — 표 40·정책 98·트리거 41·public 함수 61. 생성물 `setup.sql`(`npm run supabase:setup`,
+  139KB)·`seed.sql`(`npm run supabase:seed` — mock 픽스처 8행사 그대로, 문자열 id → `md5('communicator-seed:'||id)::uuid`).
+  **로컬 Postgres 16에서 증명**(`npm run supabase:check`, auth 스키마 심): setup 2회 멱등 · seed 2회 행 수 불변 · RLS 거부 3종(DoD 26:
+  staff→quotes 0행·insert 거부 / 비멤버→project 0행 / anon→quotes·deliverables·settlement 권한 없음) · 역할-영역 · 트리거 8종 ·
+  RPC 내부 12건·토큰 경로 14건·시트 4건 = **85/85**. 실측으로 잡은 결함 3건: security definer 안에서 `current_user`가 소유자로
+  바뀌어 종료 가드가 무력화(→ JWT role 클레임 판정) · `insert … returning`이 AFTER 트리거 멤버십보다 먼저 select 정책 평가
+  (→ 생성자 조건 추가) · 검증 SQL의 `1/0` 상수 접기(→ DO 블록 단언).
+  ② **2단 SupabaseProvider**: `src/providers/supabase/`(client·errors·ctx·files·authAdapter + `domains/` 10모듈 4,790줄 — 에이전트
+  4개 병렬) — **v12 124메서드 무수정**, 팩토리 스프레드로 합쳐 tsc가 완전성 검사(`supabase-provider.test.ts`가 정본 파일 파싱과
+  대조). 토큰 경로(`/c`·`/p`)·랜딩 리드·시트 반영·다단계 쓰기(온보딩·WBS 전개·검토·확정·업로드·컨펌 발송)는 **SQL RPC**,
+  견적 서버 재계산·시트 읽기는 **Vercel Functions `api/quote-recalc.ts`·`api/sheets.ts`**(자격증명 없으면 시트는 데모 모드).
+  로그인 = `AuthContext`·`AuthGate`·`LoginPage`(`/login`, 매직링크) — mock은 통과, `/c`·`/p`·`/`는 게이트 밖.
+  허용 도메인 = `app_config.allowed_email_domains` 트리거 + `VITE_AUTH_ALLOWED_DOMAINS` 선안내. `providers/index.ts` 스위치
+  `VITE_DATA_PROVIDER=supabase`(기본 mock). 데모 아티팩트는 supabase 모듈을 스텁으로 alias(`vite.demo.config.ts`) — "외부 요청 0건" 유지.
+  ③ **정본 정합**: 설계서 **v2.7**(§4 머리말 정합표·§6.2·§8 실행 자리·§12·§18-3·§24.2·§24.3 종결·§14) · CLAUDE.md v2.7 ·
+  `supabase/README.md`(dev 프로젝트 생성·SQL 에디터/원격 두 경로·검증·키 규약·정본 차이표) · `.env.example`·`.env.production.example`
+  (Supabase 3키 자리 개방 + 서버 env) · README.
+  ④ **3단 dev DB 실검증 완료(2026-09-07 오후)**: 사용자가 Project URL·PAT를 대화로 전달("전부 자동으로" 선택) → `.env.local`(600)에만 기록.
+  `npm run supabase:remote -- setup` **2회**(멱등, 각 3초) → `seed`(37청크·80초, 8행사) → **seed 2회차 행 수 불변**(8/124/1119/11/4/6).
+  **`npm run supabase:verify` = 83/83** — 검증 계정 3명(admin generateLink→verifyOtp = 매직링크 CI 대체) · DoD 1~25 provider 흐름 · RLS 거부 3종 ·
+  서버 재계산(조작 total 무시) · 시드 토큰 경로 · 정리. **1회차 79/83에서 잡은 결함 1건**: 행사 cascade 삭제가 토큰·견적 FK에 막힘 →
+  `approvals.decided_via_token`·`settlement_boards.quote_id` = `on delete set null`, `comments.author_token` = `on delete cascade`(작성자 없는
+  코멘트는 check 위반이라 null 불가) — 마이그레이션에 drop/add로 기존 DB에도 적용, 로컬 85/85 재증명 후 원격 재적용. 나머지 3건 중 1건은
+  검증 스크립트의 오판(랜딩 autofill은 읽기 시 조립 — mock과 같은 규약, 스크립트 수정), 2건은 위 FK의 연쇄.
+  supabase 모드 빌드 번들에 **secret·PAT 실값 0건**(publishable 1건 — 의도; `sb_secret_` 리터럴은 supabase-js의 키 형식 검사문).
+  **한계**: 컨테이너 Chromium은 프록시 때문에 외부(supabase.co) 접속이 리셋돼 실서버 브라우저 E2E는 못 돌렸다(`/c` 화면이 "Failed to fetch"
+  오류 상태로 렌더 — 앱 결함 아님). 화면 렌더는 mock 스위트·상호작용 스모크가, 서버 계층은 verify가 담당. 사용자 브라우저 실측은 게이트 ⓐ~ⓒ 뒤.
+  컨테이너는 DB 포트(5432·6543) 차단·Management API(HTTPS)만 통과함을 실측.
+  결과: vitest **953**(104파일, 기준 935 + 18) · tsc · `npm run build` · `deploy:check` 34(브라우저 포함) · demo 4단 · 상호작용 스모크(③=로그인
+  게이트) · 상시 가드 0건 · **로컬 DB 85/85 · dev DB 실검증 83/83**. PR = Phase 4(드래프트) — 사용자 게이트 3건(미결 ①) → 챗 검수.
+
+  **이탈·가정 목록**(설계서와 다르게 판단한 지점 — 전부 v2.7 §4 머리말 표에 기재):
+  1. `profiles.id`가 `auth.users`를 참조하지 않고 독립 PK + `auth_user_id`(null 허용) — §4-2b 담당자 마스터가 "로그인 전 사람"을
+     요구하므로 §4 요약을 따르면 3.20이 깨진다. 첫 로그인 시 이메일로 자동 연결(트리거). **모든 `references auth.users` FK → profiles**
+  2. 토큰 경로를 Edge Function 대신 **security definer SQL RPC**로 — 같은 계약(토큰 검증·화이트리스트·shared만·금액 표 미접근),
+     배포 단계 0·로컬 증명 가능. 사용자 결정(Vercel Functions 채택)과 같은 방향
+  3. `landing_daily_metrics` 열 이름을 TS 정본으로(§4-20 요약과 다름)
+  4. `app_config`·`sheet_source_rows` 신설(요약에 없음) — 도메인 게이트·시트 원본 적재 자리
+  5. `settlement_items` 삭제 RLS = pm 또는 담당 본인(mock `assertItemWritable`과 1:1 — §6.1엔 삭제 행이 없다)
+  6. 견적 `getQuote`는 RLS에 가려진 행을 "없음"과 구분하지 못해 staff엔 403, 그 외 404로 갈음(에이전트 보고)
+  7. 시트 원본 행 식별자는 실시트에서 `row-<행번호>`(구글 시트엔 안정 id가 없다 — **가정**, 행 삽입·정렬 시 차이 계산이 흔들린다.
+     첫 실전 전 확정 게이트)
+  8. `partner_submit` RPC가 versions 행을 돌려주지 않아 파트너 제출 파일 본문은 세션 메모리에도 남지 않는다(Phase 5 Drive에서 해소)
+  9. 스모크 ③ 블록을 로그인 게이트 경로로 교체(3.21 런처 항목은 `launcher.test.tsx`·`deploy:check`가 계속 잡는다)
+
 - **완료: Phase 3.21.1 — 표 줄바꿈 정본 + Vercel·도메인 실배포 완료**(2026-09-04 저녁).
   ① **실배포**: PR #36 머지(사용자 승인 후 Code가 머지) → `main` production READY → 사용자 승인 후 Vercel API로
   `rmb-mice.com`(308→www)·`www.rmb-mice.com`을 jsx-easy-shift에서 communicator로 이전(DNS 무변경). 실주소 확인:
@@ -895,7 +945,16 @@ DoD-29뿐 아니라 **실물 검산 2건에서 바로** 잡힌다(위 표의 "2 
   다만 3.17b가 "화면당 accent 1개 원칙"을 주석으로 명시하고 배치한 자리라 **임의로 내리지 않았다.**
   특히 '갱신 있음' 상태에서 `지금 동기화`(accent)와 `변경 n건 반영`(primary)이 동시에 뜨는 배치는
   등록 보드의 판단이 필요하다. **필요한 결정**: §10 위계를 등록 보드에도 적용할지.
-- **(열린 질문 — Phase 3.19 ③) 담당자 `소속(org)`·발주처 담당자 전화는 저장 자리가 없다.**
+- ~~(Phase 4 미결 ①) dev DB 실검증(3단) 대기~~ → **종결(2026-09-07 오후)**: URL·PAT 수령 → setup×2·seed×2·`npm run supabase:verify` **83/83**.
+  **남은 사용자 게이트 3건(Code가 대신 못 하는 것)**: ⓐ `select app.grant_demo_access('로그인 이메일')` — 어떤 이메일로 로그인할지 사용자 확인 후(2026-09-07 버튼 응답 "나중에" — 보류. PAT는 로컬에서 비우고 폐기 안내)
+  Code가 원격 실행(허용 도메인 제한은 현재 없음) ⓑ Supabase **Authentication → URL Configuration**: Site URL·Redirect URLs에 앱 주소 + `/login`
+  (실수신 매직링크 로그인은 §20 스모크로 이월 — verify는 generateLink 대체 경로) ⓒ **PAT(`sbp_`) 폐기** — 대시보드 Access Tokens에서 삭제(setup·seed
+  원격 실행에만 썼다). 실서버 브라우저 확인은 Vercel env를 `supabase`로 바꾸는 순간부터 가능 — 그건 §20 D-Day 항목이라 지금은 mock 유지.
+- **(Phase 4 미결 ②) `sheet_status` 매핑 UI** — 정본(`SHEET_MAPPED_FIELDS`)·서버 정규화·SQL 차이 규칙은 반영했으나 위저드 드롭다운은 목록 자동 파생이라 별도 시안 없이 노출된다. 실시트 헤더('상태' 등)의 자동 추천은 `suggestField`가 담당. 챗 검수에서 라벨(`신청 상태`) 확인 필요.
+- **(Phase 4 미결 ③) 시트 행 식별자 = 행 번호(가정)** — 실시트 행 삽입·정렬이 잦으면 차이 계산이 흔들린다. 첫 실전 연결 전 '고유 ID 컬럼' 매핑 옵션을 둘지 결정.
+- **(Phase 4 미결 ④) `complete_onboarding` RPC 로그 형태** — 주최형도 `wbs.expanded {count}`로 남는다(mock은 `wbs.expanded_host {count,partners}`). 감사 로그 표기만의 차이.
+- ~~(열린 질문 — Phase 3.19 ③) 담당자 `소속(org)`·발주처 담당자 전화는 저장 자리가 없다~~ → **종결**(사용자 승인 2026-09-07): `profiles.org`·`client_contacts.phone` 컬럼 신설(0200). TS `UserRef.org`·`ClientContact.phone` 노출은 3단 검수 후 화면 정렬과 함께.
+- **(열린 질문 — Phase 3.19 ③, 원문 보존)** 담당자 `소속(org)`·발주처 담당자 전화는 저장 자리가 없다.
   전자명함 파서는 소속을 인식하지만 `UserRef`에 필드가 없어 확인 표에서만 보이고 버려진다
   (화면이 그 사실을 밝힌다). 발주처 담당자는 `ClientContact = {name, org, email}`이라 전화가 없다.
   **필요한 결정**: 두 필드를 스키마에 넣을지 — 넣으면 Phase 4 DDL(§4)도 함께 개정 대상.
@@ -917,11 +976,12 @@ DoD-29뿐 아니라 **실물 검산 2건에서 바로** 잡힌다(위 표의 "2 
   완성·테스트돼 있어 데이터 출처만 붙이면 된다. **필요한 결정**: 발주처 인바운드 요청을
   어떤 스키마로 표현할지(파트너 `partner_submit` 방향축의 발주처판? 별도 테이블?) —
   무로그인 외부 지면이라 보안 검토가 따르므로 사용자 승인 + 설계서 개정 대상.
-- **(열린 질문 — Phase 3.17 ②) 시트 자동 확인 주기는 뷰어 단위 저장이다.**
+- **(열린 질문 — Phase 3.17 ②) 시트 자동 확인 주기는 뷰어 단위 저장이다.** (Phase 4 결정: 감지 경로는 폴링 유지 — Realtime 보류. 주기 저장 자리는 `sheet_connections.auto_check_minutes` 열이 이미 있어 서버 정본화는 메서드 1개 추가 시 가능)
   DataProvider v10 10메서드 계약에 `auto_check_minutes` 저장 경로가 없어 화면이
   localStorage(`communicator.sheetAutoCheck.{projectId}`)에 보관한다. 행사 단위로 공유하려면
   메서드 1개 추가 + 설계서 §24.4 개정 필요.
-- **(열린 질문 — Phase 3.17 ③) 신청 상태(`sheet_status`)가 매핑 필드 7종에 없다.**
+- ~~(열린 질문 — Phase 3.17 ③) 신청 상태(`sheet_status`)가 매핑 필드 7종에 없다~~ → **종결**(사용자 승인 2026-09-07): `SHEET_MAPPED_FIELDS` 8종, 서버(`api/sheets`)가 '신청/확정/취소'를 정규화, 차이 규칙은 상태 비교 줄이 담당.
+- **(열린 질문 — Phase 3.17 ③, 원문 보존)** 신청 상태(`sheet_status`)가 매핑 필드 7종에 없다.
   시트 소유 값인데 §24.2의 `SheetMappedField`에 빠져 있어 mock은 원본 행 상태를 무조건 따라간다.
   상태 컬럼을 매핑 대상에 넣을지 Phase 4에서 확정할 것.
 - **(열린 질문 — Phase 3.17 ④) 연락처 원문 내보내기 옵션 미구현.**
@@ -1017,6 +1077,9 @@ DoD-29뿐 아니라 **실물 검산 2건에서 바로** 잡힌다(위 표의 "2 
   (설계서 v1.4.1 §4-15·§8·§15 정본화 — 열린 질문 ①~⑤ 전부 종결)
 
 ## 4. 다음 스텝
+- **(2026-09-07 오후) Phase 4 마무리**: ① 사용자 게이트 3건(미결 ① ⓐ 로그인 이메일 확인 → `grant_demo_access` 원격 실행 ⓑ Auth URL 설정
+  ⓒ PAT 폐기) ② PR #38 챗 검수(이탈·가정 9건 + FK on-delete 규칙 사후 승인) → 머지 ③ Phase 5(Drive) 착수 — `supabase:verify`는 Phase 5·6
+  PR에서도 회귀 검사로 재실행(3키 있는 세션에서만)
 - **(2026-09-04) Phase 3.21 PR 검수 → 머지 → Vercel 연결(사용자, §18a)**: S1 `JasonCreed-creator/communicator`
   Import(설정 무변경 — `vercel.json`) → S2 env `VITE_DATA_PROVIDER=mock` → S3 `*.vercel.app`에서 ⑤ 루트 런처
   카드 2장 클릭 확인 → S4(가) `rmb-mice.com`을 옛 jsx-easy-shift 프로젝트에서 제거 → 새 프로젝트에 추가(DNS 무변경).
@@ -1091,6 +1154,23 @@ DoD-29뿐 아니라 **실물 검산 2건에서 바로** 잡힌다(위 표의 "2 
 - 이후 Phase 5(Drive) → Phase 6(알림·cron)
 
 ## 5. 결정 로그
+- **(2026-09-07 오후, Phase 4 3단) 토큰·견적 참조 FK의 on-delete 규칙** — dev 실측에서 행사 cascade 삭제가 `approvals.decided_via_token`·
+  `comments.author_token`(→ client_tokens)·`settlement_boards.quote_id`(→ quotes)에 막혔다. 앱은 토큰을 지우지 않고(회수 = `revoked_at`) 견적도
+  지우지 않으므로 운영 경로엔 영향이 없지만, 행사 삭제·검증 정리·향후 아카이브가 막히면 안 된다. 결정: 감사 참조(approvals·boards)는 `set null`,
+  코멘트는 작성자 없는 행을 남길 수 없어(`comments_author_present` check) `cascade`. 마이그레이션에 drop/add 구문을 둬 기존 DB에도 같은 규칙 적용.
+  **사후 승인 대상**(설계서 §4-6·§4-7·§4-23 DDL에는 on-delete가 적혀 있지 않았다 — v2.7 §4 머리말 표에 기재)
+- **(2026-09-07 오후, Phase 4 3단) 사용자 선택 "전부 자동으로"** — 버튼 질문(직접 붙여넣기 vs 전부 자동) → 자동. URL·PAT를 대화로 전달받아
+  Management API로 setup·seed 실행. PAT는 이 용도 뒤 폐기(미결 ① ⓒ)
+- **(2026-09-07, Phase 4) 사용자 결정 5건(버튼 응답)**: ① 범위 게이트 **[B] 3단 분할**(스키마·setup → Provider·Auth·서버 함수 → dev DB 실검증)
+  ② 검증 DB 3키 = "생성 안내 먼저" → 이후 publishable·secret 2키 대화 전달(`.env.local`에만) — URL·PAT는 미수령 ③ 시트 감지 = **폴링 유지**
+  (Realtime 보류 — §24.3 열린 질문 종결) ④ DDL 미결 2건 **둘 다 반영**(3.19③ 소속·발주처 전화, 3.17③ sheet_status 매핑) ⑤ 서버 함수 =
+  **Vercel Functions**(Edge Functions 대체 — 같은 레포·같은 배포, D-Day 추가 단계 = Vercel env 1줄). Code 판단으로 덧붙인 것: 토큰 경로·
+  다단계 쓰기는 **SQL RPC**(배포 단계 0, "키 교체+setup.sql 1회" 원칙 유지, 로컬 증명 가능) — 사용자 결정 ⑤와 같은 방향의 최소 이동
+- **(2026-09-07, Phase 4) profiles를 auth.users에서 분리** — §4-2b 담당자 마스터("사람은 행사와 무관하게 존재")와 §4-1b 요약(`profiles.id references auth.users`)이
+  충돌한다. 로그인 전 사람이 주소록·배정에 있어야 하므로 profiles가 앱의 사람 정본이고 auth 연결은 `auth_user_id`(null 허용)로 둔다.
+  첫 로그인 시 이메일로 자동 연결(app_role 보존). 설계서 v2.7 §4 머리말 표에 명시 — **사후 승인 대상**(체크아웃 보고에 이탈 1번으로 기재)
+- **(2026-09-07, Phase 4) 데모 아티팩트는 supabase 모듈을 스텁으로 alias** — supabase-js가 mock 번들에 실리면 check-artifact의
+  "외부 요청 0건"(fetch·Worker·localhost 참조) 가드가 깨진다. 앱 빌드는 무변경(공급자는 런타임 env로 고른다)
 - **(2026-08-28, Phase 3.17) 디자인 핸드오프 채택 — 미결 3건 확정.** 사용자 응답:
   ① 체크인 배치 = **A안(등록 보드 탭)** — "너의 추천안으로 진행"에 따라 메인이 A를 택했다.
   근거: 명단·현황·체크인이 한 화면에 모여 시트 스냅숏 기준이 하나로 유지되고, 새 라우트가
@@ -1489,6 +1569,29 @@ DoD-29뿐 아니라 **실물 검산 2건에서 바로** 잡힌다(위 표의 "2 
   표 min-w 820→936 상향(열 규격 합계와 일치 — 1280 콘텐츠 폭 958 안에서 무스크롤 실측)
 
 ## 6. 세션 로그
+- **2026-09-07 (Phase 4 — Supabase 이식 1·2단)**. 사용자 "supabase를 서버로 하는 형태로 우선 만들어봐야" → 체크인 3줄 + 브리프·범위 카드
+  (버튼 4문항) → [B] 승인. 1단은 메인이 직접(마이그레이션 17개·트리거·RLS·RPC·생성기·로컬 검증 85항목), 2단은 에이전트 4개 병렬
+  (projects·deliverables·clientPortal / registration·landing / program·wbs / quotes·settlement·partners — 각 ~200~300K 토큰, 보고서에 이탈 항목
+  전부 명시)과 메인(ctx·errors·client·auth·LoginPage·AuthGate·api 함수·시드·검증 스크립트·문서). 세션 중 사용자가 API 키 화면 캡처와
+  publishable·secret 2키를 대화로 전달 → `.env.local`(600) 기록·재인쇄 0. 실측: 컨테이너에서 Supabase DB 포트 차단·Management API만 통과 →
+  원격 실행 스크립트(`supabase:remote`) 준비. 로컬 Postgres 16 클러스터를 `/tmp/pg-communicator`에 띄워(postgres 유저 경로 제약으로 스크래치
+  밖 — 사유) 멱등·RLS·RPC를 증명. Deno는 npm으로 받을 수 있음을 확인했으나 Vercel 결정으로 불필요. 설계서 v2.7·CLAUDE.md v2.7 승격.
+  다음 = 3단(URL·PAT 도착 시) → 챗 검수 → Phase 5.
+  **(계속, URL 대기 중)** 3단 실행체 `scripts/supabase-dev-verify.ts`(`npm run supabase:verify`) 선작성 — 로컬 HTTP 서버로 `api/_lib` 핸들러를
+  감싸 provider의 `apiBase`만 바꾸고, 검증 계정 3명(sales·staff·비멤버)을 admin generateLink→verifyOtp로 로그인, 이 실행이 만든 행사 1건 안에서
+  DoD 1~25 흐름 ~60항목 + RLS 3종 + 정리. esbuild 번들·tsc(스크래치 tsconfig, scripts는 메인 tsconfig 밖)·`--dry` 로드 통과. 실DB 실행은 URL 도착 후.
+  사용자 질문 "3키가 어떤 키인지" → URL·publishable·secret 3종 + 선택 PAT로 답변.
+  **(계속 2 — 3단 실행)** 사용자 "차분히 알려줘… 하나도 모르겠음" → 용어 없이 상황·필요한 것·클릭 순서를 다시 설명하고 버튼 질문(직접 붙여넣기 /
+  전부 자동) → **전부 자동** 선택 → URL·PAT 수령. setup×2(멱등)·seed(80초) → verify 1회차 **79/83**: 기능 검사는 랜딩 1건(스크립트 오판 —
+  autofill은 읽기 시 조립)만, 나머지 3건은 정리 단계 FK(토큰·견적 참조) → 마이그레이션 on-delete 규칙 추가(결정 로그) → 로컬 Postgres 재기동
+  (`/tmp/pg-communicator/data`, 로그 파일 경로 `…/log`) 85/85 → 원격 재적용 → 잔여 데이터 정리 → verify 2회차 **83/83** → seed 2회차 행 수 불변.
+  supabase 모드 빌드 번들 secret·PAT 실값 0건. 실서버 브라우저 E2E는 컨테이너 Chromium의 프록시 리셋으로 불가(프록시 지정 시도 2회 실패) — 한계로 기재.
+  다음 = 사용자 게이트 3건(로그인 이메일·Auth URL·PAT 폐기) → 챗 검수 → Phase 5.
+  **(종료)** 사용자 지시 "머지하고 종료하고 내가 직접 URL 들어가서 테스트해볼게" → 브랜치 head에서 tsc·vitest 전체 재확인 후 드래프트 해제 →
+  merge commit(레포 관례) → PR 구독 해제·예약 체크인 삭제. **배포 사이트는 여전히 mock 모드**(§20 원칙) — 실서버로 보려면 Vercel env 5개
+  (`VITE_DATA_PROVIDER=supabase`·`VITE_SUPABASE_URL`·`VITE_SUPABASE_PUBLISHABLE_KEY`·`SUPABASE_URL`·`SUPABASE_SECRET_KEY`) + Supabase Auth URL 설정 +
+  `select app.grant_demo_access('로그인 이메일')`이 필요하다는 것을 종료 보고에 클릭 순서로 안내. 로그인 이메일은 "나중에"(보류) 그대로.
+  다음 세션 = 사용자 실측 피드백 반영 → Phase 5(Drive).
 - **2026-09-04 저녁 (Phase 3.21.1 — 실배포 마무리 + 표 줄바꿈 정본)**. 사용자가 "직접 들어가서 처리해봐"라며 Vercel 배포
   페이지 링크를 줬고, 대시보드는 로그인이 필요해 1일 만료 API 토큰을 받아 처리했다. 토큰으로 한 일: 실패 배포 이벤트
   로그 판독(→ `@types/node` 누락) · Preview·Production READY 확인 · 프로젝트 설정·env·도메인 조회 · 사용자 승인 후 도메인 이전.

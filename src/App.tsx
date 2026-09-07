@@ -3,6 +3,9 @@ import ClientLayout from './components/layout/ClientLayout'
 import InternalLayout from './components/layout/InternalLayout'
 import OnboardingGuard from './components/onboarding/OnboardingGuard'
 import { ProjectProvider } from './context/ProjectContext'
+import { AuthProvider } from './context/AuthContext'
+import AuthGate from './components/layout/AuthGate'
+import LoginPage from './pages/LoginPage'
 import AreaBoardPage from './pages/AreaBoardPage'
 import ClientConfirmQueuePage from './pages/ClientConfirmQueuePage'
 import ClientMaterialsPage from './pages/ClientMaterialsPage'
@@ -59,6 +62,11 @@ export function AppRoutes() {
           어느 제품에도 속하지 않는 중립 지면이라 ProjectScope·InternalLayout 둘 다 밖(2026-09-04) */}
       <Route path="/" element={<LauncherPage />} />
 
+      {/* Phase 4c — 내부 로그인(이메일 매직링크). mock 공급자에서는 /login이 곧바로 /home으로 보낸다 */}
+      <Route path="/login" element={<LoginPage />} />
+
+      {/* 내부 지면 전부 로그인 게이트 안 — mock은 통과, supabase는 세션 필수. /c·/p·/·/login은 밖 */}
+      <Route element={<AuthGate />}>
       <Route element={<ProjectScope />}>
         {/* S0 온보딩 위저드 — 가드 대상 제외 */}
         <Route path="/onboarding" element={<OnboardingPage />} />
@@ -103,6 +111,7 @@ export function AppRoutes() {
           </Route>
         </Route>
       </Route>
+      </Route>
 
       {/* 발주처 화면 S7~S8 — 무로그인 토큰 링크 (/c/demo 데모 라우트 포함), ProjectScope 밖 */}
       <Route path="/c/:token" element={<ClientLayout />}>
@@ -132,7 +141,9 @@ export function AppRoutes() {
 export default function App() {
   return (
     <BrowserRouter>
-      <AppRoutes />
+      <AuthProvider>
+        <AppRoutes />
+      </AuthProvider>
     </BrowserRouter>
   )
 }

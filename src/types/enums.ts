@@ -172,7 +172,12 @@ export type SheetDiffKind = (typeof SHEET_DIFF_KINDS)[number]
 export const ATTENDEE_SHEET_STATUSES = ['applied', 'confirmed', 'cancelled', 'removed'] as const
 export type AttendeeSheetStatus = (typeof ATTENDEE_SHEET_STATUSES)[number]
 
-/** 매핑 가능한 등록 필드 — 이 7종이 '시트 소유' 필드다(앱에서 수정 불가, §24.1-3) */
+/**
+ * 매핑 가능한 등록 필드 — 이 8종이 '시트 소유' 필드다(앱에서 수정 불가, §24.1-3).
+ * Phase 4(사용자 승인 2026-09-07, 3.17③): 신청 상태 컬럼 `sheet_status`를 매핑 대상에 추가 — 값은 시트의
+ * '신청/확정/취소' 표기를 서버(api/sheets)가 applied/confirmed/cancelled로 정규화한다. 차이 비교에서는 필드 비교가 아니라
+ * 상태 비교 줄(§24 sheetSync)이 담당하므로 computeSheetDiffRows의 필드 루프는 이 값을 건너뛴다.
+ */
 export const SHEET_MAPPED_FIELDS = [
   'name',
   'org',
@@ -181,6 +186,7 @@ export const SHEET_MAPPED_FIELDS = [
   'phone',
   'group_tag',
   'registered_at',
+  'sheet_status',
 ] as const
 export type SheetMappedField = (typeof SHEET_MAPPED_FIELDS)[number]
 
@@ -219,4 +225,5 @@ export const SHEET_FIELD_LABELS: Record<SheetMappedField, string> = {
   phone: '전화',
   group_tag: '구분',
   registered_at: '신청 일시',
+  sheet_status: '신청 상태',
 }

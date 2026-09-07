@@ -64,6 +64,7 @@ export function suggestField(header: string): SheetMappedField | null {
   if (/(휴대폰|연락처|전화|phone|mobile)/.test(h)) return 'phone'
   if (/(구분|그룹|등급|group|type)/.test(h)) return 'group_tag'
   if (/(신청일|등록일|일시|date)/.test(h)) return 'registered_at'
+  if (/(신청상태|참가상태|상태|status)/.test(h)) return 'sheet_status'
   return null
 }
 
@@ -145,7 +146,7 @@ function valueOf(field: SheetMappedField, source: { [k: string]: unknown }): str
 
 /**
  * 시트 소유 필드 비교 — 매핑된 필드(§24.1-3)만 본다. 체크인·비고는 앱 소유라 비교 대상이 아니다.
- * 신청 상태(sheet_status)는 매핑 7종에 없지만 시트가 정본인 값이라 항상 함께 따라간다.
+ * 신청 상태(sheet_status)는 매핑 여부와 무관하게 시트가 정본인 값이라 항상 함께 따라간다(Phase 4: 매핑 8종에 포함).
  */
 export function mappedFields(mapping: SheetColumnMapping[]): SheetMappedField[] {
   const fields = mapping.map((m) => m.field).filter((f): f is SheetMappedField => f !== null)
@@ -188,6 +189,8 @@ export function computeSheetDiffRows({ mapping, sourceRows, attendees }: SheetDi
     const currentParts: string[] = []
     const sourceParts: string[] = []
     for (const field of fields) {
+      // 신청 상태는 아래 상태 비교 줄이 담당한다(원본 행 키는 status, 참관객 키는 sheet_status)
+      if (field === 'sheet_status') continue
       const before = valueOf(field, attendee as unknown as Record<string, unknown>)
       const after = valueOf(field, row as unknown as Record<string, unknown>)
       if (before !== after) {
