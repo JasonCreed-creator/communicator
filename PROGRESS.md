@@ -1587,6 +1587,11 @@ DoD-29뿐 아니라 **실물 검산 2건에서 바로** 잡힌다(위 표의 "2 
   (`/tmp/pg-communicator/data`, 로그 파일 경로 `…/log`) 85/85 → 원격 재적용 → 잔여 데이터 정리 → verify 2회차 **83/83** → seed 2회차 행 수 불변.
   supabase 모드 빌드 번들 secret·PAT 실값 0건. 실서버 브라우저 E2E는 컨테이너 Chromium의 프록시 리셋으로 불가(프록시 지정 시도 2회 실패) — 한계로 기재.
   다음 = 사용자 게이트 3건(로그인 이메일·Auth URL·PAT 폐기) → 챗 검수 → Phase 5.
+  **(종료)** 사용자 지시 "머지하고 종료하고 내가 직접 URL 들어가서 테스트해볼게" → 브랜치 head에서 tsc·vitest 전체 재확인 후 드래프트 해제 →
+  merge commit(레포 관례) → PR 구독 해제·예약 체크인 삭제. **배포 사이트는 여전히 mock 모드**(§20 원칙) — 실서버로 보려면 Vercel env 5개
+  (`VITE_DATA_PROVIDER=supabase`·`VITE_SUPABASE_URL`·`VITE_SUPABASE_PUBLISHABLE_KEY`·`SUPABASE_URL`·`SUPABASE_SECRET_KEY`) + Supabase Auth URL 설정 +
+  `select app.grant_demo_access('로그인 이메일')`이 필요하다는 것을 종료 보고에 클릭 순서로 안내. 로그인 이메일은 "나중에"(보류) 그대로.
+  다음 세션 = 사용자 실측 피드백 반영 → Phase 5(Drive).
 - **2026-09-04 저녁 (Phase 3.21.1 — 실배포 마무리 + 표 줄바꿈 정본)**. 사용자가 "직접 들어가서 처리해봐"라며 Vercel 배포
   페이지 링크를 줬고, 대시보드는 로그인이 필요해 1일 만료 API 토큰을 받아 처리했다. 토큰으로 한 일: 실패 배포 이벤트
   로그 판독(→ `@types/node` 누락) · Preview·Production READY 확인 · 프로젝트 설정·env·도메인 조회 · 사용자 승인 후 도메인 이전.
