@@ -16,9 +16,14 @@
     "demo:serve": "node demo/verify/serve.mjs",
     "demo:smoke": "node demo/verify/interaction-smoke.mjs",
     "deploy:check": "node scripts/vercel-check.mjs",
+    "supabase:setup": "node scripts/supabase-build-setup.mjs",
+    "supabase:seed": "esbuild scripts/gen-seed.ts --bundle --platform=node --format=esm --target=node22 --log-level=warning --outfile=node_modules/.cache/communicator/gen-seed.mjs && node node_modules/.cache/communicator/gen-seed.mjs",
+    "supabase:check": "node scripts/supabase-local-check.mjs",
+    "supabase:remote": "node scripts/supabase-remote.mjs",
     "demo": "npm run demo:build && npm run demo:check && npm run demo:check:routing && npm run demo:check:browser"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.115.0",
     "exceljs": "^4.4.0",
     "file-saver": "^2.0.5",
     "react": "^18.3.1",

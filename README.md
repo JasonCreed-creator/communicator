@@ -14,7 +14,7 @@ MICE 프로젝트 협업 허브 — 역할별(디자인·운영·등록) 산출�
 
 ## 진행 방식
 1. Phase 0~3: 서버 없이 프론트 전체 완성 (Mock, 발주처 데모 `/c/demo` 포함)
-2. Phase 4~6: Supabase → Google Drive → 알림 순 이식 (착수 전 승인)
+2. Phase 4~6: Supabase → Google Drive → 알림 순 이식 — **Phase 4 진행 중(2026-09-07 착수)**: 스키마·RLS·RPC(`supabase/`, `setup.sql` 1회·멱등) · `SupabaseProvider`(`src/providers/supabase/`) · 내부 로그인 매직링크(`/login`) · 서버 함수 = Vercel Functions(`api/`). 전환 스위치 = `VITE_DATA_PROVIDER=supabase`(기본 mock). 절차·검증은 `supabase/README.md`
 
 Claude Code에서 클론 후 "체크인"으로 시작.
 

@@ -7,7 +7,7 @@
 //   ① InfoTip 호버 1곳 표시 + 뷰포트 내 완전 노출 (가장 오른쪽 ⓘ로 클램프를 강제)
 //   ② 사이드바 링크 클릭 → aria-current 갱신 + 전체 리로드 0 (SPA 내비 증명)
 //   ③ 해당 세션이 바꾼 화면의 핵심 클릭 경로 1개 — 세션마다 아래 "③" 블록을 교체한다
-//      (3.18: 판매 플래너 3스텝 · S0 ③ 유형 4카드)
+//      (3.18: 판매 플래너 3스텝 · S0 ③ 유형 4카드 · 3.21: 런처 · Phase 4c: 로그인 게이트)
 // 캡처는 dist-demo/shots-interaction/ 에 남긴다. 실패 시 exit 1.
 import { createServer } from 'node:http'
 import { readFileSync, mkdirSync } from 'node:fs'
@@ -141,54 +141,48 @@ check(
   `${docCountBefore} → ${docRequests.length}`,
 )
 
-// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — S-00 **제품 런처**(도메인 루트, 2026-09-04).
-//     "같은 도메인에서 선택하여 각각 진입"이 실제로 도는지: 런처 → 견적 컨피규레이터(#/quotes) →
-//     사이드바 로고로 런처 복귀 → MICE 커뮤니케이터(#/home) → 사이드바 '홈'이 /home으로 활성. ──
+// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — **로그인 게이트(Phase 4c, 2026-09-07)**.
+//     mock 공급자에서는 게이트가 통과여야 한다: #/login → 즉시 #/home(원래 목적지) · 내부 셸 렌더 ·
+//     발주처 지면 #/c/demo는 게이트 밖(로그인 없이 그대로) · 런처 → 커뮤니케이터 진입 경로 회귀 없음. ──
 
 // 데모 안내 칩은 우하단 고정이라 카드 하단과 겹칠 수 있다 — 사용자와 똑같이 닫고 시작한다
 const notice = tab.getByRole('button', { name: '안내 닫기' })
 if (await notice.count()) await notice.click()
 
-// 사이드바 로고 = 런처 복귀 경로(제품을 갈아타는 자리)
-const logoLink = tab.locator('aside a[aria-label="제품 선택으로"]')
-check((await logoLink.count()) === 1, '사이드바 로고가 제품 선택(런처) 링크', `${await logoLink.count()}개`)
-await logoLink.click()
-await tab.waitForURL(/#\/$/, { timeout: 10_000 })
-await tab.getByRole('heading', { name: '어떤 도구로 시작할까요?' }).waitFor({ timeout: 10_000 })
-const shellOnLauncher = await tab.locator('aside nav').count()
-check(shellOnLauncher === 0, '런처는 제품 셸(사이드바) 밖의 중립 지면', `nav ${shellOnLauncher}개`)
-const ctaOnLauncher = await tab.locator('.btn-accent, .btn-primary').count()
-check(ctaOnLauncher === 0, '런처 CTA — 카드 전체가 링크(accent 버튼 0개)', `${ctaOnLauncher}개`)
-await tab.screenshot({ path: resolve(SHOTS, '03a-launcher.png') })
+// /login: mock 모드에서는 로그인 화면이 뜨지 않고 목적지로 간다(AuthGate·LoginPage 통과 규약)
+const docBeforeLogin = docRequests.length
+await tab.evaluate(() => {
+  window.location.hash = '#/login'
+})
+await tab.waitForURL(/#\/home$/, { timeout: 10_000 })
+await tab.getByRole('heading', { name: '홈 대시보드' }).waitFor({ timeout: 10_000 })
+check(true, 'mock: #/login → #/home 즉시 통과(로그인 화면 미노출)')
+check((await tab.getByRole('heading', { name: 'MICE 커뮤니케이터 로그인' }).count()) === 0, 'mock: 로그인 헤딩 0개')
+check(docRequests.length === docBeforeLogin, '로그인 게이트 통과에 전체 리로드 0', `${docBeforeLogin} → ${docRequests.length}`)
+const shellAfterGate = await tab.locator('aside nav a[aria-current="page"]').innerText()
+check(/홈/.test(shellAfterGate), "게이트 뒤 내부 셸 렌더 — 사이드바 활성 항목 = 홈", shellAfterGate.trim())
+await tab.screenshot({ path: resolve(SHOTS, '03a-login-gate-mock.png') })
 
-// 견적 컨피규레이터 카드 → S-2 (mock 사용자 = sales, QuoteGate 통과)
-const docBeforeQuote = docRequests.length
-await tab.getByRole('link', { name: '견적 컨피규레이터 들어가기' }).click()
-await tab.waitForURL(/#\/quotes$/, { timeout: 10_000 })
-await tab.getByRole('heading', { name: '견적' }).waitFor({ timeout: 10_000 })
-check(true, '런처 → 견적 컨피규레이터(#/quotes)', '견적(S-2) 헤딩 확인')
-check(docRequests.length === docBeforeQuote, '런처 → 견적 전환에 전체 리로드 0', `${docBeforeQuote} → ${docRequests.length}`)
-const quoteNavActive = await tab.locator('aside nav a[aria-current="page"]').innerText()
-check(/견적/.test(quoteNavActive), '견적 진입 후 사이드바 활성 항목 = 견적', quoteNavActive.trim())
-await tab.screenshot({ path: resolve(SHOTS, '03b-launcher-to-quotes.png') })
+// 발주처 지면은 게이트 밖 — 토큰 링크는 로그인 없이 그대로 열린다(§6.3)
+await tab.evaluate(() => {
+  window.location.hash = '#/c/demo'
+})
+await tab.waitForURL(/#\/c\/demo$/, { timeout: 10_000 })
+await tab.locator('h1').first().waitFor({ timeout: 10_000 })
+check(true, '#/c/demo 발주처 지면이 로그인 없이 열린다', (await tab.locator('h1').first().innerText()).trim())
+check((await tab.locator('aside nav').count()) === 0, '발주처 지면은 내부 셸(사이드바) 밖', `nav ${await tab.locator('aside nav').count()}개`)
+await tab.screenshot({ path: resolve(SHOTS, '03b-client-outside-gate.png') })
 
-// 로고로 런처 복귀 → MICE 커뮤니케이터 카드 → S1 홈, 사이드바 '홈'(/home) 활성
-await tab.locator('aside a[aria-label="제품 선택으로"]').click()
+// 런처 → 커뮤니케이터 진입(3.21 경로) 회귀 없음 — 게이트가 끼어도 한 번의 클릭으로 홈에 닿는다
+await tab.evaluate(() => {
+  window.location.hash = '#/'
+})
 await tab.getByRole('link', { name: 'MICE 커뮤니케이터 들어가기' }).waitFor({ timeout: 10_000 })
 await tab.getByRole('link', { name: 'MICE 커뮤니케이터 들어가기' }).click()
 await tab.waitForURL(/#\/home$/, { timeout: 10_000 })
 await tab.getByRole('heading', { name: '홈 대시보드' }).waitFor({ timeout: 10_000 })
-const homeLink = tab.locator('aside nav a', { hasText: '홈' }).first()
-check((await homeLink.getAttribute('href') ?? '').endsWith('#/home'), "사이드바 '홈' 링크 = #/home", await homeLink.getAttribute('href'))
-check((await homeLink.getAttribute('aria-current')) === 'page', "런처 → 커뮤니케이터 후 '홈' aria-current=page")
+check(true, '런처 → 커뮤니케이터(#/home) — 게이트 경유 회귀 없음')
 await tab.screenshot({ path: resolve(SHOTS, '03c-launcher-to-home.png') })
-
-// 옛 견적 주소는 런처를 거치지 않는다(§10 리다이렉트 표 불변)
-await tab.evaluate(() => {
-  window.location.hash = '#/configurator'
-})
-await tab.waitForURL(/#\/quotes$/, { timeout: 10_000 })
-check(true, '옛 주소 #/configurator → #/quotes (런처 경유 없음)')
 
 await browser.close()
 server.close()

@@ -1,8 +1,8 @@
-# MICE 커뮤니케이터 — 시스템 설계서 v2.6
+# MICE 커뮤니케이터 — 시스템 설계서 v2.7
 
 | 항목 | 내용 |
 |---|---|
-| 문서 상태 | **v2.6 확정 — UI/UX 고도화(패턴 정본) + 등록 구글 시트 연동 + 행사 유형 4분류(§25 증분)**. §25 증분(Phase 3.18, 2026-08-29): `projects.format`(conference/dms/exhibition)·`psa_enabled` 신설 — **format 권한은 3가지로 한정**(온보딩 시드·견적 모델·복합 게이트 구성요소), 상시 모듈 게이트는 기존 축 유지. 판매 플래너(dms·exhibition 판매형 도구) 신설, conference 견적 경로 **무접촉**. **DataProvider v11 재동결**(v10은 3.17c에서 소진). 초청제 모드·PSA 모듈은 미착수(§25.6·§25.5). **시각안 없이 진행** — 사용자 지시로 생략, 대체 게이트는 스크린샷 검수. 앞선 v2.6 — (2026-08-28 핸드오프 채택, 2026-08-29 챗 실측 검수 반영). ① 공통 패턴 정본 = 디자인지시서 §7-1(배지 의미 4단계+중립·표 정본·빈 상태 5종·시각화 어휘·인쇄·외부 지면) ② 등록 시트 연동 §24 — 시트가 정본·앱은 읽기만, 자동 감지는 하되 **반영은 항상 사람 확인 후**, 필드 소유 분리, 하드 삭제 금지, 동시 접속 낙관적 잠금(§24.3 R-S1~R-S4) ③ **체크인 배치 = B안(사이드바 S-12 별도 화면)** — 3.17 구현은 A안이었고 이는 Code 판단, 3.17.1에서 B안으로 복원 ④ **DataProvider v10 재동결(10메서드 추가 · 120메서드)**, importVendorQuote는 **v13 예약**(v11은 §25 증분, v12는 §4-2b 담당자 마스터에서 소진 — 2026-08-29). 직전 v2.5 확정 — **운영보드 재구성: 문서 유형 우선 + 시나리오·운영가이드 빌더** (2026-08-28, 시각안 3화면·구조 결정 5가지 전부 승인 — 계기: 사용자 데모 실측 피드백 "운영보드에 큐시트·시나리오·운영가이드가 들어가야 하고 항목별 전용 빌더가 필요"). ① 운영보드 1면 = 유형 카드 4종(큐시트/시나리오/운영가이드/기타 제작물) — "카테고리가 빌더를 결정한다" 원칙의 보드 레벨 확장, 유형 선택 시 빌더 인라인 ② 시나리오 빌더(프로그램표 뼈대 자동·진행 블록·큐시트로 내보내기)·운영가이드 빌더(존/역할/비상/연락망 4섹션·원본 연동 stale 확인) 신설 — 정형 테이블 §4-27, 컨펌·스냅숏은 큐시트 규약 재사용 ③ S9 ⑦비상 대응 섹션 신설·②시나리오 펼침·③존운영 확장(§10.2) ④ **DataProvider v9 재동결(8메서드 · 110메서드)**, importVendorQuote는 v10 예약 순연. 구현 = Phase 3.16(mock·3.15.1 머지 후). 직전 v2.4.1 확정 — **패치: 3.15 머지본 챗 감수(2026-08-27, 조건부 보완) 반영** — ① §15.3b 주최형 R&R 4카드·§15.3c 규약 카드 3종 정의(감수 M4 — 설계 공백 보완, 가정) ② projects에 파트너 안내 필드 2종(partner_guide_url·partner_contact_email — DataProvider v8.1, 필드 추가만) ③ 데모 아티팩트 charset 선두 보장 규약(§13b — 감수 M1, 미선언 서빙 백지 실증) ④ 폴리시 P1~P6은 CLAUDE.md 무개정·지시문 3.15.1로 수행. 직전 v2.4 확정 — **주최형(파트너) 확장 + 견적서 임포트** (2026-08-27, 시각안 4화면·구조 결정 7가지 전부 승인). ① 프로젝트 성격 축 `kind`(대행형/주최형) 신설 — 주최형은 파트너 N곳이 무로그인 링크 `/p/{token}`으로 제출하고 우리가 검토(기존 상태머신 방향 반전 재사용), 파트너 간 완전 격리·계약액 비노출(§21) ② 직접 설계한 견적서 xlsx 업로드 → 자동 인식 → 확인 큐 → 요소 분배 4종(§22, 실서식 3형 계약). DataProvider **v8 재동결(16메서드 · 102메서드)**, WBS 3번째 템플릿 "주최형" 12건(§15.3). 구현은 Phase 3.15(mock 우선·서버 0). 직전 v2.3 확정 — **서버 스프린트: 키 최후 주입 실행 개정(기능 무변경)** (2026-08-27, 범위 게이트 승인). Phase 4(Supabase)·5(Drive)·6(알림)을 운영 자격증명 없이 D-Day(8/31 월, 첫 출근일) 전에 전부 구현·검증하고, D-Day에는 §20 런북의 자격증명 주입(서버 3키·Slack 웹훅·Drive OAuth)만으로 실전 투입 가능 상태를 만든다. 사전 검증은 개발용 무료 Supabase 프로젝트, API 키는 신형 체계(sb_publishable/sb_secret — §12, 웹검증 2026-08-27) 채택. 직전 v2.2 확정 — **정산보드(S-10) 신설** (2026-08-23, 내부정산 실물 13건 분석 기반·시각안 승인). 마진 식(항목 마크업 + PCO 기획료 + RSVP 운영비, 리드젠 제외)을 실물 2건에서 원 단위 검산하고 §19에 정본화한다. §4-23 테이블 4종 + §4-24 계약 R-S1~R-S10, DataProvider **v7 재동결(11메서드 · 86메서드)**. 직전 v2.1 — **랜딩보드(S-3) 정본화 + 랜딩 스코프 계약 + 가격 상수 v1.1 정의** (2026-08-23). 코드가 선행한 Phase 3.13 랜딩보드를 §4-19~§4-22·§8·§10에 정본으로 흡수하고, `listLandingPages`·`createLandingPage`가 현재 행사가 아닌 사용자 첫 멤버십으로 스코프되던 결함을 계약으로 못박는다(§4-21). LED 오퍼레이팅·중계 단가 분리(§17.4)와 골든 데이터셋 출처 규약(§17.3)을 확정. 직전 v2.0: **견적 Configurator(jsx-easy-shift) 단일 플랫폼 통합** (2026-08-22, 시각안 3화면 승인 · 읽기 분석 보고 기반): 견적 모듈 S-2 · 견적→행사 핸드오프 · 새 Supabase 프로젝트 · 인프라 전환 절차. 직전 v1.5: **다중 행사(프로젝트 셀렉터·행사 목록) + 행사 설정 메뉴(개요·담당자 입력) 확장** (2026-08-22, 시각안 3화면 승인). 직전 v1.4.1: v1.4(유형별 WBS·R&R, 2026-08-22 시각안 승인)에 **Phase 3.6·3.7 구현 해석 정본화** 패치: projects.onboarded_at 확정(사용자 승인 2026-08-22) · 임박/지연 배타 산식 · 일반형 28건 파생 규칙 · 재전개 보존 규칙 · 큐시트 스냅숏 mock 규약 (Code PROGRESS 열린 질문 ①~⑤ 종결) |
+| 문서 상태 | **v2.7 확정 — Phase 4 Supabase 이식 정합**(2026-09-07, 사용자 결정 5건: [B] 3단 분할 · 폴링 유지(Realtime 보류) · profiles.title/phone/org + client_contacts.phone 추가 · sheet_status 매핑 추가 · **서버 함수 = Vercel Functions**(Edge Functions 대체)). ① 스키마 구현 정본 = `supabase/migrations`(17개, 멱등) + 통합 `setup.sql` + 생성 `seed.sql`(§18-3) — §4 요약과 다른 지점은 §4 머리말 표에 명시(profiles가 앱의 사람 정본·auth_user_id 분리, FK → profiles, landing_daily_metrics 열 TS 정합, app_config·sheet_source_rows 신설) ② 토큰 경로(`/c`·`/p`)·랜딩 리드·시트 반영·다단계 쓰기 = **security definer SQL RPC**(§6.2·§8 — anon은 표 권한 0·함수 execute만, 로컬 Postgres 85항목 증명) ③ 견적 서버 재계산·시트 읽기 = **Vercel Functions `api/`**(§8·§12 — 같은 레포·같은 배포, D-Day 추가 단계 = Vercel env) ④ 내부 로그인 = 이메일 매직링크 + `app_config.allowed_email_domains` 트리거 게이트(§12) ⑤ DataProvider **v12(124메서드) 그대로** — 새 메서드 0. 직전 v2.6 — UI/UX 고도화(패턴 정본) + 등록 구글 시트 연동 + 행사 유형 4분류(§25 증분). §25 증분(Phase 3.18, 2026-08-29): `projects.format`(conference/dms/exhibition)·`psa_enabled` 신설 — **format 권한은 3가지로 한정**(온보딩 시드·견적 모델·복합 게이트 구성요소), 상시 모듈 게이트는 기존 축 유지. 판매 플래너(dms·exhibition 판매형 도구) 신설, conference 견적 경로 **무접촉**. **DataProvider v11 재동결**(v10은 3.17c에서 소진). 초청제 모드·PSA 모듈은 미착수(§25.6·§25.5). **시각안 없이 진행** — 사용자 지시로 생략, 대체 게이트는 스크린샷 검수. 앞선 v2.6 — (2026-08-28 핸드오프 채택, 2026-08-29 챗 실측 검수 반영). ① 공통 패턴 정본 = 디자인지시서 §7-1(배지 의미 4단계+중립·표 정본·빈 상태 5종·시각화 어휘·인쇄·외부 지면) ② 등록 시트 연동 §24 — 시트가 정본·앱은 읽기만, 자동 감지는 하되 **반영은 항상 사람 확인 후**, 필드 소유 분리, 하드 삭제 금지, 동시 접속 낙관적 잠금(§24.3 R-S1~R-S4) ③ **체크인 배치 = B안(사이드바 S-12 별도 화면)** — 3.17 구현은 A안이었고 이는 Code 판단, 3.17.1에서 B안으로 복원 ④ **DataProvider v10 재동결(10메서드 추가 · 120메서드)**, importVendorQuote는 **v13 예약**(v11은 §25 증분, v12는 §4-2b 담당자 마스터에서 소진 — 2026-08-29). 직전 v2.5 확정 — **운영보드 재구성: 문서 유형 우선 + 시나리오·운영가이드 빌더** (2026-08-28, 시각안 3화면·구조 결정 5가지 전부 승인 — 계기: 사용자 데모 실측 피드백 "운영보드에 큐시트·시나리오·운영가이드가 들어가야 하고 항목별 전용 빌더가 필요"). ① 운영보드 1면 = 유형 카드 4종(큐시트/시나리오/운영가이드/기타 제작물) — "카테고리가 빌더를 결정한다" 원칙의 보드 레벨 확장, 유형 선택 시 빌더 인라인 ② 시나리오 빌더(프로그램표 뼈대 자동·진행 블록·큐시트로 내보내기)·운영가이드 빌더(존/역할/비상/연락망 4섹션·원본 연동 stale 확인) 신설 — 정형 테이블 §4-27, 컨펌·스냅숏은 큐시트 규약 재사용 ③ S9 ⑦비상 대응 섹션 신설·②시나리오 펼침·③존운영 확장(§10.2) ④ **DataProvider v9 재동결(8메서드 · 110메서드)**, importVendorQuote는 v10 예약 순연. 구현 = Phase 3.16(mock·3.15.1 머지 후). 직전 v2.4.1 확정 — **패치: 3.15 머지본 챗 감수(2026-08-27, 조건부 보완) 반영** — ① §15.3b 주최형 R&R 4카드·§15.3c 규약 카드 3종 정의(감수 M4 — 설계 공백 보완, 가정) ② projects에 파트너 안내 필드 2종(partner_guide_url·partner_contact_email — DataProvider v8.1, 필드 추가만) ③ 데모 아티팩트 charset 선두 보장 규약(§13b — 감수 M1, 미선언 서빙 백지 실증) ④ 폴리시 P1~P6은 CLAUDE.md 무개정·지시문 3.15.1로 수행. 직전 v2.4 확정 — **주최형(파트너) 확장 + 견적서 임포트** (2026-08-27, 시각안 4화면·구조 결정 7가지 전부 승인). ① 프로젝트 성격 축 `kind`(대행형/주최형) 신설 — 주최형은 파트너 N곳이 무로그인 링크 `/p/{token}`으로 제출하고 우리가 검토(기존 상태머신 방향 반전 재사용), 파트너 간 완전 격리·계약액 비노출(§21) ② 직접 설계한 견적서 xlsx 업로드 → 자동 인식 → 확인 큐 → 요소 분배 4종(§22, 실서식 3형 계약). DataProvider **v8 재동결(16메서드 · 102메서드)**, WBS 3번째 템플릿 "주최형" 12건(§15.3). 구현은 Phase 3.15(mock 우선·서버 0). 직전 v2.3 확정 — **서버 스프린트: 키 최후 주입 실행 개정(기능 무변경)** (2026-08-27, 범위 게이트 승인). Phase 4(Supabase)·5(Drive)·6(알림)을 운영 자격증명 없이 D-Day(8/31 월, 첫 출근일) 전에 전부 구현·검증하고, D-Day에는 §20 런북의 자격증명 주입(서버 3키·Slack 웹훅·Drive OAuth)만으로 실전 투입 가능 상태를 만든다. 사전 검증은 개발용 무료 Supabase 프로젝트, API 키는 신형 체계(sb_publishable/sb_secret — §12, 웹검증 2026-08-27) 채택. 직전 v2.2 확정 — **정산보드(S-10) 신설** (2026-08-23, 내부정산 실물 13건 분석 기반·시각안 승인). 마진 식(항목 마크업 + PCO 기획료 + RSVP 운영비, 리드젠 제외)을 실물 2건에서 원 단위 검산하고 §19에 정본화한다. §4-23 테이블 4종 + §4-24 계약 R-S1~R-S10, DataProvider **v7 재동결(11메서드 · 86메서드)**. 직전 v2.1 — **랜딩보드(S-3) 정본화 + 랜딩 스코프 계약 + 가격 상수 v1.1 정의** (2026-08-23). 코드가 선행한 Phase 3.13 랜딩보드를 §4-19~§4-22·§8·§10에 정본으로 흡수하고, `listLandingPages`·`createLandingPage`가 현재 행사가 아닌 사용자 첫 멤버십으로 스코프되던 결함을 계약으로 못박는다(§4-21). LED 오퍼레이팅·중계 단가 분리(§17.4)와 골든 데이터셋 출처 규약(§17.3)을 확정. 직전 v2.0: **견적 Configurator(jsx-easy-shift) 단일 플랫폼 통합** (2026-08-22, 시각안 3화면 승인 · 읽기 분석 보고 기반): 견적 모듈 S-2 · 견적→행사 핸드오프 · 새 Supabase 프로젝트 · 인프라 전환 절차. 직전 v1.5: **다중 행사(프로젝트 셀렉터·행사 목록) + 행사 설정 메뉴(개요·담당자 입력) 확장** (2026-08-22, 시각안 3화면 승인). 직전 v1.4.1: v1.4(유형별 WBS·R&R, 2026-08-22 시각안 승인)에 **Phase 3.6·3.7 구현 해석 정본화** 패치: projects.onboarded_at 확정(사용자 승인 2026-08-22) · 임박/지연 배타 산식 · 일반형 28건 파생 규칙 · 재전개 보존 규칙 · 큐시트 스냅숏 mock 규약 (Code PROGRESS 열린 질문 ①~⑤ 종결) |
 | 목적 | Claude Code가 본 문서만으로 추가 질문 없이 구현 착수 |
 | 정본 관계 | 스키마·상태 머신·API 계약은 본 문서가 SoT. 구현 지침·작업 순서는 동봉 CLAUDE.md |
 | 확정 결정 | 아키텍처=하이브리드(파일=Drive, 상태=Supabase) / 발주처=무로그인 토큰 링크 / 컨펌 발송=PM 단독 / 업로드=웹앱 경유 원칙+Drive 감지 인박스 / 등록 1차=CSV 임포트 / **구현 순서=프론트 우선·서버 후행 이식(DataProvider 어댑터 계층)** / **v1.2: 지시(requested)→제작→컨펌→운영계획서(S9) 조립 파이프라인 — 웹 문서 우선, PPTX·발주처 뷰는 2차** / **v1.3: S0 온보딩(개요→유형→담당자) → 유형(일반형·모객형) 모듈 토글 → 큐시트 정형 에디터(3채널 콘솔, 컨펌 스냅숏 자동)** / **v1.4: 유형별 WBS 템플릿 자동 전개(Configurator 37태스크 이식·호환 코드 체계) + 역할별 R&R 카드** / **v1.4.1: 온보딩 완료 상태는 projects.onboarded_at 컬럼이 정본(DataProvider v3.1 재동결)** / **v1.5: 다중 행사 — 사이드바 프로젝트 셀렉터+S-1 행사 목록, "행사 설정" 메뉴 상시 노출(①개요 ②담당자 ③유형·연동), S0 위저드=같은 폼의 단계형, 행사개요 단일 원천(S9 ①은 읽기 조립)** / **v2.0: 견적 모듈(S-2) 흡수 — 가격 엔진·베뉴 DB를 `src/modules/quote`로 이식, 견적 확정→행사 생성 프리필, 견적은 로그인 내부 전용(금액은 발주처·운영계획서에 구조적 비노출), 데이터는 새 Supabase 프로젝트(옛 Configurator DB는 1회 임포트 후 폐기), 도메인 rmb-mice.com 재연결·jsx-easy-shift 아카이브** |
@@ -49,7 +49,7 @@ MICE 프로젝트 착수 시 역할별(디자인·운영·등록·발주처) 산
 | 계층 | 선택 | 비고 |
 |---|---|---|
 | 프론트 | React 18 + Vite + TypeScript + Tailwind 4 | v2.0: Configurator의 가격 엔진·베뉴 DB·Excel 내보내기(ExcelJS)를 모듈로 흡수. shadcn/Radix·Tailwind 3는 도입하지 않음(핵심 화면이 인라인 스타일이라 토큰 재스킨으로 충분) |
-| 백엔드 | Supabase Edge Functions (Deno) | 서버 별도 운영 없음. v2.0: **새 Supabase 프로젝트**(ap-northeast-2) — 옛 Configurator 프로젝트는 RLS 개방·무인증·키 하드코딩으로 폐기(§18) |
+| 백엔드 | **(v2.7) Postgres RPC(security definer) + Vercel Functions(Node, `api/`)** — Edge Functions(Deno) 대체(사용자 결정 2026-09-07) | 서버 별도 운영 없음. 다단계 쓰기·토큰 경로·랜딩 리드·시트 반영은 `setup.sql`에 포함된 SQL 함수(배포 단계 0·로컬 증명 가능), TS 엔진이 필요한 견적 서버 재계산과 외부 API(구글 시트·Drive·Slack)는 Vercel Functions(같은 레포에서 엔진 직접 import, git push마다 프론트와 함께 배포). v2.0: **새 Supabase 프로젝트**(ap-northeast-2) — 옛 Configurator 프로젝트는 RLS 개방·무인증·키 하드코딩으로 폐기(§18) |
 | DB | Supabase Postgres + RLS | Free tier로 MVP 충분 |
 | 파일 | Google Drive API v3 | 스토리지 비용 0 |
 | 배포 | Vercel(프론트) + Supabase(백엔드) | 저비용 |
@@ -70,7 +70,7 @@ MICE 프로젝트 착수 시 역할별(디자인·운영·등록·발주처) 산
 ```
 
 - **인터페이스 동결이 전제 조건** — 동결 없이는 이식 시 전 화면 재작업이 발생해 어댑터의 이점이 소멸한다 (감수 Steelman 조건부 판정)
-- 동결 이력: v1(35메서드, Phase 1) → v2(41, v1.2 승인) → v3(53, v1.3·v1.4 승인) → v3.1(v1.4.1 — 필드 추가만) → v4(v1.5 승인 — 다중 행사 5메서드) → **v5(v2.0 승인 — 견적 모듈: `listQuotes`·`getQuote`·`createQuote`·`saveQuoteVersion`·`finalizeQuote`·`createProjectFromQuote`·`exportQuoteXlsx`·`listComplianceCards`·`updateComplianceCard` **9메서드** 추가, `Project`에 모객 필드(guarantee_pax·targeting·kpi_show_rate·quote_id), `WbsTask.target` 추가. 기존 시그니처 불변)** → **v6(v2.1 승인 — 랜딩보드 8메서드: `listLandingPages`·`getLandingPage`·`createLandingPage`·`updateLandingPage`·`publishLandingPage`·`deleteLandingPage`·`listLandingMetrics`·`submitLandingLead`)** → **v6.1(v2.1 정정 — 스코프 결함 해소: `listLandingPages(projectId)`·`createLandingPage(projectId, input)`로 시그니처 변경. 나머지 6메서드는 landingId로 프로젝트를 역참조하므로 불변)** → **v7(v2.2 승인 — 정산보드 11메서드: `getSettlementBoard`·`createSettlementBoard`·`rebaseSettlementBoard`·`createSettlementBucket`·`updateSettlementBucket`·`deleteSettlementBucket`·`createSettlementItem`·`updateSettlementItem`·`deleteSettlementItem`·`listVendors`·`upsertVendor` = **86메서드**. 기존 시그니처 불변. 업로드 파싱(`importVendorQuote`)은 서버 의존이라 v8 예약 슬롯으로 남긴다 — §19.5)**. v5부터는 MockProvider와 SupabaseProvider가 동시에 이 인터페이스를 구현한다(Phase 4). 매 해제는 사용자 승인+본 문서 개정 동반이 조건 — **v6은 이 조건을 어기고 코드가 선행했다(2026-08-22 Phase 3.13). v2.1이 사후 정본화하며, 재발 방지 규칙은 §4-21 말미에 둔다**
+- 동결 이력: v1(35메서드, Phase 1) → v2(41, v1.2 승인) → v3(53, v1.3·v1.4 승인) → v3.1(v1.4.1 — 필드 추가만) → v4(v1.5 승인 — 다중 행사 5메서드) → **v5(v2.0 승인 — 견적 모듈: `listQuotes`·`getQuote`·`createQuote`·`saveQuoteVersion`·`finalizeQuote`·`createProjectFromQuote`·`exportQuoteXlsx`·`listComplianceCards`·`updateComplianceCard` **9메서드** 추가, `Project`에 모객 필드(guarantee_pax·targeting·kpi_show_rate·quote_id), `WbsTask.target` 추가. 기존 시그니처 불변)** → **v6(v2.1 승인 — 랜딩보드 8메서드: `listLandingPages`·`getLandingPage`·`createLandingPage`·`updateLandingPage`·`publishLandingPage`·`deleteLandingPage`·`listLandingMetrics`·`submitLandingLead`)** → **v6.1(v2.1 정정 — 스코프 결함 해소: `listLandingPages(projectId)`·`createLandingPage(projectId, input)`로 시그니처 변경. 나머지 6메서드는 landingId로 프로젝트를 역참조하므로 불변)** → **v7(v2.2 승인 — 정산보드 11메서드: `getSettlementBoard`·`createSettlementBoard`·`rebaseSettlementBoard`·`createSettlementBucket`·`updateSettlementBucket`·`deleteSettlementBucket`·`createSettlementItem`·`updateSettlementItem`·`deleteSettlementItem`·`listVendors`·`upsertVendor` = **86메서드**. 기존 시그니처 불변. 업로드 파싱(`importVendorQuote`)은 서버 의존이라 v8 예약 슬롯으로 남긴다 — §19.5)**. → v8(102)·v9(110)·v10(120)·v11(120, 3.18 — 메서드 0)·**v12(124, §4-2b 담당자 마스터)**. v5부터는 MockProvider와 SupabaseProvider가 동시에 이 인터페이스를 구현한다(Phase 4 — **v2.7: SupabaseProvider는 v12 124메서드를 무수정 구현, `src/providers/supabase/`**). 매 해제는 사용자 승인+본 문서 개정 동반이 조건 — **v6은 이 조건을 어기고 코드가 선행했다(2026-08-22 Phase 3.13). v2.1이 사후 정본화하며, 재발 방지 규칙은 §4-21 말미에 둔다**
 - **현재 행사 컨텍스트(v1.5)**: 프론트는 `PROJECT_ID` 상수를 쓰지 않는다. `ProjectContext`(React)가 선택된 projectId를 보관(localStorage `communicator.currentProjectId`, 없으면 목록 첫 진행 중 행사)하고 모든 화면은 컨텍스트에서 읽는다. 라우트는 불변(`/`, `/board/...`) — URL prefix(`/p/:projectId/...`) 방식은 2차(북마크 공유 요구 발생 시)
 - Mock 단계 산출: UI/UX 전체 검증 + 발주처 데모 라우트(`/c/demo`)
 - 리스크 직렬화: 최대 리스크인 Drive 계층(OAuth·프록시)을 최후행에 배치
@@ -99,6 +99,21 @@ MICE 프로젝트 착수 시 역할별(디자인·운영·등록·발주처) 산
 ## 4. 데이터 모델 (Postgres DDL 요약)
 
 > 타입·제약은 아래가 정본. 마이그레이션 파일은 이 순서대로 작성.
+>
+> **(v2.7) 구현 정본 = `supabase/migrations/*.sql`(17개) → 통합 `supabase/setup.sql`.** 아래 요약과 구현이 다른 지점(Phase 4 정합, 사용자 승인 2026-09-07):
+>
+> | 지점 | 요약(구) | 구현(정본) | 근거 |
+> |---|---|---|---|
+> | `profiles.id` | `references auth.users` | **독립 PK** + `auth_user_id uuid unique null` — 첫 로그인 시 이메일로 자동 연결(트리거) | §4-2b 담당자 마스터: 로그인 전 사람이 주소록·배정에 존재해야 한다 |
+> | `references auth.users` FK 전부 | auth.users | **`profiles(id)`** (project_members.user_id·assignee_id·uploaded_by·requested_by·author_user_id·created_by·invited_by) | 같은 이유 |
+> | `profiles.title·phone·org` · `client_contacts.phone` | 없음 | 추가(null 허용) | 3.18.1 노출 계약 + 3.19③ 사용자 승인 |
+> | `landing_daily_metrics` 열 | pageviews·visitors·form_views·day | **`views·unique_visitors·form_starts·date`**(TS `LandingDailyMetric`과 1:1) | entities.ts "DDL과 1:1" 원칙 |
+> | `sheet_connections.mapping[].field` | 7종 | + `sheet_status` | 3.17③ 사용자 승인 |
+> | `app_config` | 없음(env) | 신설 — `allowed_email_domains text[]`(auth 트리거 게이트, §12) | "키 교체+setup.sql 1회" 안의 서버측 도메인 게이트 |
+> | `sheet_source_rows` | 없음(mock 전용 타입) | 신설 — 서버가 적재한 원본 시트 행(§24 차이 계산의 비교 대상) | §24.2 |
+> | 주최형·§21·§23·§24 표의 kind/status 열 | text | text + check(TS const 배열과 1:1) | 요약 그대로 |
+>
+> 트리거(1300): updated_at · **§5 전이표 가드(상태쌍)** · 확정 견적 잠금 · onboarded_at 불변 · 생성자=pm · version_no 자동 · has_cost 가드 · 종료 행사 쓰기 가드(authenticated만) · auth 가입→프로필 연결·허용 도메인. RLS(1400) 98정책·40표 전부 활성. RPC(1600·1700)는 §8.
 
 ```sql
 -- 열거형
@@ -152,14 +167,17 @@ create table projects (
 );
 
 -- 1b. 프로필 (v2.0 — 전역 역할. 견적 메뉴 접근은 admin·sales)
-create table profiles (
-  id uuid primary key references auth.users on delete cascade,
+create table profiles (                      -- (v2.7) 앱의 '사람' 정본 = 주소록(§4-2b). auth와 분리
+  id uuid primary key default gen_random_uuid(),
+  auth_user_id uuid unique references auth.users on delete set null,   -- 로그인 전이면 null, 첫 로그인 시 이메일로 자동 연결
   display_name text not null,
-  email text not null,
+  email text not null,                        -- unique(lower(email)) — 신원 키
   app_role app_role not null default 'staff',
+  title text, phone text, org text,           -- (v2.7) 3.18.1 노출 계약 · 3.19③ 승인
   created_at timestamptz default now()
 );
--- 신규 가입은 auth 트리거로 profiles 자동 생성(app_role='staff'), 승격은 admin만
+-- 신규 가입은 auth 트리거로 profiles 자동 생성 또는 기존 프로필 연결(app_role 보존), 승격은 service role SQL(app.promote_admin)만
+-- 아래 DDL의 `references auth.users`는 전부 (v2.7) `references profiles(id)`로 읽는다
 
 -- 2. 멤버·역할
 create table project_members (
@@ -185,7 +203,8 @@ create table project_invites (
 create table client_contacts (
   id uuid primary key default gen_random_uuid(),
   project_id uuid references projects on delete cascade,
-  name text not null, org text, email text
+  name text not null, org text, email text,
+  phone text                          -- (v2.7) 3.19③ 사용자 승인
 );
 create table client_tokens (
   token uuid primary key default gen_random_uuid(),   -- URL에 그대로 사용
@@ -433,14 +452,14 @@ create unique index uq_landing_slug on landing_pages (project_id, slug);   -- sl
 create index ix_landing_project on landing_pages (project_id, updated_at desc);
 
 -- 20. 랜딩 일자별 유입 지표 (v2.1 — mock=픽스처 / Phase 4=GA Data API 적재)
-create table landing_daily_metrics (
+create table landing_daily_metrics (          -- (v2.7) 열 이름 = TS LandingDailyMetric
   landing_id uuid not null references landing_pages on delete cascade,
-  day date not null,
-  pageviews int not null default 0,
-  visitors int not null default 0,
-  form_views int not null default 0,
+  date date not null,
+  views int not null default 0,
+  unique_visitors int not null default 0,
+  form_starts int not null default 0,
   submits int not null default 0,
-  primary key (landing_id, day)
+  primary key (landing_id, date)
 );
 -- 지표는 GA에서 당겨온 파생값이다. 앱이 직접 계측하지 않으며, 제출 수(submits)와 attendees 실제 행 수는
 -- 일치하지 않을 수 있다(중복 제출·외부 제출 대상). 불일치는 화면에 그대로 노출하고 보정하지 않는다.
@@ -664,6 +683,7 @@ draft ──(담당/PM)──> internal_review ──(PM만)──> pending_appr
 - (v2.0) quotes: `select` = profiles.app_role in (admin,sales) OR (project_id가 null이 아니고 해당 프로젝트 pm 멤버) / `insert·update` = admin·sales만. compliance_cards·profiles: 멤버 범위.
 - (v2.4) partners·partner_tiers·partner_tokens: `select·insert·update` = 프로젝트 멤버(등급·계약액 열람 포함 — 내부 전용), 파트너 토큰 발급·회수는 pm만. **`partners.contract_amount`는 어떤 외부 경로(`/c/*`·`/p/*`·랜딩·운영계획서·알림)에도 나가지 않는다** — 금액 비노출 가드 대상에 추가(§19.7 확장).
 - (v2.4) 파트너 토큰 경로(`/p/{token}`)는 발주처 토큰과 동일 원칙 — RLS 미통과, Edge Function(service) 화이트리스트 쿼리만. 접근 가능 범위: **자기 partner_id의** 제출 항목·버전·shared 코멘트·방향이 partner_submit/host_notice인 WBS 태스크(자기 전개분)·행사 기본 정보(명칭·일시·장소). **타 파트너의 어떤 행도 쿼리 자체에서 제외**(파트너 간 완전 격리). 만료·회수 = 410.
+- **(v2.7 구현)** 토큰 경로는 `security definer` SQL RPC(`client_queue`·`client_status`·`client_decide`·`partner_portal`·`partner_submit`·`submit_landing_lead` — `supabase/migrations/…1700_rpc_portals.sql`)로 구현한다. anon 롤은 **표 권한 0**(1500 grants)이고 이 함수들의 execute만 가진다 — 아래 계약(토큰 검증·화이트리스트 쿼리·shared 코멘트만·금액 표 미접근)은 그대로이며 실행 주체만 Edge Function(service role)에서 DB 함수로 바뀐 것이다(사용자 결정 2026-09-07 — 배포 단계 0·로컬 Postgres 증명). 아래 문장의 'Edge Function(service role)'은 그렇게 읽는다.
 - 발주처 토큰 경로는 **RLS를 통과하지 않고** Edge Function(service role)이 토큰 검증 후 화이트리스트 쿼리만 수행 — 토큰으로 접근 가능한 데이터: 자기 프로젝트의 pending_approval 항목 + 그 버전 파일 + final 항목 + 마일스톤 진행률 + **visibility='shared' 코멘트만**(internal 코멘트는 쿼리 자체에서 제외 — v1.1, C-1). 그 외 어떤 테이블도 조회 불가.
 
 ### 6.3 토큰 설계
@@ -719,9 +739,11 @@ draft ──(담당/PM)──> internal_review ──(PM만)──> pending_appr
 
 ---
 
-## 8. API 계약 (Edge Functions)
+## 8. API 계약 (Edge Functions → v2.7: PostgREST + SQL RPC + Vercel Functions)
 
 인증: 내부 = Supabase JWT / 발주처 = 경로 토큰. 응답은 JSON, 오류는 `{error: {code, message}}`.
+
+> **(v2.7) 실행 자리 매핑** — 아래 표의 경로는 논리 계약이고, 구현은 세 자리로 나뉜다: ① 단일 표 CRUD = PostgREST(RLS) ② 한 트랜잭션이 필요한 다단계 쓰기 = SQL RPC(`…1600_rpc_core.sql`: add_member·remove_member·remove_person·complete_onboarding·replace_wbs_tasks·seed_project_sets·save_scenario_blocks·save_guide_sections·finalize_quote·review_partner_submission·transition_deliverable·upload_version·request_approval·link_inbox_file) ③ 토큰 경로·랜딩 리드·시트 반영 = SQL RPC(`…1700_rpc_portals.sql`) ④ TS 엔진·외부 API가 필요한 것 = **Vercel Functions** `api/quote-recalc`(POST /quotes·/quotes/{id}/versions의 서버 재계산)·`api/sheets`(§24 시트 probe·preview·rows). 오류 규약은 RPC가 `raise exception 'CODE: 메시지'`(errcode P04xx)로 던지고 프론트 `mapPgError`가 ProviderError로 옮긴다.
 
 | Method·Path | 권한 | 동작 |
 |---|---|---|
@@ -884,6 +906,7 @@ UI 공통: 한국어, 데스크톱 우선 + 반응형(발주처 화면은 모바
 - (v2.3) API 키는 Supabase **신형 체계**로 채택: 프론트 = `sb_publishable_…`, 서버(Edge Function·스크립트) = `sb_secret_…` (대시보드 Settings→API Keys). 레거시 anon/service_role JWT 키는 2026년 말 폐기 예정이라 신규 사용 금지(웹검증 2026-08-27). 본 문서의 "3키" = Project URL · publishable key · secret key. secret 키는 `VITE_*` env에 절대 넣지 않는다.
 - (v2.0) 클라이언트 번들에 Supabase URL·anon key 하드코딩 금지 — env만. 베뉴 DB의 `reference_cases`(실고객사명·실거래액)는 이식하지 않는다(#RULE-NO-COMPANY).
 - (v2.0) 내부 로그인 = Supabase Auth 이메일 매직링크, 허용 도메인 화이트리스트(env). profiles.app_role 승격은 admin만.
+- **(v2.7)** 허용 도메인의 서버측 정본 = `app_config.allowed_email_domains`(auth.users BEFORE INSERT 트리거가 밖의 도메인 가입을 거부, 비어 있으면 전 도메인). 프론트 `VITE_AUTH_ALLOWED_DOMAINS`는 로그인 화면 선안내. app_role 승격은 `select app.promote_admin('email')`(service role SQL) — authenticated는 app_role·auth_user_id 컬럼 update 권한이 없다. 서버 시크릿(`SUPABASE_SECRET_KEY`·`GOOGLE_SHEETS_SA_JSON`)은 **Vercel 서버 env**(VITE_ 없이)에만 — `api/` 함수가 읽는다.
 
 ---
 
@@ -910,6 +933,8 @@ UI 공통: 한국어, 데스크톱 우선 + 반응형(발주처 화면은 모바
 ---
 
 ## 14. 개정 이력
+
+- **v2.7** (2026-09-07): **Phase 4 Supabase 이식 정합** — 사용자 결정 5건([B] 3단 분할 · 시트 감지 폴링 유지 · profiles.title/phone/org+client_contacts.phone 추가 · sheet_status 매핑 추가 · 서버 함수 = Vercel Functions). ① §4 머리말에 구현 정합표 신설(profiles 독립 PK+auth_user_id, FK → profiles, metrics 열 TS 정합, app_config·sheet_source_rows 신설) ② §6.2 토큰 경로 = security definer SQL RPC(anon 표 권한 0) ③ §8 실행 자리 매핑(PostgREST / RPC 1600·1700 / Vercel `api/`) ④ §12 허용 도메인 DB 게이트·admin 승격 SQL·서버 시크릿 자리 ⑤ §18-3 산출 규약 실물(17 마이그레이션·setup/seed 생성기·remote·local-check 85항목) ⑥ §24.2 sheet_status·sheet_source_rows, §24.3 열린 질문 종결. DataProvider v12(124) 무변경. Edge Functions(Deno) 서술은 역사로 남기고 실행 자리는 위 매핑으로 읽는다
 
 - **v2.6 증분 §25** (2026-08-29): **행사 유형 4분류 × 프리셋** — `projects.format`·`psa_enabled`·`audience_model` 신설. ① format 권한 3종 한정(감수 C1 — 상시 게이트 이원화 방지) ② 정본 진입점 = S0 ③유형 4카드(감수 C2 — 'S-2 스텝 0' 폐기), 판매 플래너는 S-11 상단 탭으로 가시 노출 ③ S-10 정산 무변경(감수 M1 — §19.1 마진 항등식 보호) ④ psa_requests는 attendees FK(감수 M2) ⑤ program_sessions.track 등재(감수 M3) ⑥ PSA 알림·격리·비노출 가드 정의(감수 M4) ⑦ 초청제 모드는 기존 상태 재사용 불가로 판명 — **구현하지 않고 §25.6 열린 질문**(감수 M5의 '추측 구현 금지' 준수). **DataProvider v11 재동결** — 원 지시문의 'v10 재동결'은 3.17c의 v10(120메서드) 동결을 반영하기 전 표기라 사실대로 정정. **절차 이탈**: 협업 리듬 '시각안 먼저'를 사용자 지시(2026-08-29 "레드팀 검증 후 결과물만 전달, 코드로 진행")로 생략했다 — 시각안 승인은 존재하지 않으며, 실제 사용자 승인은 4분류 도입·[B] 게이트·레드팀 대체 검증 셋뿐이다. 3.18c(PSA)는 3.17.2 명단 식별 미확정으로 **미착수**.
 - **v2.5** (2026-08-28): **운영보드 재구성 — 문서 유형 우선 + 시나리오·운영가이드 빌더 신설** (시각안 3화면·구조 결정 5가지 승인, 계기=사용자 데모 실측 피드백). ① 운영보드 1면 = 유형 카드 4종, 유형 선택 시 빌더 인라인("카테고리가 빌더를 결정한다" 보드 레벨 확장 — 3.15.1 P7의 완성형) ② §4-27 scenario_blocks·guide_sections 정형 테이블(큐시트 cues 패턴 준용 — deliverable 연결, 컨펌·버전·스냅숏 루프 재사용) ③ 시나리오 빌더 — 프로그램표 세션 뼈대 자동 생성·진행 블록(MC/영상/의전/전환/커스텀)·**큐시트로 내보내기**(시나리오↔큐시트 역할 분리 명문화: 대본 vs 콘솔 큐) ④ 운영가이드 빌더 — 존별 운영(존운영 항목 연동)·역할 체크리스트(R&R 연동)·비상 대응·연락망/비품, 원본 변경 시 stale 표시 후 확인 반영(자동 덮어쓰기 금지) ⑤ §20b — S9 ⑦비상 대응 신설·②프로그램 상세(시나리오) 펼침·③존운영 확장, 인쇄 포함 ⑥ 기존 운영 항목 자동 분류 이관(category='큐시트'→큐시트 카드, 나머지→기타 — 무손실) ⑦ **DataProvider v9 재동결(8메서드 · 110메서드)**: listScenarioBlocks·saveScenarioBlocks·seedScenarioFromProgram·exportScenarioToCues·listGuideSections·saveGuideSections·seedGuideFromSources·createDocSnapshot(큐시트 cue-snapshot의 일반화 — 기존 메서드는 내부 위임 유지). importVendorQuote는 **v10 예약으로 순연**
@@ -1098,7 +1123,7 @@ UI 공통: 한국어, 데스크톱 우선 + 반응형(발주처 화면은 모바
 0. **(v2.3) 사전 검증 프로젝트** — Phase 4~6 구현·테스트는 개발용 무료 Supabase 프로젝트(`communicator-dev`, 기획자님 개인 계정) 기준으로 수행·통과시킨다. 운영 프로젝트는 D-Day에 생성하고, 전환은 **"키 교체 + setup.sql 1회 실행"뿐**이어야 한다(코드 변경 0 — 어긋나면 Phase 4 미완료로 본다). dev 프로젝트는 운영 전환 검증 후 Pause.
 1. **새 Supabase 프로젝트** 생성(리전 ap-northeast-2, 이름 예: remember-mice-platform) ■ → URL·anon key·service role key 3종. service role은 Code 세션 env·Supabase Vault에만(챗·문서에 절대 기재 금지).
 2. Auth: 이메일 매직링크 활성, 허용 도메인 env(`AUTH_ALLOWED_DOMAINS`), 첫 admin 계정 승격 SQL 1회 ■.
-3. 마이그레이션: §4 전체를 순서대로(v2.2 DDL). **산출 규약(v2.3)**: `supabase/migrations/*.sql`(개발 이력) + 통합 **`supabase/setup.sql`**(신규 프로젝트의 SQL 에디터에서 1회 실행으로 전체 구축 — 멱등: 2회 실행 무해를 테스트로 증명) + `supabase/seed.sql`(데모 픽스처 4행사, 선택 — 운영 프로젝트엔 실행하지 않아도 된다).
+3. 마이그레이션: §4 전체를 순서대로. **산출 규약(v2.3 → v2.7 실물)**: `supabase/migrations/*.sql` 17개(개발 이력·정본) + 통합 **`supabase/setup.sql`**(생성물 — `npm run supabase:setup`, 신규 프로젝트 SQL 에디터 1회 실행 — 멱등 2회 실행 무해를 `npm run supabase:check`(로컬 Postgres 16, 85항목)로 증명) + `supabase/seed.sql`(생성물 — `npm run supabase:seed`, mock 픽스처 8행사 그대로, 선택). 원격 실행 대체 경로 = `npm run supabase:remote -- setup|seed`(Management API + 개인 액세스 토큰, `supabase/README.md`).
 4. **옛 Configurator DB 1회 임포트**(선택 ■ — 운영 중 견적 행이 있을 때만): events→projects(§16 매핑, onboarded_at=null·status active), estimates→quotes(config→input, total_amount, version·is_final·status 승계, breakdown은 엔진 재계산), event_tasks→wbs_tasks(code 매칭·checked→done·note·target). 스크립트 `scripts/import-configurator.ts`(service role, 1회, dry-run 출력 후 실행).
 5. Vercel: communicator용 새 Vercel 프로젝트 생성 → env 3종(URL·anon·allowed domains) → 프리뷰 배포 확인 ■ → 도메인 `rmb-mice.com`을 옛 프로젝트에서 제거하고 새 프로젝트에 추가(DNS 변경 없음, Vercel 내부 이전) ■ → 옛 라우트 리다이렉트(§10 표) 동작 확인.
 6. 옛 Vercel 프로젝트(jsx-easy-shift)는 도메인 제거 후 1주 유지 → 삭제 ■. GitHub jsx-easy-shift는 README 상단에 "아카이브 — communicator로 통합(2026-xx-xx)" 1줄 커밋 후 Archive ■. 옛 Supabase 프로젝트는 임포트 검증 후 Pause → 30일 뒤 삭제 ■.
@@ -1346,9 +1371,9 @@ PDF·엑셀·사진에서 항목·단가·수량을 읽어 버킷에 배정하�
 
 ### 20.2 트랙별 정본 절차
 
-**T1 서버**: supabase.com에서 운영 프로젝트 생성(§18-1: ap-northeast-2, 이름 `remember-mice-platform` ■ 조직 계정 여부는 당일 결정 — 개인 계정으로 시작해도 이관 가능) → SQL Editor에서 `supabase/setup.sql` 전문 1회 실행 → (선택) `seed.sql`은 운영엔 실행하지 않음 → Auth 설정: 이메일 매직링크 활성 + 허용 도메인 env(§18-2) → Settings→API Keys에서 3키 복사. 첫 admin 승격 SQL 1회 ■(setup.sql 말미에 주석으로 동봉된 1줄을 본인 이메일로 실행).
+**T1 서버**: supabase.com에서 운영 프로젝트 생성(§18-1: ap-northeast-2, 이름 `remember-mice-platform` ■ 조직 계정 여부는 당일 결정 — 개인 계정으로 시작해도 이관 가능) → SQL Editor에서 `supabase/setup.sql` 전문 1회 실행 → (선택) `seed.sql`은 운영엔 실행하지 않음 → Auth 설정: 이메일 매직링크 활성 + 허용 도메인 env(§18-2) → Settings→API Keys에서 3키 복사. 첫 admin 승격 SQL 1회 ■(setup.sql 말미에 주석으로 동봉된 1줄 `select app.promote_admin('본인@이메일');`을 실행 — 데모 seed를 넣었으면 `select app.grant_demo_access('본인@이메일');`이 승격+데모 행사 pm 배정을 한 번에 한다).
 
-**T2 배포**: Vercel 가입(GitHub 로그인) → communicator 레포 import(`vercel.json` 동봉 — 설정 무변경) → 환경 변수 입력: `VITE_SUPABASE_URL`·`VITE_SUPABASE_PUBLISHABLE_KEY`·`VITE_DATA_PROVIDER=supabase` + 서버측 secret은 Supabase Edge Function secrets에만(§12) → Deploy → 접속 URL 확인. ■ rmb-mice.com 도메인 이전(§18-5)과 jsx-easy-shift 아카이브(§18-6)는 사내 협의 후 별도 수행 — 당일 필수 아님.
+**T2 배포**: Vercel 가입(GitHub 로그인) → communicator 레포 import(`vercel.json` 동봉 — 설정 무변경) → 환경 변수 입력: `VITE_SUPABASE_URL`·`VITE_SUPABASE_PUBLISHABLE_KEY`·`VITE_DATA_PROVIDER=supabase`(+선택 `VITE_AUTH_ALLOWED_DOMAINS`) + **(v2.7) 서버측 secret은 같은 Vercel 프로젝트의 서버 env `SUPABASE_URL`·`SUPABASE_SECRET_KEY`**(VITE_ 접두어 없이 — `api/quote-recalc`·`api/sheets`가 읽는다, `.env.production.example`) → Deploy → 접속 URL 확인. ■ rmb-mice.com 도메인 이전(§18-5)과 jsx-easy-shift 아카이브(§18-6)는 사내 협의 후 별도 수행 — 당일 필수 아님.
 
 **T3 슬랙**: 리멤버 워크스페이스에 앱 생성 → Incoming Webhooks 활성 → 알림 채널 지정 → Webhook URL 복사 → Supabase Edge Function secrets에 `SLACK_WEBHOOK_URL` 등록 → 앱 설정 화면(S6 ③연동 탭)에서 프로젝트별 웹훅 확인. ■ 워크스페이스 앱 설치 권한이 관리자 승인제면 당일 요청 발송으로 대체하고, 그동안 no-op 폴백(§9)으로 사용 개시.
 
@@ -1529,7 +1554,7 @@ sheet_connections (
   id uuid pk, project_id fk projects unique,      -- 행사당 1개
   state text not null,                            -- 'disconnected'|'connected'|'stale'|'revoked'
   title text, url text, tab_name text,
-  mapping jsonb not null,                         -- [{column, field}] field: name|org|title|email|phone|group_tag|registered_at|null
+  mapping jsonb not null,                         -- [{column, field}] field: name|org|title|email|phone|group_tag|registered_at|sheet_status|null  (v2.7: sheet_status 추가 — 3.17③ 승인)
   connected_at timestamptz, connected_by text,
   snapshot_at timestamptz,                        -- 화면이 기준으로 삼는 마지막 성공 읽기 시각
   snapshot_version int not null default 1,        -- 낙관적 잠금 키 (§24.3)
@@ -1544,6 +1569,11 @@ attendees 확장 (전부 nullable — 시트 연결 시에만 채워진다)
   title text null, group_tag text null,           -- 시트 소유
   sheet_status text null,                         -- 'applied'|'confirmed'|'cancelled'|'removed'
   note text null                                  -- 앱 소유
+
+sheet_source_rows (                               -- (v2.7) 서버가 적재한 원본 시트 행 = 차이 계산의 비교 대상(mock SheetSourceRow와 동형)
+  project_id fk, sheet_row_id text, row_number int, name, org, title, email, phone, group_tag,
+  registered_at, status, invalid_reason text null, previously_confirmed bool, fetched_at,
+  pk (project_id, sheet_row_id) )                 -- 적재 = api/sheets(rows) → RPC refresh_sheet_source / connect_sheet · 멤버 열람만
 ```
 
 ### 24.3 동시 접속 계약 (다중 담당자 운영)
@@ -1558,9 +1588,9 @@ attendees 확장 (전부 nullable — 시트 연결 시에만 채워진다)
 | R-S3 | 반영이 성공하면 `snapshot_version`이 증가하고 `snapshot_at`이 원본 수정 시각으로 이동한다 |
 | R-S4 | Phase 4에서 폴링을 Supabase Realtime 구독으로 교체할 때 **이 계약은 그대로 둔다** — 감지 경로만 바뀌고 반영 경로(사람 확인 → 버전 검사)는 불변이다 |
 
-> **열린 질문(Phase 4)**: 진정한 실시간 상호 반영 — 담당자 A의 반영이 담당자 B 화면에 즉시 나타나는 것 — 은
-> 서버 푸시가 있어야 가능하다. mock·서버 0 단계에서는 R-S1의 409 감지가 그 자리를 대신한다.
-> Phase 4 착수 시 `sheet_connections` 변경을 Realtime 채널로 브로드캐스트할지 확정할 것.
+> **결정(Phase 4, 사용자 승인 2026-09-07): 폴링 유지 — Realtime 교체는 보류.** 감지 경로 = 주기 자동 확인(B안)이
+> `checkSheetUpdates` → `api/sheets`(원본 읽기) → RPC `refresh_sheet_source`(적재+감지)로 서버에 옮겨졌고, 반영은
+> RPC `apply_sheet_diff`가 R-S1 낙관적 잠금을 트랜잭션 안에서 판정한다. 담당자 간 즉시 반영은 R-S1의 409 감지가 계속 대신한다.
 
 ### 24.4 DataProvider v10 (110 → 120)
 

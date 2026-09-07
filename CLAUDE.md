@@ -1,7 +1,8 @@
-# CLAUDE.md — MICE 커뮤니케이터 구현 지침 v2.6 (Claude Code용)
+# CLAUDE.md — MICE 커뮤니케이터 구현 지침 v2.7 (Claude Code용)
 
-> 레포 루트에 이 파일을 두고, `docs/mice-communicator-설계서-v2.6.md`를 함께 배치할 것(기존 설계서 파일은 버전 무관 전부 대체·삭제). `docs/mice-communicator-디자인지시서-v1.md`도 함께 배치(Phase 3.9 정본).
+> 레포 루트에 이 파일을 두고, `docs/mice-communicator-설계서-v2.7.md`를 함께 배치할 것(기존 설계서 파일은 버전 무관 전부 대체·삭제). `docs/mice-communicator-디자인지시서-v1.md`도 함께 배치(Phase 3.9 정본).
 > **스키마·상태 머신·API 계약·권한 규칙·WBS 템플릿(§15)·핸드오프 계약(§16)·이식 인벤토리(§17)·인프라 전환(§18)·D-Day 런북(§20)·주최형 확장(§21)·견적서 임포트(§22)·운영보드 재구성(§23)의 정본은 설계서 v2.5이다(정산보드는 §19·§4-23·§4-24).** 디자인 토큰·레이아웃·컴포넌트 규격의 정본은 디자인지시서 v1이다. 본 파일은 작업 순서와 규약만 정의한다. 충돌 시 설계서 우선.
+> v2.7 변경 핵심: **Phase 4 Supabase 이식 착수(2026-09-07, 사용자 결정 5건 — PROGRESS 결정 로그)**: 스키마·트리거·RLS·RPC = `supabase/migrations`(17개) → `setup.sql` 1회·멱등(로컬 Postgres 85항목 증명) · 토큰 경로(`/c`·`/p`)·랜딩 리드·시트 반영·다단계 쓰기 = **security definer SQL RPC** · TS 엔진·외부 API가 필요한 견적 서버 재계산·시트 읽기 = **Vercel Functions `api/`**(Edge Functions 미사용) · `SupabaseProvider` = `src/providers/supabase/`(v12 124메서드 무수정, 도메인 10모듈) · 내부 로그인 = 매직링크(`/login`·`AuthGate`·`app_config` 도메인 게이트). dev 3키는 `.env.local`에만.
 > v1.1 변경 핵심: **프론트 우선·서버 후행** — Phase 0~3은 서버 0, Supabase·Drive는 Phase 4~5 이식.
 > v1.2 변경 핵심: **지시(requested)→제작→컨펌→운영계획서(S9) 조립 파이프라인** — Phase 3.5 프론트 증분.
 > v1.3 변경 핵심: **S0 온보딩 → 유형 토글 → 큐시트 에디터** — Phase 3.6 프론트 증분.
@@ -20,7 +21,7 @@ MICE 프로젝트 협업 허브 — 역할별(디자인·운영·등록) 산출�
 
 ## 2. 스택 (고정 — 임의 변경 금지)
 - React 18 + Vite + TypeScript + Tailwind (프론트, Vercel 배포)
-- Supabase: Postgres + RLS + Auth(이메일 매직링크) + Edge Functions(Deno) — **지금(서버 스프린트). 검증 DB = dev 프로젝트 `communicator-dev`**(3키는 사용자가 세션 대화로 제공 — `.env.local`에만, 커밋 금지). 운영 프로젝트는 D-Day §20. 옛 Configurator 프로젝트 사용 금지. **API 키는 신형(sb_publishable/sb_secret)만** — 설계서 §12
+- Supabase: Postgres + RLS + Auth(이메일 매직링크) + **SQL RPC(security definer)**; 서버 함수는 **Vercel Functions(`api/`, Node)** — Edge Functions(Deno)는 쓰지 않는다(2026-09-07 사용자 결정, 설계서 §2·§8 v2.7) — **지금(서버 스프린트). 검증 DB = dev 프로젝트 `communicator-dev`**(3키는 사용자가 세션 대화로 제공 — `.env.local`에만, 커밋 금지). 운영 프로젝트는 D-Day §20. 옛 Configurator 프로젝트 사용 금지. **API 키는 신형(sb_publishable/sb_secret)만** — 설계서 §12
 - 견적 모듈 전용 허용 의존: exceljs · file-saver (src/modules/quote 밖에서 import 금지). shadcn/Radix·Tailwind 3 도입 금지
 - Google Drive API v3 (전용 운영 계정 OAuth, Production 게시 — 설계서 §2) — **Phase 5(지금): 자격증명 없이 코드 완성, 실계정 검증은 D-Day 스모크(§20)**
 - 알림: Slack Incoming Webhook — **Phase 6(지금): env 부재 시 no-op 폴백**. Resend(이메일)는 **Phase 6b — 이번 스프린트 범위 밖**(첫 발주처 토큰 발송 전 수행, 설계서 §9)
@@ -226,7 +227,8 @@ MICE 프로젝트 협업 허브 — 역할별(디자인·운영·등록) 산출�
   - 금지: `.ui-table` 07(전 칸 nowrap+…처리)을 문서형 표에 통째로 적용(인쇄물은 본문 칸이 접혀야 한다) · 새 색 토큰 · 데이터·provider 변경
 
 ### 서버 스프린트 (v2.3 설계 완료 — **착수 대기: 사용자가 지시할 때 개시**(2026-08-27 우선순위 변경). dev 3키는 착수 시 사용자에게 대화로 요청)
-- **Phase 4 — Supabase 이식** (설계서 v2.3 §4 DDL 전체 기준, 검증 DB = dev 프로젝트)
+- **Phase 4 — Supabase 이식** (설계서 v2.7 §4 정합표·§8 실행 자리 매핑 기준, 검증 DB = dev 프로젝트)
+  - **구현 확정(2026-09-07)**: 4a = `supabase/migrations` 17개(0100 타입 → 0200 core → 0300 app 도우미 → … → 1300 트리거 → 1400 RLS → 1500 grants → 1600·1700 RPC) + 생성물 `setup.sql`(`npm run supabase:setup`)·`seed.sql`(`npm run supabase:seed` — mock 픽스처 8행사, 문자열 id → 결정적 uuid) + `npm run supabase:check`(로컬 Postgres 16 · 85항목: 멱등·RLS 거부 3종·트리거·RPC·토큰 경로) · 4b = `src/providers/supabase/`(client·errors·ctx·files + `domains/` 10모듈, 팩토리 스프레드로 124메서드 완전성은 tsc가 검사) · 4c = `AuthContext`·`AuthGate`·`LoginPage`(`/login`)·`providers/auth.ts`, 허용 도메인 = `app_config` 트리거 + `VITE_AUTH_ALLOWED_DOMAINS` 선안내 · 서버 함수 = `api/quote-recalc.ts`(견적 재계산)·`api/sheets.ts`(시트 probe/preview/rows, 자격증명 없으면 데모 모드) · 원격 setup = `npm run supabase:remote -- setup|seed`(Management API, 컨테이너는 5432 차단). **정본과 다른 지점은 설계서 §4 머리말 표·`supabase/README.md` §5**
   - 4a 마이그레이션+RLS+seed (에이전트 D): §4 순서대로 + **v2.4 스키마(§21.1 — kind·partner_tiers·partners·partner_tokens·quote_imports·확장 컬럼) 포함**, RLS는 §6.2 전체(quotes·profiles·compliance_cards·settlement_*·vendors·landing·partner_* 포함). **산출 규약: `supabase/migrations/*.sql` + 통합 `supabase/setup.sql`(신규 프로젝트 SQL 에디터 1회 실행으로 전체 구축 — 멱등, 2회 실행 무해를 테스트로 증명, 말미에 첫 admin 승격 SQL 1줄 주석 동봉) + `supabase/seed.sql`(데모 픽스처 4행사, 선택 실행)**
   - 4b SupabaseProvider v7 (에이전트 D): 인터페이스 무수정으로 86메서드 전부 구현, `VITE_DATA_PROVIDER=supabase|mock` 스위치(기본 mock 유지 — 데모·기존 테스트 불파손). 견적 저장은 서버가 엔진으로 재계산(클라이언트 값 불신). 발주처 토큰 경로는 Edge Function(secret key) 화이트리스트 쿼리만(§6.2)
   - 4c 로그인·프로필 (에이전트 D2): 이메일 매직링크 로그인 화면(웜 페이퍼 토큰), AuthContext, profiles 자동 생성 트리거, 허용 도메인 env, app_role 게이트(견적 메뉴·API), `/c/*`는 비로그인 유지

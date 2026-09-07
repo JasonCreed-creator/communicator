@@ -2,6 +2,7 @@
 // 앱 빌드(vite.config.ts)와 완전히 분리되어 있으므로 Vercel 배포 산출물에 영향이 없다.
 //
 // 산출: dist-demo/artifact.html 한 파일(외부 요청 0건). Artifact 툴에 이 경로를 넘긴다.
+import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
@@ -13,6 +14,14 @@ export default defineConfig({
   envDir: 'demo',
   // public/은 아티팩트에서 URL로 접근할 수 없다 — 복사 자체를 끈다(브랜드 PNG는 인라인됨).
   publicDir: false,
+  resolve: {
+    // Phase 4: Supabase 공급자·인증 어댑터는 데모에 싣지 않는다 — supabase-js의 fetch·Worker·localhost 참조가
+    // "외부 요청 0건" 가드(check-artifact)를 깨기 때문. 데모는 mock 전용이라 스텁으로 갈음한다.
+    alias: [
+      { find: /^\.\/supabase\/SupabaseProvider$/, replacement: fileURLToPath(new URL('./demo/stubs/supabaseStub.ts', import.meta.url)) },
+      { find: /^\.\/supabase\/authAdapter$/, replacement: fileURLToPath(new URL('./demo/stubs/supabaseStub.ts', import.meta.url)) },
+    ],
+  },
   plugins: [inlineBrandAssets(), react(), tailwindcss(), singleFileArtifact()],
   build: {
     outDir: 'dist-demo',
