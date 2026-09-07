@@ -946,7 +946,7 @@ DoD-29뿐 아니라 **실물 검산 2건에서 바로** 잡힌다(위 표의 "2 
   특히 '갱신 있음' 상태에서 `지금 동기화`(accent)와 `변경 n건 반영`(primary)이 동시에 뜨는 배치는
   등록 보드의 판단이 필요하다. **필요한 결정**: §10 위계를 등록 보드에도 적용할지.
 - ~~(Phase 4 미결 ①) dev DB 실검증(3단) 대기~~ → **종결(2026-09-07 오후)**: URL·PAT 수령 → setup×2·seed×2·`npm run supabase:verify` **83/83**.
-  **남은 사용자 게이트 3건(Code가 대신 못 하는 것)**: ⓐ `select app.grant_demo_access('로그인 이메일')` — 어떤 이메일로 로그인할지 사용자 확인 후
+  **남은 사용자 게이트 3건(Code가 대신 못 하는 것)**: ⓐ `select app.grant_demo_access('로그인 이메일')` — 어떤 이메일로 로그인할지 사용자 확인 후(2026-09-07 버튼 응답 "나중에" — 보류. PAT는 로컬에서 비우고 폐기 안내)
   Code가 원격 실행(허용 도메인 제한은 현재 없음) ⓑ Supabase **Authentication → URL Configuration**: Site URL·Redirect URLs에 앱 주소 + `/login`
   (실수신 매직링크 로그인은 §20 스모크로 이월 — verify는 generateLink 대체 경로) ⓒ **PAT(`sbp_`) 폐기** — 대시보드 Access Tokens에서 삭제(setup·seed
   원격 실행에만 썼다). 실서버 브라우저 확인은 Vercel env를 `supabase`로 바꾸는 순간부터 가능 — 그건 §20 D-Day 항목이라 지금은 mock 유지.
