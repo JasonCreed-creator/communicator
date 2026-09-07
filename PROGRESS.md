@@ -3,7 +3,7 @@
 > 가변 상태 파일. 매 세션 체크아웃 시 에이전트가 갱신한다 (CLAUDE.md §9 리추얼).
 
 ## 1. 상태 요약
-- **진행 중: Phase 4 — Supabase 이식 (1·2단 완료, 3단 dev DB 실검증은 Project URL·PAT 대기)**(2026-09-07, 사용자 지시
+- **진행 중: Phase 4 — Supabase 이식 (1·2·3단 완료 — dev DB 실검증 83/83 · 사용자 게이트 3건·챗 검수 대기)**(2026-09-07, 사용자 지시
   "supabase를 서버로 하는 형태로 우선 만들어봐야" → 범위 게이트 [B] 3단 분할 승인). 사용자 결정 5건(결정 로그 참조):
   [B] 분할 · 시트 감지 **폴링 유지** · `profiles.title/phone/org`+`client_contacts.phone` 추가 · `sheet_status` 매핑 추가 ·
   **서버 함수 = Vercel Functions**(Edge Functions 대체).
@@ -25,11 +25,19 @@
   ③ **정본 정합**: 설계서 **v2.7**(§4 머리말 정합표·§6.2·§8 실행 자리·§12·§18-3·§24.2·§24.3 종결·§14) · CLAUDE.md v2.7 ·
   `supabase/README.md`(dev 프로젝트 생성·SQL 에디터/원격 두 경로·검증·키 규약·정본 차이표) · `.env.example`·`.env.production.example`
   (Supabase 3키 자리 개방 + 서버 env) · README.
-  ④ **3단 미착수(대기)**: publishable·secret 2키는 `.env.local`에 기록(커밋 금지 확인). **Project URL·Personal Access Token 미수령** —
-  도착 즉시 `npm run supabase:remote -- setup` → `seed` → `.env.local`에 URL 기록 → `VITE_DATA_PROVIDER=supabase`로 DoD 26 실검증.
+  ④ **3단 dev DB 실검증 완료(2026-09-07 오후)**: 사용자가 Project URL·PAT를 대화로 전달("전부 자동으로" 선택) → `.env.local`(600)에만 기록.
+  `npm run supabase:remote -- setup` **2회**(멱등, 각 3초) → `seed`(37청크·80초, 8행사) → **seed 2회차 행 수 불변**(8/124/1119/11/4/6).
+  **`npm run supabase:verify` = 83/83** — 검증 계정 3명(admin generateLink→verifyOtp = 매직링크 CI 대체) · DoD 1~25 provider 흐름 · RLS 거부 3종 ·
+  서버 재계산(조작 total 무시) · 시드 토큰 경로 · 정리. **1회차 79/83에서 잡은 결함 1건**: 행사 cascade 삭제가 토큰·견적 FK에 막힘 →
+  `approvals.decided_via_token`·`settlement_boards.quote_id` = `on delete set null`, `comments.author_token` = `on delete cascade`(작성자 없는
+  코멘트는 check 위반이라 null 불가) — 마이그레이션에 drop/add로 기존 DB에도 적용, 로컬 85/85 재증명 후 원격 재적용. 나머지 3건 중 1건은
+  검증 스크립트의 오판(랜딩 autofill은 읽기 시 조립 — mock과 같은 규약, 스크립트 수정), 2건은 위 FK의 연쇄.
+  supabase 모드 빌드 번들에 **secret·PAT 실값 0건**(publishable 1건 — 의도; `sb_secret_` 리터럴은 supabase-js의 키 형식 검사문).
+  **한계**: 컨테이너 Chromium은 프록시 때문에 외부(supabase.co) 접속이 리셋돼 실서버 브라우저 E2E는 못 돌렸다(`/c` 화면이 "Failed to fetch"
+  오류 상태로 렌더 — 앱 결함 아님). 화면 렌더는 mock 스위트·상호작용 스모크가, 서버 계층은 verify가 담당. 사용자 브라우저 실측은 게이트 ⓐ~ⓒ 뒤.
   컨테이너는 DB 포트(5432·6543) 차단·Management API(HTTPS)만 통과함을 실측.
   결과: vitest **953**(104파일, 기준 935 + 18) · tsc · `npm run build` · `deploy:check` 34(브라우저 포함) · demo 4단 · 상호작용 스모크(③=로그인
-  게이트) · 상시 가드 0건 · **로컬 DB 85/85**. PR = Phase 4(드래프트) — 챗 검수 후 3단.
+  게이트) · 상시 가드 0건 · **로컬 DB 85/85 · dev DB 실검증 83/83**. PR = Phase 4(드래프트) — 사용자 게이트 3건(미결 ①) → 챗 검수.
 
   **이탈·가정 목록**(설계서와 다르게 판단한 지점 — 전부 v2.7 §4 머리말 표에 기재):
   1. `profiles.id`가 `auth.users`를 참조하지 않고 독립 PK + `auth_user_id`(null 허용) — §4-2b 담당자 마스터가 "로그인 전 사람"을
@@ -937,7 +945,11 @@ DoD-29뿐 아니라 **실물 검산 2건에서 바로** 잡힌다(위 표의 "2 
   다만 3.17b가 "화면당 accent 1개 원칙"을 주석으로 명시하고 배치한 자리라 **임의로 내리지 않았다.**
   특히 '갱신 있음' 상태에서 `지금 동기화`(accent)와 `변경 n건 반영`(primary)이 동시에 뜨는 배치는
   등록 보드의 판단이 필요하다. **필요한 결정**: §10 위계를 등록 보드에도 적용할지.
-- **(Phase 4 미결 ①) dev DB 실검증(3단) 대기** — **Project URL 미수령**(publishable·secret 2키는 `.env.local`에 있음). PAT(`sbp_`)는 setup·seed 원격 실행에만 필요한 선택 항목 — 없으면 SQL Editor 붙여 넣기(README §2 가). URL이 오면 `supabase:remote` setup→seed → **`npm run supabase:verify`**(실행체 준비 완료 2026-09-07 — 3키만 읽고 DoD 1~25 provider 흐름 재현 + RLS 3종 + 서버 재계산 + 정리, README §3b) → 실수신 매직링크는 §20 이월.
+- ~~(Phase 4 미결 ①) dev DB 실검증(3단) 대기~~ → **종결(2026-09-07 오후)**: URL·PAT 수령 → setup×2·seed×2·`npm run supabase:verify` **83/83**.
+  **남은 사용자 게이트 3건(Code가 대신 못 하는 것)**: ⓐ `select app.grant_demo_access('로그인 이메일')` — 어떤 이메일로 로그인할지 사용자 확인 후
+  Code가 원격 실행(허용 도메인 제한은 현재 없음) ⓑ Supabase **Authentication → URL Configuration**: Site URL·Redirect URLs에 앱 주소 + `/login`
+  (실수신 매직링크 로그인은 §20 스모크로 이월 — verify는 generateLink 대체 경로) ⓒ **PAT(`sbp_`) 폐기** — 대시보드 Access Tokens에서 삭제(setup·seed
+  원격 실행에만 썼다). 실서버 브라우저 확인은 Vercel env를 `supabase`로 바꾸는 순간부터 가능 — 그건 §20 D-Day 항목이라 지금은 mock 유지.
 - **(Phase 4 미결 ②) `sheet_status` 매핑 UI** — 정본(`SHEET_MAPPED_FIELDS`)·서버 정규화·SQL 차이 규칙은 반영했으나 위저드 드롭다운은 목록 자동 파생이라 별도 시안 없이 노출된다. 실시트 헤더('상태' 등)의 자동 추천은 `suggestField`가 담당. 챗 검수에서 라벨(`신청 상태`) 확인 필요.
 - **(Phase 4 미결 ③) 시트 행 식별자 = 행 번호(가정)** — 실시트 행 삽입·정렬이 잦으면 차이 계산이 흔들린다. 첫 실전 연결 전 '고유 ID 컬럼' 매핑 옵션을 둘지 결정.
 - **(Phase 4 미결 ④) `complete_onboarding` RPC 로그 형태** — 주최형도 `wbs.expanded {count}`로 남는다(mock은 `wbs.expanded_host {count,partners}`). 감사 로그 표기만의 차이.
@@ -1065,11 +1077,9 @@ DoD-29뿐 아니라 **실물 검산 2건에서 바로** 잡힌다(위 표의 "2 
   (설계서 v1.4.1 §4-15·§8·§15 정본화 — 열린 질문 ①~⑤ 전부 종결)
 
 ## 4. 다음 스텝
-- **(2026-09-07) Phase 4 3단 — dev DB 실검증**: ① 사용자 → Project URL(`https://<ref>.supabase.co`) + Personal Access Token(`sbp_…`) 전달
-  (또는 "SQL 에디터로 직접" 선택 → `supabase/README.md` §2(가) 절차) ② Code → `.env.local` 기록 → `npm run supabase:remote -- setup` →
-  `-- seed` → `select app.grant_demo_access('본인 이메일')` ③ Auth 설정(이메일 매직링크 활성·Site URL·Redirect `/login`) ④ **`npm run supabase:verify`**
-  = DoD 26(DoD 1~25 provider 흐름 재현 + RLS 거부 3종 + 서버 재계산 — `api/` 핸들러는 배포 전이라 스크립트 안 로컬 HTTP 서버가 감싼다 + 매직링크 CI 대체)
-  → 결과를 체크아웃 보고·PR에 기재, 실패 항목은 수정 후 재실행 ⑤ PAT 폐기 안내(받았을 때만) ⑥ PR 챗 검수 → 머지 → Phase 5(Drive) 착수
+- **(2026-09-07 오후) Phase 4 마무리**: ① 사용자 게이트 3건(미결 ① ⓐ 로그인 이메일 확인 → `grant_demo_access` 원격 실행 ⓑ Auth URL 설정
+  ⓒ PAT 폐기) ② PR #38 챗 검수(이탈·가정 9건 + FK on-delete 규칙 사후 승인) → 머지 ③ Phase 5(Drive) 착수 — `supabase:verify`는 Phase 5·6
+  PR에서도 회귀 검사로 재실행(3키 있는 세션에서만)
 - **(2026-09-04) Phase 3.21 PR 검수 → 머지 → Vercel 연결(사용자, §18a)**: S1 `JasonCreed-creator/communicator`
   Import(설정 무변경 — `vercel.json`) → S2 env `VITE_DATA_PROVIDER=mock` → S3 `*.vercel.app`에서 ⑤ 루트 런처
   카드 2장 클릭 확인 → S4(가) `rmb-mice.com`을 옛 jsx-easy-shift 프로젝트에서 제거 → 새 프로젝트에 추가(DNS 무변경).
@@ -1144,6 +1154,13 @@ DoD-29뿐 아니라 **실물 검산 2건에서 바로** 잡힌다(위 표의 "2 
 - 이후 Phase 5(Drive) → Phase 6(알림·cron)
 
 ## 5. 결정 로그
+- **(2026-09-07 오후, Phase 4 3단) 토큰·견적 참조 FK의 on-delete 규칙** — dev 실측에서 행사 cascade 삭제가 `approvals.decided_via_token`·
+  `comments.author_token`(→ client_tokens)·`settlement_boards.quote_id`(→ quotes)에 막혔다. 앱은 토큰을 지우지 않고(회수 = `revoked_at`) 견적도
+  지우지 않으므로 운영 경로엔 영향이 없지만, 행사 삭제·검증 정리·향후 아카이브가 막히면 안 된다. 결정: 감사 참조(approvals·boards)는 `set null`,
+  코멘트는 작성자 없는 행을 남길 수 없어(`comments_author_present` check) `cascade`. 마이그레이션에 drop/add 구문을 둬 기존 DB에도 같은 규칙 적용.
+  **사후 승인 대상**(설계서 §4-6·§4-7·§4-23 DDL에는 on-delete가 적혀 있지 않았다 — v2.7 §4 머리말 표에 기재)
+- **(2026-09-07 오후, Phase 4 3단) 사용자 선택 "전부 자동으로"** — 버튼 질문(직접 붙여넣기 vs 전부 자동) → 자동. URL·PAT를 대화로 전달받아
+  Management API로 setup·seed 실행. PAT는 이 용도 뒤 폐기(미결 ① ⓒ)
 - **(2026-09-07, Phase 4) 사용자 결정 5건(버튼 응답)**: ① 범위 게이트 **[B] 3단 분할**(스키마·setup → Provider·Auth·서버 함수 → dev DB 실검증)
   ② 검증 DB 3키 = "생성 안내 먼저" → 이후 publishable·secret 2키 대화 전달(`.env.local`에만) — URL·PAT는 미수령 ③ 시트 감지 = **폴링 유지**
   (Realtime 보류 — §24.3 열린 질문 종결) ④ DDL 미결 2건 **둘 다 반영**(3.19③ 소속·발주처 전화, 3.17③ sheet_status 매핑) ⑤ 서버 함수 =
@@ -1564,6 +1581,12 @@ DoD-29뿐 아니라 **실물 검산 2건에서 바로** 잡힌다(위 표의 "2 
   감싸 provider의 `apiBase`만 바꾸고, 검증 계정 3명(sales·staff·비멤버)을 admin generateLink→verifyOtp로 로그인, 이 실행이 만든 행사 1건 안에서
   DoD 1~25 흐름 ~60항목 + RLS 3종 + 정리. esbuild 번들·tsc(스크래치 tsconfig, scripts는 메인 tsconfig 밖)·`--dry` 로드 통과. 실DB 실행은 URL 도착 후.
   사용자 질문 "3키가 어떤 키인지" → URL·publishable·secret 3종 + 선택 PAT로 답변.
+  **(계속 2 — 3단 실행)** 사용자 "차분히 알려줘… 하나도 모르겠음" → 용어 없이 상황·필요한 것·클릭 순서를 다시 설명하고 버튼 질문(직접 붙여넣기 /
+  전부 자동) → **전부 자동** 선택 → URL·PAT 수령. setup×2(멱등)·seed(80초) → verify 1회차 **79/83**: 기능 검사는 랜딩 1건(스크립트 오판 —
+  autofill은 읽기 시 조립)만, 나머지 3건은 정리 단계 FK(토큰·견적 참조) → 마이그레이션 on-delete 규칙 추가(결정 로그) → 로컬 Postgres 재기동
+  (`/tmp/pg-communicator/data`, 로그 파일 경로 `…/log`) 85/85 → 원격 재적용 → 잔여 데이터 정리 → verify 2회차 **83/83** → seed 2회차 행 수 불변.
+  supabase 모드 빌드 번들 secret·PAT 실값 0건. 실서버 브라우저 E2E는 컨테이너 Chromium의 프록시 리셋으로 불가(프록시 지정 시도 2회 실패) — 한계로 기재.
+  다음 = 사용자 게이트 3건(로그인 이메일·Auth URL·PAT 폐기) → 챗 검수 → Phase 5.
 - **2026-09-04 저녁 (Phase 3.21.1 — 실배포 마무리 + 표 줄바꿈 정본)**. 사용자가 "직접 들어가서 처리해봐"라며 Vercel 배포
   페이지 링크를 줬고, 대시보드는 로그인이 필요해 1일 만료 API 토큰을 받아 처리했다. 토큰으로 한 일: 실패 배포 이벤트
   로그 판독(→ `@types/node` 누락) · Preview·Production READY 확인 · 프로젝트 설정·env·도메인 조회 · 사용자 승인 후 도메인 이전.

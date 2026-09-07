@@ -375,16 +375,22 @@ create table if not exists approvals (
   decided_at timestamptz,
   decision approval_decision,
   client_comment text,
-  decided_via_token uuid references client_tokens(token)
+  decided_via_token uuid references client_tokens(token) on delete set null
 );
 create index if not exists approvals_deliverable on approvals (deliverable_id, requested_at);
+-- 행사 삭제(cascade)에서 client_tokens가 approvals·comments보다 먼저 지워질 수 있다(2026-09-07 dev 실측).
+-- 토큰 참조는 감사 필드(회수는 revoked_at — 행 삭제가 아니다)라 삭제 시 null이 맞다. 기존 DB에도 같은 규칙을 적용한다.
+alter table approvals drop constraint if exists approvals_decided_via_token_fkey;
+alter table approvals add constraint approvals_decided_via_token_fkey
+  foreign key (decided_via_token) references client_tokens(token) on delete set null;
+-- comments.author_token은 아래 7. 표 생성 직후에 같은 방식으로 조정한다(작성자 없는 코멘트를 남길 수 없어 cascade)
 
 -- 7. 코멘트 (v1.1 C-1: 내부/공유 가시성 분리)
 create table if not exists comments (
   id uuid primary key default gen_random_uuid(),
   deliverable_id uuid not null references deliverables(id) on delete cascade,
   author_user_id uuid references profiles(id),
-  author_token uuid references client_tokens(token),   -- 회수된 토큰 참조 유지 = 의도(작성자 이력 보존)
+  author_token uuid references client_tokens(token) on delete cascade,   -- 회수된 토큰 참조 유지 = 의도(회수는 삭제가 아니다). 토큰 행 삭제(행사 cascade)는 작성자 없는 코멘트를 남길 수 없어 cascade
   visibility comment_visibility not null default 'internal',
   body text not null,
   created_at timestamptz not null default now(),
@@ -392,6 +398,9 @@ create table if not exists comments (
   constraint comments_client_shared check (author_token is null or visibility = 'shared')  -- 발주처 작성분은 shared 강제
 );
 create index if not exists comments_deliverable on comments (deliverable_id, created_at);
+alter table comments drop constraint if exists comments_author_token_fkey;
+alter table comments add constraint comments_author_token_fkey
+  foreign key (author_token) references client_tokens(token) on delete cascade;
 
 -- 8. 마일스톤
 create table if not exists milestones (
@@ -766,12 +775,15 @@ create unique index if not exists vendors_name_uniq on vendors (name) where arch
 create table if not exists settlement_boards (
   id uuid primary key default gen_random_uuid(),
   project_id uuid not null unique references projects(id) on delete cascade,
-  quote_id uuid references quotes(id),
+  quote_id uuid references quotes(id) on delete set null,   -- 보드는 스냅숏(R-S2) — 기준 견적이 지워져도 버킷·quote_version은 남는다
   quote_version int,
   baselined_at timestamptz not null default now(),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+alter table settlement_boards drop constraint if exists settlement_boards_quote_id_fkey;
+alter table settlement_boards add constraint settlement_boards_quote_id_fkey
+  foreign key (quote_id) references quotes(id) on delete set null;
 
 -- 버킷 (기본 9 + 행사별 추가 — §19.2)
 create table if not exists settlement_buckets (

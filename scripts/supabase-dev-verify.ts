@@ -27,6 +27,7 @@ import { computeQuoteOutputs } from '../src/modules/quote/engine/quoteInput'
 import { createFixtureQuotes } from '../src/fixtures/quoteFixtures'
 import { RECRUITING_WBS_TEMPLATE } from '../src/fixtures/wbsTemplates'
 import { isProviderError } from '../src/lib/errors'
+import { autofillSections } from '../src/lib/landingAutofill'
 import type { UUID } from '../src/types/entities'
 import { seedUuid } from './lib/seedUuid'
 
@@ -581,11 +582,19 @@ async function main(): Promise<void> {
     // 9. 랜딩 (DoD 27·28) ─────────────────────────────────────────────
     head('9 랜딩 (DoD 27·28)')
     let landingId!: UUID
-    await check('createLandingPage → 기본 13섹션·폼·동의 시드 · autofill이 행사 개요를 조립', async () => {
+    await check('createLandingPage → 기본 13섹션·폼·동의 시드 · autofill(읽기 시 조립)이 행사 개요를 채움', async () => {
       const l = await P.createLandingPage(projectId, { title: `검증 랜딩 ${run}`, slug: `verify-${run}` })
       landingId = l.id
-      const hero = JSON.stringify(l.sections)
-      return l.sections.length === 13 && l.form_fields.length > 0 && hero.includes(`검증 행사 ${run}`) ? true : JSON.stringify({ sections: l.sections.length, fields: l.form_fields.length })
+      // 저장본은 기본 템플릿 그대로(autofill 플래그만) — 조립은 화면·내보내기 직전에 lib/landingAutofill이 한다(mock과 동일 규약)
+      const filled = autofillSections(l.sections, {
+        project: await P.getProject(projectId),
+        sessions: await P.listProgramSessions(projectId),
+        zoneDeliverables: [],
+      })
+      const hero = filled.find((s) => s.type === 'hero')
+      return l.sections.length === 13 && l.form_fields.length > 0 && hero?.headline === `검증 행사 ${run}`
+        ? true
+        : JSON.stringify({ sections: l.sections.length, fields: l.form_fields.length, hero: hero?.headline ?? null })
     })
     await check('같은 slug를 같은 행사에 → 409 · 다른 행사(견적 행사)에는 가능(§4-21)', async () => {
       const dup = await expectError(() => P.createLandingPage(projectId, { title: 'x', slug: `verify-${run}` }), { code: 'conflict' })

@@ -18,12 +18,15 @@ create unique index if not exists vendors_name_uniq on vendors (name) where arch
 create table if not exists settlement_boards (
   id uuid primary key default gen_random_uuid(),
   project_id uuid not null unique references projects(id) on delete cascade,
-  quote_id uuid references quotes(id),
+  quote_id uuid references quotes(id) on delete set null,   -- 보드는 스냅숏(R-S2) — 기준 견적이 지워져도 버킷·quote_version은 남는다
   quote_version int,
   baselined_at timestamptz not null default now(),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+alter table settlement_boards drop constraint if exists settlement_boards_quote_id_fkey;
+alter table settlement_boards add constraint settlement_boards_quote_id_fkey
+  foreign key (quote_id) references quotes(id) on delete set null;
 
 -- 버킷 (기본 9 + 행사별 추가 — §19.2)
 create table if not exists settlement_buckets (

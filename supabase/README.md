@@ -53,6 +53,9 @@
 5. **서버 함수는 배포 전이라 같은 프로세스의 로컬 HTTP 서버가 `api/_lib` 핸들러를 감싼다** — provider는 `apiBase`만 다르고 코드 경로는 Vercel 배포본과 같다
 6. **정리** — 만든 행사(cascade)·견적·auth 사용자·프로필을 지운다. 시드 행사는 읽기만 한다
 
+실측(2026-09-07, dev 프로젝트): setup 2회 멱등 · seed 2회 행 수 불변 · **verify 83/83**(1회차 79/83 → 토큰·견적 참조 FK의 on-delete 규칙 추가 후 재실행, §5 표 참조).
+컨테이너의 Chromium은 프록시 때문에 외부 접속이 끊겨 실서버 브라우저 E2E는 이 스크립트 범위 밖이다 — 화면 렌더는 mock 스위트가, 서버 계층은 이 스크립트가 본다.
+
 ## 4. 키 취급 규약 (CLAUDE.md §9 · 설계서 §12)
 
 - `.env.local`(gitignore)에만: `VITE_SUPABASE_URL` · `VITE_SUPABASE_PUBLISHABLE_KEY` · `SUPABASE_SECRET_KEY` · (임시) `SUPABASE_ACCESS_TOKEN`
@@ -70,3 +73,4 @@
 | `landing_daily_metrics` 열 이름 | pageviews·visitors·form_views·day | TS 정본 `views·unique_visitors·form_starts·date` | entities.ts "DDL과 1:1" 원칙 — 코드가 정본 |
 | `sheet_source_rows` 표 | 없음(mock 전용 타입) | 신설 — Sheets API 읽기 결과의 서버 적재 자리 | §24 차이 계산이 원본 행 ↔ attendees 비교이므로 서버에도 같은 자리가 필요 |
 | `app_config` 표 | 없음(env) | 신설 — 허용 도메인의 서버측 정본 | §12 허용 도메인 강제를 DB 트리거로 — "키 교체+setup.sql 1회" 제약 안에서 가능한 유일한 서버측 게이트 |
+| 토큰·견적 참조 FK의 on-delete | 미기재 | `approvals.decided_via_token`·`settlement_boards.quote_id` = set null, `comments.author_token` = cascade | 2026-09-07 dev 실측 — 행사 cascade 삭제가 막혔다. 회수·확정은 삭제가 아니라 운영 경로 무영향. 코멘트는 작성자 없는 행을 남길 수 없어 cascade(PROGRESS 결정 로그) |
