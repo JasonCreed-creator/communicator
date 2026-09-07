@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────
-// DataProvider 인터페이스 v10 — 2026-08-28 재동결 (설계서 v2.6 §24) — 120메서드
+// DataProvider 인터페이스 v13 — 2026-09-07 재동결 (설계서 v2.8 §4-1c) — 125메서드
 //   (아래 이력 전체를 유지한다. v7 표기는 2026-08-23 시점의 스냅숏이었다 — v8·v8.1·v9은
 //   그 뒤에 이어 붙은 것이므로 제목 줄만 최신으로 갱신한다.)
 //   v1: 2026-08-19 동결(35메서드). v2: v1.2 승인 근거로 41메서드 재동결.
@@ -54,6 +54,19 @@
 //   getSheetRegistrationStats 10메서드 추가 = 120메서드. **기존 110메서드 시그니처 불변** 후 재동결.
 //   Attendee 확장(sheet_row_id·title·group_tag·sheet_status·note)은 전부 optional이라 기존 생성
 //   경로·픽스처를 건드리지 않는다. `importVendorQuote`는 이제 **v11 예약 — 지금 만들지 않는다**.
+//   v11: 사용자 v2.6 §25 승인(2026-08-29, Phase 3.18 행사 유형 4분류) — **메서드 0건 추가·120 불변**.
+//   판매 플래너가 쓰는 데이터는 전부 기존 메서드로 닿고 프리셋은 상수라, 입력 타입 필드 확장(Project.format·
+//   psa_enabled·audience_model 등)만 있었다. `importVendorQuote`는 **v12 예약**으로 순연.
+//   (※ 이 v11·v12 두 줄은 3.18·3.20 당시 본 헤더에 누락됐다 — 정본은 설계서 §2.1·§4-2b였고,
+//    v13에서 헤더를 정본과 맞춘다. 2026-09-07 정정)
+//   v12: 사용자 승인(2026-08-29, Phase 3.20 담당자 마스터) — listPeople·createPerson·updatePerson·
+//   removePerson 4메서드 추가 = **124메서드**. **기존 120메서드 시그니처 불변** 후 재동결.
+//   `importVendorQuote`는 **v13 예약**으로 순연.
+//   v13: 사용자 승인(2026-09-07 — "앞으로 생성된 행사의 경우 삭제가 가능하도록(관리자 권한설정)") +
+//   설계서 v2.8 §4-1c를 근거로 동결 해제 → 행사 하드 삭제: **deleteProject 1메서드 추가 = 125메서드**.
+//   **기존 124메서드 시그니처 불변** 후 재동결. 권한 축은 프로젝트 역할(pm)이 아니라 **전역 app_role='admin'**
+//   이다 — 되돌릴 수 없는 유일한 행사 단위 조작이라 행사 안의 역할로는 판정하지 않는다(설계서 §6.1).
+//   `importVendorQuote`는 이제 **v14 예약 — 지금 만들지 않는다**(§19.5).
 //
 // 프로젝트 스코프 규칙(설계서 v2.1 §4-21 R-L1): 프로젝트 단위 조회·생성 메서드는 projectId를
 // 인자로 받는다. currentUser()는 행위자 신원·권한 판정 전용이며 스코프 유도에 쓰지 않는다.
@@ -173,6 +186,15 @@ export interface DataProvider {
   createProject(input: ProjectCreateInput): Promise<Project>
   /** v1.5 §8 POST /projects/{id}/close·reopen — status 토글 (pm). closed면 쓰기 전부 409 */
   closeProject(projectId: UUID, closed: boolean): Promise<Project>
+  /** v2.8 §4-1c §8 DELETE /projects/{id} — 행사 하드 삭제 (**app_role='admin' 전용**).
+   *  행사에 속한 데이터를 전부 지운다(멤버·담당 항목·버전·컨펌·코멘트·일정·등록·랜딩·정산·파트너·
+   *  큐/시나리오/가이드·시트·활동 로그). **되돌릴 수 없다.**
+   *  종료(closed) 행사도 지울 수 있다 — assertWritable을 타지 않는다(종료가 삭제의 선행 조건은 아니다).
+   *  견적(quotes)·견적 임포트(quote_imports)는 **지우지 않고 project_id만 null로 푼다** —
+   *  금액 원본이자 골든 벡터의 근거라 행사와 수명을 같이하지 않는다(SQL도 on delete set null).
+   *  주소록(profiles·users)·협력사 마스터(vendors)는 행사 비종속이라 그대로 남는다.
+   *  삭제 자체의 activity_log는 남지 않는다 — 로그가 project_id에 매여 있어 같이 지워진다(설계서 §12 이탈). */
+  deleteProject(projectId: UUID): Promise<void>
   getProject(projectId: UUID): Promise<Project>
   listMembers(projectId: UUID): Promise<MemberWithProfile[]>
   /** v1.5 §8 POST /projects/{id}/members — 담당자 추가(mock은 즉시 멤버, Phase 4부터 초대 승격) */
