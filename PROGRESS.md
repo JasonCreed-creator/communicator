@@ -937,7 +937,7 @@ DoD-29뿐 아니라 **실물 검산 2건에서 바로** 잡힌다(위 표의 "2 
   다만 3.17b가 "화면당 accent 1개 원칙"을 주석으로 명시하고 배치한 자리라 **임의로 내리지 않았다.**
   특히 '갱신 있음' 상태에서 `지금 동기화`(accent)와 `변경 n건 반영`(primary)이 동시에 뜨는 배치는
   등록 보드의 판단이 필요하다. **필요한 결정**: §10 위계를 등록 보드에도 적용할지.
-- **(Phase 4 미결 ①) dev DB 실검증(3단) 대기** — Project URL·Personal Access Token 미수령. 두 값이 오면 `supabase:remote` setup→seed → `.env.local` URL → DoD 26 재현(RLS 거부 3종·서버 재계산·매직링크는 admin generateLink 대체 → 실수신은 §20 이월).
+- **(Phase 4 미결 ①) dev DB 실검증(3단) 대기** — **Project URL 미수령**(publishable·secret 2키는 `.env.local`에 있음). PAT(`sbp_`)는 setup·seed 원격 실행에만 필요한 선택 항목 — 없으면 SQL Editor 붙여 넣기(README §2 가). URL이 오면 `supabase:remote` setup→seed → **`npm run supabase:verify`**(실행체 준비 완료 2026-09-07 — 3키만 읽고 DoD 1~25 provider 흐름 재현 + RLS 3종 + 서버 재계산 + 정리, README §3b) → 실수신 매직링크는 §20 이월.
 - **(Phase 4 미결 ②) `sheet_status` 매핑 UI** — 정본(`SHEET_MAPPED_FIELDS`)·서버 정규화·SQL 차이 규칙은 반영했으나 위저드 드롭다운은 목록 자동 파생이라 별도 시안 없이 노출된다. 실시트 헤더('상태' 등)의 자동 추천은 `suggestField`가 담당. 챗 검수에서 라벨(`신청 상태`) 확인 필요.
 - **(Phase 4 미결 ③) 시트 행 식별자 = 행 번호(가정)** — 실시트 행 삽입·정렬이 잦으면 차이 계산이 흔들린다. 첫 실전 연결 전 '고유 ID 컬럼' 매핑 옵션을 둘지 결정.
 - **(Phase 4 미결 ④) `complete_onboarding` RPC 로그 형태** — 주최형도 `wbs.expanded {count}`로 남는다(mock은 `wbs.expanded_host {count,partners}`). 감사 로그 표기만의 차이.
@@ -1067,9 +1067,9 @@ DoD-29뿐 아니라 **실물 검산 2건에서 바로** 잡힌다(위 표의 "2 
 ## 4. 다음 스텝
 - **(2026-09-07) Phase 4 3단 — dev DB 실검증**: ① 사용자 → Project URL(`https://<ref>.supabase.co`) + Personal Access Token(`sbp_…`) 전달
   (또는 "SQL 에디터로 직접" 선택 → `supabase/README.md` §2(가) 절차) ② Code → `.env.local` 기록 → `npm run supabase:remote -- setup` →
-  `-- seed` → `select app.grant_demo_access('본인 이메일')` ③ Auth 설정(이메일 매직링크 활성·Site URL·Redirect `/login`) ④ `VITE_DATA_PROVIDER=supabase`
-  로 DoD 26: DoD 1~25 재현 + RLS 거부 3종 + 서버 재계산(`api/quote-recalc`는 Vercel 배포 전이라 핸들러 직접 호출로 대체) ⑤ PAT 폐기 안내
-  ⑥ PR 챗 검수 → 머지 → Phase 5(Drive) 착수
+  `-- seed` → `select app.grant_demo_access('본인 이메일')` ③ Auth 설정(이메일 매직링크 활성·Site URL·Redirect `/login`) ④ **`npm run supabase:verify`**
+  = DoD 26(DoD 1~25 provider 흐름 재현 + RLS 거부 3종 + 서버 재계산 — `api/` 핸들러는 배포 전이라 스크립트 안 로컬 HTTP 서버가 감싼다 + 매직링크 CI 대체)
+  → 결과를 체크아웃 보고·PR에 기재, 실패 항목은 수정 후 재실행 ⑤ PAT 폐기 안내(받았을 때만) ⑥ PR 챗 검수 → 머지 → Phase 5(Drive) 착수
 - **(2026-09-04) Phase 3.21 PR 검수 → 머지 → Vercel 연결(사용자, §18a)**: S1 `JasonCreed-creator/communicator`
   Import(설정 무변경 — `vercel.json`) → S2 env `VITE_DATA_PROVIDER=mock` → S3 `*.vercel.app`에서 ⑤ 루트 런처
   카드 2장 클릭 확인 → S4(가) `rmb-mice.com`을 옛 jsx-easy-shift 프로젝트에서 제거 → 새 프로젝트에 추가(DNS 무변경).
@@ -1560,6 +1560,10 @@ DoD-29뿐 아니라 **실물 검산 2건에서 바로** 잡힌다(위 표의 "2 
   원격 실행 스크립트(`supabase:remote`) 준비. 로컬 Postgres 16 클러스터를 `/tmp/pg-communicator`에 띄워(postgres 유저 경로 제약으로 스크래치
   밖 — 사유) 멱등·RLS·RPC를 증명. Deno는 npm으로 받을 수 있음을 확인했으나 Vercel 결정으로 불필요. 설계서 v2.7·CLAUDE.md v2.7 승격.
   다음 = 3단(URL·PAT 도착 시) → 챗 검수 → Phase 5.
+  **(계속, URL 대기 중)** 3단 실행체 `scripts/supabase-dev-verify.ts`(`npm run supabase:verify`) 선작성 — 로컬 HTTP 서버로 `api/_lib` 핸들러를
+  감싸 provider의 `apiBase`만 바꾸고, 검증 계정 3명(sales·staff·비멤버)을 admin generateLink→verifyOtp로 로그인, 이 실행이 만든 행사 1건 안에서
+  DoD 1~25 흐름 ~60항목 + RLS 3종 + 정리. esbuild 번들·tsc(스크래치 tsconfig, scripts는 메인 tsconfig 밖)·`--dry` 로드 통과. 실DB 실행은 URL 도착 후.
+  사용자 질문 "3키가 어떤 키인지" → URL·publishable·secret 3종 + 선택 PAT로 답변.
 - **2026-09-04 저녁 (Phase 3.21.1 — 실배포 마무리 + 표 줄바꿈 정본)**. 사용자가 "직접 들어가서 처리해봐"라며 Vercel 배포
   페이지 링크를 줬고, 대시보드는 로그인이 필요해 1일 만료 API 토큰을 받아 처리했다. 토큰으로 한 일: 실패 배포 이벤트
   로그 판독(→ `@types/node` 누락) · Preview·Production READY 확인 · 프로젝트 설정·env·도메인 조회 · 사용자 승인 후 도메인 이전.

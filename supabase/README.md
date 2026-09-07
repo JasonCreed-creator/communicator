@@ -42,6 +42,17 @@
 4. 트리거 가드: §5 전이표 밖 전이 거부·표 안 전이 허용 / 확정 견적 금액 변경 거부 / has_cost=false 버킷 발주액 거부 / 종료 행사 쓰기 거부(authenticated)·허용(서비스) / onboarded_at 되돌리기 거부 / 프로필 app_role 자가 승격 거부 / version_no 자동 증가 / auth 가입 시 프로필 자동 연결 / 허용 도메인 밖 가입 거부
 5. RPC: add_member(배정·중복 409·design 403) / remove_member 마지막 PM 409 / remove_person 배정 409 / complete_onboarding(이미 완료 409·미완료 기록) / transition_deliverable(허용·코멘트 422·전이표 밖 409) / upload_version 자동 draft / request_approval(pm·pdf) / finalize_quote(staff 403) / **토큰 경로(anon)**: client_queue·client_status(금액 키 0건·internal 코멘트 0건·회수 410·없는 토큰 404) · client_decide(승인→final·수정요청 코멘트 필수·shared 강제) · partner_portal(contract_amount·price 0건) · partner_submit(자기 항목만) · submit_landing_lead(성함 필수·정상 적재) · anon은 내부 RPC 실행 불가 / 시트: check_sheet_updates·apply_sheet_diff(낡은 버전 409·pm·reg만) — **총 85항목**
 
+## 3b. dev 실검증 — 실 Supabase에서 증명하는 것 (Phase 4 3단 · DoD 26)
+
+`npm run supabase:verify` (`.env.local`의 URL·publishable·secret 3키만 읽는다. PAT 불필요. `--dry`는 번들 로드·계획 출력만, `--keep`은 만든 검증 데이터 보존):
+
+1. **사전 점검** — `app_config` 조회로 setup.sql 적용 여부(미적용이면 즉시 중단·안내), seed 여부(있으면 데모 토큰 경로 검사 포함), 허용 도메인(제한이 있으면 그 도메인으로 검증 계정을 만든다)
+2. **로그인 = 매직링크 CI 대체(CLAUDE.md 4d)** — `admin.generateLink(magiclink)` → `verifyOtp(token_hash)`. 메일 발송·수신 없이 같은 verify 경로를 탄다. 실수신 왕복은 §20 D-Day 스모크
+3. **DoD 1~25를 SupabaseProvider 흐름으로 재현** — 이 실행이 만든 행사 1건 안에서: 온보딩(WBS 37·R&R·컴플라이언스 시드, 재완료 409) · 담당자/주소록(마지막 PM 409·배정 있는 사람 삭제 409+행사명) · 컨펌 루프(승인→final, 수정요청 코멘트 필수→재업로드 draft 복귀, internal 코멘트 /c 비노출, 미리보기 포맷 422, 회수 토큰 410) · 지시 발행(requested→draft) · 등록(CSV upsert·체크인·통계) · 홈·S9(금액 키 0건) · 견적(서버 재계산·조작 시도 무시·staff 403·버전 체인·확정 잠금·§16 핸드오프 상호 링크) · 정산(버킷 9종 rc/ld·항등식·has_cost 422·부가세 분리) · 랜딩(13섹션·slug 스코프·anon 리드 → attendees) · 정형 문서(시나리오 시드 409·큐 내보내기 보존·운영가이드 4섹션·doc-snapshot) · 시트 연동(데모 모드 서버 함수: connect·감지만·낡은 버전 409·KPI) · 주최형(파트너 격리·검토 루프·R-H1 보존)
+4. **RLS 거부 3종(DoD 26)** — staff→quotes 0행·insert 거부 / 비멤버→project 0행(REST·provider 양쪽) / anon→quotes·deliverables·settlement_items 권한 없음 + 역할-영역 403·app_role 자가 승격 거부
+5. **서버 함수는 배포 전이라 같은 프로세스의 로컬 HTTP 서버가 `api/_lib` 핸들러를 감싼다** — provider는 `apiBase`만 다르고 코드 경로는 Vercel 배포본과 같다
+6. **정리** — 만든 행사(cascade)·견적·auth 사용자·프로필을 지운다. 시드 행사는 읽기만 한다
+
 ## 4. 키 취급 규약 (CLAUDE.md §9 · 설계서 §12)
 
 - `.env.local`(gitignore)에만: `VITE_SUPABASE_URL` · `VITE_SUPABASE_PUBLISHABLE_KEY` · `SUPABASE_SECRET_KEY` · (임시) `SUPABASE_ACCESS_TOKEN`
