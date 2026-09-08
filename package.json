@@ -21,6 +21,7 @@
     "supabase:check": "node scripts/supabase-local-check.mjs",
     "supabase:remote": "node scripts/supabase-remote.mjs",
     "supabase:verify": "esbuild scripts/supabase-dev-verify.ts --bundle --platform=node --format=esm --target=node22 --log-level=warning --outfile=node_modules/.cache/communicator/dev-verify.mjs && node node_modules/.cache/communicator/dev-verify.mjs",
+    "supabase:reset-demo": "esbuild scripts/supabase-reset-demo.ts --bundle --platform=node --format=esm --target=node22 --log-level=warning --outfile=node_modules/.cache/communicator/reset-demo.mjs && node node_modules/.cache/communicator/reset-demo.mjs",
     "demo": "npm run demo:build && npm run demo:check && npm run demo:check:routing && npm run demo:check:browser"
   },
   "dependencies": {

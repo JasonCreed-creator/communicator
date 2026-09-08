@@ -240,6 +240,15 @@ as $$
   select app.current_app_role() in ('admin','sales')
 $$;
 
+-- 행사 하드 삭제 권한 = app_role admin 단독(§4-1c · §6.1 — 프로젝트 역할 pm과 무관하다)
+create or replace function app.is_admin()
+returns boolean
+language sql stable security definer
+set search_path = public
+as $$
+  select app.current_app_role() = 'admin'
+$$;
+
 create or replace function app.member_role(p_project uuid)
 returns member_role
 language sql stable security definer
@@ -1610,7 +1619,8 @@ alter default privileges in schema public grant all on sequences to authenticate
 -- >>> 20260907001600_rpc_core.sql
 -- ─────────────────────────────────────────────────────────────────────
 -- 1600 · RPC(내부 로그인 경로) — 한 트랜잭션이어야 하는 다단계 쓰기를 SQL 함수로 묶는다.
--- 전부 security invoker(RLS 적용)다. 예외(list_people·remove_person)는 주소록이 행사 경계를 넘기 때문이며 본문에 사유를 적었다.
+-- 전부 security invoker(RLS 적용)다. 예외(list_people·remove_person·delete_project)는 각각 주소록이 행사 경계를
+-- 넘고, 행사 삭제가 행사 스코프 표 전부를 가로지르기 때문이며 사유는 각 본문에 적었다.
 -- 오류 규약: raise exception 'CODE: 메시지' + errcode P04xx → 프론트 mapPgError가 ProviderError로 옮긴다.
 -- PostgREST 기본은 함수 실행 권한이 PUBLIC이라, 여기서 만드는 함수는 전부 public에서 걷고 필요한 롤에만 준다.
 -- ─────────────────────────────────────────────────────────────────────
@@ -1760,6 +1770,32 @@ begin
 end $$;
 revoke execute on function public.remove_person(uuid) from public, anon;
 grant execute on function public.remove_person(uuid) to authenticated;
+
+-- ── 행사 하드 삭제 (§4-1c · §8 DELETE /projects/{id}) ───────────────
+-- security definer인 이유(파일 머리말의 세 번째 예외): ① 삭제가 행사 스코프 표 전부(멤버·항목·버전·컨펌·
+-- 코멘트·일정·등록·랜딩·정산·파트너·시나리오/가이드/큐·시트·활동 로그)를 캐스케이드로 가로지르므로 호출자의
+-- 표별 RLS와 무관하게 한 트랜잭션에서 끝나야 하고, ② 권한 축이 행사 안의 역할(project_members)이 아니라
+-- 전역 app_role이라 행 단위 정책으로는 판정할 수 없기 때문이다. projects에는 delete 정책을 두지 않았다 —
+-- 이 RPC가 유일한 삭제 경로다(다중 방어).
+-- 되돌릴 수 없는 조작이라 pm이 아니라 admin만 허용한다.
+create or replace function public.delete_project(p_project uuid)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not app.is_admin() then
+    raise exception 'FORBIDDEN: 행사 삭제는 관리자(admin) 권한이 필요합니다.' using errcode = 'P0403';
+  end if;
+  if not exists (select 1 from projects where id = p_project) then
+    raise exception 'NOT_FOUND: 프로젝트를 찾을 수 없습니다.' using errcode = 'P0404';
+  end if;
+  -- app.require_writable를 부르지 않는다 — 종료(closed) 행사도 삭제할 수 있어야 한다(§4-1c).
+  -- app.write_log도 부르지 않는다 — activity_log는 project_id에 매여 있어 이 delete로 함께 지워진다.
+  --   "로그가 빠졌다"고 뒤에 채워 넣지 말 것(설계서 §12 이탈로 문서화됨).
+  -- quotes·quote_imports는 FK가 on delete set null이라 행이 남고 project_id만 풀린다 —
+  --   여기서 따로 손대지 않는다. 주소록(profiles)·협력사(vendors)는 행사 비종속이라 무관하다.
+  delete from projects where id = p_project;
+end $$;
+revoke execute on function public.delete_project(uuid) from public, anon;
+grant execute on function public.delete_project(uuid) to authenticated;
 
 -- ── WBS 전개·온보딩 (§4-15 재전개 보존 · §8 onboarding-complete "한 트랜잭션") ─────────
 -- 클라이언트가 템플릿(src/fixtures/wbsTemplates.ts 정본)으로 전개한 전체 행을 넘기고, DB는 한 트랜잭션에서

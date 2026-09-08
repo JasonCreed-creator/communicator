@@ -3,6 +3,37 @@
 > 가변 상태 파일. 매 세션 체크아웃 시 에이전트가 갱신한다 (CLAUDE.md §9 리추얼).
 
 ## 1. 상태 요약
+- **완료: Phase 4.1 — v2.8 행사 하드 삭제(관리자 전용) + 새 출발**(2026-09-08, PR #39 머지 — 사용자 지시
+  "기존 행사들을 다 지우고 임시 담당자들도 다 삭제하고 새롭게 시작 / 앞으로 생성된 행사는 삭제 가능하도록(관리자 권한설정)").
+  범위 게이트 **[B] 3턴 분할** 승인 → **1·2턴 완료, 3턴(Supabase 실서버 전환)은 키 대기로 미착수**.
+  사용자 결정 4건: 저장 방식 = **Supabase 실서버 전환**(mock 유지 아님) · 삭제 권한 = **admin 전용** · 범위 = [B] ·
+  운영 DB = **기존 dev 프로젝트 승격**(신규 생성 아님).
+  ① **판단 근거가 된 실측**: 라이브 번들(`www.rmb-mice.com/assets/index-*.js`)에 `prj-stc26`이 있고 Supabase URL이 없다 →
+  **프로덕션은 mock 모드**다. 즉 데모 8행사가 새로고침마다 되살아나고 사용자가 만든 행사는 저장되지 않는다.
+  "삭제 기능만 만들면 반쪽"이라는 사실을 이 근거로 제시하고 전환 여부를 물었다.
+  ② **1턴(provider·SQL)**: `DataProvider v13 = 125메서드`(`deleteProject` 1건) — 헤더 이력에 누락돼 있던 **v11·v12도 보충**
+  (정본은 설계서 §2.1이었고 헤더는 v10에서 멈춰 있었다). mock은 36개 `MockState` 필드 전수 캐스케이드(blob URL 회수·id 카운터
+  미재사용·견적 분리), 서버는 `security definer` RPC `public.delete_project` + `app.is_admin()`. **`projects`에 delete RLS 정책은
+  두지 않았다** — 정책 부재 + definer 단일 경로가 이중 방어(로컬 Postgres 16 실측: authenticated 직접 DELETE는 0행 매칭으로
+  조용히 성공한 것처럼 보인다). `createEmptyState()` 신설, `createFixtureState()`는 무변경.
+  `npm run supabase:reset-demo`(시드 id로만 타깃·**dry-run 기본**·service 경로 전용·FK 차단 시 강제하지 않고 사유 표기).
+  ③ **2턴(화면)**: S-1 카드 삭제 버튼(admin만) · 행사 설정 ③ 위험 구역(**비관리자도 카드는 보이고 버튼만 잠기며 사유가 읽힌다**) ·
+  `DeleteProjectDialog`(행사명 타이핑 확인 — `window.confirm`은 Enter 한 번에 지나가고 대상 오인을 못 거른다) ·
+  `ProjectContext` 저장 id 검증·죽은 값 정리 · **행사 0건 "첫 행사 만들기" 지면**(예전 "표시할 행사가 없습니다."는 `ProjectScope`
+  안이라 `/projects`조차 못 여는 막다른 길이었다).
+  ④ **정찰이 미리 잡은 함정**: mock `currentUser()`가 멤버십 0이면 `forbidden`을 던지고 있었다 — 행사를 전부 지우면 전 화면이
+  403이 되고 새 행사를 만들 경로조차 없다. SupabaseProvider(`ctx.ts`)는 이미 최소 권한 폴백이라 **mock을 서버 쪽에 맞췄다**.
+  ⑤ **구현 중 실측으로 잡은 자기 회귀 1건**: `ProjectContext` 검증을 넣으며 "`reload()`가 로딩을 태우므로 검증은 항상 확정된
+  목록을 상대로 한다"고 판단했는데 **틀렸다**. `reloadSummaries()`는 tick만 올리고 `loading=true`는 이펙트에서 세워져, 그 사이
+  렌더 한 번이 **옛 목록**으로 검증을 돌린다 → 방금 만든 행사가 죽은 id로 오판돼 dod20이 깨졌다. 수정 = **선택 시점의 목록
+  스냅숏과 비교**(선택 이후 새 목록이 도착하지 않았으면 아직 검증하지 않는다). 화면 에이전트가 자기 파일을 되돌려보고
+  "당신 변경이 원인"이라고 정확히 짚어 준 건이다.
+  결과: vitest **980**(106파일, 기준선 953/104 — +27 = DoD 58 provider 21 + UI 7, 회귀 0) · tsc · `npm run build` ·
+  **`supabase:check` 95/95**(기준선 85, +10 — admin 삭제·캐스케이드 0행·견적 보존·종료 행사 삭제·pm(sales) 403·staff 403·404·
+  anon 거부를 로컬 Postgres 16에서 실증) · 상시 가드 0건.
+  정본: 설계서 **v2.7 → v2.8**(파일명·표제 포함, §4-1c 신설·§2.1·§6.1·§8·§14) · CLAUDE.md Phase 4.1·DoD 58 ·
+  `supabase/README.md` §3c · 결정 로그 7건. **PR #39 머지(2026-09-08, 사용자 지시 "머지하고 커밋 후 종료")**
+
 - **진행 중: Phase 4 — Supabase 이식 (1·2·3단 완료 — dev DB 실검증 83/83 · 사용자 게이트 3건·챗 검수 대기)**(2026-09-07, 사용자 지시
   "supabase를 서버로 하는 형태로 우선 만들어봐야" → 범위 게이트 [B] 3단 분할 승인). 사용자 결정 5건(결정 로그 참조):
   [B] 분할 · 시트 감지 **폴링 유지** · `profiles.title/phone/org`+`client_contacts.phone` 추가 · `sheet_status` 매핑 추가 ·
@@ -933,6 +964,20 @@ DoD-29뿐 아니라 **실물 검산 2건에서 바로** 잡힌다(위 표의 "2 
 - **F3(레포 기본 브랜치 → main)** — 이 세션에 노출된 도구에 레포 설정 변경 수단이 없다(§3 미결 참조)
 
 ## 3. 미결
+- **(Phase 4.1 3턴 — 미착수) Supabase 실서버 전환이 남아 있다.** 사용자가 dev 프로젝트(`communicator-dev`) 3키
+  (URL · `sb_publishable_…` · `sb_secret_…`)를 세션 대화로 주면 착수한다. 절차는 `supabase/README.md` §3c:
+  `.env.local`(600) 기록 → `npm run supabase:verify` → `npm run supabase:reset-demo`(**미리보기를 사용자에게 보이고 승인 후**
+  `--yes`) → Vercel env 3키 주입 → 배포 → 상호작용 스모크·데모 아티팩트 재발행.
+  **사용자 작업 1건**: 매직링크 최초 로그인 후 SQL Editor에서 `select app.promote_admin('본인@이메일');` — 없으면 PM이어도
+  삭제가 잠긴다(권한 축이 전역 app_role이라 프로젝트 역할로는 안 열린다).
+- **(Phase 4.1) 프로덕션이 mock인 동안 삭제 버튼은 잠긴 것으로 보인다 — 결함이 아니다.** 픽스처의 현재 사용자
+  `usr-pm`은 `app_role='sales'`라 S-1 카드에는 버튼이 아예 없고, 행사 설정 ③에는 카드가 사유와 함께 잠긴 상태로 보인다.
+  실서버 전환 + `promote_admin` 후에 열린다. 픽스처를 admin으로 바꾸면 dod25(견적 권한)의 기준이 흔들리므로 바꾸지 않았다.
+- **(Phase 4.1 이탈 1 — 설계서 §4-1c에 명시) 삭제 자체의 `activity_log`는 남지 않는다.** 로그 행이 `project_id`에 매여
+  같은 cascade에 포함된다(§12 감사 규약 이탈). 남기려면 행사 비종속 감사 표가 필요하다 — 2차 로드맵(§13).
+  코드 두 곳에 "나중에 로그를 되살리지 말 것" 주석을 달았다.
+- **(Phase 4.1 이탈 2) Drive 트리는 남는다.** DB만 지운다(§12 "파일은 Drive 자체가 원본"). 정리는 §20 런북 수동 절차.
+  Phase 5 착수 시 삭제와 Drive 정리의 관계를 한 번 결정해야 한다.
 - **(열린 질문 — Phase 3.19 ①) 금액 에코의 영문 표기가 정해져 있지 않다.**
   §10은 한글 축약(`1,200만원`)만 규정한다. 견적 모듈은 한/영 토글이 살아 있어 영문 모드에서는
   라벨이 영어인데 에코만 한글이 된다 — 지금은 `MoneyField`의 `echo={en ? null : undefined}`로
@@ -1077,6 +1122,9 @@ DoD-29뿐 아니라 **실물 검산 2건에서 바로** 잡힌다(위 표의 "2 
   (설계서 v1.4.1 §4-15·§8·§15 정본화 — 열린 질문 ①~⑤ 전부 종결)
 
 ## 4. 다음 스텝
+- **(2026-09-08) Phase 4.1 이후**: ① 사용자가 dev 3키를 주면 **3턴 실서버 전환**(위 미결 ① 절차) ② 그 뒤 Phase 5(Drive) 착수 —
+  `supabase:verify`는 Phase 5·6 PR에서도 회귀 검사로 재실행(3키 있는 세션에서만) ③ 전환 후 첫 실사용에서 삭제 동선을
+  한 번 밟아 보고(행사 생성 → 삭제 → 목록 복귀) 결과를 결정 로그에 남긴다
 - **(2026-09-07 오후) Phase 4 마무리**: ① 사용자 게이트 3건(미결 ① ⓐ 로그인 이메일 확인 → `grant_demo_access` 원격 실행 ⓑ Auth URL 설정
   ⓒ PAT 폐기) ② PR #38 챗 검수(이탈·가정 9건 + FK on-delete 규칙 사후 승인) → 머지 ③ Phase 5(Drive) 착수 — `supabase:verify`는 Phase 5·6
   PR에서도 회귀 검사로 재실행(3키 있는 세션에서만)
@@ -1154,6 +1202,30 @@ DoD-29뿐 아니라 **실물 검산 2건에서 바로** 잡힌다(위 표의 "2 
 - 이후 Phase 5(Drive) → Phase 6(알림·cron)
 
 ## 5. 결정 로그
+- **(2026-09-07, Phase 4.1) DataProvider v12 동결 해제 → v13 재동결(125메서드).** 근거 = 사용자 지시
+  "앞으로 생성된 행사의 경우 삭제가 가능하도록(관리자 권한설정)". `deleteProject` 1메서드 추가, 기존 124메서드 시그니처 불변.
+  §9 규약대로 **설계서 개정(v2.8 §4-1c 신설)을 동반**했다. `importVendorQuote`는 **v14 예약**으로 순연(v13은 본 증분이 소진)
+- **(2026-09-07, Phase 4.1) 행사 삭제의 권한 축 = 전역 `app_role='admin'`(프로젝트 pm 아님).** 행사 안의 다른 파괴적 조작은
+  전부 그 행사의 pm이 하지만, 삭제는 되돌릴 수 없고 행사 자체가 사라져 "그 행사 안에서의 지위"로 판정하면 순환이다.
+  §6.1에 **pm 열이 `—`인 첫 행**이 생겼고, **admin이 sales와 갈라지는 첫 지점**이다 — 기존 `admin·sales` 술어
+  (`app.is_quote_user()`·`canUseQuotes`)는 손대지 않고 새 술어(`app.is_admin()`·`canDeleteProject`)를 추가했다. 사용자 승인(버튼 선택)
+- **(2026-09-07, Phase 4.1) 종료(closed)는 삭제의 선행 조건이 아니다.** `assertWritable`·`app.require_writable` 미경유.
+  종료 행사를 지우는 게 정상 동선인데 종료 가드를 태우면 "종료했더니 삭제가 막힌다"가 된다. 오삭제 방어는 상태가 아니라
+  **확인 단계**(행사명 타이핑)로 옮겼다 — `window.confirm`은 Enter 한 번으로 지나가고 대상 오인을 거르지 못한다
+- **(2026-09-07, Phase 4.1) `projects`에 delete RLS 정책을 두지 않는다.** 정책을 열면 가드 없는 맨 삭제가 생긴다.
+  정책 부재 + `security definer` RPC(`public.delete_project`) 단일 경로가 이중 방어다. 로컬 Postgres 16 실측:
+  authenticated의 직접 DELETE는 **0행 매칭으로 조용히 성공**하는 것처럼 보인다(PostgREST가 성공을 돌려준다) — 정책을 안 여는 근거
+- **(2026-09-07, Phase 4.1) 견적은 지우지 않고 분리한다.** `quotes`·`quote_imports`는 `project_id`만 null
+  (SQL은 이미 `on delete set null`). 금액 원본이자 골든 벡터(DoD 21)의 근거라 행사와 수명을 같이하지 않는다.
+  주소록(`profiles`)·협력사(`vendors`)는 행사 비종속이라 무관 — 배정만 사라져 `removePerson`이 더는 409를 내지 않는다
+  (= 사용자가 요청한 "임시 담당자 삭제"의 정상 경로)
+- **(2026-09-07, Phase 4.1) 이탈 2건.** ① 삭제 자체의 `activity_log`는 남지 않는다 — 로그 행이 `project_id`에 매여
+  같은 cascade에 포함된다(설계서 §12 감사 규약 이탈, §4-1c에 명시. 코드에도 "나중에 로그를 되살리지 말 것" 주석).
+  ② Drive 트리는 남는다 — DB만 지운다(§12 "파일은 Drive 자체가 원본"), 정리는 §20 런북 수동 절차
+- **(2026-09-07, Phase 4.1) 사용자 결정 3건(버튼).** ① 저장 방식 = **Supabase 실서버 전환**(mock 유지 아님) —
+  라이브 번들 실측으로 `www.rmb-mice.com`이 mock 모드임을 확인(`prj-stc26` 포함·Supabase URL 없음), 즉 만든 행사가
+  새로고침마다 사라져 삭제 기능도 반쪽이 된다는 사실을 근거로 제시 ② 삭제 권한 = **admin 전용** ③ 범위 = **[B] 3턴 분할**.
+  추가로 운영 DB = **기존 dev 프로젝트 승격**(신규 생성 아님)
 - **(2026-09-07 오후, Phase 4 3단) 토큰·견적 참조 FK의 on-delete 규칙** — dev 실측에서 행사 cascade 삭제가 `approvals.decided_via_token`·
   `comments.author_token`(→ client_tokens)·`settlement_boards.quote_id`(→ quotes)에 막혔다. 앱은 토큰을 지우지 않고(회수 = `revoked_at`) 견적도
   지우지 않으므로 운영 경로엔 영향이 없지만, 행사 삭제·검증 정리·향후 아카이브가 막히면 안 된다. 결정: 감사 참조(approvals·boards)는 `set null`,
@@ -1569,6 +1641,15 @@ DoD-29뿐 아니라 **실물 검산 2건에서 바로** 잡힌다(위 표의 "2 
   표 min-w 820→936 상향(열 규격 합계와 일치 — 1280 콘텐츠 폭 958 안에서 무스크롤 실측)
 
 ## 6. 세션 로그
+- **2026-09-08 (Phase 4.1 — 행사 하드 삭제 + 새 출발)**. 사용자 지시 2문장 → 라이브 번들을 직접 받아 mock 모드임을 실측한 뒤
+  브리프·범위 카드(버튼 3문항) 제시 → [B] 3턴 분할·admin 전용·Supabase 전환 승인. 착수 전 **정찰 6개 병렬**(mock 시드·mock
+  캐스케이드·Supabase FK/RLS·권한 모델·담당자 마스터·정본 문서 — 97만 토큰)로 36개 `MockState` 필드 인벤토리와 FK 24개
+  on-delete를 확정했고, Supabase 정찰은 로컬 Postgres 16을 세워 롤백 트랜잭션으로 실측했다. 1턴은 인터페이스 동결 해제를
+  메인이 직접 하고 나머지 5건(mock·SQL/RPC·provider·픽스처·리셋 스크립트)을 병렬, 그 뒤 검증 에이전트가 DoD 58 provider
+  테스트를 썼다. 2턴은 기반 3건(ProjectContext·확인 모달·README)을 메인이 직접, 화면 2건(S-1·행사 설정)을 병렬.
+  **화면 에이전트가 1턴의 내 판단 오류를 잡아냈다** — 자기 파일을 되돌려 재현해 보이며 원인이 `ProjectContext`임을 특정했다.
+  PR #39는 드래프트로 열어 2턴까지 본문을 갱신했고, PR 구독 후 자체 점검을 3회 돌렸다(전부 무변화 — 조용히 재예약).
+  Vercel 프리뷰는 Ready(9/4의 `@types/node` optional-peer 회귀 미재발). 세션 마감 시 사용자 지시로 머지.
 - **2026-09-07 (Phase 4 — Supabase 이식 1·2단)**. 사용자 "supabase를 서버로 하는 형태로 우선 만들어봐야" → 체크인 3줄 + 브리프·범위 카드
   (버튼 4문항) → [B] 승인. 1단은 메인이 직접(마이그레이션 17개·트리거·RLS·RPC·생성기·로컬 검증 85항목), 2단은 에이전트 4개 병렬
   (projects·deliverables·clientPortal / registration·landing / program·wbs / quotes·settlement·partners — 각 ~200~300K 토큰, 보고서에 이탈 항목

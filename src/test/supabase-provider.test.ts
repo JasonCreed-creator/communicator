@@ -1,4 +1,4 @@
-// Phase 4 — SupabaseProvider 완전성 계약(서버 0). 124메서드가 인터페이스 정본(DataProvider.ts)과 1:1인지,
+// Phase 4 — SupabaseProvider 완전성 계약(서버 0). 125메서드가 인터페이스 정본(DataProvider.ts)과 1:1인지,
 // mock과 같은 이름 집합인지, 오류 매핑(mapPgError)·행 정규화(normalizeRow)·env 검증이 계약대로인지 본다.
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
@@ -22,9 +22,9 @@ const fakeClient = {
 const env = { url: 'https://x.supabase.co', publishableKey: 'sb_publishable_x', allowedDomains: [], apiBase: '/api' }
 
 describe('Phase 4 · SupabaseProvider 완전성', () => {
-  it('인터페이스 정본의 124메서드를 전부, 그리고 그것만 구현한다', () => {
+  it('인터페이스 정본의 125메서드를 전부, 그리고 그것만 구현한다', () => {
     const names = interfaceMethodNames()
-    expect(names).toHaveLength(124)
+    expect(names).toHaveLength(125)
     const provider = createSupabaseProvider({ client: fakeClient, env })
     const keys = Object.keys(provider).sort()
     expect(keys).toEqual([...names].sort())
@@ -36,7 +36,7 @@ describe('Phase 4 · SupabaseProvider 완전성', () => {
     const mockNames = Object.getOwnPropertyNames(MockProvider.prototype).filter((n) => names.has(n))
     expect(mockNames.sort()).toEqual([...names].sort())
     const provider: DataProvider = createSupabaseProvider({ client: fakeClient, env })
-    expect(Object.keys(provider)).toHaveLength(124)
+    expect(Object.keys(provider)).toHaveLength(125)
   })
 
   it('오류 매핑: RLS 위반 → forbidden · RPC 접두 코드 → 해당 code · unique → conflict · 0행 → not_found', () => {

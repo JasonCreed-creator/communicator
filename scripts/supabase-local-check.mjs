@@ -262,6 +262,54 @@ ${`do $$ begin if (select snapshot_version from sheet_connections where project_
       { role: 'authenticated', sub: authId.design, expect: 'error', match: '등록 데이터 권한' })
   }
 
+  // 5e. RPC — 행사 하드 삭제 (§4-1c · DataProvider v13 deleteProject)
+  // 권한 축이 프로젝트 역할(pm)이 아니라 전역 app_role이므로, "행사의 pm이지만 admin은 아닌" pm 계정과
+  // 대비되는 admin 계정을 따로 만든다(승격은 서비스 경로 SQL — app.promote_admin).
+  psql(['-c', `select app.promote_admin('admin@example.com', '관리자')`])
+  authId.admin = psql(['-c', `insert into auth.users (email) values ('admin@example.com') returning id`]).out
+  record('delete_project 전제: admin 프로필 승격 + auth 연결',
+    psql(['-c', `select app_role from profiles where auth_user_id='${authId.admin}'`]).out === 'admin')
+  const del = {
+    vendors: psql(['-c', `select count(*) from vendors`]).out,
+    profiles: psql(['-c', `select count(*) from profiles`]).out,
+    quotes: psql(['-c', `select count(*) from quotes`]).out,
+    imports: psql(['-c', `select count(*) from quote_imports`]).out,
+    quotesFree: psql(['-c', `select count(*) from quotes where project_id is null`]).out,
+    quotesPrj: psql(['-c', `select count(*) from quotes where project_id='${PRJ}'`]).out,
+  }
+  record(`delete_project 전제: 삭제 대상 행사에 연결 견적 ${del.quotesPrj}건(0이면 견적 보존 검사가 무의미)`, Number(del.quotesPrj) > 0)
+  scenario('RPC delete_project: admin 삭제 → 행사·하위(항목·참관객·WBS·활동 로그) 전부 사라짐', `select delete_project('${PRJ}');
+reset role;
+${assertSql(`not exists (select 1 from projects where id='${PRJ}')`)}
+${assertSql(`(select count(*) from deliverables where project_id='${PRJ}') = 0`)}
+${assertSql(`(select count(*) from attendees where project_id='${PRJ}') = 0`)}
+${assertSql(`(select count(*) from wbs_tasks where project_id='${PRJ}') = 0`)}
+${assertSql(`(select count(*) from activity_log where project_id='${PRJ}') = 0`)}`,
+    { role: 'authenticated', sub: authId.admin })
+  scenario(`RPC delete_project: 견적은 지워지지 않고 project_id만 풀림(총 ${del.quotes}건 불변 · ${del.quotesPrj}건 연결 해제)`, `select delete_project('${PRJ}');
+reset role;
+${assertSql(`(select count(*) from quotes) = ${del.quotes}`)}
+${assertSql(`(select count(*) from quotes where project_id is null) = ${Number(del.quotesFree) + Number(del.quotesPrj)}`)}
+${assertSql(`(select count(*) from quote_imports) = ${del.imports}`)}`,
+    { role: 'authenticated', sub: authId.admin })
+  scenario(`RPC delete_project: 주소록(profiles ${del.profiles})·협력사(vendors ${del.vendors})는 행사 비종속 — 건수 불변`, `select delete_project('${PRJ}');
+reset role;
+${assertSql(`(select count(*) from profiles) = ${del.profiles}`)}
+${assertSql(`(select count(*) from vendors) = ${del.vendors}`)}`,
+    { role: 'authenticated', sub: authId.admin })
+  scenario('RPC delete_project: 종료(closed) 행사도 삭제 가능 — require_writable 경로가 아님', `select delete_project('${PRJ_CLOSED}');
+reset role;
+${assertSql(`not exists (select 1 from projects where id='${PRJ_CLOSED}')`)}`,
+    { role: 'authenticated', sub: authId.admin })
+  scenario('RPC delete_project: 행사 pm이어도 app_role이 admin이 아니면 403(sales)', `select delete_project('${PRJ}');`,
+    { role: 'authenticated', sub: authId.pm, expect: 'error', match: '관리자\\(admin\\) 권한' })
+  scenario('RPC delete_project: staff는 403', `select delete_project('${PRJ}');`,
+    { role: 'authenticated', sub: authId.design, expect: 'error', match: '관리자\\(admin\\) 권한' })
+  scenario('RPC delete_project: 없는 행사 404', `select delete_project('${seedUuid('nope')}');`,
+    { role: 'authenticated', sub: authId.admin, expect: 'error', match: 'NOT_FOUND|찾을 수 없' })
+  scenario('RPC delete_project: anon(토큰 경로 롤)은 실행 불가', `select delete_project('${PRJ}');`,
+    { role: 'anon', expect: 'error', match: 'permission denied' })
+
   // 6. 시크릿 커밋 가드 (§8 DoD 9) — 실키 값 패턴이 레포 파일에 없는가
   const grep = spawnSync('grep', ['-rnE', 'sb_secret_[A-Za-z0-9_-]{10,}|sbp_[A-Za-z0-9]{20,}', 'src', 'supabase', 'scripts', '--include=*.ts', '--include=*.tsx', '--include=*.sql', '--include=*.mjs', '--include=*.md'], { encoding: 'utf8' })
   record('시크릿 커밋 가드: sb_secret_/sbp_ 실키 패턴 0건 (DoD 9)', grep.status === 1, grep.stdout)

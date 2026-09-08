@@ -955,3 +955,72 @@ export function createFixtureState(): MockState {
 
   return state
 }
+
+/**
+ * 빈 상태(신규 도입) 시작점 — 행사가 하나도 없는 상태의 MockState.
+ *
+ * 데모 빌드와 기존 테스트 스위트는 이 함수를 쓰지 않는다(전부 `createFixtureState()`의 8행사에 의존).
+ * 이 함수는 두 가지를 시험 가능하게 만들려고 존재한다.
+ *   ① 행사 0건 UI 경로 — 셀렉터·S-1 목록·홈 대시보드가 데모 데이터 없이도 서는가
+ *   ② 행사 삭제 경로 — 삭제 후 마지막 행사가 사라진 자리를 재현한다
+ *
+ * 담긴 것은 로그인한 운영자 1명뿐이다. 신원 값은 기존 `usr-pm`(김기획)을 그대로 재사용해
+ * 다른 코드가 특별 취급을 하지 않아도 되게 했다. 다만 `app_role`은 픽스처의 'sales'가 아니라
+ * **'admin'**으로 둔다 — 행사 삭제는 전역 admin 전용이라(프로젝트 pm으로는 불가) sales로 두면
+ * 이 상태에서 삭제 경로 자체를 밟을 수 없다. 빈 상태의 유일한 사용자는 곧 도입 담당자이므로
+ * admin이 실제 운영 시나리오와도 맞는다.
+ *
+ * 반환 타입을 `MockState`로 명시해 필드 누락을 tsc가 잡게 한다 — `as MockState`·`any`로 덮지 말 것.
+ */
+export function createEmptyState(): MockState {
+  return {
+    users: [
+      { id: 'usr-pm', name: '김기획', email: 'pm@example.com', title: '기획팀 팀장', phone: '010-0000-1001' },
+    ],
+    current_user_id: 'usr-pm',
+    profiles: [
+      {
+        id: 'usr-pm',
+        display_name: '김기획',
+        email: 'pm@example.com',
+        // 위 주석 참조 — 빈 상태의 단독 사용자는 admin(삭제 경로 검증 가능)
+        app_role: 'admin',
+        created_at: '2026-08-01T09:00:00.000Z',
+      },
+    ],
+    projects: [],
+    members: [],
+    client_contacts: [],
+    client_tokens: [],
+    deliverables: [],
+    versions: [],
+    approvals: [],
+    comments: [],
+    milestones: [],
+    rsvp_contacts: [],
+    attendees: [],
+    activity_log: [],
+    unregistered_files: [],
+    program_sessions: [],
+    cues: [],
+    wbs_tasks: [],
+    role_charters: [],
+    quotes: [],
+    compliance_cards: [],
+    landing_pages: [],
+    // Record라 빈 배열이 아니라 빈 객체다
+    landing_metrics: {},
+    vendors: [],
+    settlement_boards: [],
+    settlement_buckets: [],
+    settlement_items: [],
+    partner_tiers: [],
+    partners: [],
+    partner_tokens: [],
+    quote_imports: [],
+    scenario_blocks: [],
+    guide_sections: [],
+    sheet_connections: [],
+    sheet_source_rows: [],
+  }
+}

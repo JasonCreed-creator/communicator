@@ -26,6 +26,7 @@ type ProjectsDomain = Pick<
   | 'listProjects'
   | 'createProject'
   | 'closeProject'
+  | 'deleteProject'
   | 'getProject'
   | 'listMembers'
   | 'addMember'
@@ -130,6 +131,20 @@ export function projectsDomain(ctx: SupabaseCtx): ProjectsDomain {
   async function assertPersonAdmin(): Promise<void> {
     const user = await ctx.currentUser()
     if (user.role !== 'pm') throw new ProviderError('forbidden', 'PM 전용 기능입니다.')
+  }
+
+  /**
+   * v2.8 §4-1c 행사 삭제 권한 = **전역 app_role='admin' 하나뿐**(프로젝트 pm이 아니다 — §6.1).
+   * ctx.assertQuoteRole()과 같은 모양의 app_role 검사이지만, 견적 축(admin·sales)과 기준이 달라
+   * 공용 ctx에 넣지 않고 이 파일에 둔다(assertPersonAdmin과 같은 자리·같은 이유).
+   * RPC(delete_project)가 서버에서 같은 판정을 다시 하므로 이건 빠르고 국소적인 사전 차단일 뿐이다 —
+   * removePerson이 assertPersonAdmin으로 먼저 걸러내는 것과 같은 패턴.
+   */
+  async function assertProjectDeleteAdmin(): Promise<void> {
+    const me = await ctx.me()
+    if (me.app_role !== 'admin') {
+      throw new ProviderError('forbidden', '행사 삭제는 관리자(admin) 권한이 필요합니다.')
+    }
   }
 
   /** 행사 코드 유일성 — RLS로 보이는 범위에서 먼저 확인(mock과 같은 메시지), 보이지 않는 충돌은 insert/update의 23505로 잡는다 */
@@ -281,6 +296,37 @@ export function projectsDomain(ctx: SupabaseCtx): ProjectsDomain {
       ) as Project
       await ctx.log(projectId, closed ? 'project.closed' : 'project.reopened', 'project', projectId)
       return project
+    },
+
+    /**
+     * v2.8 §4-1c §8 DELETE /projects/{id} — 행사 하드 삭제. **되돌릴 수 없다**(휴지통 없음).
+     *
+     * 지운다: 행사 행과 그에 매달린 전부 — 멤버·발주처 담당자/토큰·산출물과 그 아래(버전·컨펌·
+     * 코멘트·큐·시나리오 블록·가이드 섹션)·마일스톤·RSVP·참가자·프로그램 세션·WBS·R&R·컴플라이언스
+     * 카드·랜딩(지표 포함)·정산 보드/버킷/항목·파트너 등급/파트너/파트너 토큰·시트 연결·활동 로그.
+     * 실제 연쇄는 스키마의 on delete cascade가 수행한다(앱이 지울 목록을 따로 나열하지 않는다).
+     *
+     * 남는다: 견적(quotes)·견적 임포트(quote_imports)는 행을 지우지 않고 project_id만 null로 푼다 —
+     * 금액 원본이자 골든 벡터의 근거라 행사와 수명을 같이하지 않는다. SQL의 on delete set null이
+     * 처리하므로 여기서 별도 update를 쏘지 않는다.
+     * 주소록(profiles)과 협력사 마스터(vendors)는 행사 비종속이라 손대지 않는다.
+     *
+     * 권한은 **전역 app_role='admin' 하나뿐**이다 — 행사 pm은 자기 행사라도 지울 수 없다.
+     * 파괴 범위가 행사 경계를 넘어(견적 연결 해제) 미치고 복구 경로가 없어서, 행사 단위 권한이 아니라
+     * 조직 단위 권한에 묶는다(§6.1). 종료(closed) 행사도 지울 수 있다 — assertWritable을 타지 않는다.
+     */
+    async deleteProject(projectId) {
+      // 서버(delete_project RPC)가 admin·존재 여부를 다시 판정한다. 여기 사전 검사는 mock과 같은
+      // 메시지를 즉시 돌려주기 위한 국소 차단일 뿐 — removePerson/assertPersonAdmin과 같은 패턴이다.
+      await assertProjectDeleteAdmin()
+      // 미존재(NOT_FOUND)는 RPC가 판정한다 — security definer라 RLS로 가려진 행사도 정확히 구분하고,
+      // 앱이 먼저 조회하면 '안 보이는 행사'가 not_found로 새어 판정이 두 곳으로 갈린다.
+      await ctx.rpc<void>('delete_project', { p_project: projectId })
+      // 지운 행사의 멤버십이 역할 캐시에 남아 있으면 이후 roleIn()이 죽은 행사에 권한이 있다고 답한다.
+      ctx.invalidateRoles(projectId)
+      // ctx.log()는 부르지 않는다 — activity_log는 project_id에 매여 있어(on delete cascade)
+      // 방금 지운 행사의 로그 행은 남을 수 없다. 삭제 자체를 기록할 자리가 없는 것이지 누락이 아니다
+      // (설계서 §12 이탈로 명시). "로그가 빠졌다"고 나중에 여기에 log를 되살리지 말 것.
     },
 
     async addMember(projectId, input) {

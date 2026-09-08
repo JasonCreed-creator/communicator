@@ -30,6 +30,15 @@ as $$
   select app.current_app_role() in ('admin','sales')
 $$;
 
+-- 행사 하드 삭제 권한 = app_role admin 단독(§4-1c · §6.1 — 프로젝트 역할 pm과 무관하다)
+create or replace function app.is_admin()
+returns boolean
+language sql stable security definer
+set search_path = public
+as $$
+  select app.current_app_role() = 'admin'
+$$;
+
 create or replace function app.member_role(p_project uuid)
 returns member_role
 language sql stable security definer

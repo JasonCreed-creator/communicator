@@ -56,6 +56,30 @@
 실측(2026-09-07, dev 프로젝트): setup 2회 멱등 · seed 2회 행 수 불변 · **verify 83/83**(1회차 79/83 → 토큰·견적 참조 FK의 on-delete 규칙 추가 후 재실행, §5 표 참조).
 컨테이너의 Chromium은 프록시 때문에 외부 접속이 끊겨 실서버 브라우저 E2E는 이 스크립트 범위 밖이다 — 화면 렌더는 mock 스위트가, 서버 계층은 이 스크립트가 본다.
 
+## 3c. 데모 데이터 정리 + 새 출발 (Phase 4.1 · 설계서 v2.8 §4-1c)
+
+`seed.sql`을 넣어 데모 8행사로 화면을 확인한 뒤, 실제 업무 데이터로 시작할 때의 절차다.
+
+1. **본인을 관리자로 승격** — 행사 삭제는 전역 `app_role='admin'` 전용이다(프로젝트 pm으로는 불가).
+   매직링크로 한 번 로그인해 `profiles` 행이 생긴 뒤, SQL Editor에서 한 줄:
+   ```sql
+   select app.promote_admin('본인@이메일');
+   ```
+   `grant_demo_access`를 이미 돌렸다면 승격이 포함돼 있으므로 생략해도 된다.
+2. **시드 데모 데이터 제거** — `npm run supabase:reset-demo`
+   - **미리보기가 기본이다.** 무엇을 지울지(행사 8건·견적 6·협력사 8·담당자 4와 cascade 표 행 수)만 출력하고
+     아무것도 바꾸지 않는다. 대상 DB를 오인하지 않도록 URL의 host를 함께 찍는다.
+   - 실제 삭제는 `npm run supabase:reset-demo -- --yes`.
+   - **시드 id만 지운다** — `md5('communicator-seed:' || 픽스처 id)`. 앱에서 직접 만든 행사·견적·협력사·담당자는
+     id가 달라 대상이 되지 않는다. 조건 없는 delete·truncate는 쓰지 않는다.
+   - 실제 데이터가 참조하는 협력사·담당자는 FK가 막는다 → **강제하지 않고** 사유를 적어 남긴다(정상 종료).
+   - 되돌리려면 `npm run supabase:seed`로 재시드하면 된다(멱등).
+   - **service 경로 전용** — `SUPABASE_SECRET_KEY`가 필요하다. authenticated 세션은 `projects`가 0행이라
+     지울 대상 자체를 볼 수 없다.
+3. **앱에서 첫 행사 만들기** — 행사가 0건이면 내부 화면이 "첫 행사 만들기" 지면으로 유도한다(막다른 길이 아니다).
+4. 이후 개별 행사 삭제는 앱에서 한다 — S-1 행사 목록 카드의 `삭제`, 또는 행사 설정 ③ 유형·연동 탭 맨 아래.
+   확인 단계로 **행사명을 직접 입력**해야 진행된다. 종료 여부와 무관하게 지울 수 있다.
+
 ## 4. 키 취급 규약 (CLAUDE.md §9 · 설계서 §12)
 
 - `.env.local`(gitignore)에만: `VITE_SUPABASE_URL` · `VITE_SUPABASE_PUBLISHABLE_KEY` · `SUPABASE_SECRET_KEY` · (임시) `SUPABASE_ACCESS_TOKEN`

@@ -289,11 +289,22 @@ export class MockProvider implements DataProvider {
     return user
   }
 
+  /**
+   * 현재 사용자 + 첫 멤버십의 역할. 멤버십이 하나도 없는 사용자는 **예외 대신** 최소 권한(reg)·빈
+   * project_id로 돌려준다 — 새 사용자가 행사를 만들 수 있어야 하고, 마지막 행사를 지운 직후에도
+   * 화면이 403으로 죽지 않아야 하기 때문이다. 실제 권한은 각 메서드의 단언(assertPm 등)과
+   * Phase 4의 RLS가 판정한다. SupabaseProvider와 동일한 계약이다 —
+   * `src/providers/supabase/ctx.ts`의 currentUser() 주석 참조.
+   */
   private currentUser(): CurrentUser {
     const user = this.mustFindUser(this.state.current_user_id)
     const membership = this.state.members.find((m) => m.user_id === user.id)
-    if (!membership) throw new ProviderError('forbidden', '프로젝트 멤버가 아닙니다.')
-    return { ...user, role: membership.role, project_id: membership.project_id, app_role: this.appRoleOf(user.id) }
+    return {
+      ...user,
+      role: membership?.role ?? 'reg',
+      project_id: membership?.project_id ?? '',
+      app_role: this.appRoleOf(user.id),
+    }
   }
 
   /** §4-1b — profiles 행이 없으면 가입 기본값 'staff' */
@@ -514,6 +525,120 @@ export class MockProvider implements DataProvider {
     project.closed_at = closed ? nowIso() : null
     this.log(projectId, `user:${user.id}`, closed ? 'project.closed' : 'project.reopened', 'project', projectId)
     return project
+  }
+
+  /**
+   * v2.8 §4-1c §8 DELETE /projects/{id} — 행사 하드 삭제. **되돌릴 수 없다**(휴지통 없음).
+   *
+   * 지운다: 멤버·발주처 담당자/토큰·산출물과 그 아래 전부(버전·컨펌·코멘트·큐·시나리오 블록·
+   * 가이드 섹션)·마일스톤·RSVP·참가자·활동 로그·미등록 파일·프로그램 세션·WBS·R&R·컴플라이언스
+   * 카드·랜딩(지표 포함)·정산 보드/버킷/항목·파트너 등급/파트너/파트너 토큰·시트 연결과 원본 행.
+   *
+   * 남는다: 견적(quotes)·견적 임포트(quote_imports)는 **행을 지우지 않고 project_id만 null로 푼다** —
+   * 금액 원본이자 골든 벡터의 근거라 행사와 수명을 같이하지 않는다(SQL도 on delete set null).
+   * 주소록(users·profiles)과 협력사 마스터(vendors)는 행사 비종속이라 손대지 않는다.
+   *
+   * 권한은 **전역 app_role='admin' 하나뿐**이다 — 행사 pm은 자기 행사라도 지울 수 없다.
+   * 파괴 범위가 행사 경계를 넘어(견적 연결 해제) 미치고 복구 경로가 없어서, 행사 단위 권한이 아니라
+   * 조직 단위 권한에 묶는다.
+   *
+   * 종료(closed) 행사도 지울 수 있다 — assertWritable을 타지 않는다. 종료는 삭제의 선행 조건이
+   * 아니고(활성 행사도 admin이면 지울 수 있다), 종료 행사만 지울 수 있게 하면 오히려
+   * '종료 → 삭제' 2단 조작을 강요하게 된다.
+   */
+  async deleteProject(projectId: UUID): Promise<void> {
+    this.assertAdmin()
+    // 종료 여부와 무관 — assertWritable을 부르지 않는다(위 JSDoc 참조)
+    this.mustFindProject(projectId)
+
+    // ① 부모를 지우기 전에 자식 조회용 id 집합부터 모은다(지운 뒤에는 되짚을 수 없다)
+    const delIds = new Set(
+      this.state.deliverables.filter((d) => d.project_id === projectId).map((d) => d.id),
+    )
+    const verIds = this.state.versions.filter((v) => delIds.has(v.deliverable_id)).map((v) => v.id)
+    const landingIds = this.state.landing_pages
+      .filter((l) => l.project_id === projectId)
+      .map((l) => l.id)
+    const boardIds = new Set(
+      this.state.settlement_boards.filter((b) => b.project_id === projectId).map((b) => b.id),
+    )
+    const partnerIds = new Set(
+      this.state.partners.filter((p) => p.project_id === projectId).map((p) => p.id),
+    )
+
+    // ② 살아남는 쪽(견적·견적 임포트)을 먼저 떼어낸다 — 프로젝트 행이 사라진 뒤에 매칭하면
+    //    어느 견적이 이 행사 것이었는지 알 수 없다
+    for (const q of this.state.quotes) {
+      if (q.project_id === projectId) {
+        q.project_id = null
+        q.updated_at = nowIso()
+      }
+    }
+    for (const qi of this.state.quote_imports) {
+      if (qi.project_id === projectId) qi.project_id = null
+    }
+
+    // ③ blob URL 회수 — mock 업로드는 메모리에 매달려 있어 참조를 끊는 것만으로는 안 풀린다
+    const canRevoke = typeof URL !== 'undefined' && typeof URL.revokeObjectURL === 'function'
+    for (const versionId of verIds) {
+      const url = this.uploadedFileUrls.get(versionId)
+      if (url === undefined) continue
+      if (canRevoke && url.startsWith('blob:')) URL.revokeObjectURL(url)
+      this.uploadedFileUrls.delete(versionId)
+    }
+    // idCounters는 건드리지 않는다 — 지운 행사의 번호를 재사용하면 새 행사가 옛 id를 물려받는다
+
+    // ④ 손자 이하(부모 id로만 닿는 것들)
+    this.state.settlement_items = this.state.settlement_items.filter(
+      (i) => !boardIds.has(i.board_id),
+    )
+    this.state.settlement_buckets = this.state.settlement_buckets.filter(
+      (b) => !boardIds.has(b.board_id),
+    )
+    this.state.partner_tokens = this.state.partner_tokens.filter(
+      (t) => !partnerIds.has(t.partner_id),
+    )
+    for (const landingId of landingIds) delete this.state.landing_metrics[landingId]
+    this.state.versions = this.state.versions.filter((v) => !delIds.has(v.deliverable_id))
+    this.state.approvals = this.state.approvals.filter((a) => !delIds.has(a.deliverable_id))
+    this.state.comments = this.state.comments.filter((c) => !delIds.has(c.deliverable_id))
+    this.state.cues = this.state.cues.filter((c) => !delIds.has(c.deliverable_id))
+    this.state.scenario_blocks = this.state.scenario_blocks.filter(
+      (b) => !delIds.has(b.deliverable_id),
+    )
+    this.state.guide_sections = this.state.guide_sections.filter(
+      (g) => !delIds.has(g.deliverable_id),
+    )
+
+    // ⑤ project_id를 직접 들고 있는 자식 전부
+    const keep = <T extends { project_id: UUID }>(rows: T[]): T[] =>
+      rows.filter((r) => r.project_id !== projectId)
+    this.state.members = keep(this.state.members)
+    this.state.client_contacts = keep(this.state.client_contacts)
+    this.state.client_tokens = keep(this.state.client_tokens)
+    this.state.deliverables = keep(this.state.deliverables)
+    this.state.milestones = keep(this.state.milestones)
+    this.state.rsvp_contacts = keep(this.state.rsvp_contacts)
+    this.state.attendees = keep(this.state.attendees)
+    this.state.activity_log = keep(this.state.activity_log)
+    this.state.unregistered_files = keep(this.state.unregistered_files)
+    this.state.program_sessions = keep(this.state.program_sessions)
+    this.state.wbs_tasks = keep(this.state.wbs_tasks)
+    this.state.role_charters = keep(this.state.role_charters)
+    this.state.compliance_cards = keep(this.state.compliance_cards)
+    this.state.landing_pages = keep(this.state.landing_pages)
+    this.state.settlement_boards = keep(this.state.settlement_boards)
+    this.state.partner_tiers = keep(this.state.partner_tiers)
+    this.state.partners = keep(this.state.partners)
+    this.state.sheet_connections = keep(this.state.sheet_connections)
+    this.state.sheet_source_rows = keep(this.state.sheet_source_rows)
+
+    // ⑥ 행사 행
+    this.state.projects = this.state.projects.filter((p) => p.id !== projectId)
+
+    // 삭제 자체는 this.log()를 부르지 않는다 — activity_log는 project_id에 매인 행사 스코프 로그라
+    // 방금 ⑤에서 같이 지워졌다. 여기서 남겨봐야 고아 행이 되거나 다음 삭제 때 사라진다.
+    // (감사 로그가 필요하면 행사 밖 저장소가 있어야 한다 — 설계서 §12 이탈로 기록됨.)
   }
 
   async addMember(projectId: UUID, input: MemberInput): Promise<MemberWithProfile> {
@@ -1545,6 +1670,19 @@ export class MockProvider implements DataProvider {
   private assertPm(): CurrentUser {
     const user = this.currentUser()
     if (user.role !== 'pm') throw new ProviderError('forbidden', 'PM 전용 기능입니다.')
+    return user
+  }
+
+  /**
+   * v2.8 §4-1c — 전역 admin 단언(행사 삭제 전용). 행사 역할(pm)과 무관한 조직 단위 권한이라
+   * currentUser()의 멤버십 경로를 타지 않고 current_user_id + profiles.app_role만 본다 —
+   * 멤버십이 0건인 admin(마지막 행사를 지운 직후가 바로 그 상태다)도 통과해야 한다.
+   */
+  private assertAdmin(): UserRef {
+    const user = this.mustFindUser(this.state.current_user_id)
+    if (this.appRoleOf(user.id) !== 'admin') {
+      throw new ProviderError('forbidden', '행사 삭제는 관리자(admin) 권한이 필요합니다.')
+    }
     return user
   }
 
