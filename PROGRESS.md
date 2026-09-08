@@ -1154,6 +1154,30 @@ DoD-29뿐 아니라 **실물 검산 2건에서 바로** 잡힌다(위 표의 "2 
 - 이후 Phase 5(Drive) → Phase 6(알림·cron)
 
 ## 5. 결정 로그
+- **(2026-09-07, Phase 4.1) DataProvider v12 동결 해제 → v13 재동결(125메서드).** 근거 = 사용자 지시
+  "앞으로 생성된 행사의 경우 삭제가 가능하도록(관리자 권한설정)". `deleteProject` 1메서드 추가, 기존 124메서드 시그니처 불변.
+  §9 규약대로 **설계서 개정(v2.8 §4-1c 신설)을 동반**했다. `importVendorQuote`는 **v14 예약**으로 순연(v13은 본 증분이 소진)
+- **(2026-09-07, Phase 4.1) 행사 삭제의 권한 축 = 전역 `app_role='admin'`(프로젝트 pm 아님).** 행사 안의 다른 파괴적 조작은
+  전부 그 행사의 pm이 하지만, 삭제는 되돌릴 수 없고 행사 자체가 사라져 "그 행사 안에서의 지위"로 판정하면 순환이다.
+  §6.1에 **pm 열이 `—`인 첫 행**이 생겼고, **admin이 sales와 갈라지는 첫 지점**이다 — 기존 `admin·sales` 술어
+  (`app.is_quote_user()`·`canUseQuotes`)는 손대지 않고 새 술어(`app.is_admin()`·`canDeleteProject`)를 추가했다. 사용자 승인(버튼 선택)
+- **(2026-09-07, Phase 4.1) 종료(closed)는 삭제의 선행 조건이 아니다.** `assertWritable`·`app.require_writable` 미경유.
+  종료 행사를 지우는 게 정상 동선인데 종료 가드를 태우면 "종료했더니 삭제가 막힌다"가 된다. 오삭제 방어는 상태가 아니라
+  **확인 단계**(행사명 타이핑)로 옮겼다 — `window.confirm`은 Enter 한 번으로 지나가고 대상 오인을 거르지 못한다
+- **(2026-09-07, Phase 4.1) `projects`에 delete RLS 정책을 두지 않는다.** 정책을 열면 가드 없는 맨 삭제가 생긴다.
+  정책 부재 + `security definer` RPC(`public.delete_project`) 단일 경로가 이중 방어다. 로컬 Postgres 16 실측:
+  authenticated의 직접 DELETE는 **0행 매칭으로 조용히 성공**하는 것처럼 보인다(PostgREST가 성공을 돌려준다) — 정책을 안 여는 근거
+- **(2026-09-07, Phase 4.1) 견적은 지우지 않고 분리한다.** `quotes`·`quote_imports`는 `project_id`만 null
+  (SQL은 이미 `on delete set null`). 금액 원본이자 골든 벡터(DoD 21)의 근거라 행사와 수명을 같이하지 않는다.
+  주소록(`profiles`)·협력사(`vendors`)는 행사 비종속이라 무관 — 배정만 사라져 `removePerson`이 더는 409를 내지 않는다
+  (= 사용자가 요청한 "임시 담당자 삭제"의 정상 경로)
+- **(2026-09-07, Phase 4.1) 이탈 2건.** ① 삭제 자체의 `activity_log`는 남지 않는다 — 로그 행이 `project_id`에 매여
+  같은 cascade에 포함된다(설계서 §12 감사 규약 이탈, §4-1c에 명시. 코드에도 "나중에 로그를 되살리지 말 것" 주석).
+  ② Drive 트리는 남는다 — DB만 지운다(§12 "파일은 Drive 자체가 원본"), 정리는 §20 런북 수동 절차
+- **(2026-09-07, Phase 4.1) 사용자 결정 3건(버튼).** ① 저장 방식 = **Supabase 실서버 전환**(mock 유지 아님) —
+  라이브 번들 실측으로 `www.rmb-mice.com`이 mock 모드임을 확인(`prj-stc26` 포함·Supabase URL 없음), 즉 만든 행사가
+  새로고침마다 사라져 삭제 기능도 반쪽이 된다는 사실을 근거로 제시 ② 삭제 권한 = **admin 전용** ③ 범위 = **[B] 3턴 분할**.
+  추가로 운영 DB = **기존 dev 프로젝트 승격**(신규 생성 아님)
 - **(2026-09-07 오후, Phase 4 3단) 토큰·견적 참조 FK의 on-delete 규칙** — dev 실측에서 행사 cascade 삭제가 `approvals.decided_via_token`·
   `comments.author_token`(→ client_tokens)·`settlement_boards.quote_id`(→ quotes)에 막혔다. 앱은 토큰을 지우지 않고(회수 = `revoked_at`) 견적도
   지우지 않으므로 운영 경로엔 영향이 없지만, 행사 삭제·검증 정리·향후 아카이브가 막히면 안 된다. 결정: 감사 참조(approvals·boards)는 `set null`,

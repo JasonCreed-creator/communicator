@@ -7,15 +7,18 @@
 //  · 세팅 미완료 카드는 canvas 면 + negative 보더로 갈라, 남은 필수 항목·온보딩 진행률·
 //    액션 버튼을 카드 안에 넣는다.
 //  · 현재 행사는 2px accent 보더 + '현재' 배지.
+//
+// v2.8 §4-1c — 카드 액션 행에 삭제가 붙는다(권한 = 전역 app_role='admin').
 import { useState, type KeyboardEvent, type MouseEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import ErrorAlert from '../components/internal/ErrorAlert'
 import PageHeader from '../components/internal/PageHeader'
 import ProgressBar from '../components/internal/ProgressBar'
 import { LevelBadge } from '../components/internal/StatusBadge'
+import DeleteProjectDialog, { canDeleteProject } from '../components/settings/DeleteProjectDialog'
 import { missingRequired } from '../components/settings/requiredFields'
 import { useProject } from '../context/ProjectContext'
-import { useMutation } from '../hooks/useAsync'
+import { useAsync, useMutation } from '../hooks/useAsync'
 import { EVENT_TYPE_LABELS, ddayLabel, formatDate } from '../lib/labels'
 import { getDataProvider } from '../providers'
 import type { ProjectSummary } from '../types/views'
@@ -27,6 +30,12 @@ export default function ProjectListPage() {
   const navigate = useNavigate()
   const [showClosed, setShowClosed] = useState(false)
   const createMutation = useMutation(() => provider.createProject({}))
+  // 권한은 화면에서 한 번만 읽어 카드에 내린다 — 카드마다 getCurrentUser()를 부르면
+  // 행사 수만큼 같은 조회가 반복된다(사이드바 견적 게이트와 같은 관용구).
+  const me = useAsync(() => provider.getCurrentUser(), [])
+  const canDelete = !!me.data && canDeleteProject(me.data)
+  // 열린 삭제 모달은 화면이 하나만 붙든다 — 카드마다 상태를 두면 두 카드가 동시에 열 수 있다.
+  const [pendingDelete, setPendingDelete] = useState<ProjectSummary | null>(null)
 
   const active = summaries.filter((s) => s.status === 'active')
   const closed = summaries.filter((s) => s.status === 'closed')
@@ -81,6 +90,8 @@ export default function ProjectListPage() {
             onOpen={() => openActive(s)}
             onContinueOnboarding={() => continueOnboarding(s)}
             reloadSummaries={reloadSummaries}
+            canDelete={canDelete}
+            onRequestDelete={() => setPendingDelete(s)}
           />
         ))}
 
@@ -104,6 +115,8 @@ export default function ProjectListPage() {
             {showClosed ? '접기' : `종료 ${closed.length}`}
           </button>
 
+          {/* 종료 행사도 지울 수 있다 — 종료는 삭제의 선행 조건이 아니고(§4-1c 결정 2),
+              끝난 행사를 치우는 것이 오히려 정상 동선이다. 그래서 canDelete를 그대로 내린다. */}
           {showClosed && (
             <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {closed.map((s) => (
@@ -115,11 +128,28 @@ export default function ProjectListPage() {
                   onOpen={() => openClosed(s)}
                   onContinueOnboarding={() => continueOnboarding(s)}
                   reloadSummaries={reloadSummaries}
+                  canDelete={canDelete}
+                  onRequestDelete={() => setPendingDelete(s)}
                 />
               ))}
             </div>
           )}
         </div>
+      )}
+
+      {/* 삭제 확인은 모달이 전담한다(행사명 타이핑·오류 표시 포함). 여기서는 성공 후
+          목록만 다시 읽는다 — 지운 행사가 현재 행사였거나 마지막 행사였어도
+          ProjectContext가 스스로 되잡는다(죽은 저장값 정리 / 행사 0건 빈 화면). */}
+      {pendingDelete && (
+        <DeleteProjectDialog
+          projectId={pendingDelete.id}
+          projectName={pendingDelete.name}
+          onCancel={() => setPendingDelete(null)}
+          onDeleted={() => {
+            setPendingDelete(null)
+            reloadSummaries()
+          }}
+        />
       )}
     </section>
   )
@@ -132,6 +162,8 @@ function ProjectCard({
   onOpen,
   onContinueOnboarding,
   reloadSummaries,
+  canDelete,
+  onRequestDelete,
 }: {
   summary: ProjectSummary
   isCurrent: boolean
@@ -139,6 +171,10 @@ function ProjectCard({
   onOpen: () => void
   onContinueOnboarding: () => void
   reloadSummaries: () => void
+  /** 전역 app_role='admin'인지 — 화면에서 한 번 판정해 내려온다(카드는 조회하지 않는다) */
+  canDelete: boolean
+  /** 삭제 모달 열기 — 열린 모달은 화면이 하나만 붙든다 */
+  onRequestDelete: () => void
 }) {
   const closeMutation = useMutation((closed: boolean) => provider.closeProject(summary.id, closed))
 
@@ -170,6 +206,7 @@ function ProjectCard({
         : 'bg-track text-ink-sub'
 
   const quiet = summary.pending_approvals === 0 && summary.delayed_tasks === 0
+  const actionGutter = canDelete ? 'pr-40' : 'pr-28'
 
   return (
     <div
@@ -201,16 +238,37 @@ function ProjectCard({
         >
           {closedSection ? '재개' : '종료'}
         </button>
+        {/* 삭제 — admin이 아니면 여기서는 버튼 자체를 숨긴다.
+            §10 진입점 원칙은 "게이트된 **화면**은 메뉴에 사유와 함께 남긴다"는 규칙인데,
+            이건 카드 안 여러 액션 중 하나다. 사유를 붙인 비활성 상태는 행사 설정 ③ 탭이
+            보여주므로, 진입점 둘 중 하나가 스스로 설명한다 — 원칙을 지키면서 모든 카드에
+            영구히 죽은 버튼을 박아 두지 않는 자리다. */}
+        {canDelete && (
+          <button
+            type="button"
+            data-testid="card-delete"
+            onClick={(e) => {
+              // 카드 자체가 role="button"이라 멈추지 않으면 삭제를 누른 순간 행사로 진입한다
+              e.stopPropagation()
+              onRequestDelete()
+            }}
+            className="btn btn-ghost-negative btn-sm"
+          >
+            삭제
+          </button>
+        )}
       </div>
 
-      {/* ① 정체 — 유형 · 일자 · 장소 + 행사명 */}
+      {/* ① 정체 — 유형 · 일자 · 장소 + 행사명
+           우측 여백은 절대배치된 액션 행을 피하는 값 — 삭제 버튼이 붙는 admin 화면에서는
+           행이 한 칸 더 길어지므로 함께 넓힌다(글자와 버튼이 겹치지 않게). */}
       <div>
-        <p className="t-caption pr-28">
+        <p className={`t-caption ${actionGutter}`}>
           {EVENT_TYPE_LABELS[summary.event_type]} ·{' '}
           {summary.event_date ? formatDate(summary.event_date) : '일정 미정'} ·{' '}
           {summary.venue ?? '미정'}
         </p>
-        <h3 className="t-card-title mt-1.5 pr-28">{summary.name}</h3>
+        <h3 className={`t-card-title mt-1.5 ${actionGutter}`}>{summary.name}</h3>
       </div>
 
       {needsSetup ? (

@@ -8,6 +8,10 @@
 //    개수는 버튼 title로 전달한다 — 탭의 접근 가능한 이름을 흔들지 않기 위해서다.
 //  · Drive·Slack 미연결 자리를 빈 상태 정본(②)으로 — 무엇이 좋아지는지 + 언제 열리는지.
 //    게이트 뒤에 숨기지 않는다(§10 진입점 원칙).
+//
+// v2.8 §4-1c — ③탭 맨 아래 위험 구역(행사 삭제). 권한 축이 이 화면의 다른 조작과 다르다:
+//  다른 편집은 전부 이 행사의 pm이 하지만 삭제만 **전역 app_role='admin'**이다. admin이 아니어도
+//  카드는 그대로 보이고 버튼만 잠긴다 — 무엇이 없어서 막혔는지 그 자리에서 읽혀야 한다(§10 진입점 원칙).
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Card from '../components/internal/Card'
@@ -17,6 +21,7 @@ import PageHeader from '../components/internal/PageHeader'
 import PermissionNotice from '../components/internal/PermissionNotice'
 import PartnerRosterEditor from '../components/partner/PartnerRosterEditor'
 import ClientContactsEditor from '../components/settings/ClientContactsEditor'
+import DeleteProjectDialog, { canDeleteProject } from '../components/settings/DeleteProjectDialog'
 import MembersEditor from '../components/settings/MembersEditor'
 import PartnerGuideEditor from '../components/settings/PartnerGuideEditor'
 import PartnerTierEditor from '../components/settings/PartnerTierEditor'
@@ -100,12 +105,15 @@ export default function SettingsPage() {
   const { projectId, reloadSummaries } = useProject()
   const navigate = useNavigate()
   const [tab, setTab] = useState<Tab>('overview')
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
 
   const project = useAsync(() => provider.getProject(projectId), [projectId])
   const currentUser = useAsync(() => provider.getCurrentUser(), [])
   const members = useAsync(() => provider.listMembers(projectId), [projectId])
   const contacts = useAsync(() => provider.listClientContacts(projectId), [projectId])
   const isPm = currentUser.data?.role === 'pm'
+  // 삭제만 전역 축이다 — 같은 currentUser 조회를 재사용한다(중복 getCurrentUser 금지)
+  const canDelete = !!currentUser.data && canDeleteProject(currentUser.data)
   // 토큰 조회는 pm 전용(provider assertPm) — 아니면 호출 자체를 하지 않는다(무의미한 오류 방지)
   const clientTokens = useAsync(
     () => (isPm ? provider.listClientTokens(projectId) : Promise.resolve([])),
@@ -444,6 +452,69 @@ export default function SettingsPage() {
                   </div>
                 </Card>
               </div>
+
+              {/* 위험 구역 — 되돌릴 수 없는 조작은 탭 맨 아래에 따로 둔다(연동 카드와 섞지 않는다).
+                  admin이 아니어도 카드는 보이고 버튼만 잠긴다(§10 진입점 원칙·§4-2c). */}
+              <Card
+                title="행사 삭제"
+                action={
+                  <span className="inline-flex shrink-0 items-center rounded-full bg-negative-tint px-2 py-0.5 text-xs font-medium text-negative">
+                    위험 구역
+                  </span>
+                }
+              >
+                <div data-testid="danger-zone" className="space-y-3">
+                  <p className="text-sm leading-relaxed text-ink-sub">
+                    이 행사와 여기에 속한 자료가 전부 사라집니다 — 담당자 배정·제작 항목과 버전·컨펌
+                    기록·코멘트·일정·등록 명단·랜딩·정산·파트너·큐시트/시나리오/운영가이드·시트
+                    연결·활동 로그.
+                    <b className="text-negative"> 되돌릴 수 없습니다.</b>
+                  </p>
+                  <p className="text-sm leading-relaxed text-ink-sub">
+                    연결된 견적은 지워지지 않고 행사 연결만 풀립니다(사이드바 '견적만 있음'으로
+                    돌아갑니다). 담당자 주소록과 협력사 목록도 그대로 남고, 배정만 사라집니다.
+                  </p>
+                  <p className="text-xs text-ink-cap">
+                    종료 여부와 관계없이 삭제됩니다 — 종료는 삭제의 선행 조건이 아닙니다.
+                  </p>
+                  {canDelete ? (
+                    <button
+                      type="button"
+                      onClick={() => setConfirmingDelete(true)}
+                      className="btn btn-ghost-negative btn-sm"
+                    >
+                      행사 삭제
+                    </button>
+                  ) : (
+                    <PermissionNotice
+                      reason="행사 삭제는 관리자(admin) 권한이 필요합니다."
+                      howToRequest="이 행사의 PM이어도 삭제할 수 없습니다 — 행사 안의 역할이 아니라 계정 전역 권한이라, 관리자가 계정에 admin 권한을 부여해야 열립니다."
+                      action={
+                        <button type="button" disabled className="btn btn-ghost-negative btn-sm">
+                          행사 삭제
+                        </button>
+                      }
+                    />
+                  )}
+                </div>
+              </Card>
+
+              {/* 확인(행사명 타이핑)·오류 표시는 모달이 전담한다 — 여기서 다시 구현하지 않는다.
+                  삭제 후 이 화면에 남지 않는 이유: S-1 목록과 달리 이 화면은 방금 사라진 행사에
+                  스코프돼 있어, 남아 있으면 죽은 id의 '행사 설정'을 그리게 된다. 그래서 S-1로
+                  옮긴다 — 마지막 행사였다면 ProjectContext가 거기서 자기 빈 화면을 띄운다. */}
+              {confirmingDelete && (
+                <DeleteProjectDialog
+                  projectId={projectId}
+                  projectName={project.data.name}
+                  onCancel={() => setConfirmingDelete(false)}
+                  onDeleted={() => {
+                    setConfirmingDelete(false)
+                    reloadSummaries()
+                    navigate('/projects')
+                  }}
+                />
+              )}
             </div>
           )}
         </>
