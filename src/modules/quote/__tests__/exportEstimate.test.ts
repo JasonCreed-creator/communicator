@@ -430,3 +430,86 @@ describe("DoD 22 — 외부 업로드·네트워크 호출 0건", () => {
     expect(source.default).not.toMatch(/\bbackup\s*[=:]/);
   });
 });
+
+// ── 2026-09-10 디자인 감수 + 직인 + 시트 최적화 ──
+describe("exportEstimate — 행 높이·격자선·통화 서식 (2026-09-10 디자인 감수)", () => {
+  it("사용 중인 모든 행에 명시 높이가 있고, 항목 행은 20pt 이상·2줄 내용은 더 높다", async () => {
+    const { ws } = await buildSheet(SAMPLE_CFG);
+    const last = ws.rowCount;
+    expect(last).toBeGreaterThan(40);
+    const missing: number[] = [];
+    for (let r = 1; r <= last; r++) {
+      const h = ws.getRow(r).height;
+      if (h === undefined || h === null) missing.push(r);
+    }
+    expect(missing).toEqual([]);
+    // 사용자 확정 간격은 그대로: 타이틀 3행 22.65 · 오렌지 라인 4 · 총액 27.5 · 베뉴 고지 18.65
+    expect(ws.getRow(1).height).toBeCloseTo(22.65, 2);
+    expect(ws.getRow(4).height).toBe(4);
+    expect(ws.getRow(10).height).toBe(27.5);
+    expect(ws.getRow(14).height).toBeCloseTo(18.65, 2);
+    // 헤더 블록 5~9행은 같은 높이(20)
+    for (let r = 5; r <= 9; r++) expect(ws.getRow(r).height).toBe(20);
+    // 항목 행: 1줄 = 20, 긴 산출 내역(운영 인력·보험 — 비고가 2줄)은 그보다 높다
+    let opsRow: number | null = null, oneLineRow: number | null = null;
+    ws.eachRow((row, n) => {
+      if (row.getCell(1).value === "행사 운영 인력") opsRow = n;
+      if (row.getCell(1).value === "엔지니어") oneLineRow = n;
+    });
+    expect(ws.getRow(oneLineRow!).height).toBe(20);
+    expect(ws.getRow(opsRow!).height).toBeGreaterThan(20);
+    // 섹션 사이 빈 행은 spacer(10) — 1번 섹션 제목 바로 위(12행)
+    expect(ws.getRow(12).height).toBe(10);
+  });
+
+  it("격자선이 꺼져 있고(문서형) 통화 서식은 따옴표 ₩(Excel·Sheets 공통)", async () => {
+    const { ws } = await buildSheet(SAMPLE_CFG);
+    expect(ws.views?.[0]?.showGridLines).toBe(false);
+    expect(ws.getCell("D10").numFmt).toBe('"₩"#,##0');
+    expect(ws.getCell("G10").numFmt).toBe('"₩"#,##0');
+  });
+
+  it("한글금액 수식이 이식형(NUMBERSTRING 없음)이고 두 총액 행 모두에 걸린다", async () => {
+    const { ws } = await buildSheet(SAMPLE_CFG);
+    for (const ref of ["B10", "B11"]) {
+      const f = formulaOf(ws.getCell(ref).value) ?? "";
+      expect(f).not.toContain("NUMBERSTRING");
+      expect(f).toContain(`TEXT(ROUND(ABS(D${ref.slice(1)}),0)`);
+    }
+  });
+});
+
+describe("exportEstimate — 리멤버 기본 레이아웃 직인 (인)", () => {
+  it("공급자 행은 G 상호 / H '(인)'로 나뉘고(병합 해제), 상호에는 '(인)'이 없다", async () => {
+    const { ws } = await buildSheet(SAMPLE_CFG);
+    expect(ws.getCell("F7").value).toBe("공 급 자");
+    expect(String(ws.getCell("G7").value)).toBe("㈜리멤버앤컴퍼니");
+    expect(ws.getCell("H7").value).toBe("(인)");
+    expect(ws.getCell("G7").isMerged).toBe(false);
+    // 다른 공급자 정보 행은 여전히 G:H 병합
+    expect(ws.getCell("G6").isMerged).toBe(true);
+  });
+
+  it("직인 자산이 없으면(404) 이미지 0건으로 정상 생성 — '(인)' 글자만 남는다", async () => {
+    const { ws } = await buildSheet(SAMPLE_CFG);
+    expect(ws.getImages().length).toBe(0);
+  });
+
+  it("brand.sealBase64가 주어지면 기본 레이아웃에서도 직인이 H7 '(인)' 위에 임베드된다", async () => {
+    const { ws } = await buildSheet(SAMPLE_CFG, { brand: { sealBase64: TINY_PNG } });
+    const images = ws.getImages();
+    expect(images.length).toBe(1);
+    // ExcelJS 타입 정의에는 ext가 없지만 oneCell 앵커는 ext(px)를 갖고 돌아온다
+    const range = images[0].range as unknown as { tl: { nativeCol: number; nativeRow: number }; ext?: { width: number; height: number } };
+    // H열(0-based 7) — 앵커는 공급자 행(7행) 중심에 오도록 한 행 위(6행, 0-based 5)에서 시작
+    expect(range.tl.nativeCol).toBe(7);
+    expect(range.tl.nativeRow).toBe(5);
+    expect(range.ext).toMatchObject({ width: 60, height: 60 });
+  });
+
+  it("영문 견적서는 '(Seal)' 표식", async () => {
+    const { ws } = await buildSheet(SAMPLE_CFG, { lang: "en" });
+    expect(ws.getCell("H7").value).toBe("(Seal)");
+    expect(String(ws.getCell("G7").value)).toBe("Remember & Company");
+  });
+});

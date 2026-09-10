@@ -372,11 +372,14 @@ describe("옵션 키 정규화 (scaler4k → ledOperating)", () => {
     expect(p.ot).toBe(30_000 * 40 + 2 * BOOTH_PREMIUM_UNIT_PRICE);
   });
 
-  it("한글금액이 NUMBERSTRING 수식으로 총액(D10)에 연동된다", async () => {
+  it("한글금액이 이식형 수식(NUMBERSTRING 아님)으로 총액(D10)에 연동된다", async () => {
     const { ws } = await buildSheet({ ...BASE, options: { emcee: true } });
     const b10 = ws.getCell("B10").value;
     const f = formulaOf(b10) ?? "";
-    expect(f).toContain("NUMBERSTRING(D10");
+    // 2026-09-10: 한국어 Excel 전용 NUMBERSTRING → Excel·Google Sheets 공통 함수만 쓰는 수식(koreanAmountFormula)
+    expect(f).not.toContain("NUMBERSTRING");
+    expect(f).toContain("TEXT(ROUND(ABS(D10),0)");
+    expect(f.startsWith('"일금 "&')).toBe(true);
     // 캐시 결과 형식: "일금 ...원 정 (137,810,000원)" — 한글금액 뒤 숫자 병기
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     expect(String((b10 as any)?.result ?? "")).toMatch(/^일금 .+원 정 \([\d,]+원\)$/);

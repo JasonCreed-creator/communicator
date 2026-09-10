@@ -17,6 +17,11 @@ export interface AuthAdapter {
   /** 성공 시 null, 실패 시 사용자에게 보일 한국어 메시지 */
   signInWithEmail(email: string): Promise<string | null>
   signOut(): Promise<void>
+  /**
+   * 현재 세션의 액세스 토큰 — Vercel Functions(`api/`)를 화면이 직접 부를 때 Bearer로 싣는다
+   * (예: 견적서 → 구글 스프레드시트 생성). mock은 세션이 없어 항상 null.
+   */
+  getAccessToken(): Promise<string | null>
 }
 
 export const mockAuthAdapter: AuthAdapter = {
@@ -26,6 +31,7 @@ export const mockAuthAdapter: AuthAdapter = {
   onChange: () => () => undefined,
   signInWithEmail: async () => null,
   signOut: async () => undefined,
+  getAccessToken: async () => null,
 }
 
 /** 허용 도메인 검사(프론트 선안내 — 서버 정본은 app_config + auth 트리거) */

@@ -14,6 +14,8 @@ interface AuthContextValue {
   signOut: () => Promise<void>
   /** 로그인 화면이 먼저 안내하는 허용 도메인(비어 있으면 제한 없음) */
   allowedDomains: string[]
+  /** 서버 함수(api/) 호출용 Bearer 토큰 — mock은 null */
+  getAccessToken: () => Promise<string | null>
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -55,6 +57,7 @@ export function AuthProvider({ children, adapter }: { children: ReactNode; adapt
         setUser(null)
       },
       allowedDomains: auth.allowedDomains,
+      getAccessToken: () => auth.getAccessToken(),
     }),
     [auth, loading, user],
   )
@@ -73,6 +76,7 @@ export function useAuth(): AuthContextValue {
       signInWithEmail: async () => null,
       signOut: async () => undefined,
       allowedDomains: [],
+      getAccessToken: async () => null,
     }
   }
   return ctx

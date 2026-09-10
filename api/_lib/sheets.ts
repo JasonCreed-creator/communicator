@@ -92,22 +92,26 @@ async function requireMember(env: SheetsEnv, accessToken: string, projectId: str
 }
 
 // ── 구글 API (서비스 계정 JWT → access token) ───────────────────────────
-interface ServiceAccount {
+export interface ServiceAccount {
   client_email: string
   private_key: string
 }
+
+/** 등록 시트 읽기 스코프(§24 단방향 — 읽기 전용) */
+export const SHEETS_READONLY_SCOPE =
+  'https://www.googleapis.com/auth/spreadsheets.readonly https://www.googleapis.com/auth/drive.metadata.readonly'
 
 function base64url(input: Buffer | string): string {
   return Buffer.from(input).toString('base64').replace(/=+$/, '').replace(/\+/g, '-').replace(/\//g, '_')
 }
 
-export async function googleAccessToken(sa: ServiceAccount, fetchImpl: typeof fetch = fetch): Promise<string> {
+export async function googleAccessToken(sa: ServiceAccount, fetchImpl: typeof fetch = fetch, scope: string = SHEETS_READONLY_SCOPE): Promise<string> {
   const now = Math.floor(Date.now() / 1000)
   const header = base64url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }))
   const claims = base64url(
     JSON.stringify({
       iss: sa.client_email,
-      scope: 'https://www.googleapis.com/auth/spreadsheets.readonly https://www.googleapis.com/auth/drive.metadata.readonly',
+      scope,
       aud: 'https://oauth2.googleapis.com/token',
       iat: now,
       exp: now + 3600,

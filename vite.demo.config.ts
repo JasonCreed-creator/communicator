@@ -20,6 +20,8 @@ export default defineConfig({
     alias: [
       { find: /^\.\/supabase\/SupabaseProvider$/, replacement: fileURLToPath(new URL('./demo/stubs/supabaseStub.ts', import.meta.url)) },
       { find: /^\.\/supabase\/authAdapter$/, replacement: fileURLToPath(new URL('./demo/stubs/supabaseStub.ts', import.meta.url)) },
+      // 견적서 → 구글 스프레드시트 생성(서버 함수 호출)은 데모에 싣지 않는다 — fetch 호출부 1건(브랜드 자산) 가드 유지.
+      { find: /^\.\.\/\.\.\/modules\/quote\/export\/createQuoteSpreadsheet$/, replacement: fileURLToPath(new URL('./demo/stubs/quoteGsheetStub.ts', import.meta.url)) },
     ],
   },
   plugins: [inlineBrandAssets(), react(), tailwindcss(), singleFileArtifact()],

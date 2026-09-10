@@ -141,48 +141,55 @@ check(
   `${docCountBefore} → ${docRequests.length}`,
 )
 
-// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — **로그인 게이트(Phase 4c, 2026-09-07)**.
-//     mock 공급자에서는 게이트가 통과여야 한다: #/login → 즉시 #/home(원래 목적지) · 내부 셸 렌더 ·
-//     발주처 지면 #/c/demo는 게이트 밖(로그인 없이 그대로) · 런처 → 커뮤니케이터 진입 경로 회귀 없음. ──
+// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — **견적서 내보내기 2종(2026-09-10)**.
+//     S-2 목록에 'Excel 내려받기'·'구글 시트로 만들기'가 나란히 있고, mock 공급자(로그인 없음)에서 시트 버튼은
+//     무음 실패 대신 안내 문구(role=alert)를 띄운다(무동작 금지). 에디터 ④에도 같은 두 버튼이 있다.
+//     (직전 세션 ③ = 로그인 게이트 — 그 경로는 launcher.test·AuthGate 테스트가 계속 잡는다) ──
 
 // 데모 안내 칩은 우하단 고정이라 카드 하단과 겹칠 수 있다 — 사용자와 똑같이 닫고 시작한다
 const notice = tab.getByRole('button', { name: '안내 닫기' })
 if (await notice.count()) await notice.click()
 
-// /login: mock 모드에서는 로그인 화면이 뜨지 않고 목적지로 간다(AuthGate·LoginPage 통과 규약)
-const docBeforeLogin = docRequests.length
+const docBeforeQuotes = docRequests.length
 await tab.evaluate(() => {
-  window.location.hash = '#/login'
+  window.location.hash = '#/quotes'
 })
-await tab.waitForURL(/#\/home$/, { timeout: 10_000 })
-await tab.getByRole('heading', { name: '홈 대시보드' }).waitFor({ timeout: 10_000 })
-check(true, 'mock: #/login → #/home 즉시 통과(로그인 화면 미노출)')
-check((await tab.getByRole('heading', { name: 'MICE 커뮤니케이터 로그인' }).count()) === 0, 'mock: 로그인 헤딩 0개')
-check(docRequests.length === docBeforeLogin, '로그인 게이트 통과에 전체 리로드 0', `${docBeforeLogin} → ${docRequests.length}`)
-const shellAfterGate = await tab.locator('aside nav a[aria-current="page"]').innerText()
-check(/홈/.test(shellAfterGate), "게이트 뒤 내부 셸 렌더 — 사이드바 활성 항목 = 홈", shellAfterGate.trim())
-await tab.screenshot({ path: resolve(SHOTS, '03a-login-gate-mock.png') })
+await tab.getByRole('heading', { name: '견적' }).waitFor({ timeout: 10_000 })
+const excelBtn = tab.getByRole('button', { name: 'Excel 내려받기' })
+const sheetBtn = tab.getByRole('button', { name: '구글 시트로 만들기' })
+check((await excelBtn.count()) === 1 && (await sheetBtn.count()) === 1, 'S-2 목록: Excel 내려받기 · 구글 시트로 만들기 버튼 2종')
+check(!(await sheetBtn.isDisabled()), '선택된 견적이 있으면 시트 버튼 활성')
+await sheetBtn.click()
+const alert = tab.getByRole('alert')
+await alert.waitFor({ timeout: 10_000 })
+const alertText = (await alert.innerText()).trim()
+check(/실서버\(로그인\) 모드에서만/.test(alertText) && /Excel로 내려받으세요/.test(alertText), 'mock: 시트 버튼 → 안내 문구(무음 실패 없음)', alertText)
+check((await tab.getByTestId('gsheet-result').count()) === 0, 'mock: 결과 카드(링크) 없음')
+check(docRequests.length === docBeforeQuotes, '견적 목록·안내 표시에 전체 리로드 0', `${docBeforeQuotes} → ${docRequests.length}`)
+await tab.screenshot({ path: resolve(SHOTS, '03a-quotes-export-buttons.png') })
 
-// 발주처 지면은 게이트 밖 — 토큰 링크는 로그인 없이 그대로 열린다(§6.3)
+// 에디터 ④ — 목록에서 '＋ 새 버전'으로 견적 id를 얻고, ?step=4 딥링크로 확인·확정 단계에 진입한다
+await tab.getByRole('button', { name: '＋ 새 버전' }).click()
+await tab.waitForURL(/#\/quotes\/[^/]+\/edit/, { timeout: 10_000 })
+const editHash = await tab.evaluate(() => window.location.hash)
+const quoteId = editHash.match(/#\/quotes\/([^/?]+)\/edit/)?.[1]
+check(Boolean(quoteId), '＋ 새 버전 → 에디터 진입(견적 id 확보)', quoteId)
 await tab.evaluate(() => {
-  window.location.hash = '#/c/demo'
+  window.location.hash = '#/quotes'
 })
-await tab.waitForURL(/#\/c\/demo$/, { timeout: 10_000 })
-await tab.locator('h1').first().waitFor({ timeout: 10_000 })
-check(true, '#/c/demo 발주처 지면이 로그인 없이 열린다', (await tab.locator('h1').first().innerText()).trim())
-check((await tab.locator('aside nav').count()) === 0, '발주처 지면은 내부 셸(사이드바) 밖', `nav ${await tab.locator('aside nav').count()}개`)
-await tab.screenshot({ path: resolve(SHOTS, '03b-client-outside-gate.png') })
-
-// 런처 → 커뮤니케이터 진입(3.21 경로) 회귀 없음 — 게이트가 끼어도 한 번의 클릭으로 홈에 닿는다
-await tab.evaluate(() => {
-  window.location.hash = '#/'
-})
-await tab.getByRole('link', { name: 'MICE 커뮤니케이터 들어가기' }).waitFor({ timeout: 10_000 })
-await tab.getByRole('link', { name: 'MICE 커뮤니케이터 들어가기' }).click()
-await tab.waitForURL(/#\/home$/, { timeout: 10_000 })
-await tab.getByRole('heading', { name: '홈 대시보드' }).waitFor({ timeout: 10_000 })
-check(true, '런처 → 커뮤니케이터(#/home) — 게이트 경유 회귀 없음')
-await tab.screenshot({ path: resolve(SHOTS, '03c-launcher-to-home.png') })
+await tab.getByRole('heading', { name: '견적' }).waitFor({ timeout: 10_000 })
+await tab.evaluate((id) => {
+  window.location.hash = `#/quotes/${id}/edit?step=4`
+}, quoteId)
+const editorExcel = tab.getByRole('button', { name: /Excel 내려받기/ })
+const editorSheet = tab.getByRole('button', { name: /구글 스프레드시트로 만들기/ })
+await editorSheet.waitFor({ timeout: 10_000 })
+check((await editorExcel.count()) === 1, '에디터 ④: Excel 내려받기 버튼')
+check(!(await editorSheet.isDisabled()), '에디터 ④: 저장된 견적이라 시트 버튼 활성')
+await editorSheet.click()
+await tab.getByRole('alert').waitFor({ timeout: 10_000 })
+check(/실서버\(로그인\) 모드에서만/.test((await tab.getByRole('alert').innerText()).trim()), '에디터 ④ mock: 안내 문구')
+await tab.screenshot({ path: resolve(SHOTS, '03b-editor-step4-export.png'), fullPage: true })
 
 await browser.close()
 server.close()
