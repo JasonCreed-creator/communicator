@@ -2,6 +2,7 @@
 
 > 레포 루트에 이 파일을 두고, `docs/mice-communicator-설계서-v2.8.md`를 함께 배치할 것(기존 설계서 파일은 버전 무관 전부 대체·삭제). `docs/mice-communicator-디자인지시서-v1.md`도 함께 배치(Phase 3.9 정본).
 > **스키마·상태 머신·API 계약·권한 규칙·WBS 템플릿(§15)·핸드오프 계약(§16)·이식 인벤토리(§17)·인프라 전환(§18)·D-Day 런북(§20)·주최형 확장(§21)·견적서 임포트(§22)·운영보드 재구성(§23)의 정본은 설계서 v2.5이다(정산보드는 §19·§4-23·§4-24).** 디자인 토큰·레이아웃·컴포넌트 규격의 정본은 디자인지시서 v1이다. 본 파일은 작업 순서와 규약만 정의한다. 충돌 시 설계서 우선.
+> v2.7.1 변경 핵심(2026-09-10): **Phase 4.2 견적서 생성 고도화** — 구글 스프레드시트 생성(Vercel Function `api/quote-gsheet`, DataProvider 불변) · 한글금액 이식형 수식(`NUMBERSTRING` 폐기) · 전 행 명시 높이·격자선 off · 직인 `public/brand/remember-seal.png` 자동 앵커. 정본 = 설계서 §8 표 `POST /api/quote-gsheet` 행·§17.3-2.
 > v2.7 변경 핵심: **Phase 4 Supabase 이식 착수(2026-09-07, 사용자 결정 5건 — PROGRESS 결정 로그)**: 스키마·트리거·RLS·RPC = `supabase/migrations`(17개) → `setup.sql` 1회·멱등(로컬 Postgres 85항목 증명) · 토큰 경로(`/c`·`/p`)·랜딩 리드·시트 반영·다단계 쓰기 = **security definer SQL RPC** · TS 엔진·외부 API가 필요한 견적 서버 재계산·시트 읽기 = **Vercel Functions `api/`**(Edge Functions 미사용) · `SupabaseProvider` = `src/providers/supabase/`(v12 124메서드 무수정, 도메인 10모듈) · 내부 로그인 = 매직링크(`/login`·`AuthGate`·`app_config` 도메인 게이트). dev 3키는 `.env.local`에만.
 > v1.1 변경 핵심: **프론트 우선·서버 후행** — Phase 0~3은 서버 0, Supabase·Drive는 Phase 4~5 이식.
 > v1.2 변경 핵심: **지시(requested)→제작→컨펌→운영계획서(S9) 조립 파이프라인** — Phase 3.5 프론트 증분.
@@ -244,6 +245,20 @@ MICE 프로젝트 협업 허브 — 역할별(디자인·운영·등록) 산출�
   - 데이터 초기화: `npm run supabase:reset-demo`(시드 8행사 + 시드 견적·협력사·프로필 제거, **dry-run 기본**, 시드 id로만 타깃, service 경로 전용). 재시드는 `npm run supabase:seed`로 복구 가능
   - 금지: `projects`에 delete RLS 정책 추가 · 기존 `admin || sales` 술어를 admin 단독으로 좁히기 · 삭제를 상태 전이표(§5)에 추가 · 견적/주소록/협력사 동반 삭제 · `createFixtureState()` 변경(테스트 104파일 중 84파일·952케이스 중 648케이스가 의존)
 
+- **Phase 4.2 — 견적서 생성 고도화: 구글 스프레드시트 + 디자인 감수 + 직인** (사용자 지시 2026-09-10 5건, 서버 = Vercel Function 1개)
+  - **내보내기 2종 병존**: `Excel 내려받기`(기존 blob 저장) + `구글 스프레드시트로 만들기` — 같은 xlsx blob을 `POST /api/quote-gsheet`에 넘기면
+    서버가 서비스 계정(`GOOGLE_SHEETS_SA_JSON` 재사용)으로 `GOOGLE_QUOTE_FOLDER_ID` 폴더에 **시트로 변환 업로드**하고 링크를 돌려준다.
+    요청자에게만 편집자 공유(anyone 링크 금지). **DataProvider 125메서드 불변** — 시트 생성은 `modules/quote/export/createQuoteSpreadsheet.ts`
+    (saveQuoteFile과 같은 층) + `AuthAdapter.getAccessToken`. mock 공급자는 토큰이 없어 **안내 문구**(무음 실패 금지), 자격증명 없으면 503을 사실대로
+  - **한글금액 = 이식형 수식**(`koreanAmountFormula.ts`): `NUMBERSTRING`은 한국어 Excel 전용이라 구글 시트에서 `#NAME?` — TEXT·MID·VALUE·IF·ROUND·ABS만으로
+    같은 표기("일십"·"일천"·"일억…만")를 낸다. JS 정본 `koreanAmount`와 미니 평가기(CI) + **LibreOffice 강제 재계산**(soffice 있을 때) 이중 검증
+  - **디자인 감수**: 전 행 명시 높이(내용 줄 수 × 1.4em + 6, 최소 20 · 헤더 20 · 섹션 제목 22 · 소계 20 · 빈 행 10, 사용자 확정 간격 22.65/4/18.65/16/27.5는 불변) ·
+    격자선 off · 통화 서식 `"₩"#,##0`. 열 폭(2026-08-13 확정 그리드)은 손대지 않는다
+  - **직인**: 공급자 행을 G 상호 / H "(인)"으로 나누고 `public/brand/remember-seal.png`를 H 중심 60px에 앵커 — 파일이 없으면 글자만, 넣으면 자동 반영.
+    데모 빌드는 없으면 빈 data: URI로 인라인(`demo/plugins.ts` 치환 4건)
+  - 금지: 열 폭·엔진 상수 변경 · `NUMBERSTRING` 재도입 · 시트 생성을 DataProvider 메서드로 승격(승인 없는 동결 해제) · 자격증명 없는데 데모 링크 흉내
+  - **가정(확정 게이트 = 첫 실키 주입)**: ⓐ xlsx→Sheets 변환이 셀 위 이미지(로고·직인)를 보존한다 ⓑ 서비스 계정 소유 파일은 폴더가 공유 드라이브일 때 소유가 드라이브에 남는다(내 드라이브 폴더면 SA 저장 용량을 쓴다)
+
 - **Phase 5 — Drive 이식: 코드 완성·자격증명 최후** (에이전트 E): OAuth(운영 계정·Production)·표준 트리(§7.1)·업로드+파일명 규약(§7.2)·프록시 ReadableStream 패스스루+100MB 캡(§7.4)·Changes API 인박스(§7.3)·final 스냅숏 원자성(§7.5) — `supabase/functions/_shared/drive.ts` 모듈화. **실계정 없이 검증**: Drive HTTP 호출 계층을 인터페이스로 분리해 모의 서버 계약 테스트로 커버(업로드·copy 실패 재시도·토큰 만료 재발급·100MB 캡 시나리오 포함). 산출 2종: **`scripts/drive-auth.ts`**(최초 1회 동의→refresh token 발급 안내, 한국어) · **`scripts/drive-smoke.ts`**(D-Day 5분 검증: refresh 교환→트리 생성→업로드→copy→스트리밍, 실패 시 어느 단계·무엇을 확인할지 한국어 출력)
 - **Phase 6 — 알림·cron** (에이전트 F): Slack 웹훅 유틸 + §9 매트릭스의 내부 Slack 이벤트 훅 전부 + reminders cron. `SLACK_WEBHOOK_URL` 미설정 = 콘솔 no-op(발송은 fire-and-forget+실패 로그 — 본 동작을 절대 막지 않음). 페이로드 계약 테스트(§19.7 금액 금지 키 5종 부재 포함). **Resend 이메일 = Phase 6b, 이번 범위 밖** — 컨펌 발송 UI에 "이메일 발송은 준비 중 — 링크 복사 전달" 안내 명시(게이트 뒤에 숨기지 않음)
 - **Phase 4.6 — 인프라 전환**: 사용자 게이트 단계(운영 Supabase·Vercel·도메인·임포트·아카이브)는 **§20 D-Day 런북으로 이동 — Code가 수행하지 않는다.** 옛 Configurator DB 1회 임포트 스크립트(`scripts/import-configurator.ts`, dry-run)는 기존 계획대로 Phase 4에서 동봉만
@@ -370,6 +385,8 @@ Phase 3.8과 3.9는 **별도 커밋·별도 PR**로 분리한다(3.8 = 타입·�
 53. (3.18.1) **담당자 카드**: 전자명함 텍스트 파싱이 정상·부분 실패·빈 입력·복수 카드·전화 표기 정규화를 처리하고(실패 필드는 빈 칸 — 추측 채움 0건), 담당자 이름·직함·연락처가 내부와 발주처(`/c`) 양쪽에 노출되며, 같은 화면에서 금액 키·타 파트너·참가자 명단 PII는 계속 0건이다 (테스트로 증명)
 
 58. (v2.8 §4-1c) **행사 하드 삭제**: `app_role='admin'`만 `deleteProject`가 되고 sales·staff는 `forbidden`(메시지 `행사 삭제는 관리자(admin) 권한이 필요합니다.`), 없는 행사는 404; 삭제 후 그 행사의 스코프 데이터가 전부 사라지고 **견적은 행 수 그대로 `project_id`만 null**이며 주소록·협력사는 불변, **종료 행사도 삭제되고**(assertWritable 미경유) 배정이 사라진 담당자는 `removePerson`이 더는 409를 내지 않는다; **8행사를 전부 지운 뒤에도 `getCurrentUser()`가 살아 있고 `createProject`로 첫 행사를 만들 수 있다**(새 출발 보증), 삭제된 행사의 `/c`·`/p` 토큰은 깨끗한 404/410 (테스트로 증명 — `src/test/dod58-project-delete.test.ts`)
+
+59. (Phase 4.2) **견적서 생성 고도화**: 한글금액 수식에 `NUMBERSTRING` 0건 + 허용 함수만(ABS·IF·MID·ROUND·TEXT·VALUE) + 미니 평가기 결과 = JS 정본(샘플 40) + LibreOffice 강제 재계산 = JS 정본(soffice 있을 때) · 사용 행 전부 명시 높이(1줄 20 · 2줄 34 · 빈 행 10 · 확정 간격 불변) · 격자선 off · `"₩"#,##0` · 공급자 행 G/H 분리 + `sealBase64`면 H7 중심 60px 이미지 · 목록·에디터 ④에 내보내기 버튼 2종, mock에서 시트 버튼은 안내 문구 · API: staff 403 → 자격증명 없음 503 → sales/admin은 토큰→변환 업로드(폴더·mimeType)→요청자 공유 순, 공유 실패는 링크를 막지 않음 (테스트로 증명 — `koreanAmountFormula*.test.ts` · `exportEstimate.test.ts` · `createQuoteSpreadsheet.test.ts` · `quote-gsheet.test.tsx` · `api-functions.test.ts`)
 
 ### 상시 grep 가드 (매 세션 종료 시 0건 확인 — 위 DoD와 별개로 항상 검사)
 | 가드 | 명령 | 근거 |

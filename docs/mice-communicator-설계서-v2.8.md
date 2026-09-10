@@ -789,6 +789,7 @@ draft ──(담당/PM)──> internal_review ──(PM만)──> pending_appr
 | POST /quotes/{id}/finalize | admin·sales | is_final=true·locked_at 기록. 같은 프로젝트의 다른 final은 archived (v2.0) |
 | POST /quotes/{id}/create-project | admin·sales | **핸드오프**: 확정 견적에서 projects 생성(§16 매핑으로 프리필, onboarded_at null) + quote.project_id·project.quote_id 상호 연결 → S0 진입 (v2.0) |
 | GET /quotes/{id}/export.xlsx | admin·sales | ExcelJS 견적서 — 자동 외부 업로드 없음(Phase 5에서 Drive 저장은 명시 버튼) (v2.0) |
+| POST /api/quote-gsheet | admin·sales | **(v2.8.1, Vercel Function)** 견적서 xlsx(= export.xlsx와 같은 파일)를 받아 서비스 계정으로 Drive 폴더(`GOOGLE_QUOTE_FOLDER_ID`)에 **구글 스프레드시트로 변환 업로드**하고 링크 반환. 요청자 이메일에 편집자 공유(특정 사용자만 — "링크가 있는 모든 사용자" 금지). 자격증명 없으면 503(데모로 흉내 내지 않음). 사용자 명시 클릭에만 실행 — §12 ③ "자동 업로드 없음"과 무충돌. GET은 `{ready}`만 |
 | GET·PATCH /compliance-cards | 멤버(체크)·pm(편집) | 컴플라이언스 카드 (v2.0) |
 
 ---
@@ -909,7 +910,7 @@ UI 공통: 한국어, 데스크톱 우선 + 반응형(발주처 화면은 모바
 - (v2.3) API 키는 Supabase **신형 체계**로 채택: 프론트 = `sb_publishable_…`, 서버(Edge Function·스크립트) = `sb_secret_…` (대시보드 Settings→API Keys). 레거시 anon/service_role JWT 키는 2026년 말 폐기 예정이라 신규 사용 금지(웹검증 2026-08-27). 본 문서의 "3키" = Project URL · publishable key · secret key. secret 키는 `VITE_*` env에 절대 넣지 않는다.
 - (v2.0) 클라이언트 번들에 Supabase URL·anon key 하드코딩 금지 — env만. 베뉴 DB의 `reference_cases`(실고객사명·실거래액)는 이식하지 않는다(#RULE-NO-COMPANY).
 - (v2.0) 내부 로그인 = Supabase Auth 이메일 매직링크, 허용 도메인 화이트리스트(env). profiles.app_role 승격은 admin만.
-- **(v2.7)** 허용 도메인의 서버측 정본 = `app_config.allowed_email_domains`(auth.users BEFORE INSERT 트리거가 밖의 도메인 가입을 거부, 비어 있으면 전 도메인). 프론트 `VITE_AUTH_ALLOWED_DOMAINS`는 로그인 화면 선안내. app_role 승격은 `select app.promote_admin('email')`(service role SQL) — authenticated는 app_role·auth_user_id 컬럼 update 권한이 없다. 서버 시크릿(`SUPABASE_SECRET_KEY`·`GOOGLE_SHEETS_SA_JSON`)은 **Vercel 서버 env**(VITE_ 없이)에만 — `api/` 함수가 읽는다.
+- **(v2.7)** 허용 도메인의 서버측 정본 = `app_config.allowed_email_domains`(auth.users BEFORE INSERT 트리거가 밖의 도메인 가입을 거부, 비어 있으면 전 도메인). 프론트 `VITE_AUTH_ALLOWED_DOMAINS`는 로그인 화면 선안내. app_role 승격은 `select app.promote_admin('email')`(service role SQL) — authenticated는 app_role·auth_user_id 컬럼 update 권한이 없다. 서버 시크릿(`SUPABASE_SECRET_KEY`·`GOOGLE_SHEETS_SA_JSON`·**`GOOGLE_QUOTE_FOLDER_ID`**(v2.8.1 견적 시트 저장 폴더))은 **Vercel 서버 env**(VITE_ 없이)에만 — `api/` 함수가 읽는다. 견적 시트 생성은 같은 서비스 계정에 Drive 쓰기 스코프(`auth/drive`)를 쓰지만 대상은 그 폴더 하나뿐이다(폴더 공유로 권한을 준다 — 도메인 위임 불요).
 
 ---
 
@@ -1099,7 +1100,7 @@ UI 공통: 한국어, 데스크톱 우선 + 반응형(발주처 화면은 모바
 
 ### 17.3 검증 기준 (DoD 21~23의 정본)
 1. **엔진 등가**: pricing-dataset.json의 전 벡터(**21+1**, 인원 그리드 47행 포함)에 대해 이식 엔진 산출이 **0원 차이** — Configurator README_코웍이식 합격 기준 그대로. (v2.1: v1.1.0 데이터셋으로 교체)
-2. **Excel 등가**: 동일 입력으로 생성한 .xlsx의 셀 값·수식(NUMBERSTRING 한글금액·O/X 재계산)이 원본과 일치(exportEstimate 테스트 26케이스 통과).
+2. **Excel 등가**: 동일 입력으로 생성한 .xlsx의 셀 값·수식(한글금액·O/X 재계산)이 원본과 일치(exportEstimate 테스트 26케이스 통과). **(v2.8.1) 한글금액 수식은 `NUMBERSTRING`(한국어 Excel 전용)이 아니라 `koreanAmountFormula`(TEXT·MID·VALUE·IF·ROUND·ABS만)** — Excel 전 로케일·Google Sheets·LibreOffice가 같은 값을 낸다(LibreOffice 강제 재계산으로 JS 정본과 1:1 실측 — `koreanAmountFormula.libreoffice.test.ts`). 통화 서식은 `"₩"#,##0`(따옴표), 전 행 명시 높이·격자선 off — Excel·Sheets가 같은 리듬으로 그린다. 직인은 공급자 행 H열 "(인)" 중심 60px 앵커(`public/brand/remember-seal.png` 있을 때만).
 3. **비노출**: quotes·breakdown·total_amount가 `/c/*` 응답·운영계획서 조립 데이터·activity_log·알림 페이로드 어디에도 없음(테스트로 증명).
 4. **데이터셋 출처(v2.1 신설)**: 골든 데이터셋은 **jsx-easy-shift의 생성기로 만든 산출물만** 인정한다. 커뮤니케이터의 이식 엔진으로 기대값을 만들면 자기 자신과의 비교가 되어 등가 검증이 무의미해진다.
    - `source.repo`·`source.commit`·`source.engine`은 **생성 시점에 실제로 사용한 커밋**을 적는다. 단가를 바꾼 PR 이후에 재생성했는데 `source.commit`이 그 이전 커밋이면 **그 자체로 검증 실패**로 본다.
