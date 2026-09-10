@@ -1,7 +1,9 @@
 // S-2 ④ 확인·확정 — RQC STEP 4 분해 이식(항목별 요약·조정) + v2.0 확정 잠금·고객 정보.
 import { TARGET_MAX } from '../../modules/quote/engine/calcEstimate'
 import type { QuoteOutputs } from '../../modules/quote/engine/quoteInput'
+import type { QuoteSpreadsheetResult } from '../../modules/quote/export/createQuoteSpreadsheet'
 import type { Quote } from '../../types/entities'
+import QuoteSheetResultCard from './QuoteSheetResultCard'
 import { fmtMoney, fmtWon, type QuoteFormState } from './quoteFormState'
 import type { QuoteStrings } from './quoteStrings'
 
@@ -41,6 +43,8 @@ export default function StepReview({
   saving,
   finalizing,
   downloadPending,
+  sheetPending,
+  sheetResult,
   error,
   t,
   en,
@@ -51,6 +55,7 @@ export default function StepReview({
   onSave,
   onFinalize,
   onDownload,
+  onCreateSheet,
 }: {
   form: QuoteFormState
   /** 조정 반영 산출 */
@@ -61,6 +66,10 @@ export default function StepReview({
   saving: boolean
   finalizing: boolean
   downloadPending: boolean
+  /** 구글 스프레드시트 생성 중 */
+  sheetPending: boolean
+  /** 이 견적으로 만든 구글 스프레드시트(없으면 null) */
+  sheetResult: QuoteSpreadsheetResult | null
   error: string | null
   t: QuoteStrings
   en: boolean
@@ -71,6 +80,7 @@ export default function StepReview({
   onSave: () => void
   onFinalize: () => void
   onDownload: () => void
+  onCreateSheet: () => void
 }) {
   const p = baseOutputs.result
   const pAdj = outputs.result
@@ -241,9 +251,16 @@ export default function StepReview({
         <button type="button" className="btn btn-accent w-full" onClick={onFinalize} disabled={finalizing || saving || isOversize || isFinal}>
           {isFinal ? `🔒 ${t.finalizedBadge}` : finalizing ? t.saving : `🔏 ${t.finalizeBtn}`}
         </button>
-        <button type="button" className="btn btn-ghost w-full" onClick={onDownload} disabled={downloadPending || isOversize || !savedQuote}>
-          {t.downloadBtn}
-        </button>
+        {/* 내보내기 2종 — Excel 내려받기 · 구글 스프레드시트 생성(같은 xlsx를 서버가 시트로 변환) */}
+        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+          <button type="button" className="btn btn-ghost w-full" onClick={onDownload} disabled={downloadPending || isOversize || !savedQuote}>
+            {t.downloadBtn}
+          </button>
+          <button type="button" className="btn btn-ghost w-full" onClick={onCreateSheet} disabled={sheetPending || isOversize || !savedQuote}>
+            {sheetPending ? t.gsheetPending : t.gsheetBtn}
+          </button>
+        </div>
+        {sheetResult && <QuoteSheetResultCard result={sheetResult} t={t} />}
         <button type="button" className="btn btn-ghost w-full" onClick={onPrev}>
           {t.prev}
         </button>

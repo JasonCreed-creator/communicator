@@ -44,5 +44,9 @@ export function createSupabaseAuthAdapter(): AuthAdapter {
     async signOut() {
       await sb.auth.signOut()
     },
+    async getAccessToken() {
+      const { data } = await sb.auth.getSession()
+      return data.session?.access_token ?? null
+    },
   }
 }

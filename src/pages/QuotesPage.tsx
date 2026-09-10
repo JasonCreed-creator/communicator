@@ -1,5 +1,5 @@
 // S-2 견적 목록 (§10) — 좌: 견적 버전 표(버전·인원·베뉴·모객·총액·상태) / 우: 선택 버전 요약.
-// 상단: Excel 내려받기 · ＋ 새 버전 · ＋ 새 견적. 금액은 이 화면(와 Excel)에만 — 접근 = admin·sales.
+// 상단: Excel 내려받기 · 구글 시트로 만들기 · ＋ 새 버전 · ＋ 새 견적. 금액은 이 화면(와 Excel·구글 시트)에만 — 접근 = admin·sales.
 //
 // 3.17b 시안 정렬('랜딩보드 · 견적.dc.html'):
 //  · 버전 표를 **표 정본**(.ui-table + .ui-th)으로 — 44 고정·zebra·스티키 첫 열,
@@ -20,7 +20,9 @@ import QuoteGate from '../components/quote/QuoteGate'
 import QuoteVersionDelta, { previousVersion } from '../components/quote/QuoteVersionDelta'
 import { fmtWon } from '../components/quote/quoteFormState'
 import { QUOTE_STATUS_LEVEL } from '../components/quote/quoteStatus'
+import QuoteSheetResultCard from '../components/quote/QuoteSheetResultCard'
 import QUOTE_STR from '../components/quote/quoteStrings'
+import { useQuoteSpreadsheet } from '../components/quote/useQuoteSpreadsheet'
 import { useProject } from '../context/ProjectContext'
 import { useAsync } from '../hooks/useAsync'
 import { venueDisplayName } from '../modules/quote/engine/quoteInput'
@@ -42,6 +44,7 @@ function QuotesBody() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [downloading, setDownloading] = useState(false)
+  const gsheet = useQuoteSpreadsheet()
   // 기본 정렬 = 최신 버전 위로(시안의 활성 화살표 ↓)
   const [sortKey, setSortKey] = useState<SortKey>('version')
   const [sortDir, setSortDir] = useState<SortDirection>('desc')
@@ -88,6 +91,16 @@ function QuotesBody() {
       setActionError(err instanceof Error ? err.message : '엑셀 생성에 실패했습니다.')
     } finally {
       setDownloading(false)
+    }
+  }
+
+  const handleCreateSheet = async () => {
+    if (!selected) return
+    setActionError(null)
+    try {
+      await gsheet.create(selected.id, 'ko', t.gsheetMockNotice)
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : '구글 스프레드시트 생성에 실패했습니다.')
     }
   }
 
@@ -181,6 +194,9 @@ function QuotesBody() {
             <button type="button" className="btn btn-ghost" onClick={() => void handleDownload()} disabled={!selected || downloading}>
               {t.listDownload}
             </button>
+            <button type="button" className="btn btn-ghost" onClick={() => void handleCreateSheet()} disabled={!selected || gsheet.pending}>
+              {gsheet.pending ? t.gsheetPending : t.listGsheet}
+            </button>
             <button
               type="button"
               className="btn btn-ghost"
@@ -199,6 +215,8 @@ function QuotesBody() {
           </>
         }
       />
+
+      {gsheet.resultFor(selected?.id) && <QuoteSheetResultCard result={gsheet.resultFor(selected?.id)!} t={t} />}
 
       {actionError && (
         <p role="alert" className="rounded-md bg-negative-tint px-3 py-2 text-sm text-negative">

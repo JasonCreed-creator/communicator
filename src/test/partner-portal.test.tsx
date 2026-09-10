@@ -6,7 +6,7 @@
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { PARTNER_DEMO_TOKEN, PARTNER_EXPIRED_TOKEN, PARTNER_REVOKED_TOKEN, PROJECT_ID_HOST } from '../fixtures/hostFixtures'
 import type { DeadlineGroup } from '../components/partner-portal/deadlineGroups'
 import PartnerPortalGroupList from '../components/partner-portal/PartnerPortalGroupList'
@@ -16,6 +16,18 @@ import PartnerPortalPage from '../pages/PartnerPortalPage'
 import { getDataProvider } from '../providers'
 import type { MockProvider } from '../providers'
 import type { PartnerPortalItem, PartnerPortalNotice } from '../types'
+
+// 주최형 데모 픽스처(hostFixtures.ts)는 EVENT_DATE='2026-10-15' + "≈D-49" 가정. HT-2(D-37 = 09-08) 마감이 지나면
+// 주최 측 안내가 "완료"로 옮겨가 "전부 예정" 기대가 어긋난다(2026-09-10 실측 — origin/main에서도 같은 실패).
+// partner-board.test와 같은 방식으로 시계를 픽스처 가정일에 고정한다(Date만 가짜 — 타이머는 실제).
+const FIXTURE_TODAY = new Date('2026-08-27T09:00:00')
+beforeAll(() => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(FIXTURE_TODAY)
+})
+afterAll(() => {
+  vi.useRealTimers()
+})
 
 afterEach(cleanup)
 

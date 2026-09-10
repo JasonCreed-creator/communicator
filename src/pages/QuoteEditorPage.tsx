@@ -19,6 +19,7 @@ import {
   type QuoteFormState,
 } from '../components/quote/quoteFormState'
 import QUOTE_STR, { type QuoteLang } from '../components/quote/quoteStrings'
+import { useQuoteSpreadsheet } from '../components/quote/useQuoteSpreadsheet'
 import { useProject } from '../context/ProjectContext'
 import { computeQuoteOutputs } from '../modules/quote/engine/quoteInput'
 import { saveQuoteFile } from '../modules/quote/export/saveQuoteFile'
@@ -62,6 +63,7 @@ function EditorBody({ quoteId, initialStep }: { quoteId: string | null; initialS
   const [saving, setSaving] = useState(false)
   const [finalizing, setFinalizing] = useState(false)
   const [downloadPending, setDownloadPending] = useState(false)
+  const gsheet = useQuoteSpreadsheet()
   const [creating, setCreating] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
 
@@ -182,6 +184,17 @@ function EditorBody({ quoteId, initialStep }: { quoteId: string | null; initialS
       setDownloadPending(false)
     }
   }, [savedQuote, lang])
+
+  // 구글 스프레드시트 생성 — Excel과 같은 xlsx를 서버가 Drive에 시트로 변환. mock 모드는 안내 문구(오류 슬롯)
+  const handleCreateSheet = useCallback(async () => {
+    if (!savedQuote) return
+    setActionError(null)
+    try {
+      await gsheet.create(savedQuote.id, lang, t.gsheetMockNotice)
+    } catch (err) {
+      setActionError(messageOf(err))
+    }
+  }, [savedQuote, lang, gsheet, t])
 
   const handleCreateProject = useCallback(async () => {
     if (!savedQuote) return
@@ -310,6 +323,8 @@ function EditorBody({ quoteId, initialStep }: { quoteId: string | null; initialS
               saving={saving}
               finalizing={finalizing}
               downloadPending={downloadPending}
+              sheetPending={gsheet.pending}
+              sheetResult={gsheet.resultFor(savedQuote?.id)}
               error={actionError}
               t={t}
               en={en}
@@ -320,6 +335,7 @@ function EditorBody({ quoteId, initialStep }: { quoteId: string | null; initialS
               onSave={() => void persist()}
               onFinalize={() => void handleFinalize()}
               onDownload={() => void handleDownload()}
+              onCreateSheet={() => void handleCreateSheet()}
             />
           )}
           {step === 5 && (

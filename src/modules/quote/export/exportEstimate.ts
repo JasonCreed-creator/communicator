@@ -23,10 +23,16 @@ import {
   resolveOverride,
   type EstimateResult,
 } from "../engine/calcEstimate";
+import { amountInWordsFormula, amountInWordsKo } from "./koreanAmountFormula";
 
 // 리멤버 워드마크(크림/화이트 — 블랙 헤더 밴드용). PROGRESS 결정 로그: 로고 상시 노출은
 // 사용자 명시 지시(#RULE-NO-COMPANY 예외) — 자산은 public/brand 주입, 로드 실패 시 로고 없이 출력.
 const REMEMBER_LOGO_URL = "/brand/remember-logo-offwhite.png";
+// 리멤버 직인(2026-09-10 사용자 지시 "직인 파일은 추후 — 견적서 내 (인) 위에 붙이기"). 파일이 public/brand에
+// 없으면(404·0바이트) 직인 없이 "(인)" 글자만 출력한다 — 자산을 넣는 순간 자동 반영. 규격은 public/brand/README.md.
+const REMEMBER_SEAL_URL = "/brand/remember-seal.png";
+/** 직인 렌더 크기(px, 96dpi) — 약 16mm. 공급자 행 H열 "(인)" 중심에 앵커 */
+const SEAL_PX = 60;
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Cell = any;
@@ -35,20 +41,146 @@ type Sheet = any;
 let ExcelJSModule: any = null;
 let fileSaverModule: any = null;
 
-// 로고 base64 캐시. 실패 시 로고 없이 출력한다.
-let _logoB64: string | null = null;
-async function loadLogoBase64(): Promise<string> {
-  if (_logoB64 !== null) return _logoB64;
+// 브랜드 자산(로고·직인) base64 캐시 — same-origin 상대 경로를 이 한 곳에서만 fetch한다(DoD 22 · 데모 가드 "fetch 1건").
+// 실패·404·빈 응답은 ""로 캐시해 자산 없이 출력한다.
+const _assetB64 = new Map<string, string>();
+async function loadAssetBase64(url: string): Promise<string> {
+  const cached = _assetB64.get(url);
+  if (cached !== undefined) return cached;
+  let b64 = "";
   try {
-    const res = await fetch(REMEMBER_LOGO_URL);
-    const bytes = new Uint8Array(await res.arrayBuffer());
-    let bin = "";
-    for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
-    _logoB64 = btoa(bin);
+    const res = await fetch(url);
+    if (res.ok) {
+      const bytes = new Uint8Array(await res.arrayBuffer());
+      let bin = "";
+      for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+      b64 = bytes.length > 0 ? btoa(bin) : "";
+    }
   } catch {
-    _logoB64 = "";
+    b64 = "";
   }
-  return _logoB64;
+  _assetB64.set(url, b64);
+  return b64;
+}
+
+/** 통화 서식 — ₩를 따옴표로 감싸 Excel·Google Sheets·LibreOffice가 같은 서식 문자열로 읽게 한다 */
+const WON_FMT = '"₩"#,##0';
+
+// ─── 행 높이 정본 (pt) — 2026-09-10 디자인 감수: 모든 행에 명시 높이를 준다 ───
+// Excel은 파일을 열 때 줄바꿈 셀의 행 높이를 다시 재지 않아(ExcelJS 산출물은 전부 기본 15pt) 긴 산출 내역이 잘렸고,
+// 구글 시트는 반대로 자동 확장돼 행마다 높이가 달라졌다. 내용으로 줄 수를 산출해 고정하면 두 뷰어가 같은 리듬으로 그린다.
+const ROW_PT = {
+  /** 견적 정보·공급자 블록(5~9행) */
+  info: 20,
+  /** 섹션 제목 밴드 */
+  sectionTitle: 22,
+  /** 항목 헤더(항목·내용·산출 내역…) */
+  itemHeader: 20,
+  /** 항목·조정 행 최소 높이(1줄) */
+  itemMin: 20,
+  /** 소계 행 */
+  subtotal: 20,
+  /** 섹션 사이 빈 행 */
+  spacer: 10,
+} as const;
+/** 글자 크기(pt) → 한 줄 높이(pt). 한글 글꼴(맑은 고딕·Noto Sans KR)의 행간 ≈ 1.4em */
+const lineHeightPt = (fontPt: number) => fontPt * 1.4;
+
+/** Excel 열 너비 단위(기본 글꼴 '0' 폭 = 7px) → px */
+const colWidthPx = (widthUnits: number) => Math.round(widthUnits * 7);
+const PX_PER_PT = 96 / 72;
+const EMU_PER_PX = 9525;
+
+/** 문자 폭(px) — 한글·CJK·이모지는 1em, 라틴 소문자 0.55em, 대문자·숫자 0.62em, 공백·구두점 0.3~0.5em */
+function charPx(ch: string, fontPt: number): number {
+  const em = fontPt * PX_PER_PT;
+  const code = ch.codePointAt(0) ?? 0;
+  const cjk = (code >= 0x1100 && code <= 0x11ff) || (code >= 0x3000 && code <= 0x9fff) || (code >= 0xac00 && code <= 0xd7af)
+    || (code >= 0xf900 && code <= 0xfaff) || (code >= 0xff00 && code <= 0xffef) || code >= 0x1f000;
+  if (cjk) return em;
+  if (code >= 0x2000 && code <= 0x2bff) return em * 0.7; // ·, ⚠, ✅, ≈ 등 기호
+  if (/[a-z]/.test(ch)) return em * 0.55;
+  if (/[A-Z0-9]/.test(ch)) return em * 0.62;
+  if (ch === " ") return em * 0.3;
+  if (/[.,:;'"()[\]/|-]/.test(ch)) return em * 0.35;
+  return em * 0.6;
+}
+
+/** 줄바꿈 셀의 줄 수 추정 — 명시 줄바꿈 + 폭 초과 접힘(8% 여유) */
+function estimateLines(text: string, widthUnits: number, fontPt: number): number {
+  const avail = Math.max(20, colWidthPx(widthUnits) - 6);
+  let lines = 0;
+  for (const segment of text.split(/\r?\n/)) {
+    let px = 0;
+    for (const ch of segment) px += charPx(ch, fontPt);
+    lines += Math.max(1, Math.ceil((px * 1.08) / avail));
+  }
+  return Math.max(1, lines);
+}
+
+/** "A5:C5" → 숫자 범위 */
+function parseRange(ref: string): { top: number; left: number; bottom: number; right: number } {
+  const colNum = (letters: string) => letters.split("").reduce((n, ch) => n * 26 + (ch.charCodeAt(0) - 64), 0);
+  const [a, b] = ref.split(":");
+  const m1 = /^([A-Z]+)(\d+)$/.exec(a)!;
+  const m2 = /^([A-Z]+)(\d+)$/.exec(b ?? a)!;
+  return { top: Number(m1[2]), left: colNum(m1[1]), bottom: Number(m2[2]), right: colNum(m2[1]) };
+}
+
+/**
+ * 명시 높이가 없는 행 전부에 내용 기준 높이를 준다(fromRow~toRow). 이미 높이가 있는 행(타이틀·고지·총액 등
+ * 사용자 확정 간격)은 건드리지 않는다. 빈 행은 섹션 간격(spacer)으로 본다.
+ */
+function fitRowHeights(ws: Sheet, fromRow: number, toRow: number): void {
+  const merges: string[] = ws.model?.merges ?? [];
+  const masterWidth = new Map<string, number>();
+  const covered = new Set<string>();
+  for (const ref of merges) {
+    const rg = parseRange(ref);
+    let width = 0;
+    for (let c = rg.left; c <= rg.right; c++) width += Number(ws.getColumn(c).width) || 10;
+    for (let rr = rg.top; rr <= rg.bottom; rr++) for (let c = rg.left; c <= rg.right; c++) {
+      if (rr === rg.top && c === rg.left) masterWidth.set(`${rr},${c}`, width);
+      else covered.add(`${rr},${c}`);
+    }
+  }
+  for (let r = fromRow; r <= toRow; r++) {
+    const row = ws.getRow(r);
+    if (row.height !== undefined && row.height !== null) continue;
+    let lines = 0;
+    let fontPt = 10;
+    row.eachCell({ includeEmpty: false }, (cell: Cell, c: number) => {
+      if (covered.has(`${r},${c}`)) return;
+      const v = cell.value;
+      const text = typeof v === "string" ? v
+        : v && typeof v === "object" && typeof v.result === "string" ? v.result
+        : typeof v === "number" ? String(v) : "";
+      if (!text) return;
+      const size = Number(cell.font?.size) || 10;
+      const width = masterWidth.get(`${r},${c}`) ?? (Number(ws.getColumn(c).width) || 10);
+      const wrap = cell.alignment?.wrapText !== false;
+      lines = Math.max(lines, wrap ? estimateLines(text, width, size) : 1);
+      fontPt = Math.max(fontPt, size);
+    });
+    row.height = lines === 0 ? ROW_PT.spacer : Math.max(ROW_PT.itemMin, Math.ceil(lines * lineHeightPt(fontPt) + 6));
+  }
+}
+
+/** 이미지를 (row, col) 셀 중심에 놓는 ExcelJS 앵커 — 행 높이·열 너비에서 EMU 오프셋을 계산한다 */
+function anchorOverCell(ws: Sheet, row: number, col: number, sizePx: number) {
+  const rowPx = (i: number) => (Number(ws.getRow(i).height) || 15) * PX_PER_PT;
+  const colPx = colWidthPx(Number(ws.getColumn(col).width) || 10);
+  let startRow = row;
+  let offY = rowPx(row) / 2 - sizePx / 2;
+  while (offY < 0 && startRow > 1) {
+    startRow--;
+    offY += rowPx(startRow);
+  }
+  const offX = Math.max(0, (colPx - sizePx) / 2);
+  return {
+    tl: { nativeCol: col - 1, nativeColOff: Math.round(offX * EMU_PER_PX), nativeRow: startRow - 1, nativeRowOff: Math.round(Math.max(0, offY) * EMU_PER_PX) },
+    ext: { width: sizePx, height: sizePx },
+  };
 }
 
 const OG = "FFFF6B00"; // 브랜드 오렌지 #FF6B00 (ARGB 포맷)
@@ -69,8 +201,11 @@ const REMEMBER_BRAND = {
   titleKoMnc: "리멤버 MICE 패키지 견적서",
   titleEnMnc: "Remember MICE Package — Estimate",
   sheetName: "리멤버MICE솔루션",
-  supplierKo: "㈜리멤버앤컴퍼니                      (인)",
-  supplierEn: "Remember & Company                    (Seal)",
+  supplierKo: "㈜리멤버앤컴퍼니",
+  supplierEn: "Remember & Company",
+  // 직인 자리 표식 — 공급자 행의 H열에 따로 두고 그 위에 직인 이미지를 앵커한다(리멤버 기본 레이아웃)
+  sealMarkKo: "(인)",
+  sealMarkEn: "(Seal)",
   addressKo: "서울시 강남구 테헤란로 134",
   addressEn: "134 Teheran-ro, Gangnam-gu, Seoul, Korea",
   filePrefix: "리멤버견적서",
@@ -92,33 +227,6 @@ export interface ExportEstimateOptions {
   lang?: "ko" | "en";
   /** 공급자/제목/파일명 화이트라벨 (미지정 시 리멤버 기본) */
   brand?: ExportBrand | null;
-}
-
-function koreanAmount(n: number): string {
-  const num = Math.round(n);
-  if (num === 0) return "영";
-  let result = "";
-  const digits = ["", "일", "이", "삼", "사", "오", "육", "칠", "팔", "구"];
-  const parts: { val: number; unit: string }[] = [];
-  const units = ["", "만", "억"];
-  let remaining = num;
-  let idx = 0;
-  while (remaining > 0) {
-    const part = remaining % 10000;
-    if (part > 0) parts.unshift({ val: part, unit: units[idx] || "" });
-    remaining = Math.floor(remaining / 10000);
-    idx++;
-  }
-  for (const p of parts) {
-    const t = Math.floor(p.val / 1000), h = Math.floor((p.val % 1000) / 100);
-    const te = Math.floor((p.val % 100) / 10), o = p.val % 10;
-    if (t) result += digits[t] + "천";
-    if (h) result += digits[h] + "백";
-    if (te) result += digits[te] + "십";
-    if (o) result += digits[o];
-    result += p.unit;
-  }
-  return result;
 }
 
 interface CellOpts {
@@ -144,6 +252,7 @@ function setCell(ws: Sheet, r: number, c: number, val: any, opts: CellOpts = {})
 }
 
 function itemHeaders(ws: Sheet, r: number, headers: string[]): void {
+  ws.getRow(r).height = ROW_PT.itemHeader;
   headers.forEach((v, i) => {
     if (i === 6) {
       ws.mergeCells(r, 7, r, 8);
@@ -185,6 +294,7 @@ function totalRow(
   itemRange: { from: number; to: number } | null,
   subtotalLabel: string,
 ): void {
+  ws.getRow(r).height = ROW_PT.subtotal;
   ws.mergeCells(r, 1, r, 5);
   setCell(ws, r, 1, subtotalLabel, { bold: true, bg: "FFF0F0F0", align: "right" });
   if (itemRange && itemRange.from && itemRange.to >= itemRange.from) {
@@ -192,11 +302,11 @@ function totalRow(
     cell.value = { formula: `SUM(F${itemRange.from}:F${itemRange.to})`, result: total };
     cell.font = { bold: true, size: 10 };
     cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF0F0F0" } };
-    cell.numFmt = "₩#,##0";
+    cell.numFmt = WON_FMT;
     cell.alignment = { horizontal: "right", vertical: "middle" };
     cell.border = borders;
   } else {
-    setCell(ws, r, 6, total, { bold: true, numFmt: "₩#,##0", align: "right", bg: "FFF0F0F0" });
+    setCell(ws, r, 6, total, { bold: true, numFmt: WON_FMT, align: "right", bg: "FFF0F0F0" });
   }
   ws.mergeCells(r, 7, r, 8);
   setCell(ws, r, 7, "", { bg: "FFF0F0F0" });
@@ -240,12 +350,13 @@ export async function exportEstimate(
     const titleTx = MNC ? PAL.ink : undefined;
     const bandBg = MNC ? PAL.navy : BK;
     const bandTx = MNC ? PAL.cream : WH;
+    ws.getRow(r).height = ROW_PT.sectionTitle;
     ws.mergeCells(r, 1, r, 2);
     setCell(ws, r, 1, title, { bold: true, bg: titleBg, ...(titleTx ? { fontColor: titleTx } : {}) });
     // 감수 반영: 밴드 내 "소계" 라벨 제거(하단 소계행과 중복) + 우측 꼬리 블랙 통일(줄무늬 제거)
     for (let i = 3; i <= 4; i++) setCell(ws, r, i, "", { bold: true, bg: bandBg, fontColor: bandTx, align: "center" });
     ws.mergeCells(r, 4, r, 5);
-    setCell(ws, r, 6, sectionTotal, { bold: true, bg: bandBg, fontColor: bandTx, numFmt: "₩#,##0", align: "right" });
+    setCell(ws, r, 6, sectionTotal, { bold: true, bg: bandBg, fontColor: bandTx, numFmt: WON_FMT, align: "right" });
     ws.mergeCells(r, 7, r, 8);
     setCell(ws, r, 7, "", { bg: bandBg });
   }
@@ -324,7 +435,7 @@ export async function exportEstimate(
   // 한글금액 뒤에 숫자금액을 괄호 병기 — "일금 ...원 정 (137,810,000원)" 관행 표기
   const amountInWords = (n: number) => en
     ? `${Math.round(n).toLocaleString("en-US")} KRW only`
-    : `일금 ${koreanAmount(n)}원 정 (${Math.round(n).toLocaleString("ko-KR")}원)`;
+    : amountInWordsKo(n);
 
   // ─── 다운로드 직전 섹션별 수동 조정 ───
   const adj: Record<string, any> = adjustments || {};
@@ -365,6 +476,8 @@ export async function exportEstimate(
   const saveAs = fileSaverModule.saveAs || fileSaverModule.default;
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet(B.sheetName, {});
+  // 문서형 출력 — 격자선을 끈다(Excel·Sheets 모두 셀 테두리만 남아 인쇄물과 같은 모습)
+  ws.views = [{ showGridLines: false }];
 
   // M&C는 공급자 표(2쌍 라벨·값)가 균형 잡히도록 전용 열 너비 사용.
   // 라벨 col5/col7 좁게, 값 col6/col8 넓게 → 이메일·팩스가 한 줄에 들어간다.
@@ -419,7 +532,7 @@ export async function exportEstimate(
     ws.mergeCells(4, 1, 4, 8);
     ws.getCell(4, 1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: OG } };
     ws.getRow(4).height = 4;
-    const logoB64 = await loadLogoBase64();
+    const logoB64 = await loadAssetBase64(REMEMBER_LOGO_URL);
     if (logoB64) {
       try {
         const logoId = wb.addImage({ base64: logoB64, extension: "png" });
@@ -474,6 +587,8 @@ export async function exportEstimate(
   // 오른쪽 블록: brand.richSupplier면 사업자등록증 형식의 공급자 카드(cols 5-8, 헤더바 + 6행),
   // 아니면 기존 컴팩트 4행(cols 6-8). 헤더 높이에 맞춰 총액·섹션 시작행을 자동 산출한다.
   let headerRowCount: number, sealAnchorRow: number | null = null;
+  /** 리멤버 기본 레이아웃의 직인 앵커 행(공급자 행) — richSupplier와 별도 */
+  let stdSealRow: number | null = null;
   if (B.richSupplier) {
     const LB: CellOpts = MNC ? { bold: true, bg: PAL.goldSoft, fontColor: PAL.ink, size: 9, align: "center" } : { bold: true, bg: WH, size: 9, align: "center" };
     // 공급자 값은 모두 가운데 정렬
@@ -509,21 +624,35 @@ export async function exportEstimate(
     // M&C는 좌측 값이 D열까지 병합되어 공백 D열이 없다. 리멤버만 D·E 스페이서를 비운다.
     if (!MNC) for (let i = 0; i < headerRowCount; i++) setCell(ws, r + i, 4, "");
   } else {
+    // 공급자 문자열에 "(인)"이 딸려 온 화이트라벨 브랜드는 표식을 떼어 H열로 옮긴다(구 supplierKo 호환)
+    const supplierRaw = String((en ? B.supplierEn : B.supplierKo) ?? "");
+    const supplierName = supplierRaw.replace(/\s*\((?:인|Seal)\)\s*$/i, "").trim();
+    const sealMark = (en ? B.sealMarkEn : B.sealMarkKo) || (en ? "(Seal)" : "(인)");
+    const SUPPLIER_ROW = 2;
     const rightInfo: [string, any][] = [
       [T.proposalDate, `${today.getFullYear()}. ${today.getMonth() + 1}. ${today.getDate()}`],
       [T.validity, T.validityVal],
-      [T.supplier, en ? B.supplierEn : B.supplierKo],
+      [T.supplier, supplierName],
       [T.address, en ? B.addressEn : B.addressKo],
       [T.manager, cfg.manager || ""],
     ];
     rightInfo.forEach(([label, val], i) => {
       setCell(ws, r + i, 6, label, { bold: true, bg: "FFF5F5F5", align: "center" });
-      ws.mergeCells(r + i, 7, r + i, 8);
-      setCell(ws, r + i, 7, val);
+      if (i === SUPPLIER_ROW) {
+        // 공급자 행만 G·H를 나눈다 — G 상호 / H "(인)" 표식(직인 이미지가 이 칸 중심에 얹힌다)
+        setCell(ws, r + i, 7, val);
+        setCell(ws, r + i, 8, sealMark, { align: "center" });
+      } else {
+        ws.mergeCells(r + i, 7, r + i, 8);
+        setCell(ws, r + i, 7, val);
+      }
     });
+    stdSealRow = r + SUPPLIER_ROW;
     headerRowCount = Math.max(leftRows, rightInfo.length);
     for (let i = 0; i < headerRowCount; i++) { setCell(ws, r + i, 4, ""); setCell(ws, r + i, 5, ""); }
   }
+  // 견적 정보·공급자 블록은 한 줄 값만 담으므로 같은 높이로 고정 — 직인 앵커 계산이 이 높이를 참조한다
+  for (let i = 0; i < headerRowCount; i++) ws.getRow(r + i).height = ROW_PT.info;
 
   // 직인 삽입 — brand.sealBase64 있으면 대표 행 우측(col H)에 이미지 float.
   if (B.richSupplier && B.sealBase64 && sealAnchorRow) {
@@ -545,6 +674,20 @@ export async function exportEstimate(
       console.warn("[exportEstimate] seal insert failed:", e?.message ?? e);
     }
   }
+  // 리멤버 기본 레이아웃 직인 — 공급자 행 H열 "(인)" 중심에 앵커. 자산 = brand.sealBase64(주입) 또는 public/brand/remember-seal.png
+  if (!B.richSupplier && stdSealRow) {
+    const injected = B.sealBase64 ? String(B.sealBase64) : "";
+    const sealB64 = injected ? injected.replace(/^data:image\/\w+;base64,/, "") : await loadAssetBase64(REMEMBER_SEAL_URL);
+    if (sealB64) {
+      try {
+        const ext = /^data:image\/jpe?g/i.test(injected) ? "jpeg" : "png";
+        const imgId = wb.addImage({ base64: sealB64, extension: ext });
+        ws.addImage(imgId, { ...anchorOverCell(ws, stdSealRow, 8, SEAL_PX), editAs: "oneCell" });
+      } catch (e: any) {
+        console.warn("[exportEstimate] seal insert failed:", e?.message ?? e);
+      }
+    }
+  }
 
   const totalsRow1 = 5 + headerRowCount;   // 기본(리멤버): 10
   const totalsRow2 = totalsRow1 + 1;        // 11
@@ -558,7 +701,7 @@ export async function exportEstimate(
     labelCell(ws, row, 1, label);                                        // A: 라벨
     setCell(ws, row, 2, amountInWords(amount), { bold: true, bg: PAL.goldSoft, fontColor: PAL.ink, align: "right" }); // B: 한글표기(오른쪽)
     // C: 아라비아숫자 — 한글금액(B)과 붙도록 왼쪽 정렬 + 살짝 들여쓰기
-    setCell(ws, row, 3, amount, { bold: true, size: big ? 14 : 12, fontColor: PAL.gold, numFmt: "₩#,##0", bg: PAL.goldSoft });
+    setCell(ws, row, 3, amount, { bold: true, size: big ? 14 : 12, fontColor: PAL.gold, numFmt: WON_FMT, bg: PAL.goldSoft });
     ws.getCell(row, 3).alignment = { horizontal: "left", vertical: "middle", indent: 1 };
     ws.mergeCells(row, 4, row, 8);                                       // D-H: 골드 밴드 유지(빈칸)
     setCell(ws, row, 4, "", { bg: PAL.goldSoft });
@@ -573,10 +716,10 @@ export async function exportEstimate(
     ws.mergeCells(row, 2, row, 3);
     setCell(ws, row, 2, amountInWords(amount), { bold: true, bg: TOTAL_BG });
     ws.mergeCells(row, 4, row, 5);
-    setCell(ws, row, 4, amount, { bold: true, size, fontColor: OG, numFmt: "₩#,##0", align: "right", bg: TOTAL_BG });
+    setCell(ws, row, 4, amount, { bold: true, size, fontColor: OG, numFmt: WON_FMT, align: "right", bg: TOTAL_BG });
     setCell(ws, row, 6, T.vatIncl, { bold: true, bg: TOTAL_BG, align: "center" });
     ws.mergeCells(row, 7, row, 8);
-    setCell(ws, row, 7, Math.round(amount * 1.1), { bold: true, numFmt: "₩#,##0", align: "right", bg: TOTAL_BG });
+    setCell(ws, row, 7, Math.round(amount * 1.1), { bold: true, numFmt: WON_FMT, align: "right", bg: TOTAL_BG });
     ws.getRow(row).height = 27.5; // 사용자 확정 간격
   };
   if (MNC) totalRowMnc(totalsRow1, T.grandTotal, pkT, true);
@@ -964,16 +1107,19 @@ export async function exportEstimate(
     if (!MNC) ws.getCell(totalsRow2, 7).value = { formula: `ROUND(D${totalsRow2}*1.1,0)`, result: Math.round(pkNoOpt * 1.1) };
   }
 
-  // ─── 한글금액 자동 연동 (한국어 Excel의 NUMBERSTRING 함수) ───
-  // 총액(D열)을 직접 수정하거나 상위 섹션 값이 바뀌면 한글 표기도 자동 갱신된다.
-  // NUMBERSTRING은 한국어 Excel 전용 — 미지원 뷰어(Sheets 등)는 캐시된 결과 문자열을 표시한다.
-  if (!en && !MNC) {
-    const wordsFormula = (cellRef: string) => `"일금 "&NUMBERSTRING(${cellRef},1)&"원 정 ("&TEXT(${cellRef},"#,##0")&"원)"`;
-    ws.getCell(totalsRow1, 2).value = { formula: wordsFormula(`D${totalsRow1}`), result: amountInWords(pkT) };
+  // ─── 한글금액 자동 연동 — 이식형 수식(koreanAmountFormula: TEXT·MID·VALUE·IF만) ───
+  // 종전 NUMBERSTRING은 한국어 Excel 전용이라 구글 시트·LibreOffice·영문 Excel에서 #NAME?가 났다(2026-09-10 사용자 지시).
+  // 총액(D열 — M&C는 C열)을 직접 고치거나 상위 섹션 값이 바뀌면 한글 표기도 어느 뷰어에서든 자동 갱신된다.
+  if (!en) {
+    const wordsRef = (row: number) => `${MNC ? "C" : "D"}${row}`;
+    ws.getCell(totalsRow1, 2).value = { formula: amountInWordsFormula(wordsRef(totalsRow1)), result: amountInWords(pkT) };
     if (p.ot > 0 && sec5OptTotalR) {
-      ws.getCell(totalsRow2, 2).value = { formula: wordsFormula(`D${totalsRow2}`), result: amountInWords(pkNoOpt) };
+      ws.getCell(totalsRow2, 2).value = { formula: amountInWordsFormula(wordsRef(totalsRow2)), result: amountInWords(pkNoOpt) };
     }
   }
+
+  // ─── 행 높이 정돈 — 명시 높이가 없는 행 전부(항목·조정·주의·빈 행)에 내용 기준 높이를 준다 ───
+  fitRowHeights(ws, 5, r);
 
   // 열 폭은 사용자 확정 그리드로 고정 — 자동 확장 없음 (2026-08-13)
 
