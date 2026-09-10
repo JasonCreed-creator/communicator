@@ -12,7 +12,7 @@ import {
   maskEmail,
   maskPhone,
   suggestField,
-} from '../../src/providers/mock/sheetSync'
+} from '../../src/providers/mock/sheetSync.js'
 import type { SheetColumnMapping } from '../../src/types/entities'
 import type { SheetColumnPreview, SheetProbe, SheetTabInfo } from '../../src/types/views'
 import type { SheetMappedField } from '../../src/types/enums'

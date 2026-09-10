@@ -5,9 +5,9 @@
 // v2.0 이식 (설계서 §17.1): jsx-easy-shift main 6047834
 // src/components/remember-quote/quoteMode.ts — 로직 불변, import 경로만 조정.
 // EstimateResult는 엔진 정본 타입을 재노출한다(원본은 부분 타입을 자체 정의 — TS 타입 부여 범위).
-import { calcEstimate, type EstimateResult } from "./calcEstimate";
+import { calcEstimate, type EstimateResult } from "./calcEstimate.js";
 
-export type { EstimateResult } from "./calcEstimate";
+export type { EstimateResult } from "./calcEstimate.js";
 
 export type QuoteConfig = {
   target: number;

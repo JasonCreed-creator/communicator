@@ -2,7 +2,7 @@
 // Edge Function 대신 Vercel Functions — 같은 레포·같은 배포, D-Day 추가 단계는 Vercel env의 secret 1줄).
 // Web 표준 시그니처: Vercel Node 런타임이 Request → Response 핸들러를 그대로 지원한다.
 // 서버 전용 env: SUPABASE_URL(=VITE_SUPABASE_URL) · SUPABASE_SECRET_KEY · VITE_SUPABASE_PUBLISHABLE_KEY.
-import { handleRecalcRequest } from './_lib/quoteRecalc'
+import { handleRecalcRequest } from './_lib/quoteRecalc.js'
 
 export async function POST(request: Request): Promise<Response> {
   return handleRecalcRequest(request, process.env)

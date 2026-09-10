@@ -1,6 +1,6 @@
 // Vercel Function — POST /api/sheets (설계서 §24 등록 시트 읽기: probe · preview · rows).
 // 시트 → 앱 단방향(§24.6) — 이 함수에 쓰기 작업은 없다. 자격증명(GOOGLE_SHEETS_SA_JSON) 없으면 데모 모드.
-import { handleSheetsRequest } from './_lib/sheets'
+import { handleSheetsRequest } from './_lib/sheets.js'
 
 export async function POST(request: Request): Promise<Response> {
   return handleSheetsRequest(request, process.env)

@@ -21,3 +21,6 @@ npm-debug.log*
 
 # demo artifact build output
 dist-demo/
+
+# Vercel CLI local build/link output (vercel build 재현용 — 커밋 금지)
+.vercel/

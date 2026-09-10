@@ -321,6 +321,7 @@ Phase 3.8과 3.9는 **별도 커밋·별도 PR**로 분리한다(3.8 = 타입·�
 - 상태 전이는 단일 함수(`transitionStatus`) 경유 — 설계서 §5 전이표 밖 전이는 409. 컨펌 발송은 미리보기 포맷 검사 포함
 - 코멘트 기본 visibility='internal', 발주처 작성분은 shared 강제
 - 에러 응답 포맷 통일: `{error:{code,message}}`
+- **Vercel Functions(`api/`)가 닿는 런타임 상대 import는 `.js` 확장자 필수**(`./_lib/x.js`, `../../src/….js` — src 안의 연쇄 import 포함). @vercel/node는 파일 단위 ESM 트랜스파일이라 확장자 없는 지정자는 런타임 `ERR_MODULE_NOT_FOUND`(= `FUNCTION_INVOCATION_FAILED`)가 된다(2026-09-10 프로덕션 실측 — Phase 4 함수 3개 전부). TS·Vite·esbuild는 `.js`→`.ts`로 되짚으므로 앱 빌드는 무영향. 가드 = `src/test/api-esm-imports.test.ts`
 
 ## 7. 프론트 완료 기준 (Phase 0~3 DoD — Mock 기준)
 1. Mock E2E: 항목 생성 → 파일 업로드(blob) → 내부확정 → PM 발송(미리보기 포맷 검사 동작) → `/c/demo`에서 승인 → final 표시
@@ -397,6 +398,7 @@ Phase 3.8과 3.9는 **별도 커밋·별도 PR**로 분리한다(3.8 = 타입·�
 | 금액 비노출 | `grep -rn "total_amount\|breakdown\|ordered_amount\|actual_amount\|markup\|margin\|settlement\|contract_amount" src/pages/Client* src/pages/Landing* src/pages/Partner* src/lib/landing* src/components/plan src/components/client src/components/partner` | **DoD 23·30·32 (v2.4 — contract_amount 키·Partner 경로 확대)** |
 | 온보딩 플래그 | `grep -rn "onboarding_completed" src` | DoD 16 |
 | **공개 링크 공유 문구** | `grep -rn "링크가 있는 모든" src` — 금지문(`공유하지 마세요`) 밖에서 0건 | **3.17.1 T2 — 참가자 실명·연락처 시트를 링크 공개로 권하는 문구 금지** |
+| **api/ ESM 확장자** | `src/test/api-esm-imports.test.ts` — api 진입점에서 닿는 런타임 상대 import 전부 `.js` | **2026-09-10 프로덕션 실측 — 확장자 없는 지정자는 Vercel에서 `FUNCTION_INVOCATION_FAILED`. 로컬 재현 = `vercel build` 산출물을 Node ESM으로 로드** |
 | **폼 정본 우회** | `dod50-form-canon` 소스 가드 — accent 재선언 3형(인라인 `accentColor` · CSS `accent-color` · Tailwind 축약 `accent-*`) 0건 + 체크·라디오 `ui-check` / 셀렉트 `ui-select` | **DoD 50 — 컨트롤이 다시 브라우저 기본값으로 갈라지는 것을 막는다. Tailwind 축약도 같은 재선언이라 함께 막는다(3.19 실측: 슬라이더 2곳)** |
 
 앞의 3종은 `src/test/dod-project-scope-guard.test.ts`·기존 DoD 테스트가 상시 자동 검증한다 — 셸 grep은 이중 확인용이다.
