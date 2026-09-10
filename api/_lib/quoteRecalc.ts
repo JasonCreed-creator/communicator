@@ -5,7 +5,7 @@
 // 흐름: ① 사용자 JWT 검증(getUser) ② app_role admin·sales 확인 ③ 엔진 재계산 ④ secret 키로 insert(RLS 우회 —
 // 권한은 ②에서 이미 판정) ⑤ 새 버전이면 이전 버전 superseded 체인. 클라이언트가 보낸 breakdown·total_amount는 무시한다.
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
-import { computeQuoteOutputs } from '../../src/modules/quote/engine/quoteInput'
+import { computeQuoteOutputs } from '../../src/modules/quote/engine/quoteInput.js'
 import type { Quote, QuoteInput } from '../../src/types/entities'
 
 export interface RecalcRequest {

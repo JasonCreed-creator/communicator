@@ -7,9 +7,9 @@ import {
   calcEstimate,
   type CalcConfig,
   type EstimateResult,
-} from './calcEstimate'
-import { effectiveAdjust } from './quoteMode'
-import { clampVenueIndex, selectedVenueRental, type VenueEntry } from './venueOptions'
+} from './calcEstimate.js'
+import { effectiveAdjust } from './quoteMode.js'
+import { clampVenueIndex, selectedVenueRental, type VenueEntry } from './venueOptions.js'
 
 /** 후보 표기명 — §16: 홀이 있으면 `이름 · 홀` */
 export function venueDisplayName(v: { name: string; hall?: string | null }): string {

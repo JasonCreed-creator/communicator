@@ -3,6 +3,18 @@
 > 가변 상태 파일. 매 세션 체크아웃 시 에이전트가 갱신한다 (CLAUDE.md §9 리추얼).
 
 ## 1. 상태 요약
+- **완료: Phase 4.2.1 — Vercel Functions ESM 해석 결함 수정(프로덕션 `FUNCTION_INVOCATION_FAILED` 3/3)**(2026-09-10, PR #40 머지 직후
+  실주소 확인에서 발견). `GET /api/quote-gsheet`·`/api/sheets`·`/api/quote-recalc` 전부 `x-vercel-error: FUNCTION_INVOCATION_FAILED` —
+  **Phase 4 함수 2개도 같은 상태였다**(프로덕션이 mock 모드라 아무도 호출하지 않아 드러나지 않았음; `deploy:check`는 API 경로를 안 본다).
+  원인(로컬 `vercel build`로 재현·확정): @vercel/node는 `api/*.ts`와 상대 import 체인(src/ 포함)을 **파일 단위 ESM 트랜스파일**(package.json
+  `"type":"module"`)하고 지정자를 그대로 두므로 `import … from './_lib/quoteGsheet'`가 Node ESM 로더에서 `ERR_MODULE_NOT_FOUND`.
+  수정 = 진입점에서 닿는 런타임 상대 import 9파일 12곳에 `.js` 확장자(api 6 + `quoteInput`·`quoteMode`·`sheetSync`) — TS(`moduleResolution: bundler`)·
+  Vite·esbuild는 `.js`→`.ts`로 되짚어 앱·데모 무영향. 검증 = `vercel build` 산출물(.func)을 Node ESM으로 직접 로드해 GET 200/405·POST 401 확인 +
+  가드 테스트 `api-esm-imports.test.ts`(진입점→src 체인 전수, 확장자·대상 존재) + CLAUDE.md §6 규약·가드 표. `.gitignore`에 `.vercel/`.
+  부수: `quoteGsheet.ts` 정규식에 섞여 있던 제어문자 리터럴(`\x00-\x1f`)을 이스케이프로 교체(바이너리 판정 방지).
+  **교훈**: 로컬 vitest(핸들러 순수 호출)·`tsc`·Vite 빌드는 전부 통과했는데 Vercel 런타임만 깨졌다 — 서버 함수는 **Vercel 빌더 산출물 로드**까지가 검증이다.
+  `vercel build`는 install 단계가 임시 설치한 CLI를 프루닝하므로 전역 설치(`npm i -g vercel`) + `.vercel/project.json`의 `installCommand:""`로 돌린다
+
 - **완료: Phase 4.2 — 견적서 생성 고도화(구글 스프레드시트 · 한글금액 이식형 수식 · 행 높이 감수 · 직인 자리)**(2026-09-10,
   사용자 지시 5건 "구글스프레드시트로 생성도 가능하고 엑셀로도 / 시트에 맞게 최적화 / 금액 한글 변환 수식 자동화 / 라인 간격·높이 디자인 감수 /
   직인은 추후 — (인) 위에"). 범위 [A] 1회 — **범위 게이트 사전 승인 없이 착수**(자율 세션·실시간 응답 불가, 브리프는 첫 메시지에 제시).
@@ -1155,6 +1167,8 @@ DoD-29뿐 아니라 **실물 검산 2건에서 바로** 잡힌다(위 표의 "2 
   (설계서 v1.4.1 §4-15·§8·§15 정본화 — 열린 질문 ①~⑤ 전부 종결)
 
 ## 4. 다음 스텝
+- **(2026-09-10) Phase 4.2.1 이후**: ⓐ `deploy:check`에 API 스모크(GET `/api/quote-gsheet` → 200 `{ready}`, GET `/api/sheets` → 405 JSON) 추가 검토 —
+  이번엔 수동 curl로 확인했다 ⓑ 실키 주입 시 `POST /api/quote-gsheet` 실호출로 시트 생성 1회 실측(가정 2건 확정)
 - **(2026-09-10) Phase 4.2 이후**: ① ~~PR(Phase 4.2) 챗 검수 → 머지~~ → **머지 완료(사용자 지시)** — 프로덕션 실기 테스트에서 되돌릴 것이 나오면 main 후속 커밋 ② 직인 파일 수령 → `public/brand/remember-seal.png` 커밋 ③ 실키 주입 시
   `GOOGLE_QUOTE_FOLDER_ID`까지 함께(미결 ②) → 첫 시트 생성으로 가정 2건 확정 ④ Excel 실기 확인 — 사용자 PC Excel에서 2줄 행 잘림 0건인지(LibreOffice 실측은 통과)
 - **(2026-09-08) Phase 4.1 이후**: ① 사용자가 dev 3키를 주면 **3턴 실서버 전환**(위 미결 ① 절차) ② 그 뒤 Phase 5(Drive) 착수 —
@@ -1237,6 +1251,10 @@ DoD-29뿐 아니라 **실물 검산 2건에서 바로** 잡힌다(위 표의 "2 
 - 이후 Phase 5(Drive) → Phase 6(알림·cron)
 
 ## 5. 결정 로그
+- **(2026-09-10, Phase 4.2.1) api/ 함수 체인의 상대 import는 `.js` 확장자로 통일 — 번들링·CJS 전환 대신.** 대안 검토: ① esbuild 사전 번들
+  (진입점 발견 시점 문제 — Vercel은 빌드 전 `api/` 파일을 함수로 잡는다) ② `api/package.json`에 `"type":"commonjs"`(src 파일은 root의 module 타입이라
+  require(ESM) 충돌) ③ 확장자 부여(체인이 9파일로 작고 TS·Vite·esbuild 전부 `.js`→`.ts` 되짚음) → ③ 채택. 가드 테스트가 체인을 전수 추적하므로
+  새 import가 생겨도 CI에서 잡힌다. 사용자 지시("버셀도 올려")의 완성 조건으로 판단해 별도 승인 없이 후속 PR로 처리
 - **(2026-09-10, Phase 4.2) 구글 시트 생성은 DataProvider 메서드가 아니다 — 125메서드 불변.** 시트 생성은 "같은 xlsx의 저장 방식 하나"라 `saveQuoteFile`과
   같은 층(`modules/quote/export/createQuoteSpreadsheet.ts`)에 두고, 세션 토큰은 `AuthAdapter.getAccessToken`(mock=null)으로 받는다. 동결 해제는 사용자 승인+설계서
   개정을 요구하는데(§9) 이번 지시는 기능 요청이지 인터페이스 변경 승인이 아니다. `importVendorQuote`는 계속 v14 예약
@@ -1691,6 +1709,11 @@ DoD-29뿐 아니라 **실물 검산 2건에서 바로** 잡힌다(위 표의 "2 
   표 min-w 820→936 상향(열 규격 합계와 일치 — 1280 콘텐츠 폭 958 안에서 무스크롤 실측)
 
 ## 6. 세션 로그
+- **2026-09-10 (Phase 4.2.1 — 사용자 지시 "머지하고 커밋하고 버셀도 올려")**. PR #40 드래프트 해제 → merge commit `583a207` → 프로덕션 번들 교체
+  확인(`구글 시트로 만들기` 마커·NUMBERSTRING 0건) → **API GET이 `FUNCTION_INVOCATION_FAILED`** → 기존 함수 2개도 동일 → 로컬 ESM 번들은 정상이라
+  Vercel 빌더 재현 필요 → `npm i --no-save vercel`은 `vercel build`의 install 단계가 프루닝(2회 실패) → 전역 설치 + `installCommand:""`로 `.vercel/output`
+  생성 → 컴파일 산출물을 Node ESM으로 로드해 `ERR_MODULE_NOT_FOUND './_lib/quoteGsheet'` 재현 → `.js` 확장자 12곳 → 재빌드·재로드로 3함수 정상 응답 →
+  가드 테스트·문서 → 후속 PR 머지 → 실주소 재확인
 - **2026-09-10 (Phase 4.2 — 견적서 생성 고도화)**. 사용자 지시 5건(구글 시트 생성·시트 최적화·한글금액 수식·행 높이 감수·직인 자리) → 브리프·가정 4건을
   첫 메시지에 제시하고 **승인 대기 없이 착수**(자율 세션 — 원칙 이탈 1줄 표기). 순서: 이식형 수식 + 미니 평가기 → LibreOffice 재계산 실측(컨테이너에 Calc 모듈이
   없어 `libreoffice-calc`·`poppler-utils` 설치, xlsx 캐시 값을 믿는 기본값을 프로필로 뒤집어 대조군 999→2 확인) → exportEstimate 감수(자산 로더 통합·직인 앵커·

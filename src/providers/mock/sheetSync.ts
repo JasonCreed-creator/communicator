@@ -11,7 +11,7 @@ import type {
   SheetTabInfo,
 } from '../../types/views'
 import type { SheetMappedField } from '../../types/enums'
-import { SHEET_FIELD_LABELS, SHEET_STATUS_LABELS } from '../../types/enums'
+import { SHEET_FIELD_LABELS, SHEET_STATUS_LABELS } from '../../types/enums.js'
 
 /** 데모용 서비스 계정(합성 주소) — 위저드 1단계의 '뷰어로 초대할 계정' */
 export const SHEET_SERVICE_ACCOUNT = 'sheets-reader@communicator-demo.iam.gserviceaccount.com'
