@@ -127,9 +127,16 @@ function parseRange(ref: string): { top: number; left: number; bottom: number; r
   return { top: Number(m1[2]), left: colNum(m1[1]), bottom: Number(m2[2]), right: colNum(m2[1]) };
 }
 
+/** 항목 행 균일 높이의 줄 수 상한 — 이보다 긴 행(드문 3줄 이상)만 그 행만 예외로 키운다 */
+const UNIFORM_MAX_LINES = 2;
+
 /**
- * 명시 높이가 없는 행 전부에 내용 기준 높이를 준다(fromRow~toRow). 이미 높이가 있는 행(타이틀·고지·총액 등
+ * 명시 높이가 없는 행 전부에 높이를 준다(fromRow~toRow). 이미 높이가 있는 행(타이틀·고지·총액 등
  * 사용자 확정 간격)은 건드리지 않는다. 빈 행은 섹션 간격(spacer)으로 본다.
+ *
+ * 2026-09-11 사용자 지적 "행의 높이가 들쭉날쭉": 행마다 줄 수로 따로 매기면 비고가 2줄로 접히는 행만 커져
+ * 리듬이 깨진다. **항목 행은 문서 안에서 한 높이**로 통일한다 — 가장 긴 행의 줄 수(2줄 상한)를 기준으로
+ * 전 항목 행에 같은 높이를 주고, 세로 가운데 정렬이 1줄 행의 여백을 위아래로 나눈다.
  */
 function fitRowHeights(ws: Sheet, fromRow: number, toRow: number): void {
   const merges: string[] = ws.model?.merges ?? [];
@@ -144,6 +151,8 @@ function fitRowHeights(ws: Sheet, fromRow: number, toRow: number): void {
       else covered.add(`${rr},${c}`);
     }
   }
+  // 1차: 행별 줄 수·글자 크기 산출
+  const plan: { row: any; lines: number; fontPt: number }[] = [];
   for (let r = fromRow; r <= toRow; r++) {
     const row = ws.getRow(r);
     if (row.height !== undefined && row.height !== null) continue;
@@ -162,7 +171,16 @@ function fitRowHeights(ws: Sheet, fromRow: number, toRow: number): void {
       lines = Math.max(lines, wrap ? estimateLines(text, width, size) : 1);
       fontPt = Math.max(fontPt, size);
     });
-    row.height = lines === 0 ? ROW_PT.spacer : Math.max(ROW_PT.itemMin, Math.ceil(lines * lineHeightPt(fontPt) + 6));
+    plan.push({ row, lines, fontPt });
+  }
+  // 2차: 항목 행 균일 높이 = 가장 긴 행의 줄 수(상한 2줄) 기준 — 문서 전체가 한 리듬
+  const heightFor = (lines: number, fontPt: number) => Math.max(ROW_PT.itemMin, Math.ceil(lines * lineHeightPt(fontPt) + 6));
+  const contentRows = plan.filter((p) => p.lines > 0);
+  const uniformLines = Math.min(UNIFORM_MAX_LINES, Math.max(1, ...contentRows.map((p) => p.lines)));
+  const uniformFont = Math.max(10, ...contentRows.map((p) => p.fontPt));
+  const uniformHeight = heightFor(uniformLines, uniformFont);
+  for (const p of plan) {
+    p.row.height = p.lines === 0 ? ROW_PT.spacer : p.lines > UNIFORM_MAX_LINES ? heightFor(p.lines, p.fontPt) : uniformHeight;
   }
 }
 

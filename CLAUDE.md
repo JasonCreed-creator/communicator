@@ -252,8 +252,9 @@ MICE 프로젝트 협업 허브 — 역할별(디자인·운영·등록) 산출�
     (saveQuoteFile과 같은 층) + `AuthAdapter.getAccessToken`. mock 공급자는 토큰이 없어 **안내 문구**(무음 실패 금지), 자격증명 없으면 503을 사실대로
   - **한글금액 = 이식형 수식**(`koreanAmountFormula.ts`): `NUMBERSTRING`은 한국어 Excel 전용이라 구글 시트에서 `#NAME?` — TEXT·MID·VALUE·IF·ROUND·ABS만으로
     같은 표기("일십"·"일천"·"일억…만")를 낸다. JS 정본 `koreanAmount`와 미니 평가기(CI) + **LibreOffice 강제 재계산**(soffice 있을 때) 이중 검증
-  - **디자인 감수**: 전 행 명시 높이(내용 줄 수 × 1.4em + 6, 최소 20 · 헤더 20 · 섹션 제목 22 · 소계 20 · 빈 행 10, 사용자 확정 간격 22.65/4/18.65/16/27.5는 불변) ·
-    격자선 off · 통화 서식 `"₩"#,##0`. 열 폭(2026-08-13 확정 그리드)은 손대지 않는다
+  - **디자인 감수**: 전 행 명시 높이 — **항목 행은 문서 안에서 한 높이**(가장 긴 행의 줄 수 기준, 2줄 상한 → 보통 34pt; 3줄 이상인 행만 예외로 더 높게.
+    2026-09-11 사용자 지적 "행의 높이가 들쭉날쭉" — 행마다 줄 수로 따로 매기면 비고가 접히는 행만 커진다) · 헤더 20 · 섹션 제목 22 · 소계 20 · 빈 행 10 ·
+    사용자 확정 간격 22.65/4/18.65/16/27.5는 불변 · 격자선 off · 통화 서식 `"₩"#,##0`. 열 폭(2026-08-13 확정 그리드)은 손대지 않는다
   - **직인**: 공급자 행을 G 상호 / H "(인)"으로 나누고 `public/brand/remember-seal.png`를 H 중심 60px에 앵커 — 파일이 없으면 글자만, 넣으면 자동 반영.
     데모 빌드는 없으면 빈 data: URI로 인라인(`demo/plugins.ts` 치환 4건)
   - 금지: 열 폭·엔진 상수 변경 · `NUMBERSTRING` 재도입 · 시트 생성을 DataProvider 메서드로 승격(승인 없는 동결 해제) · 자격증명 없는데 데모 링크 흉내
@@ -387,7 +388,7 @@ Phase 3.8과 3.9는 **별도 커밋·별도 PR**로 분리한다(3.8 = 타입·�
 
 58. (v2.8 §4-1c) **행사 하드 삭제**: `app_role='admin'`만 `deleteProject`가 되고 sales·staff는 `forbidden`(메시지 `행사 삭제는 관리자(admin) 권한이 필요합니다.`), 없는 행사는 404; 삭제 후 그 행사의 스코프 데이터가 전부 사라지고 **견적은 행 수 그대로 `project_id`만 null**이며 주소록·협력사는 불변, **종료 행사도 삭제되고**(assertWritable 미경유) 배정이 사라진 담당자는 `removePerson`이 더는 409를 내지 않는다; **8행사를 전부 지운 뒤에도 `getCurrentUser()`가 살아 있고 `createProject`로 첫 행사를 만들 수 있다**(새 출발 보증), 삭제된 행사의 `/c`·`/p` 토큰은 깨끗한 404/410 (테스트로 증명 — `src/test/dod58-project-delete.test.ts`)
 
-59. (Phase 4.2) **견적서 생성 고도화**: 한글금액 수식에 `NUMBERSTRING` 0건 + 허용 함수만(ABS·IF·MID·ROUND·TEXT·VALUE) + 미니 평가기 결과 = JS 정본(샘플 40) + LibreOffice 강제 재계산 = JS 정본(soffice 있을 때) · 사용 행 전부 명시 높이(1줄 20 · 2줄 34 · 빈 행 10 · 확정 간격 불변) · 격자선 off · `"₩"#,##0` · 공급자 행 G/H 분리 + `sealBase64`면 H7 중심 60px 이미지 · 목록·에디터 ④에 내보내기 버튼 2종, mock에서 시트 버튼은 안내 문구 · API: staff 403 → 자격증명 없음 503 → sales/admin은 토큰→변환 업로드(폴더·mimeType)→요청자 공유 순, 공유 실패는 링크를 막지 않음 (테스트로 증명 — `koreanAmountFormula*.test.ts` · `exportEstimate.test.ts` · `createQuoteSpreadsheet.test.ts` · `quote-gsheet.test.tsx` · `api-functions.test.ts`)
+59. (Phase 4.2) **견적서 생성 고도화**: 한글금액 수식에 `NUMBERSTRING` 0건 + 허용 함수만(ABS·IF·MID·ROUND·TEXT·VALUE) + 미니 평가기 결과 = JS 정본(샘플 40) + LibreOffice 강제 재계산 = JS 정본(soffice 있을 때) · 사용 행 전부 명시 높이(항목 행은 문서 내 균일 — 1줄 행과 2줄 행이 같은 높이(샘플 34) · 빈 행 10 · 확정 간격 불변) · 격자선 off · `"₩"#,##0` · 공급자 행 G/H 분리 + `sealBase64`면 H7 중심 60px 이미지 · 목록·에디터 ④에 내보내기 버튼 2종, mock에서 시트 버튼은 안내 문구 · API: staff 403 → 자격증명 없음 503 → sales/admin은 토큰→변환 업로드(폴더·mimeType)→요청자 공유 순, 공유 실패는 링크를 막지 않음 (테스트로 증명 — `koreanAmountFormula*.test.ts` · `exportEstimate.test.ts` · `createQuoteSpreadsheet.test.ts` · `quote-gsheet.test.tsx` · `api-functions.test.ts`)
 
 ### 상시 grep 가드 (매 세션 종료 시 0건 확인 — 위 DoD와 별개로 항상 검사)
 | 가드 | 명령 | 근거 |
