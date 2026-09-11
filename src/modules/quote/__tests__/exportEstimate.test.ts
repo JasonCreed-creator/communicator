@@ -433,7 +433,7 @@ describe("DoD 22 — 외부 업로드·네트워크 호출 0건", () => {
 
 // ── 2026-09-10 디자인 감수 + 직인 + 시트 최적화 ──
 describe("exportEstimate — 행 높이·격자선·통화 서식 (2026-09-10 디자인 감수)", () => {
-  it("사용 중인 모든 행에 명시 높이가 있고, 항목 행은 20pt 이상·2줄 내용은 더 높다", async () => {
+  it("사용 중인 모든 행에 명시 높이가 있고, 항목 행은 문서 안에서 한 높이(가장 긴 행 기준·2줄 상한)", async () => {
     const { ws } = await buildSheet(SAMPLE_CFG);
     const last = ws.rowCount;
     expect(last).toBeGreaterThan(40);
@@ -450,14 +450,18 @@ describe("exportEstimate — 행 높이·격자선·통화 서식 (2026-09-10 �
     expect(ws.getRow(14).height).toBeCloseTo(18.65, 2);
     // 헤더 블록 5~9행은 같은 높이(20)
     for (let r = 5; r <= 9; r++) expect(ws.getRow(r).height).toBe(20);
-    // 항목 행: 1줄 = 20, 긴 산출 내역(운영 인력·보험 — 비고가 2줄)은 그보다 높다
-    let opsRow: number | null = null, oneLineRow: number | null = null;
+    // 항목 행: 2026-09-11 사용자 지적("행의 높이가 들쭉날쭉") — 1줄 행(엔지니어·웹페이지)과 비고가 2줄로 접히는 행
+    // (행사 운영 인력·RSVP 운영비)이 **같은 높이**여야 한다. 이 샘플은 2줄 행이 있으므로 균일 높이 = 2줄(34pt)
+    const ITEM_LABELS = ["엔지니어", "웹페이지", "환경조성", "행사 운영 인력", "행사장 안전보험", "RSVP 운영비", "쇼업 보장", "PCO 기획료", "기념품"];
+    const itemHeights = new Map<string, number>();
     ws.eachRow((row, n) => {
-      if (row.getCell(1).value === "행사 운영 인력") opsRow = n;
-      if (row.getCell(1).value === "엔지니어") oneLineRow = n;
+      const a = row.getCell(1).value;
+      if (typeof a === "string" && ITEM_LABELS.includes(a)) itemHeights.set(a, Number(ws.getRow(n).height));
     });
-    expect(ws.getRow(oneLineRow!).height).toBe(20);
-    expect(ws.getRow(opsRow!).height).toBeGreaterThan(20);
+    expect([...itemHeights.keys()].sort()).toEqual([...ITEM_LABELS].sort());
+    const distinct = new Set(itemHeights.values());
+    expect(distinct.size).toBe(1);
+    expect([...distinct][0]).toBe(34);
     // 섹션 사이 빈 행은 spacer(10) — 1번 섹션 제목 바로 위(12행)
     expect(ws.getRow(12).height).toBe(10);
   });
