@@ -508,7 +508,7 @@ describe("exportEstimate — 리멤버 기본 레이아웃 직인 (인)", () => 
     // H열(0-based 7) — 앵커는 공급자 행(7행) 중심에 오도록 한 행 위(6행, 0-based 5)에서 시작
     expect(range.tl.nativeCol).toBe(7);
     expect(range.tl.nativeRow).toBe(5);
-    expect(range.ext).toMatchObject({ width: 60, height: 60 });
+    expect(range.ext).toMatchObject({ width: 72, height: 72 });
   });
 
   it("영문 견적서는 '(Seal)' 표식", async () => {

@@ -141,7 +141,7 @@ check(
   `${docCountBefore} → ${docRequests.length}`,
 )
 
-// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — **견적서 내보내기 2종(2026-09-10)**.
+// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — **견적서 내보내기 2종(2026-09-10) + 파일 속 이미지(2026-09-24 직인)**.
 //     S-2 목록에 'Excel 내려받기'·'구글 시트로 만들기'가 나란히 있고, mock 공급자(로그인 없음)에서 시트 버튼은
 //     무음 실패 대신 안내 문구(role=alert)를 띄운다(무동작 금지). 에디터 ④에도 같은 두 버튼이 있다.
 //     (직전 세션 ③ = 로그인 게이트 — 그 경로는 launcher.test·AuthGate 테스트가 계속 잡는다) ──
@@ -167,6 +167,24 @@ check(/실서버\(로그인\) 모드에서만/.test(alertText) && /Excel로 내�
 check((await tab.getByTestId('gsheet-result').count()) === 0, 'mock: 결과 카드(링크) 없음')
 check(docRequests.length === docBeforeQuotes, '견적 목록·안내 표시에 전체 리로드 0', `${docBeforeQuotes} → ${docRequests.length}`)
 await tab.screenshot({ path: resolve(SHOTS, '03a-quotes-export-buttons.png') })
+
+// ③-2 (2026-09-24 직인) — 내려받은 Excel 안의 이미지를 직접 연다. 데모는 직인을 싣지 않으므로(demo/plugins.ts)
+//      로고 1장(PNG)만 있어야 하고, PNG가 아닌 미디어는 0건이어야 한다 — 없는 자산 경로에 SPA 폴백 HTML이
+//      PNG로 박히던 운영 결함의 회귀 가드. 직인이 실제로 얹히는 경로는 sealAsset.test.ts가 잡는다
+const [download] = await Promise.all([tab.waitForEvent('download', { timeout: 15_000 }), excelBtn.click()])
+const { default: ExcelJS } = await import('exceljs')
+const wbx = new ExcelJS.Workbook()
+await wbx.xlsx.readFile(await download.path())
+const media = wbx.model.media ?? []
+const PNG_SIG = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
+const nonPng = media.filter((m) => !PNG_SIG.every((b, i) => m.buffer?.[i] === b))
+check(
+  media.length === 1 && nonPng.length === 0,
+  'Excel 파일 이미지 = 로고 1장(PNG) · 직인 없음(데모 제외) · 비PNG 미디어 0',
+  `media ${media.length} · 비PNG ${nonPng.length}`,
+)
+const sealMark = wbx.worksheets[0].getCell('H7').value
+check(sealMark === '(인)', "Excel 공급자 행 H7 '(인)' 표식", String(sealMark))
 
 // 에디터 ④ — 목록에서 '＋ 새 버전'으로 견적 id를 얻고, ?step=4 딥링크로 확인·확정 단계에 진입한다
 await tab.getByRole('button', { name: '＋ 새 버전' }).click()

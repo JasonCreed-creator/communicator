@@ -28,11 +28,12 @@ import { amountInWordsFormula, amountInWordsKo } from "./koreanAmountFormula";
 // 리멤버 워드마크(크림/화이트 — 블랙 헤더 밴드용). PROGRESS 결정 로그: 로고 상시 노출은
 // 사용자 명시 지시(#RULE-NO-COMPANY 예외) — 자산은 public/brand 주입, 로드 실패 시 로고 없이 출력.
 const REMEMBER_LOGO_URL = "/brand/remember-logo-offwhite.png";
-// 리멤버 직인(2026-09-10 사용자 지시 "직인 파일은 추후 — 견적서 내 (인) 위에 붙이기"). 파일이 public/brand에
-// 없으면(404·0바이트) 직인 없이 "(인)" 글자만 출력한다 — 자산을 넣는 순간 자동 반영. 규격은 public/brand/README.md.
+// 리멤버 직인(2026-09-10 사용자 지시 "견적서 내 (인) 위에 붙이기" → 2026-09-24 사용자 제공 직인 반영). 파일이
+// 없거나 PNG가 아니면 직인 없이 "(인)" 글자만 출력한다. 리멤버 브랜드 견적서에만 쓴다. 규격은 public/brand/README.md.
 const REMEMBER_SEAL_URL = "/brand/remember-seal.png";
-/** 직인 렌더 크기(px, 96dpi) — 약 16mm. 공급자 행 H열 "(인)" 중심에 앵커 */
-const SEAL_PX = 60;
+/** 직인 렌더 크기(px, 96dpi) — 공급자 행 H열 "(인)" 중심에 앵커. 2026-09-24 사용자 선택(60·72·84 실렌더 비교):
+ *  2.5행에 걸치고 테두리 글자가 읽히는 크기. A4 한 장 맞춤 인쇄 시 지름 약 12mm */
+const SEAL_PX = 72;
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Cell = any;
@@ -42,8 +43,9 @@ let ExcelJSModule: any = null;
 let fileSaverModule: any = null;
 
 // 브랜드 자산(로고·직인) base64 캐시 — same-origin 상대 경로를 이 한 곳에서만 fetch한다(DoD 22 · 데모 가드 "fetch 1건").
-// 실패·404·빈 응답은 ""로 캐시해 자산 없이 출력한다.
+// 실패·404·빈 응답·PNG가 아닌 응답은 ""로 캐시해 자산 없이 출력한다.
 const _assetB64 = new Map<string, string>();
+const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 async function loadAssetBase64(url: string): Promise<string> {
   const cached = _assetB64.get(url);
   if (cached !== undefined) return cached;
@@ -52,9 +54,14 @@ async function loadAssetBase64(url: string): Promise<string> {
     const res = await fetch(url);
     if (res.ok) {
       const bytes = new Uint8Array(await res.arrayBuffer());
-      let bin = "";
-      for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
-      b64 = bytes.length > 0 ? btoa(bin) : "";
+      // 없는 경로에도 호스트가 index.html을 200으로 돌려준다(vercel.json SPA rewrite) — 상태 코드만 믿으면
+      // HTML이 PNG로 워크북에 박힌다(2026-09-24 운영 실측). 자산은 전부 PNG이므로 서명으로 판정한다.
+      const isPng = bytes.length > PNG_SIGNATURE.length && PNG_SIGNATURE.every((b, i) => bytes[i] === b);
+      if (isPng) {
+        let bin = "";
+        for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+        b64 = btoa(bin);
+      }
     }
   } catch {
     b64 = "";
@@ -692,10 +699,15 @@ export async function exportEstimate(
       console.warn("[exportEstimate] seal insert failed:", e?.message ?? e);
     }
   }
-  // 리멤버 기본 레이아웃 직인 — 공급자 행 H열 "(인)" 중심에 앵커. 자산 = brand.sealBase64(주입) 또는 public/brand/remember-seal.png
+  // 리멤버 기본 레이아웃 직인 — 공급자 행 H열 "(인)" 중심에 앵커. 자산 = brand.sealBase64(주입) 또는 public/brand/remember-seal.png.
+  // 공개 경로 직인은 리멤버 브랜드 전용 — 다른 공급자 명의 견적서에 리멤버 직인이 찍히면 안 된다(자기 sealBase64가 있을 때만 직인)
   if (!B.richSupplier && stdSealRow) {
     const injected = B.sealBase64 ? String(B.sealBase64) : "";
-    const sealB64 = injected ? injected.replace(/^data:image\/\w+;base64,/, "") : await loadAssetBase64(REMEMBER_SEAL_URL);
+    const sealB64 = injected
+      ? injected.replace(/^data:image\/\w+;base64,/, "")
+      : B === REMEMBER_BRAND
+        ? await loadAssetBase64(REMEMBER_SEAL_URL)
+        : "";
     if (sealB64) {
       try {
         const ext = /^data:image\/jpe?g/i.test(injected) ? "jpeg" : "png";
