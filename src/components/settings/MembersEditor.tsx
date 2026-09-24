@@ -1,35 +1,44 @@
-// 담당자 목록·배정·추가·삭제 — 행사 설정(S6) ②탭과 온보딩(S0) ②단계가 공용으로 쓴다(설계서 v1.5 §10).
-// addMember·removeMember는 pm 전용(서버 assertPm) — readOnly=true(비 pm)면 배정·추가 행·삭제 버튼을 숨긴다.
-// Phase 3.20 — 배정 경로가 셋이다: ①주소록에서 고르기(기본) ②직접 입력 ③전자명함 붙여넣기.
-// 셋 다 저장은 addMember 하나로 모인다(이메일로 같은 사람을 알아보고 프로필을 재사용).
-import { useId, useState, type FormEvent } from 'react'
+// 담당자 배정 보드 — 행사 설정(S6) ②탭과 온보딩(S0) ②단계가 공용으로 쓴다(설계서 v1.5 §10).
+// Phase 3.22(2026-09-24, 사용자 지시 "미리 배치하지 말고 인물카드를 만들어서 클릭하거나 드래그앤드랍으로"):
+//   역할 칸 4개(PM·디자인·운영·등록) = 이 행사의 배정 현황, 주소록 인물 카드 = 배정 후보.
+//   배정은 ①카드를 눌러 역할 고르기 ②카드를 역할 칸으로 끌어놓기 — 저장은 addMember 하나(DataProvider 불변).
+//   미리 배치하지 않는다 — 새 행사에는 만든 사람(PM)만 있다(설계서 §8).
+// addMember·removeMember는 pm 전용(서버 assertPm) — readOnly=true(비 pm)면 역할 칸만 읽기로 보여 준다.
+// 주소록에 없는 사람은 ②직접 입력 ③전자명함 붙여넣기로 넣는다(Phase 3.20) — 셋 다 addMember로 모인다
+// (이메일로 같은 사람을 알아보고 프로필을 재사용).
+import { useId, useState, type DragEvent, type FormEvent, type KeyboardEvent } from 'react'
 import { Link } from 'react-router-dom'
 import EmptyState from '../internal/EmptyState'
 import ErrorAlert from '../internal/ErrorAlert'
 import Field from '../internal/Field'
 import { useAsync, useMutation } from '../../hooks/useAsync'
 import { parseContactCards, type ParsedContact } from '../../lib/contactCard'
-import { ROLE_BAR_CLASSES, ROLE_LABELS } from '../../lib/labels'
+import { ROLE_BAR_CLASSES, ROLE_BORDER_CLASSES, ROLE_LABELS } from '../../lib/labels'
 import { getDataProvider } from '../../providers'
 import type { MemberRole } from '../../types/enums'
 import type { UUID } from '../../types/entities'
-import type { MemberInput, PersonWithAssignments } from '../../types/views'
+import type { MemberInput, MemberWithProfile, PersonWithAssignments } from '../../types/views'
 
 const provider = getDataProvider()
 
 const ROLES: MemberRole[] = ['pm', 'design', 'ops', 'reg']
 const DEFAULT_ROLE: MemberRole = 'design'
 
-function RolePill({ role }: { role: MemberRole }) {
-  return (
-    <span
-      className={`inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${ROLE_BAR_CLASSES[role]} ${
-        role === 'reg' ? 'text-ink' : 'text-white'
-      }`}
-    >
-      {ROLE_LABELS[role]}
-    </span>
-  )
+/** 끌어놓기 데이터 형식 — 역할 칸은 주소록 카드만 받는다(파일·글자를 끌어와도 반응하지 않는다) */
+export const PERSON_DRAG_TYPE = 'application/x-communicator-person'
+
+/** 역할은 형태로만 — 8px 도트(디자인지시서 §7-1.2: 역할에 pill 배지를 쓰지 않는다) */
+function RoleDot({ role }: { role: MemberRole }) {
+  return <span aria-hidden className={`inline-block size-2 shrink-0 rounded-full ${ROLE_BAR_CLASSES[role]}`} />
+}
+
+/** 카드 머리 글자 — 성(첫 글자)으로 사람을 빠르게 알아본다. 이미지 자산을 두지 않는다 */
+function initialOf(name: string): string {
+  return name.trim().charAt(0).toUpperCase() || '?'
+}
+
+function carriesPerson(e: DragEvent): boolean {
+  return Array.from(e.dataTransfer?.types ?? []).includes(PERSON_DRAG_TYPE)
 }
 
 export default function MembersEditor({
@@ -42,13 +51,25 @@ export default function MembersEditor({
   readOnly?: boolean
 }) {
   const members = useAsync(() => provider.listMembers(projectId), [projectId])
-  // 주소록(전역 담당자 마스터) — 배정 후보의 원천. 배정·삭제로 후보가 바뀌므로 멤버와 함께 재조회한다.
+  // 주소록(전역 담당자 마스터) — 배정 후보의 원천. 배정·빼기로 후보가 바뀌므로 멤버와 함께 재조회한다.
   const people = useAsync(() => provider.listPeople(), [])
   // removeMember는 void 반환 — useMutation 성공 판정(반환값 존재)을 위해 true로 감싼다
   const remove = useMutation(async (memberId: UUID) => {
     await provider.removeMember(projectId, memberId)
     return true
   })
+  const assign = useMutation((person: PersonWithAssignments, role: MemberRole) =>
+    provider.addMember(projectId, {
+      display_name: person.name,
+      email: person.email ?? '',
+      role,
+      // 주소록에 적힌 직함·전화를 그대로 들고 간다 — 행사마다 다시 묻지 않는 것이 목적이다
+      title: person.title ?? null,
+      phone: person.phone ?? null,
+    }),
+  )
+  // 끌고 있는 카드 — 역할 칸이 받을 준비가 됐다는 표시(점선)를 켠다
+  const [draggingId, setDraggingId] = useState<UUID | null>(null)
 
   const reloadAll = () => {
     members.reload()
@@ -58,9 +79,10 @@ export default function MembersEditor({
   }
 
   const handleRemove = async (memberId: UUID, name: string) => {
-    if (!window.confirm(`${name} 담당자를 삭제하시겠습니까?`)) return
+    if (!window.confirm(`${name} 님을 이 행사 담당에서 뺄까요? 담당자 목록(주소록)에는 그대로 남습니다.`)) return
+    assign.setError(null)
     const ok = await remove.run(memberId)
-    if (ok) reloadAll() // 배정에서 빠진 사람은 다시 후보가 된다
+    if (ok) reloadAll() // 뺀 사람은 다시 후보 카드가 된다
   }
 
   const assignedIds = new Set((members.data ?? []).map((m) => m.user_id))
@@ -69,68 +91,62 @@ export default function MembersEditor({
       .map((m) => m.profile.email?.toLowerCase())
       .filter((e): e is string => Boolean(e)),
   )
-  // 이미 배정된 사람은 addMember가 409로 막는다 — 고를 수 없는 것을 목록에 두지 않는다.
+  // 이미 배정된 사람은 addMember가 409로 막는다 — 고를 수 없는 카드를 두지 않는다.
   // 이메일이 없는 프로필도 뺀다: 이메일이 사람의 신원 키라 배정 자체가 성립하지 않는다.
   const candidates = (people.data ?? []).filter(
     (p) => Boolean(p.email) && !assignedIds.has(p.id) && !assignedEmails.has(p.email!.toLowerCase()),
   )
 
+  const handleAssign = async (person: PersonWithAssignments, role: MemberRole): Promise<boolean> => {
+    remove.setError(null)
+    const created = await assign.run(person, role)
+    if (created) reloadAll()
+    return Boolean(created)
+  }
+
+  const handleDropPerson = (personId: string, role: MemberRole) => {
+    setDraggingId(null)
+    const person = candidates.find((p) => p.id === personId)
+    // 이미 배정됐거나(다른 탭에서 먼저 배정) 주소록에서 사라진 카드 — 조용히 무시하지 않고 사실을 알린다
+    if (!person) {
+      assign.setError('그 담당자는 이미 배정됐거나 주소록에 없습니다. 목록을 새로 확인하세요.')
+      reloadAll()
+      return
+    }
+    void handleAssign(person, role)
+  }
+
+  const busy = assign.pending || remove.pending
+
   return (
-    <div className="space-y-3">
+    // @container — 열 수를 화면 폭이 아니라 이 편집기가 놓인 칸의 폭으로 정한다
+    // (행사 설정 ②는 좁은 왼쪽 열, 온보딩 ②는 넓은 본문 — 같은 컴포넌트가 두 폭에 놓인다)
+    <div className="@container space-y-3">
       <ErrorAlert message={members.error} />
       {members.data && (
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr>
-                <th className="ui-th">이름</th>
-                {/* 3.18.1 §2 — 직함·전화는 저장되는 값이다. 내부·발주처(/c) 지면 모두에 그대로 나간다 */}
-                <th className="ui-th">직함</th>
-                <th className="ui-th">이메일</th>
-                <th className="ui-th">전화</th>
-                <th className="ui-th">역할</th>
-                {!readOnly && <th className="ui-th">삭제</th>}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {members.data.map((m) => (
-                <tr key={m.user_id}>
-                  <td className="whitespace-nowrap py-2 pl-3 pr-4 text-ink">{m.profile.name}</td>
-                  <td className="py-2 pl-3 pr-4 text-ink-sub">{m.profile.title || '-'}</td>
-                  <td className="py-2 pl-3 pr-4 text-ink-sub">{m.profile.email ?? '-'}</td>
-                  <td className="whitespace-nowrap py-2 pl-3 pr-4 text-ink-sub">{m.profile.phone || '-'}</td>
-                  <td className="whitespace-nowrap py-2 pl-3 pr-4">
-                    <RolePill role={m.role} />
-                  </td>
-                  {!readOnly && (
-                    <td className="py-2 pl-3">
-                      <button
-                        type="button"
-                        onClick={() => handleRemove(m.user_id, m.profile.name)}
-                        disabled={remove.pending}
-                        className="text-xs text-negative underline"
-                      >
-                        삭제
-                      </button>
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <RoleLanes
+          members={members.data}
+          readOnly={readOnly}
+          dragging={draggingId !== null}
+          busy={busy}
+          onDropPerson={handleDropPerson}
+          onRemove={handleRemove}
+        />
       )}
       <ErrorAlert message={remove.error} />
+      <ErrorAlert message={assign.error} />
 
       {!readOnly && (
         <>
           <ErrorAlert message={people.error} />
           {members.data && people.data && (
-            <AssignFromDirectory
-              projectId={projectId}
+            <PeoplePool
               candidates={candidates}
               directoryEmpty={people.data.length === 0}
-              onAssigned={reloadAll}
+              busy={busy}
+              onAssign={handleAssign}
+              onDragStart={setDraggingId}
+              onDragEnd={() => setDraggingId(null)}
             />
           )}
           <AddMemberForm projectId={projectId} onCreated={reloadAll} />
@@ -146,67 +162,168 @@ export default function MembersEditor({
   )
 }
 
-/** 셀렉트 한 줄로 사람을 알아보게 — 동명이인은 직함·이메일로 갈린다 */
-function personOptionLabel(person: PersonWithAssignments): string {
-  return [person.name, person.title, person.email].filter(Boolean).join(' \u00b7 ')
+/**
+ * 역할 칸 4개 = 이 행사의 배정 현황 (Phase 3.22 — 표를 대체).
+ *
+ * 칸마다 배정된 사람의 이름·직함·이메일·전화를 보여 준다(3.18.1 §2 — 직함·전화는 발주처 화면에도
+ * 그대로 나가는 값이라 여기서 눈으로 확인된다). 주소록 카드를 끌어와 놓으면 그 역할로 배정된다.
+ * 배정된 카드는 끌 수 없다 — 역할을 바꾸려면 빼고 다시 배정한다(빼기·배정 두 동작이 각각 보인다).
+ */
+function RoleLanes({
+  members,
+  readOnly,
+  dragging,
+  busy,
+  onDropPerson,
+  onRemove,
+}: {
+  members: MemberWithProfile[]
+  readOnly: boolean
+  dragging: boolean
+  busy: boolean
+  onDropPerson: (personId: string, role: MemberRole) => void
+  onRemove: (memberId: UUID, name: string) => void
+}) {
+  const [overRole, setOverRole] = useState<MemberRole | null>(null)
+  const accepts = (e: DragEvent) => !readOnly && !busy && carriesPerson(e)
+
+  return (
+    <div className="grid grid-cols-1 gap-3 @sm:grid-cols-2 @3xl:grid-cols-4" data-testid="role-lanes">
+      {ROLES.map((role) => {
+        const laneMembers = members.filter((m) => m.role === role)
+        const over = overRole === role
+        return (
+          <section
+            key={role}
+            aria-label={`${ROLE_LABELS[role]} 담당`}
+            data-role-lane={role}
+            onDragEnter={(e) => {
+              if (!accepts(e)) return
+              e.preventDefault()
+              setOverRole(role)
+            }}
+            onDragOver={(e) => {
+              if (!accepts(e)) return
+              e.preventDefault()
+              e.dataTransfer.dropEffect = 'copy'
+            }}
+            onDragLeave={(e) => {
+              if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+                setOverRole((r) => (r === role ? null : r))
+              }
+            }}
+            onDrop={(e) => {
+              setOverRole(null)
+              if (!accepts(e)) return
+              e.preventDefault()
+              const personId = e.dataTransfer.getData(PERSON_DRAG_TYPE)
+              if (personId) onDropPerson(personId, role)
+            }}
+            className={`flex min-h-[120px] flex-col rounded-lg border-2 p-2.5 transition-colors ${
+              over
+                ? 'border-accent bg-accent-tint'
+                : dragging && !readOnly
+                  ? 'border-dashed border-border-strong bg-canvas'
+                  : 'border-transparent bg-canvas'
+            }`}
+          >
+            <header className="flex items-center justify-between gap-2">
+              <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-sm font-semibold text-ink">
+                <RoleDot role={role} />
+                {ROLE_LABELS[role]}
+              </span>
+              <span className="t-caption whitespace-nowrap text-ink-cap">{laneMembers.length}명</span>
+            </header>
+            {laneMembers.length > 0 ? (
+              <ul className="mt-2 space-y-2">
+                {laneMembers.map((m) => (
+                  <li
+                    key={m.user_id}
+                    data-member-card={m.user_id}
+                    className={`rounded-md border border-l-4 border-border ${ROLE_BORDER_CLASSES[role]} bg-card px-2.5 py-2 shadow-card`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-ink" title={m.profile.name}>
+                          {m.profile.name}
+                        </p>
+                        {m.profile.title && (
+                          <p className="truncate text-xs text-ink-sub" title={m.profile.title}>
+                            {m.profile.title}
+                          </p>
+                        )}
+                        {m.profile.email && (
+                          <p className="truncate text-xs text-ink-cap" title={m.profile.email}>
+                            {m.profile.email}
+                          </p>
+                        )}
+                        {m.profile.phone && (
+                          <p className="truncate text-xs text-ink-cap" title={m.profile.phone}>
+                            {m.profile.phone}
+                          </p>
+                        )}
+                      </div>
+                      {!readOnly && (
+                        <button
+                          type="button"
+                          onClick={() => onRemove(m.user_id, m.profile.name)}
+                          disabled={busy}
+                          aria-label={`${m.profile.name} 빼기`}
+                          className="shrink-0 whitespace-nowrap text-xs text-negative underline"
+                        >
+                          빼기
+                        </button>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-2 flex flex-1 items-center justify-center rounded-md border border-dashed border-border px-2 py-4 text-center text-xs text-ink-cap">
+                {readOnly ? '배정 없음' : over ? '여기에 놓으면 배정됩니다' : '카드를 여기로 끌어놓기'}
+              </p>
+            )}
+          </section>
+        )
+      })}
+    </div>
+  )
 }
 
 /**
- * 등록된 담당자에서 배정 (Phase 3.20).
+ * 주소록 인물 카드 = 배정 후보 (Phase 3.22 — 셀렉트 피커를 대체).
  *
  * 같은 사람을 행사마다 다시 타이핑하면 오타가 이메일에 그대로 꽂히고 연락처가 행사별로 갈라진다.
- * 그래서 고르는 경로를 직접 입력보다 **위에** 둔다. 저장은 기존 addMember 그대로 —
- * 이메일로 같은 사람을 알아보고 프로필을 재사용하므로 배정 전용 메서드가 필요 없다.
+ * 그래서 고르는 경로를 직접 입력보다 **위에** 둔다(Phase 3.20). 카드를 누르면 역할 버튼 4개가 열리고,
+ * 카드를 끌어 역할 칸에 놓아도 된다 — 끌기가 안 되는 터치·키보드 환경은 누르기로 같은 일을 한다.
  */
-function AssignFromDirectory({
-  projectId,
+function PeoplePool({
   candidates,
   directoryEmpty,
-  onAssigned,
+  busy,
+  onAssign,
+  onDragStart,
+  onDragEnd,
 }: {
-  projectId: UUID
   candidates: PersonWithAssignments[]
   /** 후보 0명의 두 사정을 가른다: 주소록 자체가 빈 것 vs 이 행사에 전원 배정된 것 */
   directoryEmpty: boolean
-  onAssigned: () => void
+  busy: boolean
+  onAssign: (person: PersonWithAssignments, role: MemberRole) => Promise<boolean>
+  onDragStart: (personId: UUID) => void
+  onDragEnd: () => void
 }) {
-  const uid = useId()
-  const [personId, setPersonId] = useState('')
-  const [role, setRole] = useState<MemberRole>(DEFAULT_ROLE)
-  const assign = useMutation((person: PersonWithAssignments) =>
-    provider.addMember(projectId, {
-      display_name: person.name,
-      email: person.email ?? '',
-      role,
-      // 주소록에 적힌 직함·전화를 그대로 들고 간다 — 행사마다 다시 묻지 않는 것이 목적이다
-      title: person.title ?? null,
-      phone: person.phone ?? null,
-    }),
-  )
-
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault()
-    const person = candidates.find((p) => p.id === personId)
-    if (!person) {
-      assign.setError('배정할 담당자를 선택하세요.')
-      return
-    }
-    const created = await assign.run(person)
-    if (created) {
-      setPersonId('')
-      onAssigned()
-    }
-  }
+  const [openId, setOpenId] = useState<UUID | null>(null)
 
   if (candidates.length === 0) {
     return (
       <div className="space-y-2 border-t border-border pt-3">
-        <p className="t-caption text-ink-sub">등록된 담당자에서 배정</p>
+        <p className="t-caption text-ink-sub">주소록</p>
         <EmptyState
           message={
             directoryEmpty
-              ? '등록된 담당자가 없습니다 — 담당자 화면에서 먼저 등록하면 다음부터 골라서 배정할 수 있습니다.'
-              : '이 행사에 배정할 수 있는 사람이 모두 배정됐습니다.'
+              ? '등록된 담당자가 없습니다 — 담당자 화면에서 먼저 등록하면 다음부터 카드로 골라서 배정할 수 있습니다.'
+              : '주소록의 모든 담당자가 이 행사에 배정됐습니다.'
           }
           action={
             <Link to="/people" className="btn btn-ghost btn-sm">
@@ -219,56 +336,121 @@ function AssignFromDirectory({
   }
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="flex flex-wrap items-end gap-3 border-t border-border pt-3"
+    <div className="space-y-2 border-t border-border pt-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <p className="t-caption text-ink-sub">
+          주소록 {candidates.length}명 — 카드를 눌러 역할을 고르거나, 위의 역할 칸으로 끌어놓으세요.
+        </p>
+        <Link to="/people" className="t-caption text-ink-cap underline">
+          담당자 목록 관리
+        </Link>
+      </div>
+      <ul className="grid grid-cols-1 items-start gap-2 @sm:grid-cols-2 @2xl:grid-cols-3" aria-label="배정할 수 있는 담당자">
+        {candidates.map((person) => (
+          <PersonCard
+            key={person.id}
+            person={person}
+            open={openId === person.id}
+            busy={busy}
+            onToggle={() => setOpenId((id) => (id === person.id ? null : person.id))}
+            onAssign={async (role) => {
+              if (await onAssign(person, role)) setOpenId(null)
+            }}
+            onDragStart={() => {
+              setOpenId(null)
+              onDragStart(person.id)
+            }}
+            onDragEnd={onDragEnd}
+          />
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+function PersonCard({
+  person,
+  open,
+  busy,
+  onToggle,
+  onAssign,
+  onDragStart,
+  onDragEnd,
+}: {
+  person: PersonWithAssignments
+  open: boolean
+  busy: boolean
+  onToggle: () => void
+  onAssign: (role: MemberRole) => void
+  onDragStart: () => void
+  onDragEnd: () => void
+}) {
+  const groupId = useId()
+  // 머리는 <button>이 아니라 role="button"이다 — <button> 위에서 시작한 끌기가 부모의 draggable로
+  // 이어지지 않는 브라우저 문제(파이어폭스로 알려짐 — 실측은 크롬만)를 피해, 누르는 곳과 끄는 곳을 같게 둔다.
+  const handleKey = (e: KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      if (!busy) onToggle()
+    }
+  }
+  return (
+    <li
+      draggable={!busy}
+      data-person-card={person.id}
+      onDragStart={(e) => {
+        e.dataTransfer.setData(PERSON_DRAG_TYPE, person.id)
+        e.dataTransfer.setData('text/plain', person.name)
+        e.dataTransfer.effectAllowed = 'copy'
+        onDragStart()
+      }}
+      onDragEnd={onDragEnd}
+      className={`rounded-lg border bg-card px-3 py-2 shadow-card transition-colors ${
+        open ? 'border-accent' : 'border-border hover:border-border-strong'
+      } ${busy ? 'opacity-60' : 'cursor-grab active:cursor-grabbing'}`}
     >
-      <Field
-        id={`${uid}-person`}
-        label="등록된 담당자"
-        hint="이미 이 행사에 배정된 사람은 목록에 없습니다."
+      <div
+        role="button"
+        tabIndex={busy ? -1 : 0}
+        aria-expanded={open}
+        aria-controls={open ? groupId : undefined}
+        aria-disabled={busy || undefined}
+        aria-label={`${person.name} 역할 고르기`}
+        onClick={() => {
+          if (!busy) onToggle()
+        }}
+        onKeyDown={handleKey}
+        className="flex items-center gap-2.5 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
-        <select
-          id={`${uid}-person`}
-          value={personId}
-          onChange={(e) => setPersonId(e.target.value)}
-          className="ui-input ui-select w-72"
+        <span
+          aria-hidden
+          className="grid size-8 shrink-0 place-items-center rounded-full bg-track text-sm font-semibold text-brown"
         >
-          <option value="">담당자 선택</option>
-          {candidates.map((p) => (
-            <option key={p.id} value={p.id}>
-              {personOptionLabel(p)}
-            </option>
+          {initialOf(person.name)}
+        </span>
+        <span className="min-w-0">
+          <span className="block truncate text-sm font-medium text-ink">{person.name}</span>
+          <span className="block truncate text-xs text-ink-sub">{person.title || person.email}</span>
+        </span>
+      </div>
+      {open && (
+        <div id={groupId} role="group" aria-label={`${person.name} 역할`} className="mt-2 flex flex-wrap gap-1.5">
+          {ROLES.map((role) => (
+            <button
+              key={role}
+              type="button"
+              onClick={() => onAssign(role)}
+              disabled={busy}
+              aria-label={`${person.name} ${ROLE_LABELS[role]}으로 배정`}
+              className="btn btn-ghost btn-sm gap-1.5"
+            >
+              <RoleDot role={role} />
+              {ROLE_LABELS[role]}
+            </button>
           ))}
-        </select>
-      </Field>
-      {/* 라벨을 '배정 역할'로 둔다 — 아래 직접 입력 폼의 '역할'과 이름이 겹치면 무엇을 고르는 칸인지 흐려진다 */}
-      <Field id={`${uid}-assign-role`} label="배정 역할">
-        <select
-          id={`${uid}-assign-role`}
-          value={role}
-          onChange={(e) => setRole(e.target.value as MemberRole)}
-          className="ui-input ui-select w-28"
-        >
-          {ROLES.map((r) => (
-            <option key={r} value={r}>
-              {ROLE_LABELS[r]}
-            </option>
-          ))}
-        </select>
-      </Field>
-      <button
-        type="submit"
-        disabled={assign.pending || personId === ''}
-        className="btn btn-ghost btn-sm"
-      >
-        배정
-      </button>
-      <Link to="/people" className="t-caption text-ink-cap underline">
-        담당자 목록 관리
-      </Link>
-      <ErrorAlert message={assign.error} />
-    </form>
+        </div>
+      )}
+    </li>
   )
 }
 
