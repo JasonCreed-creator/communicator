@@ -310,6 +310,84 @@ ${assertSql(`not exists (select 1 from projects where id='${PRJ_CLOSED}')`)}`,
   scenario('RPC delete_project: anon(토큰 경로 롤)은 실행 불가', `select delete_project('${PRJ}');`,
     { role: 'anon', expect: 'error', match: 'permission denied' })
 
+  // 5e. Drive 저장소 (v2.9 §7 · Phase 5) — 5인자 upload_version · 인박스 연결 · service 전용 RPC 권한 · Vault 토큰 · §7.5 2단계 확정
+  const DRV = '1AbCdEfGhIjKlMnOpQrStUvWxYz012345'   // 실제 Drive id 모양(20자+, drv- 접두 아님)
+  const designItem = psql(['-c', `select id from deliverables where project_id='${PRJ}' and area='design' and status in ('draft','changes_requested','requested','internal_review') and partner_id is null order by created_at limit 1`]).out
+  record('Drive 전제: 데모 행사에 업로드 가능한 디자인 항목 1건 이상', Boolean(designItem))
+  scenario('Drive upload_version(5인자): Drive 파일 id 기록 + 같은 항목 중복 등록 409', `select upload_version('${designItem}', '260924_X_키비주얼_시안_v9.pdf', null, 'a.pdf', '${DRV}');
+reset role;
+${assertSql(`exists (select 1 from versions where deliverable_id='${designItem}' and drive_file_id='${DRV}')`)}
+set local role authenticated;
+select upload_version('${designItem}', 'dup.pdf', null, 'dup.pdf', '${DRV}');`,
+    { role: 'authenticated', sub: authId.design, expect: 'error', match: '이미 이 항목에 등록된 파일' })
+  scenario('Drive upload_version: 인박스에 있던 파일을 등록하면 인박스는 연결 처리(중복 표시 없음)', `reset role;
+insert into unregistered_files (project_id, drive_file_id, file_name, detected_folder) values ('${PRJ}', '${DRV}', 'a.pdf', '05_산출물/디자인');
+set local role authenticated;
+select upload_version('${designItem}', 'a.pdf', null, 'a.pdf', '${DRV}');
+reset role;
+${assertSql(`(select linked_deliverable_id from unregistered_files where drive_file_id='${DRV}') = '${designItem}'`)}`,
+    { role: 'authenticated', sub: authId.design })
+  scenario('Drive upload_version: 4인자 호출도 그대로 동작(Phase 4 호출부 호환 · 자리표시 id)', `select upload_version('${designItem}', 'legacy.pdf', 'n', 'legacy.pdf');
+reset role;
+${assertSql(`exists (select 1 from versions where deliverable_id='${designItem}' and file_name='legacy.pdf' and starts_with(drive_file_id, 'pending:'))`)}`,
+    { role: 'authenticated', sub: authId.design })
+  const check = scenario('Drive drive_upload_check(pm): 폴더 경로에 필요한 값만(JSON)', `select drive_upload_check('${designItem}');`, { role: 'authenticated', sub: authId.pm })
+  record('drive_upload_check 응답에 행사 코드·항목 영역 포함 · 금액 키 0건', /"code"/.test(check) && /"area": ?"design"/.test(check) && !/total_amount|breakdown|contract_amount/.test(check), check.slice(0, 200))
+  scenario('Drive drive_upload_check: reg는 403(역할-영역)', `select drive_upload_check('${designItem}');`,
+    { role: 'authenticated', sub: authId.reg, expect: 'error', match: '쓰기 권한' })
+  for (const [fn, call] of [
+    ['drive_token_read', 'drive_token_read()'],
+    ['drive_known_file_ids', `drive_known_file_ids('${PRJ}')`],
+    ['client_file_versions', `client_file_versions('${DEMO_TOKEN}')`],
+    ['finalize_approved', `finalize_approved('${designItem}', null)`],
+    ['drive_connection_save', `drive_connection_save('x', 'a@example.com', null)`],
+  ]) {
+    scenario(`Drive ${fn}: authenticated 실행 불가(service 전용)`, `select ${call};`, { role: 'authenticated', sub: authId.pm, expect: 'error', match: 'permission denied' })
+    scenario(`Drive ${fn}: anon 실행 불가(service 전용)`, `select ${call};`, { role: 'anon', expect: 'error', match: 'permission denied' })
+  }
+  scenario('Drive drive_connection: authenticated는 표 권한 없음', `select count(*) from drive_connection;`,
+    { role: 'authenticated', sub: authId.pm, expect: 'error', match: 'permission denied' })
+  scenario('Drive Vault: 저장 → 읽기 → 재저장(갱신) → 해제', `select drive_connection_save('rt-1', 'owner@example.com', null);
+${assertSql(`drive_token_read() = 'rt-1'`)}
+${assertSql(`(select account_email from drive_connection where id=1) = 'owner@example.com'`)}
+select drive_connection_error('끊김');
+${assertSql(`(select last_error from drive_connection where id=1) = '끊김'`)}
+select drive_connection_save('rt-2', 'owner@example.com', null);
+${assertSql(`drive_token_read() = 'rt-2' and (select last_error from drive_connection where id=1) is null and (select count(*) from vault.secrets where name='communicator_drive_refresh_token') = 1`)}
+select drive_connection_clear();
+${assertSql(`drive_token_read() is null and not exists (select 1 from drive_connection)`)}`)
+  const known = scenario('Drive drive_known_file_ids: 버전 + 인박스 id를 모두 안다', `select array_length(drive_known_file_ids('${PRJ}'), 1) > 0 and 'drv-f-inbox-001' = any(drive_known_file_ids('${PRJ}'));`)
+  record('drive_known_file_ids에 인박스 시드 id 포함', known === 't', known)
+  const files = scenario('Drive client_file_versions(service): 데모 토큰의 컨펌 대기 + 확정본 버전', `select client_file_versions('${DEMO_TOKEN}');`)
+  record('client_file_versions: 버전 목록 JSON · 금액 키 0건', /"version_id"/.test(files) && !/total_amount|breakdown|contract_amount/.test(files), files.slice(0, 160))
+  scenario('Drive client_file_versions: 회수 토큰 410', `select client_file_versions('${REVOKED_TOKEN}');`, { expect: 'error', match: 'GONE|만료' })
+  scenario('§7.5 drive_enabled=false(기본): 승인 즉시 final — 기존 흐름 불변', `select client_decide('${DEMO_TOKEN}', '${pendingApprovals[0]}', 'approved');
+reset role;
+${assertSql(`(select status from deliverables where id = (select deliverable_id from approvals where id='${pendingApprovals[0]}')) = 'final'`)}`,
+    { role: 'anon' })
+  scenario('§7.5 drive_enabled=true + 행사 폴더: 승인은 approved에서 멈추고 → 복사 대상 조회 → finalize_approved로 final(+로그)', `update app_config set drive_enabled = true where id = 1;
+update projects set drive_root_folder_id = '${DRV}ROOT' where id = '${PRJ}';
+set local role anon;
+select client_decide('${DEMO_TOKEN}', '${pendingApprovals[0]}', 'approved');
+reset role;
+${assertSql(`(select status from deliverables where id = (select deliverable_id from approvals where id='${pendingApprovals[0]}')) = 'approved'`)}
+${assertSql(`(client_snapshot_target('${DEMO_TOKEN}', '${pendingApprovals[0]}') ->> 'version_id') = (select version_id::text from approvals where id='${pendingApprovals[0]}')`)}
+${assertSql(`jsonb_array_length(drive_pending_snapshots('${PRJ}')) >= 1`)}
+select finalize_approved((select deliverable_id from approvals where id='${pendingApprovals[0]}'), 'SNAPSHOT-COPY-ID');
+${assertSql(`(select status from deliverables where id = (select deliverable_id from approvals where id='${pendingApprovals[0]}')) = 'final'`)}
+${assertSql(`exists (select 1 from activity_log where action='drive.snapshot_copied' and meta->>'snapshot_file_id'='SNAPSHOT-COPY-ID')`)}
+${assertSql(`client_snapshot_target('${DEMO_TOKEN}', '${pendingApprovals[0]}') is null`)}
+select finalize_approved((select deliverable_id from approvals where id='${pendingApprovals[0]}'), 'again');
+${assertSql(`(select count(*) from activity_log where starts_with(action, 'drive.snapshot_')) = 1`)}`)
+
+  scenario('Drive drive_project_folder: admin은 삭제 전 행사 폴더 id·이름을 읽는다(멤버가 아니어도)', `reset role;
+update projects set drive_root_folder_id = '${DRV}EVENT' where id = '${PRJ_CLOSED}';
+set local role authenticated;
+${assertSql(`(drive_project_folder('${PRJ_CLOSED}') ->> 'drive_root_folder_id') = '${DRV}EVENT'`)}`,
+    { role: 'authenticated', sub: authId.admin })
+  scenario('Drive drive_project_folder: admin이 아니면 403(sales pm)', `select drive_project_folder('${PRJ}');`,
+    { role: 'authenticated', sub: authId.pm, expect: 'error', match: '관리자\\(admin\\)' })
+
   // 6. 시크릿 커밋 가드 (§8 DoD 9) — 실키 값 패턴이 레포 파일에 없는가
   const grep = spawnSync('grep', ['-rnE', 'sb_secret_[A-Za-z0-9_-]{10,}|sbp_[A-Za-z0-9]{20,}', 'src', 'supabase', 'scripts', '--include=*.ts', '--include=*.tsx', '--include=*.sql', '--include=*.mjs', '--include=*.md'], { encoding: 'utf8' })
   record('시크릿 커밋 가드: sb_secret_/sbp_ 실키 패턴 0건 (DoD 9)', grep.status === 1, grep.stdout)

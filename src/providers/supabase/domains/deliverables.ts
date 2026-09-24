@@ -4,10 +4,12 @@
 // 상태 전이·버전 업로드·인박스 연결은 "상태 갱신 + 버전/코멘트 insert + 로그"가 한 트랜잭션이어야 해서 RPC
 // (transition_deliverable·upload_version·link_inbox_file)를 탄다 — RPC는 mock의 규칙을 같은 메시지로 재판정하고,
 // 이 파일은 그 앞에 mock과 같은 순서로 앱 계층 단언을 둔다. requestApproval은 program 도메인 담당(이 파일 아님).
-// 파일 원본: Phase 4는 Drive 없음 — 업로드 blob은 files.rememberUpload로 세션 메모리에만(§2.1 2단계).
+// 파일 원본(v2.9 §7): Drive가 연결돼 있으면 api/drive로 행사 폴더에 4MB 조각 업로드(링크 등록 포함) → 서버가 같은
+// upload_version RPC를 사용자 JWT로 부른다. 미연결이면 Phase 4 경로(업로드 blob은 세션 메모리 — 새로고침 시 소실).
 import type { DataProvider } from '../../DataProvider'
-import type { SupabaseCtx } from '../ctx'
-import { fileUrlFor, rememberUpload } from '../files'
+import { normalizeRow, type SupabaseCtx } from '../ctx'
+import { driveFor } from '../drive'
+import { fileUrlFor, rememberUpload, sessionFileUrl } from '../files'
 import { ProviderError } from '../../../lib/errors'
 import { assertTransition, buildVersionFileName } from '../../../lib/statusMachine'
 import { isDelayed, isImminent, toIsoDate } from '../../../lib/wbs'
@@ -306,6 +308,13 @@ export function deliverablesDomain(ctx: SupabaseCtx): DeliverablesDomain {
       if (d.partner_id !== null && d.status === 'requested') {
         throw new ProviderError('conflict', '파트너 제출 항목은 파트너가 제출 링크로 첫 제출을 해야 합니다.')
       }
+      // v13.1 §7.2b — Drive에 직접 올린 파일을 링크로 등록(서버가 루트 안 여부·복사·중복·권한을 다시 판정)
+      if (input.drive_link !== undefined) {
+        if (!input.drive_link.trim()) throw new ProviderError('validation', 'Drive 파일 링크를 붙여 주세요.')
+        const linked = normalizeRow(await driveFor(ctx).client.link(deliverableId, input.drive_link.trim(), input.note))
+        input.onProgress?.(1, 1)
+        return linked
+      }
       // 파일명 규약(§7.2)은 호출자가 만들어 넘긴다 — version_no는 DB 트리거(max+1)와 같은 산식으로 미리 계산
       const latest = ctx.q(
         await ctx.sb
@@ -316,25 +325,49 @@ export function deliverablesDomain(ctx: SupabaseCtx): DeliverablesDomain {
           .limit(1),
       ) as { version_no: number }[]
       const versionNo = (latest[0]?.version_no ?? 0) + 1
+      const fileName = buildVersionFileName({
+        date: new Date(),
+        project_code: project.code,
+        category: d.category,
+        title: d.title,
+        version_no: versionNo,
+        original_file_name: input.file_name,
+      })
+      const drive = driveFor(ctx)
+      if (input.file && (await drive.ready())) {
+        // Phase 5: 행사 폴더에 조각 업로드 → 서버가 upload_version(p_drive_file_id)으로 등록
+        const uploaded = normalizeRow(
+          await drive.client.upload({
+            deliverableId,
+            file: input.file,
+            fileName,
+            originalFileName: input.file_name,
+            note: input.note,
+            onProgress: input.onProgress,
+          }),
+        )
+        rememberUpload(uploaded.id, input.file) // 이 세션의 즉시 미리보기(원본은 Drive)
+        return uploaded
+      }
       const version = await ctx.rpc<Version>('upload_version', {
         p_deliverable: deliverableId,
-        p_file_name: buildVersionFileName({
-          date: new Date(),
-          project_code: project.code,
-          category: d.category,
-          title: d.title,
-          version_no: versionNo,
-          original_file_name: input.file_name,
-        }),
+        p_file_name: fileName,
         p_note: input.note ?? null,
         p_original_file_name: input.file_name,
       })
-      // Phase 4 파일 저장: 세션 메모리 blob URL(새로고침 시 소실 허용) — Drive 업로드는 Phase 5
+      // Drive 미연결: 세션 메모리 blob URL(새로고침 시 소실 허용 — Phase 4 경로)
       rememberUpload(version.id, input.file)
+      const size = input.file?.size ?? 0
+      input.onProgress?.(size, size)
       return version
     },
 
     async getFileUrl(versionId) {
+      const local = sessionFileUrl(versionId)
+      if (local) return local
+      // Drive 원본이면 서명 프록시 URL(같은 틱의 요청은 한 번에 묻는다) — 아니면 자리표시
+      const signed = await driveFor(ctx).fileUrl(versionId)
+      if (signed) return signed
       const version = ctx.q(
         await ctx.sb.from('versions').select('id, file_name').eq('id', versionId).maybeSingle(),
         '버전을 찾을 수 없습니다.',
@@ -409,6 +442,8 @@ export function deliverablesDomain(ctx: SupabaseCtx): DeliverablesDomain {
     // ── 미등록 파일 인박스 (S1) ───────────────────────────────────────
     async listInbox(projectId) {
       await ctx.project(projectId)
+      // §7.3 — Drive 행사 폴더를 먼저 훑어 새 파일을 인박스에 올린다(행사당 60초 1회 · 8초 상한 · 실패는 조용히)
+      await driveFor(ctx).scanThrottled(projectId)
       return ctx.q(
         await ctx.sb
           .from('unregistered_files')

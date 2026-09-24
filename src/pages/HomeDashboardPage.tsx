@@ -20,6 +20,8 @@ import { activityActionLabel, activityActorLabel } from '../components/internal/
 import { groupHostTasks } from '../components/partner/partnerBoardUtils'
 import { useProject } from '../context/ProjectContext'
 import { useAsync, useMutation } from '../hooks/useAsync'
+import { getDriveGateway } from '../lib/drive/driveGateway'
+import { useDriveStatus } from '../lib/drive/useDriveStatus'
 import { AREA_LABELS, formatDate, formatDateTime, ddayLabel } from '../lib/labels'
 import { getDataProvider } from '../providers'
 import type { Deliverable } from '../types/entities'
@@ -296,6 +298,7 @@ export default function HomeDashboardPage() {
         </Card>
 
         <InboxCard
+          projectId={projectId}
           inbox={inbox.data ?? []}
           loading={inbox.loading}
           error={inbox.error}
@@ -347,6 +350,7 @@ export default function HomeDashboardPage() {
 }
 
 interface InboxCardProps {
+  projectId: string
   inbox: import('../types/entities').UnregisteredFile[]
   loading: boolean
   error: string | null
@@ -354,8 +358,36 @@ interface InboxCardProps {
   onChanged: () => void
 }
 
-function InboxCard({ inbox, loading, error, deliverables, onChanged }: InboxCardProps) {
+/**
+ * 미등록 인박스(§7.3) — 행사 폴더에 직접 올린 파일. v2.9: 실서버 + Drive 연결이면 '지금 확인'으로 바로 훑는다
+ * (조회 때도 행사당 60초에 1회 자동으로 훑는다 — providers/supabase/drive.ts). mock은 픽스처 인박스라 버튼이 없다.
+ */
+function InboxCard({ projectId, inbox, loading, error, deliverables, onChanged }: InboxCardProps) {
   const [selected, setSelected] = useState<Record<string, string>>({})
+  const drive = useDriveStatus()
+  const gateway = getDriveGateway()
+  const [scanNote, setScanNote] = useState<string | null>(null)
+  const scan = useMutation(async () => {
+    if (gateway.mode !== 'server') throw new Error('실서버 모드에서만 Drive를 확인할 수 있습니다.')
+    return gateway.client.scan(projectId)
+  })
+  const canScan = gateway.mode === 'server' && !!drive.status?.configured && drive.status.connected
+
+  const handleScan = async () => {
+    setScanNote(null)
+    const r = await scan.run()
+    if (!r) return
+    if (r.skipped === 'no_tree') setScanNote('아직 이 행사의 Drive 폴더가 없습니다 — 행사 설정 ③에서 만들거나 첫 업로드 때 생깁니다.')
+    else if (r.skipped === 'tree_missing') setScanNote('행사 폴더를 Drive에서 찾을 수 없습니다(휴지통·이동) — 행사 설정 ③에서 폴더 구조를 확인하세요.')
+    else {
+      const parts = [`새 파일 ${r.added}건`]
+      if (r.removed) parts.push(`사라진 파일 ${r.removed}건 정리`)
+      if (r.finalized) parts.push(`확정 복사 ${r.finalized}건 완료`)
+      if (r.failed) parts.push(`확정 복사 ${r.failed}건 재시도 대기`)
+      setScanNote(`Drive 확인 — ${parts.join(' · ')}`)
+    }
+    onChanged()
+  }
   const link = useMutation((inboxId: string, deliverableId: string) =>
     provider.linkInboxFile(inboxId, deliverableId),
   )
@@ -380,11 +412,24 @@ function InboxCard({ inbox, loading, error, deliverables, onChanged }: InboxCard
     <Card
       title="미등록 인박스"
       action={
-        <span className="inline-flex shrink-0 items-center rounded-full bg-track px-2 py-0.5 text-xs font-medium text-ink-sub">
-          {inbox.length}
+        <span className="flex shrink-0 items-center gap-2">
+          {canScan && (
+            <button type="button" onClick={handleScan} disabled={scan.pending} className="btn btn-ghost btn-sm">
+              {scan.pending ? '확인 중…' : 'Drive 지금 확인'}
+            </button>
+          )}
+          <span className="inline-flex shrink-0 items-center rounded-full bg-track px-2 py-0.5 text-xs font-medium text-ink-sub">
+            {inbox.length}
+          </span>
         </span>
       }
     >
+      {scanNote && (
+        <p className="mb-2 text-xs text-ink-sub" role="status">
+          {scanNote}
+        </p>
+      )}
+      <ErrorAlert message={scan.error} />
       <ErrorAlert message={error} />
       <ErrorAlert message={link.error} />
       <ErrorAlert message={dismiss.error} />

@@ -5,6 +5,7 @@
 // list_people·remove_person)가 서버에서 이중 강제한다. 다중 쓰기가 한 트랜잭션이어야 하는 곳은 RPC를 탄다.
 import type { DataProvider } from '../../DataProvider'
 import { normalizeRow, nowIso, type SupabaseCtx } from '../ctx'
+import { driveFor } from '../drive'
 import { mapPgError, type PgErrorLike } from '../errors'
 import { ProviderError } from '../../../lib/errors'
 import { isDelayed, toIsoDate } from '../../../lib/wbs'
@@ -280,6 +281,8 @@ export function projectsDomain(ctx: SupabaseCtx): ProjectsDomain {
       const project = normalizeRow(res.data) as Project
       ctx.invalidateRoles() // 트리거가 만든 pm 멤버십을 다음 roleIn이 보게 한다
       await ctx.log(project.id, 'project.created', 'project', project.id)
+      // §8 POST /projects "+ Drive 표준 트리 생성"(v2.9) — 기다리지 않는다. 실패·미연결이면 첫 업로드 때 다시 만든다
+      driveFor(ctx).ensureTreeQuietly(project.id)
       return project
     },
 
@@ -319,9 +322,19 @@ export function projectsDomain(ctx: SupabaseCtx): ProjectsDomain {
       // 서버(delete_project RPC)가 admin·존재 여부를 다시 판정한다. 여기 사전 검사는 mock과 같은
       // 메시지를 즉시 돌려주기 위한 국소 차단일 뿐 — removePerson/assertPersonAdmin과 같은 패턴이다.
       await assertProjectDeleteAdmin()
+      // v2.9 — 지우기 전에 Drive 행사 폴더를 확인해 두고(관리자 전용 RPC), 삭제 뒤 루트 99_archive로 옮긴다(파일은 지우지 않는다).
+      // 조회 실패(마이그레이션 전 DB 등)는 보관만 건너뛴다 — 삭제 판정은 아래 RPC 한 곳이다.
+      const folder = await ctx
+        .rpc<{ drive_root_folder_id: string | null; name: string } | null>('drive_project_folder', { p_project: projectId })
+        .catch(() => null)
       // 미존재(NOT_FOUND)는 RPC가 판정한다 — security definer라 RLS로 가려진 행사도 정확히 구분하고,
       // 앱이 먼저 조회하면 '안 보이는 행사'가 not_found로 새어 판정이 두 곳으로 갈린다.
       await ctx.rpc<void>('delete_project', { p_project: projectId })
+      if (folder?.drive_root_folder_id) {
+        void driveFor(ctx)
+          .client.archiveProject(folder.drive_root_folder_id, folder.name)
+          .catch((e) => console.warn('[drive] 행사 폴더 보관 실패(Drive에 그대로 남음):', e instanceof Error ? e.message : e))
+      }
       // 지운 행사의 멤버십이 역할 캐시에 남아 있으면 이후 roleIn()이 죽은 행사에 권한이 있다고 답한다.
       ctx.invalidateRoles(projectId)
       // ctx.log()는 부르지 않는다 — activity_log는 project_id에 매여 있어(on delete cascade)

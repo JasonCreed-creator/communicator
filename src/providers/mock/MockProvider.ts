@@ -8,6 +8,7 @@ import {
   isPreviewFileName,
 } from '../../lib/statusMachine'
 import { isDelayed, isImminent, offsetToDate, toIsoDate } from '../../lib/wbs'
+import { driveFileUrl, parseDriveLink, type DriveLinkParse } from '../../lib/driveLink'
 import { createFixtureState, type MockState } from '../../fixtures/sampleProject'
 import { COMPLIANCE_CARD_TEMPLATES, HOST_COMPLIANCE_CARD_TEMPLATES } from '../../fixtures/complianceTemplates'
 import { defaultConsents, defaultFormFields, defaultSections } from '../../lib/landingTemplate'
@@ -979,44 +980,70 @@ export class MockProvider implements DataProvider {
     if (!UPLOADABLE_STATUSES.includes(d.status)) {
       throw new ProviderError('conflict', `현재 상태(${d.status})에서는 업로드할 수 없습니다.`)
     }
-    const versionNo = (this.versionsOf(deliverableId)[0]?.version_no ?? 0) + 1
-    const version: Version = {
-      id: this.nextId('ver'),
-      deliverable_id: deliverableId,
-      version_no: versionNo,
-      drive_file_id: this.nextId('drv-f'),
-      file_name: buildVersionFileName({
-        date: new Date(),
-        project_code: this.projectOf(d).code,
-        category: d.category,
-        title: d.title,
-        version_no: versionNo,
-        original_file_name: input.file_name,
-      }),
-      note: input.note ?? null,
-      uploaded_by: user.id,
-      created_at: nowIso(),
-    }
-    this.state.versions.push(version)
-
-    // Mock 파일 저장: blob URL (테스트 등 비 DOM 환경은 자리표시 URL)
-    const canBlob = typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function'
-    this.uploadedFileUrls.set(
-      version.id,
-      input.file && canBlob ? URL.createObjectURL(input.file) : `mock://files/${version.id}`,
-    )
-
-    // §5: requested(v1.2 첫 업로드)·changes_requested 상태에서 새 버전 업로드 시 draft 자동 전이.
-    // v2.4 §5.1: 주최형 inbound(partner_id 보유) 항목은 version_upload의 목적지가 분기된다 —
-    // 수정요청 상태의 내부 업로드(파트너 파일 대리 등록)도 재제출과 같이 pending_approval로
-    // 복귀하고, 아직 제출 전(requested)인 항목은 파트너 제출(partner_submit) 경로만 있으므로
-    // 내부 업로드를 409로 막는다(전이표에 requested→draft(inbound) 갈래를 쓰지 않는다).
+    // v2.4 §5.1: 주최형 inbound(partner_id 보유) 항목은 아직 제출 전(requested)이면 파트너 제출(partner_submit)
+    // 경로만 있으므로 내부 업로드를 409로 막는다(전이표에 requested→draft(inbound) 갈래를 쓰지 않는다).
+    // (v2.9: 이 판정을 버전 기록 앞으로 옮겼다 — 예전에는 거부된 업로드도 버전 행이 먼저 남았다)
     if (d.partner_id !== null && d.status === 'requested') {
       throw new ProviderError(
         'conflict',
         '파트너 제출 항목은 파트너가 제출 링크로 첫 제출을 해야 합니다.',
       )
     }
+    // v13.1 §7.2b — Drive 링크 등록. mock은 서버가 없어 링크 모양만 판정한다(루트 안 여부·복사는 실서버 몫).
+    // 파일명은 표시 이름(없으면 "Drive 파일(…)") · 보기 = Drive 새 탭(내부 멤버 — 발주처 지면에는 싣지 않는다)
+    let driveLink: DriveLinkParse | null = null
+    if (input.drive_link !== undefined) {
+      driveLink = parseDriveLink(input.drive_link)
+      if (!driveLink) {
+        throw new ProviderError(
+          'validation',
+          '구글 드라이브 파일 링크를 붙여 주세요 (drive.google.com/file/d/… 또는 docs.google.com/…).',
+        )
+      }
+      if (driveLink.kind === 'folder') {
+        throw new ProviderError('validation', '폴더 링크입니다 — 등록할 파일의 링크를 붙여 주세요.')
+      }
+      const linkedId = driveLink.id
+      if (this.versionsOf(deliverableId).some((v) => v.drive_file_id === linkedId)) {
+        throw new ProviderError('conflict', '이미 이 항목에 등록된 파일입니다.')
+      }
+    }
+    const versionNo = (this.versionsOf(deliverableId)[0]?.version_no ?? 0) + 1
+    const version: Version = {
+      id: this.nextId('ver'),
+      deliverable_id: deliverableId,
+      version_no: versionNo,
+      drive_file_id: driveLink ? driveLink.id : this.nextId('drv-f'),
+      file_name: driveLink
+        ? input.file_name.trim() || `Drive 파일(${driveLink.id.slice(0, 8)})`
+        : buildVersionFileName({
+            date: new Date(),
+            project_code: this.projectOf(d).code,
+            category: d.category,
+            title: d.title,
+            version_no: versionNo,
+            original_file_name: input.file_name,
+          }),
+      note: input.note ?? (driveLink ? 'Drive 링크로 등록' : null),
+      uploaded_by: user.id,
+      created_at: nowIso(),
+    }
+    this.state.versions.push(version)
+
+    // Mock 파일 저장: blob URL (테스트 등 비 DOM 환경은 자리표시 URL) · 링크 등록은 Drive 보기 주소
+    const canBlob = typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function'
+    this.uploadedFileUrls.set(
+      version.id,
+      driveLink
+        ? driveFileUrl(driveLink.id)
+        : input.file && canBlob
+          ? URL.createObjectURL(input.file)
+          : `mock://files/${version.id}`,
+    )
+
+    // §5: requested(v1.2 첫 업로드)·changes_requested 상태에서 새 버전 업로드 시 draft 자동 전이.
+    // v2.4 §5.1: 주최형 inbound(partner_id 보유) 항목은 version_upload의 목적지가 분기된다 —
+    // 수정요청 상태의 내부 업로드(파트너 파일 대리 등록)도 재제출과 같이 pending_approval로 복귀한다.
     if (d.status === 'requested' || d.status === 'changes_requested') {
       const to = d.partner_id !== null ? 'pending_approval' : 'draft'
       assertTransition(d.status, to, 'version_upload')
@@ -1027,6 +1054,9 @@ export class MockProvider implements DataProvider {
       deliverable_id: deliverableId,
       version_no: versionNo,
     })
+    // v13.1 진행률 — mock은 즉시 끝난다(보낸 바이트 = 전체)
+    const size = driveLink ? 1 : (input.file?.size ?? 0)
+    input.onProgress?.(size, size)
     return version
   }
 
@@ -1087,6 +1117,15 @@ export class MockProvider implements DataProvider {
     const version = this.state.versions.find((v) => v.id === versionId)
     if (!version) throw new ProviderError('not_found', '버전을 찾을 수 없습니다.')
     return placeholderPreviewUrl(version.file_name)
+  }
+
+  /**
+   * 발주처 지면(`/c`)용 파일 URL — Drive 링크로 등록한 버전은 발주처가 열 권한이 없고(§7.4 프록시 원칙)
+   * mock에는 프록시가 없으므로 자리표시로 준다. 실서버는 api/drive 서명 프록시가 원본을 보여 준다.
+   */
+  private async clientFileUrl(versionId: UUID, fileName: string): Promise<string> {
+    const url = await this.getFileUrl(versionId)
+    return url.startsWith('https://drive.google.com/') ? placeholderPreviewUrl(fileName) : url
   }
 
   // ── 코멘트 ────────────────────────────────────────────────────────
@@ -4421,7 +4460,7 @@ export class MockProvider implements DataProvider {
           id: v!.id,
           version_no: v!.version_no,
           file_name: v!.file_name,
-          preview_url: await this.getFileUrl(v!.id),
+          preview_url: await this.clientFileUrl(v!.id, v!.file_name),
         },
         // §6.2: visibility='shared'만 — internal은 쿼리 자체에서 제외
         shared_comments: this.state.comments
@@ -4552,7 +4591,7 @@ export class MockProvider implements DataProvider {
             deliverable_id: d.id,
             deliverable_title: d.title,
             file_name: latest.file_name,
-            file_url: await this.getFileUrl(latest.id),
+            file_url: await this.clientFileUrl(latest.id, latest.file_name),
             finalized_at: d.updated_at,
           }
         }),

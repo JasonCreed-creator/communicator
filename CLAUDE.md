@@ -1,7 +1,8 @@
-# CLAUDE.md — MICE 커뮤니케이터 구현 지침 v2.7 (Claude Code용)
+# CLAUDE.md — MICE 커뮤니케이터 구현 지침 v2.8 (Claude Code용)
 
-> 레포 루트에 이 파일을 두고, `docs/mice-communicator-설계서-v2.8.md`를 함께 배치할 것(기존 설계서 파일은 버전 무관 전부 대체·삭제). `docs/mice-communicator-디자인지시서-v1.md`도 함께 배치(Phase 3.9 정본).
+> 레포 루트에 이 파일을 두고, `docs/mice-communicator-설계서-v2.9.md`를 함께 배치할 것(기존 설계서 파일은 버전 무관 전부 대체·삭제). `docs/mice-communicator-디자인지시서-v1.md`도 함께 배치(Phase 3.9 정본).
 > **스키마·상태 머신·API 계약·권한 규칙·WBS 템플릿(§15)·핸드오프 계약(§16)·이식 인벤토리(§17)·인프라 전환(§18)·D-Day 런북(§20)·주최형 확장(§21)·견적서 임포트(§22)·운영보드 재구성(§23)의 정본은 설계서 v2.5이다(정산보드는 §19·§4-23·§4-24).** 디자인 토큰·레이아웃·컴포넌트 규격의 정본은 디자인지시서 v1이다. 본 파일은 작업 순서와 규약만 정의한다. 충돌 시 설계서 우선.
+> v2.8 변경 핵심(2026-09-24): **Phase 5 Drive 저장소 연결** — 사용자 지시 "작업물 저장소는 이 폴더(MICE Communicator) · 파트별 폴더링 · 파일 끌어놓기·폴더 업로드·Drive에 직접 올린 뒤 링크로도 작업". 사용자 결정 3건: 범위 [A] · **연결 계정 = 폴더 소유 계정 OAuth** · 코드 완성까지(실키는 다음). 서버 = Vercel Function `api/drive` 1개(**4MB 조각 중계** 업로드 · 링크 등록 · 서명 URL 스트림 · 인박스 스캔 · §7.5 2단계 확정 · OAuth 연결 · 행사 폴더 지정·보관) · SQL `20260924000100_drive.sql` · 화면 = S3 업로드 카드(끌어놓기·파일/폴더 선택·Drive 링크) + 행사 설정 ③ Drive 카드 + 홈 인박스 "Drive 지금 확인" · **DataProvider v13.1**(`UploadVersionInput.drive_link`·`onProgress` 필드 추가만). 정본 = 설계서 v2.9 §2·§7·§8.3.
 > v2.7.1 변경 핵심(2026-09-10): **Phase 4.2 견적서 생성 고도화** — 구글 스프레드시트 생성(Vercel Function `api/quote-gsheet`, DataProvider 불변) · 한글금액 이식형 수식(`NUMBERSTRING` 폐기) · 전 행 명시 높이·격자선 off · 직인 `public/brand/remember-seal.png` 자동 앵커. 정본 = 설계서 §8 표 `POST /api/quote-gsheet` 행·§17.3-2.
 > v2.7 변경 핵심: **Phase 4 Supabase 이식 착수(2026-09-07, 사용자 결정 5건 — PROGRESS 결정 로그)**: 스키마·트리거·RLS·RPC = `supabase/migrations`(17개) → `setup.sql` 1회·멱등(로컬 Postgres 85항목 증명) · 토큰 경로(`/c`·`/p`)·랜딩 리드·시트 반영·다단계 쓰기 = **security definer SQL RPC** · TS 엔진·외부 API가 필요한 견적 서버 재계산·시트 읽기 = **Vercel Functions `api/`**(Edge Functions 미사용) · `SupabaseProvider` = `src/providers/supabase/`(v12 124메서드 무수정, 도메인 10모듈) · 내부 로그인 = 매직링크(`/login`·`AuthGate`·`app_config` 도메인 게이트). dev 3키는 `.env.local`에만.
 > v1.1 변경 핵심: **프론트 우선·서버 후행** — Phase 0~3은 서버 0, Supabase·Drive는 Phase 4~5 이식.
@@ -24,7 +25,7 @@ MICE 프로젝트 협업 허브 — 역할별(디자인·운영·등록) 산출�
 - React 18 + Vite + TypeScript + Tailwind (프론트, Vercel 배포)
 - Supabase: Postgres + RLS + Auth(이메일 매직링크) + **SQL RPC(security definer)**; 서버 함수는 **Vercel Functions(`api/`, Node)** — Edge Functions(Deno)는 쓰지 않는다(2026-09-07 사용자 결정, 설계서 §2·§8 v2.7) — **지금(서버 스프린트). 검증 DB = dev 프로젝트 `communicator-dev`**(3키는 사용자가 세션 대화로 제공 — `.env.local`에만, 커밋 금지). 운영 프로젝트는 D-Day §20. 옛 Configurator 프로젝트 사용 금지. **API 키는 신형(sb_publishable/sb_secret)만** — 설계서 §12
 - 견적 모듈 전용 허용 의존: exceljs · file-saver (src/modules/quote 밖에서 import 금지). shadcn/Radix·Tailwind 3 도입 금지
-- Google Drive API v3 (전용 운영 계정 OAuth, Production 게시 — 설계서 §2) — **Phase 5(지금): 자격증명 없이 코드 완성, 실계정 검증은 D-Day 스모크(§20)**
+- Google Drive API v3 — **v2.9: 저장소 = 사용자 지정 폴더(`DRIVE_ROOT_FOLDER_ID`), 연결 계정 = 폴더 소유 계정 OAuth**(2026-09-24 사용자 결정 — 전용 운영 계정은 '연결 해제 → 재연결'로 교체), 갱신 토큰 = 앱 '연결하기' → Supabase Vault. 서비스 계정은 **공유 드라이브 전용**(저장 용량 없음). Phase 5 코드 완성·실계정 검증은 키 주입 후 `npm run drive:smoke`(§20 T5)
 - 알림: Slack Incoming Webhook — **Phase 6(지금): env 부재 시 no-op 폴백**. Resend(이메일)는 **Phase 6b — 이번 스프린트 범위 밖**(첫 발주처 토큰 발송 전 수행, 설계서 §9)
 
 ## 3. 레포 구조 (제안 — 조정 시 사유를 PROGRESS.md에 기록)
@@ -266,6 +267,15 @@ MICE 프로젝트 협업 허브 — 역할별(디자인·운영·등록) 산출�
   - **가정(확정 게이트 = 첫 실키 주입)**: ⓐ xlsx→Sheets 변환이 셀 위 이미지(로고·직인)를 보존한다 ⓑ 서비스 계정 소유 파일은 폴더가 공유 드라이브일 때 소유가 드라이브에 남는다(내 드라이브 폴더면 SA 저장 용량을 쓴다)
 
 - **Phase 5 — Drive 이식: 코드 완성·자격증명 최후** (에이전트 E): OAuth(운영 계정·Production)·표준 트리(§7.1)·업로드+파일명 규약(§7.2)·프록시 ReadableStream 패스스루+100MB 캡(§7.4)·Changes API 인박스(§7.3)·final 스냅숏 원자성(§7.5) — `supabase/functions/_shared/drive.ts` 모듈화. **실계정 없이 검증**: Drive HTTP 호출 계층을 인터페이스로 분리해 모의 서버 계약 테스트로 커버(업로드·copy 실패 재시도·토큰 만료 재발급·100MB 캡 시나리오 포함). 산출 2종: **`scripts/drive-auth.ts`**(최초 1회 동의→refresh token 발급 안내, 한국어) · **`scripts/drive-smoke.ts`**(D-Day 5분 검증: refresh 교환→트리 생성→업로드→copy→스트리밍, 실패 시 어느 단계·무엇을 확인할지 한국어 출력)
+  - **구현 확정(2026-09-24 — 설계서 v2.9 §7·§8.3)**: 서버 = `api/drive.ts` 1개 + `api/_lib/drive/`(errors·sign·googleDrive·auth·store·tree·service·handler) —
+    Drive REST는 fetch 주입형(계약 테스트 = 가짜 Drive `src/test/helpers/fakeDrive.ts`), DB 경계는 `DriveStore`(Supabase 구현 + 메모리 구현).
+    업로드 = **4MB 조각 중계**(Vercel 요청 4.5MB 한도 · 브라우저→Google 직접 PUT은 CORS 불가) · 권한 판정은 사용자 JWT로 SQL(`drive_upload_check`·`upload_version` 5인자판) ·
+    링크 등록 = 루트 안 파일만(행사 폴더 안 참조 · 루트 안 다른 곳 복사 · 밖 403) · 인박스 = **폴더 목록 비교**(Changes API 이탈 — 소유 계정 전체 피드 회피) ·
+    스트림 = 서명 URL(내부 1h·발주처 2h, PDF 외 sandbox CSP) · §7.5 = `app_config.drive_enabled` + 행사 폴더일 때 approved 멈춤 → `client-finalize` 복사 → `finalize_approved` ·
+    행사 삭제 → 폴더를 루트 `99_archive`로. `scripts/drive-auth.ts`는 앱 '연결하기'(OAuth 콜백 → Vault)로 대체. 클라이언트 = `src/lib/drive/`(driveClient·driveGateway·collectFiles·useDriveStatus) +
+    `providers/supabase/drive.ts`(상태 캐시·파일 URL 일괄·스캔 60초 제한). 데모는 `driveClient`를 스텁으로 alias(외부 요청 0건 유지)
+  - 금지: permissions API 호출(anyone 링크) · 루트 밖 파일 읽어 들이기 · Drive 토큰·클라이언트 secret의 VITE_ 노출 · 운영 작업(연결·폴더·스캔)을 DataProvider 메서드로 승격(승인 없는 동결 해제)
+
 - **Phase 6 — 알림·cron** (에이전트 F): Slack 웹훅 유틸 + §9 매트릭스의 내부 Slack 이벤트 훅 전부 + reminders cron. `SLACK_WEBHOOK_URL` 미설정 = 콘솔 no-op(발송은 fire-and-forget+실패 로그 — 본 동작을 절대 막지 않음). 페이로드 계약 테스트(§19.7 금액 금지 키 5종 부재 포함). **Resend 이메일 = Phase 6b, 이번 범위 밖** — 컨펌 발송 UI에 "이메일 발송은 준비 중 — 링크 복사 전달" 안내 명시(게이트 뒤에 숨기지 않음)
 - **Phase 4.6 — 인프라 전환**: 사용자 게이트 단계(운영 Supabase·Vercel·도메인·임포트·아카이브)는 **§20 D-Day 런북으로 이동 — Code가 수행하지 않는다.** 옛 Configurator DB 1회 임포트 스크립트(`scripts/import-configurator.ts`, dry-run)는 기존 계획대로 Phase 4에서 동봉만
 - **Phase 4.7 — 협력사 견적서 파싱**: 변경 없음(추후 — 사용자 승인+설계서 개정 동반, DataProvider v8)
@@ -394,6 +404,8 @@ Phase 3.8과 3.9는 **별도 커밋·별도 PR**로 분리한다(3.8 = 타입·�
 58. (v2.8 §4-1c) **행사 하드 삭제**: `app_role='admin'`만 `deleteProject`가 되고 sales·staff는 `forbidden`(메시지 `행사 삭제는 관리자(admin) 권한이 필요합니다.`), 없는 행사는 404; 삭제 후 그 행사의 스코프 데이터가 전부 사라지고 **견적은 행 수 그대로 `project_id`만 null**이며 주소록·협력사는 불변, **종료 행사도 삭제되고**(assertWritable 미경유) 배정이 사라진 담당자는 `removePerson`이 더는 409를 내지 않는다; **8행사를 전부 지운 뒤에도 `getCurrentUser()`가 살아 있고 `createProject`로 첫 행사를 만들 수 있다**(새 출발 보증), 삭제된 행사의 `/c`·`/p` 토큰은 깨끗한 404/410 (테스트로 증명 — `src/test/dod58-project-delete.test.ts`)
 
 59. (Phase 4.2) **견적서 생성 고도화**: 한글금액 수식에 `NUMBERSTRING` 0건 + 허용 함수만(ABS·IF·MID·ROUND·TEXT·VALUE) + 미니 평가기 결과 = JS 정본(샘플 40) + LibreOffice 강제 재계산 = JS 정본(soffice 있을 때) · 사용 행 전부 명시 높이(항목 행은 문서 내 균일 — 1줄 행과 2줄 행이 같은 높이(샘플 34) · 빈 행 10 · 확정 간격 불변) · 격자선 off · `"₩"#,##0` · 공급자 행 G/H 분리 + 직인(`sealBase64` 또는 공개 자산)이면 H7 중심 72px 이미지(국문만 — 영문은 표식·직인 없이 G:H 병합) · 목록·에디터 ④에 내보내기 버튼 2종, mock에서 시트 버튼은 안내 문구 · API: staff 403 → 자격증명 없음 503 → sales/admin은 토큰→변환 업로드(폴더·mimeType)→요청자 공유 순, 공유 실패는 링크를 막지 않음 (테스트로 증명 — `koreanAmountFormula*.test.ts` · `exportEstimate.test.ts` · `createQuoteSpreadsheet.test.ts` · `quote-gsheet.test.tsx` · `api-functions.test.ts`)
+61. (Phase 5 · 설계서 v2.9 §7) **Drive 저장소 서버 계약**: 트리 멱등(2회 실행 폴더 수 불변·표식 채택·지운 파트 복구) · 행사 폴더 이름 `YYMMDD_코드_행사명` · 6MB 파일이 4MB+2MB 조각으로 `05_산출물/디자인/{항목}`에 규약 이름 저장·버전 등록(재시도·빈 파일·권한은 바이트 전·상한 413·조각 규칙 400·위조 403·만료 410·거부 시 휴지통) · 링크 3분기(행사 폴더 안 참조·루트 안 복사·루트 밖 403·폴더 422·중복 409·바로가기 판정) · 서명 스트림(inline PDF·HTML attachment+sandbox·Range 206·100MB 413·구글 문서 PDF·발주처 토큰 범위) · §7.5 복사 후에만 final(3회 실패 → approved 유지 → 스캔 재시도·멱등 사본 1개·자리표시 원본은 복사 없이 마감) · 인박스 스캔(06·99·진행 중 제외·경로·사라진 행 정리) · OAuth(admin 전용·offline+consent·콜백 저장·실패 사유 3종·invalid_grant 503) · 폴더 지정·보관 · 견적 시트 `00_견적서` · **permissions 호출 0건**(호출 기록 + 소스) (테스트로 증명 — `src/test/dod61-drive-storage.test.ts` + 로컬 Postgres `supabase:check` Drive 28항목)
+62. (Phase 5 · §7.2) **업로드 3경로 화면**: 끌어놓기 영역·파일 선택(multiple)·폴더 선택(webkitdirectory) · 여러 파일 = 이름순 목록 → 파일마다 버전 1개(onProgress 전달) · 드롭·빼기 · Drive 링크 입력 검증(링크 아님·폴더) · 링크 등록 버전 = 표시 이름·Drive 새 탭 · 중복 409 문구 · **발주처 `/c`에 drive.google.com 0건**(mock 자리표시) · 행사 설정 ③ Drive 카드(연결하기 → 동의 화면 · 행사 폴더 만들기 · 기존 폴더 지정 검증 · OAuth 복귀 문구·주소창 정리) · 홈 인박스 "Drive 지금 확인"(mock은 없음) (테스트로 증명 — `src/test/dod62-upload-paths.test.tsx` · `drive-link-parse.test.ts`)
 60. (Phase 4.2.3) **직인 반영**: `public/brand/remember-seal.png`가 정사각·300px+·알파 PNG이고, 리멤버 국문 견적서 공급자 행 H7 "(인)" 중심에 72px로 얹히고 영문 견적서는 "(Seal)" 표식 없이 공급자 행이 G:H 병합이고 직인 0건·직인 파일 요청 0건이며, 없는 자산 경로에 호스트가 index.html(200)을 돌려줘도 워크북 미디어 0건(PNG 서명 판정), 리멤버가 아닌 브랜드는 자기 `sealBase64` 없이는 직인 0건이고, 데모 아티팩트에는 직인 원본이 없다(브랜드 PNG data: URI 3개) (테스트로 증명 — `sealAsset.test.ts` · `exportEstimate.test.ts` · `demo:check` · `demo:smoke` ③-2) + `deploy:check` 로고·직인 PNG 서빙 2항목
 
 ### 상시 grep 가드 (매 세션 종료 시 0건 확인 — 위 DoD와 별개로 항상 검사)
@@ -406,6 +418,7 @@ Phase 3.8과 3.9는 **별도 커밋·별도 PR**로 분리한다(3.8 = 타입·�
 | 온보딩 플래그 | `grep -rn "onboarding_completed" src` | DoD 16 |
 | **공개 링크 공유 문구** | `grep -rn "링크가 있는 모든" src` — 금지문(`공유하지 마세요`) 밖에서 0건 | **3.17.1 T2 — 참가자 실명·연락처 시트를 링크 공개로 권하는 문구 금지** |
 | **api/ ESM 확장자** | `src/test/api-esm-imports.test.ts` — api 진입점에서 닿는 런타임 상대 import 전부 `.js` | **2026-09-10 프로덕션 실측 — 확장자 없는 지정자는 Vercel에서 `FUNCTION_INVOCATION_FAILED`. 로컬 재현 = `vercel build` 산출물을 Node ESM으로 로드** |
+| **Drive 공유 권한 호출** | `src/test/dod61-drive-storage.test.ts` ⑩ — `api/_lib/drive/**`에 `/permissions`·anyone 0건 + 전 흐름 호출 기록에 permissions 0건 | **v2.9 §7.6 — 앱은 Drive 공유 권한을 바꾸지 않는다(CLAUDE.md §6). 연결 계정이 전체 scope라 코드 한 줄로 사고가 난다** |
 | **폼 정본 우회** | `dod50-form-canon` 소스 가드 — accent 재선언 3형(인라인 `accentColor` · CSS `accent-color` · Tailwind 축약 `accent-*`) 0건 + 체크·라디오 `ui-check` / 셀렉트 `ui-select` | **DoD 50 — 컨트롤이 다시 브라우저 기본값으로 갈라지는 것을 막는다. Tailwind 축약도 같은 재선언이라 함께 막는다(3.19 실측: 슬라이더 2곳)** |
 
 앞의 3종은 `src/test/dod-project-scope-guard.test.ts`·기존 DoD 테스트가 상시 자동 검증한다 — 셸 grep은 이중 확인용이다.

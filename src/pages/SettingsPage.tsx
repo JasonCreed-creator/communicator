@@ -8,6 +8,7 @@
 //    개수는 버튼 title로 전달한다 — 탭의 접근 가능한 이름을 흔들지 않기 위해서다.
 //  · Drive·Slack 미연결 자리를 빈 상태 정본(②)으로 — 무엇이 좋아지는지 + 언제 열리는지.
 //    게이트 뒤에 숨기지 않는다(§10 진입점 원칙).
+//  · v2.9(Phase 5): Drive 자리는 DriveCard — 연결 상태·저장소·이 행사 폴더(만들기·기존 폴더 지정)·관리자 연결.
 //
 // v2.8 §4-1c — ③탭 맨 아래 위험 구역(행사 삭제). 권한 축이 이 화면의 다른 조작과 다르다:
 //  다른 편집은 전부 이 행사의 pm이 하지만 삭제만 **전역 app_role='admin'**이다. admin이 아니어도
@@ -22,6 +23,7 @@ import PermissionNotice from '../components/internal/PermissionNotice'
 import PartnerRosterEditor from '../components/partner/PartnerRosterEditor'
 import ClientContactsEditor from '../components/settings/ClientContactsEditor'
 import DeleteProjectDialog, { canDeleteProject } from '../components/settings/DeleteProjectDialog'
+import DriveCard from '../components/settings/DriveCard'
 import MembersEditor from '../components/settings/MembersEditor'
 import PartnerGuideEditor from '../components/settings/PartnerGuideEditor'
 import PartnerTierEditor from '../components/settings/PartnerTierEditor'
@@ -104,7 +106,10 @@ const ROLE_PREVIEW: { role: MemberRole; blurb: string }[] = [
 export default function SettingsPage() {
   const { projectId, reloadSummaries } = useProject()
   const navigate = useNavigate()
-  const [tab, setTab] = useState<Tab>('overview')
+  // v2.9 — Drive 연결(OAuth) 후 /settings?drive=… 로 돌아오면 ③ 유형·연동 탭(Drive 카드)을 바로 연다
+  const [tab, setTab] = useState<Tab>(() =>
+    typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('drive') ? 'integration' : 'overview',
+  )
   const [confirmingDelete, setConfirmingDelete] = useState(false)
 
   const project = useAsync(() => provider.getProject(projectId), [projectId])
@@ -398,32 +403,13 @@ export default function SettingsPage() {
 
               {/* 연동 2종 — 빈 상태 정본 ②: 무엇이 좋아지는지 + 언제 열리는지 (accent CTA 없음) */}
               <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                <Card
-                  title="Drive 연결"
-                  action={
-                    <span className="inline-flex shrink-0 items-center rounded-full bg-track px-2 py-0.5 text-xs font-medium text-ink-sub">
-                      {project.data.drive_root_folder_id ? '연결됨' : '미연결'}
-                    </span>
-                  }
-                >
-                  <EmptyState
-                    message="산출물 폴더가 연결되지 않았습니다."
-                    action={
-                      <div
-                        data-testid="drive-empty"
-                        className="flex flex-col items-center gap-2.5 text-center"
-                      >
-                        <p className="max-w-[280px] text-xs leading-relaxed text-ink-cap">
-                          연결하면 표준 폴더 트리가 자동 생성되고, 직접 올린 파일이 미등록 인박스에
-                          쌓입니다.
-                        </p>
-                        <span className="inline-flex items-center rounded-full bg-steel-tint px-2 py-0.5 text-xs font-medium text-steel">
-                          Phase 5 예정
-                        </span>
-                      </div>
-                    }
-                  />
-                </Card>
+                <DriveCard
+                  projectId={projectId}
+                  driveRootFolderId={project.data.drive_root_folder_id}
+                  isPm={isPm}
+                  isAdmin={currentUser.data?.app_role === 'admin'}
+                  onChanged={handleSaved}
+                />
 
                 <Card
                   title="Slack Webhook"

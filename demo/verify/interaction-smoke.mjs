@@ -7,7 +7,8 @@
 //   ① InfoTip 호버 1곳 표시 + 뷰포트 내 완전 노출 (가장 오른쪽 ⓘ로 클램프를 강제)
 //   ② 사이드바 링크 클릭 → aria-current 갱신 + 전체 리로드 0 (SPA 내비 증명)
 //   ③ 해당 세션이 바꾼 화면의 핵심 클릭 경로 1개 — 세션마다 아래 "③" 블록을 교체한다
-//      (3.18: 판매 플래너 3스텝 · S0 ③ 유형 4카드 · 3.21: 런처 · Phase 4c: 로그인 게이트)
+//      (3.18: 판매 플래너 3스텝 · S0 ③ 유형 4카드 · 3.21: 런처 · Phase 4c: 로그인 게이트 · 4.2: 견적 내보내기 ·
+//       Phase 5: 업로드 3경로 — 파일 선택 여러 개·끌어놓기·Drive 링크 등록)
 // 캡처는 dist-demo/shots-interaction/ 에 남긴다. 실패 시 exit 1.
 import { createServer } from 'node:http'
 import { readFileSync, mkdirSync } from 'node:fs'
@@ -141,7 +142,53 @@ check(
   `${docCountBefore} → ${docRequests.length}`,
 )
 
-// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — **견적서 내보내기 2종(2026-09-10) + 파일 속 이미지(2026-09-24 직인)**.
+// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — **Phase 5 업로드 3경로(2026-09-24)**.
+//     항목 상세(RB27 'LED 키비주얼', requested)의 버전 업로드 카드: 폴더 선택 입력(webkitdirectory) · 파일 2개 선택 →
+//     이름순 목록(시안2 → 시안10) → 업로드 = 새 버전 2개 · 끌어놓기(브라우저 DataTransfer drop) → 목록 · Drive 링크 등록 → 새 버전.
+//     mock이라 서버 호출은 없다(fetch 1건 가드 유지) — 저장 위치 안내 문구가 그 사실을 적는다.
+
+// 데모 안내 칩은 우하단 고정이라 카드 하단과 겹칠 수 있다 — 사용자와 똑같이 닫고 시작한다
+const notice0 = tab.getByRole('button', { name: '안내 닫기' })
+if (await notice0.count()) await notice0.click()
+
+const docBeforeUpload = docRequests.length
+await tab.evaluate(() => {
+  window.location.hash = '#/items/dlv-rb27-prd-001'
+})
+const zone = tab.getByTestId('upload-dropzone')
+await zone.waitFor({ timeout: 10_000 })
+check((await tab.locator('input[webkitdirectory]').count()) === 1, '업로드 카드: 폴더 선택 입력(webkitdirectory)')
+check(/데모\(mock\) 모드/.test(await zone.innerText()), '업로드 카드: 저장 위치 안내(mock — 새로고침 시 사라짐)')
+await tab.getByLabel('파일 선택').setInputFiles([
+  { name: '시안10.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-10') },
+  { name: '시안2.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-2') },
+])
+const queue = tab.getByTestId('upload-queue')
+await queue.waitFor({ timeout: 10_000 })
+const rows = await queue.getByRole('listitem').allInnerTexts()
+check(rows.length === 2 && rows[0].includes('시안2.pdf') && rows[1].includes('시안10.pdf'), '파일 2개 → 이름순 목록(시안2 → 시안10)', rows.join(' | '))
+await tab.screenshot({ path: resolve(SHOTS, '03a-upload-queue.png'), fullPage: true })
+await tab.getByRole('button', { name: '업로드', exact: true }).click()
+await tab.getByText('새 버전 2개를 올렸습니다.').waitFor({ timeout: 10_000 })
+check(true, '업로드 → 새 버전 2개(파일마다 1개)')
+await zone.evaluate((el) => {
+  const dt = new DataTransfer()
+  dt.items.add(new File(['x'], '끌어놓은_배너.png', { type: 'image/png' }))
+  el.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }))
+})
+await queue.waitFor({ timeout: 10_000 })
+check((await queue.innerText()).includes('끌어놓은_배너.png'), '끌어놓기 → 목록에 담김')
+await tab.getByRole('button', { name: 'Drive 링크로 등록' }).click()
+await tab.getByLabel('Drive 링크').fill('https://drive.google.com/file/d/1AbCdEfGhIjKlMnOpQrStUvWxYz0123456/view?usp=sharing')
+await tab.getByLabel('표시 이름(선택)').fill('링크등록_시안.pdf')
+await tab.getByRole('button', { name: '링크 등록' }).click()
+await tab.getByText('Drive 파일을 새 버전으로 등록했습니다.').waitFor({ timeout: 10_000 })
+check((await tab.getByText('링크등록_시안.pdf').count()) >= 1, 'Drive 링크 등록 → 새 버전(표시 이름)')
+check(docRequests.length === docBeforeUpload, '업로드·끌어놓기·링크 등록에 전체 리로드 0', `${docBeforeUpload} → ${docRequests.length}`)
+await tab.screenshot({ path: resolve(SHOTS, '03b-upload-link.png'), fullPage: true })
+
+// ── ③-이전(2026-09-10 · 09-24) 견적서 내보내기 2종 + 파일 속 이미지(직인) — 직전 세션 ③을 회귀 가드로 유지.
+//    **견적서 내보내기 2종(2026-09-10) + 파일 속 이미지(2026-09-24 직인)**.
 //     S-2 목록에 'Excel 내려받기'·'구글 시트로 만들기'가 나란히 있고, mock 공급자(로그인 없음)에서 시트 버튼은
 //     무음 실패 대신 안내 문구(role=alert)를 띄운다(무동작 금지). 에디터 ④에도 같은 두 버튼이 있다.
 //     (직전 세션 ③ = 로그인 게이트 — 그 경로는 launcher.test·AuthGate 테스트가 계속 잡는다) ──
@@ -166,7 +213,7 @@ const alertText = (await alert.innerText()).trim()
 check(/실서버\(로그인\) 모드에서만/.test(alertText) && /Excel로 내려받으세요/.test(alertText), 'mock: 시트 버튼 → 안내 문구(무음 실패 없음)', alertText)
 check((await tab.getByTestId('gsheet-result').count()) === 0, 'mock: 결과 카드(링크) 없음')
 check(docRequests.length === docBeforeQuotes, '견적 목록·안내 표시에 전체 리로드 0', `${docBeforeQuotes} → ${docRequests.length}`)
-await tab.screenshot({ path: resolve(SHOTS, '03a-quotes-export-buttons.png') })
+await tab.screenshot({ path: resolve(SHOTS, '03c-quotes-export-buttons.png') })
 
 // ③-2 (2026-09-24 직인) — 내려받은 Excel 안의 이미지를 직접 연다. 데모는 직인을 싣지 않으므로(demo/plugins.ts)
 //      로고 1장(PNG)만 있어야 하고, PNG가 아닌 미디어는 0건이어야 한다 — 없는 자산 경로에 SPA 폴백 HTML이
@@ -207,7 +254,7 @@ check(!(await editorSheet.isDisabled()), '에디터 ④: 저장된 견적이라 
 await editorSheet.click()
 await tab.getByRole('alert').waitFor({ timeout: 10_000 })
 check(/실서버\(로그인\) 모드에서만/.test((await tab.getByRole('alert').innerText()).trim()), '에디터 ④ mock: 안내 문구')
-await tab.screenshot({ path: resolve(SHOTS, '03b-editor-step4-export.png'), fullPage: true })
+await tab.screenshot({ path: resolve(SHOTS, '03d-editor-step4-export.png'), fullPage: true })
 
 await browser.close()
 server.close()

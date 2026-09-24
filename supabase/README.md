@@ -80,6 +80,31 @@
 4. 이후 개별 행사 삭제는 앱에서 한다 — S-1 행사 목록 카드의 `삭제`, 또는 행사 설정 ③ 유형·연동 탭 맨 아래.
    확인 단계로 **행사명을 직접 입력**해야 진행된다. 종료 여부와 무관하게 지울 수 있다.
 
+## 3d. Drive 저장소 연결 (Phase 5 · 설계서 v2.9 §7 · §20 T4) — 기획자님 클릭 절차
+
+전제: 3c까지 끝나 실서버(Supabase)로 돌고 있고, 본인이 admin(`select app.promote_admin('본인@회사');`)이다.
+DB 쪽은 `setup.sql`을 한 번 더 실행하면 된다(18개 마이그레이션 · 멱등 — `20260924000100_drive.sql`이 Drive 표·함수를 더한다).
+
+1. **Google Cloud Console** (회사 조직의 프로젝트 권장 — 조직 안이면 동의 화면을 Internal로 둘 수 있어 검증·7일 만료가 없다)
+   - API 및 서비스 → 라이브러리 → **Google Drive API** 사용 설정
+   - OAuth 동의 화면 → 사용자 유형 **내부(Internal)** (개인 GCP라 선택지가 없으면 외부 + **프로덕션 게시** — 테스트 상태는 7일마다 끊긴다)
+   - 사용자 인증 정보 → OAuth 클라이언트 ID → **웹 애플리케이션** → 승인된 리디렉션 URI:
+     `https://www.rmb-mice.com/api/drive` (쓰는 도메인마다 하나씩 — `*.vercel.app`으로도 들어간다면 그 주소도)
+2. **Vercel** → 프로젝트 → Settings → Environment Variables (Production) — 값은 대화·문서에 붙이지 않는다
+   - `DRIVE_ROOT_FOLDER_ID` = 저장소 폴더 링크 `drive.google.com/drive/folders/<여기>`
+   - `GOOGLE_OAUTH_CLIENT_ID` · `GOOGLE_OAUTH_CLIENT_SECRET` = 1의 클라이언트
+   - 저장 후 **Redeploy**
+3. **앱** → 아무 행사 → 행사 설정 → ③ 유형·연동 → Drive 카드 **"Drive 연결하기"**
+   → 저장소 폴더 **소유 계정**(또는 편집 권한이 있는 회사 계정)으로 로그인·허용 → `/settings?drive=connected` 확인 문구
+   - 앱은 저장 전에 그 계정이 저장소 폴더에 **쓸 수 있는지** 확인한다(못 쓰면 "편집 권한이 있는 계정으로" 안내)
+   - 갱신 토큰은 Supabase **Vault**(`communicator_drive_refresh_token`)에만 남는다 — 화면·URL·로그에 나오지 않는다
+4. **스모크**(선택, 로컬): `.env.local`에 2의 값 + `VITE_SUPABASE_URL`·`SUPABASE_SECRET_KEY` → `npm run drive:smoke`
+   (토큰 교환 → 루트 쓰기 → 임시 트리 2회 멱등 → 5MB 조각 업로드 → 06 복사·Range 대조 → 임시 폴더 휴지통)
+5. 확인: 행사 설정 ③ "행사 폴더 만들기" → Drive에 `YYMMDD_코드_행사명/01_기획 … 99_archive` · 항목 상세에서 파일 끌어놓기 → `05_산출물/디자인/{항목}`에 규약 이름으로
+
+되돌리기: Drive 카드 "Drive 연결 해제"(admin — Vault 토큰 삭제·Google 토큰 revoke). 파일은 Drive에 그대로 남는다.
+서비스 계정 경로(`DRIVE_AUTH=service_account`)는 저장소를 **공유 드라이브**로 옮긴 경우에만 — 서비스 계정은 저장 용량이 없다.
+
 ## 4. 키 취급 규약 (CLAUDE.md §9 · 설계서 §12)
 
 - `.env.local`(gitignore)에만: `VITE_SUPABASE_URL` · `VITE_SUPABASE_PUBLISHABLE_KEY` · `SUPABASE_SECRET_KEY` · (임시) `SUPABASE_ACCESS_TOKEN`
