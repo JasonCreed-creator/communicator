@@ -1100,7 +1100,7 @@ UI 공통: 한국어, 데스크톱 우선 + 반응형(발주처 화면은 모바
 
 ### 17.3 검증 기준 (DoD 21~23의 정본)
 1. **엔진 등가**: pricing-dataset.json의 전 벡터(**21+1**, 인원 그리드 47행 포함)에 대해 이식 엔진 산출이 **0원 차이** — Configurator README_코웍이식 합격 기준 그대로. (v2.1: v1.1.0 데이터셋으로 교체)
-2. **Excel 등가**: 동일 입력으로 생성한 .xlsx의 셀 값·수식(한글금액·O/X 재계산)이 원본과 일치(exportEstimate 테스트 26케이스 통과). **(v2.8.1) 한글금액 수식은 `NUMBERSTRING`(한국어 Excel 전용)이 아니라 `koreanAmountFormula`(TEXT·MID·VALUE·IF·ROUND·ABS만)** — Excel 전 로케일·Google Sheets·LibreOffice가 같은 값을 낸다(LibreOffice 강제 재계산으로 JS 정본과 1:1 실측 — `koreanAmountFormula.libreoffice.test.ts`). 통화 서식은 `"₩"#,##0`(따옴표), 전 행 명시 높이·격자선 off — Excel·Sheets가 같은 리듬으로 그린다. 직인은 공급자 행 H열 "(인)" 중심 60px 앵커(`public/brand/remember-seal.png` 있을 때만).
+2. **Excel 등가**: 동일 입력으로 생성한 .xlsx의 셀 값·수식(한글금액·O/X 재계산)이 원본과 일치(exportEstimate 테스트 26케이스 통과). **(v2.8.1) 한글금액 수식은 `NUMBERSTRING`(한국어 Excel 전용)이 아니라 `koreanAmountFormula`(TEXT·MID·VALUE·IF·ROUND·ABS만)** — Excel 전 로케일·Google Sheets·LibreOffice가 같은 값을 낸다(LibreOffice 강제 재계산으로 JS 정본과 1:1 실측 — `koreanAmountFormula.libreoffice.test.ts`). 통화 서식은 `"₩"#,##0`(따옴표), 전 행 명시 높이·격자선 off — Excel·Sheets가 같은 리듬으로 그린다. 직인은 공급자 행 H열 "(인)" 중심 72px 앵커(`public/brand/remember-seal.png` — 2026-09-24 실직인 반영, 리멤버 브랜드 견적서에만, 자산은 PNG 서명으로 판정해 SPA 폴백 HTML을 거른다).
 3. **비노출**: quotes·breakdown·total_amount가 `/c/*` 응답·운영계획서 조립 데이터·activity_log·알림 페이로드 어디에도 없음(테스트로 증명).
 4. **데이터셋 출처(v2.1 신설)**: 골든 데이터셋은 **jsx-easy-shift의 생성기로 만든 산출물만** 인정한다. 커뮤니케이터의 이식 엔진으로 기대값을 만들면 자기 자신과의 비교가 되어 등가 검증이 무의미해진다.
    - `source.repo`·`source.commit`·`source.engine`은 **생성 시점에 실제로 사용한 커밋**을 적는다. 단가를 바꾼 PR 이후에 재생성했는데 `source.commit`이 그 이전 커밋이면 **그 자체로 검증 실패**로 본다.
