@@ -20,7 +20,11 @@ const setupSql = readFileSync(join(root, 'supabase', 'setup.sql'), 'utf8')
 const rlsSql = readFileSync(join(migDir, migrations.find((f) => f.includes('_rls'))!), 'utf8')
 
 /** 정책이 없어도 되는 표 — 서비스 경로(SQL 에디터·Edge Function secret)만 쓴다 */
-const SERVICE_ONLY_TABLES = ['app_config']
+const SERVICE_ONLY_TABLES = [
+  'app_config',
+  // v2.9 §7.6 — Drive 연결 메타(계정·시각·마지막 오류). 갱신 토큰 자체는 Vault. api/drive(secret 키)만 읽고 쓴다
+  'drive_connection',
+]
 
 function createdTables(sql: string): string[] {
   return [...sql.matchAll(/create table if not exists (\w+)/g)].map((m) => m[1])
@@ -42,6 +46,8 @@ describe('Phase 4 · supabase 스키마 정적 계약', () => {
     expect(tables.length).toBeGreaterThanOrEqual(40)
     const enableBlock = rlsSql.match(/foreach t in array array\[([\s\S]*?)\]/)![1]
     const enabled = new Set([...enableBlock.matchAll(/'(\w+)'/g)].map((m) => m[1]))
+    // 1400 뒤 마이그레이션이 만든 표는 그 파일에서 직접 켠다(v2.9 drive_connection) — 켜는 문장이 어딘가 있어야 한다
+    for (const m of allSql.matchAll(/alter table (\w+) enable row level security/g)) enabled.add(m[1])
     for (const t of tables) expect(enabled.has(t), `${t} RLS 활성 누락`).toBe(true)
     const withPolicy = new Set([...rlsSql.matchAll(/create policy \w+ on (\w+)/g)].map((m) => m[1]))
     for (const t of tables) {

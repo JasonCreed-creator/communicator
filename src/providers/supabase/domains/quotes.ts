@@ -5,6 +5,7 @@
 // 견적 생성·새 버전은 **서버 재계산**(Vercel Function /api/quote-recalc)만 거친다 — 클라이언트 산출값은 저장되지 않는다.
 import type { DataProvider } from '../../DataProvider'
 import { SupabaseCtx, normalizeRow, nowIso } from '../ctx'
+import { driveFor } from '../drive'
 import { ProviderError, type ErrorCode } from '../../../lib/errors'
 import { toVatExcluded } from '../../../lib/settlement'
 import type {
@@ -402,6 +403,7 @@ export function quotesDomain(ctx: SupabaseCtx): QuotesDomain {
       }
       const project = await materializeProjectFromQuote(ctx, quote, me.id)
       await ctx.log(project.id, 'project.created_from_quote', 'project', project.id, { quote_id: quote.id })
+      driveFor(ctx).ensureTreeQuietly(project.id) // v2.9 §8 — 행사 생성 = Drive 표준 트리(기다리지 않음)
       return project
     },
 

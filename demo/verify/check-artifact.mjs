@@ -86,6 +86,9 @@ const BENIGN_HOSTS = new Map([
   // v2.1 랜딩보드: 랜딩 내보내기 템플릿의 GA4/GTM 스니펫 문자열. 내려받은 .html에서만 실행되며
   // 데모 아티팩트 자체는 이 호스트로 요청하지 않는다(브라우저 검증: 외부 요청 0건).
   ['www.googletagmanager.com', '랜딩 내보내기용 GA/GTM 스니펫 문자열 (이 페이지는 요청하지 않음)'],
+  // v2.9 Drive 저장소: 링크 등록 입력 placeholder·Drive 링크 파서(lib/driveLink)·mock 링크 등록 버전의 '새 탭 열기' 주소.
+  // 페이지가 가져오지 않는다(fetch 0) — 사람이 누르면 새 탭으로 이동할 뿐.
+  ['drive.google.com', 'Drive 링크 문자열 (링크 등록 placeholder·파서·새 탭 열기 — 요청 없음)'],
 ])
 const urls = [...new Set(html.match(/https?:\/\/[^\s"'`)<>\\]+/g) ?? [])]
 const unknownHosts = new Set()

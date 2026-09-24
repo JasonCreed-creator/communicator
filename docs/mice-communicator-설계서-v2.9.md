@@ -1,8 +1,8 @@
-# MICE 커뮤니케이터 — 시스템 설계서 v2.8
+# MICE 커뮤니케이터 — 시스템 설계서 v2.9
 
 | 항목 | 내용 |
 |---|---|
-| 문서 상태 | **v2.8 확정 — 행사 하드 삭제 + 새 출발**(2026-09-07, 사용자 지시: 데모 행사·임시 담당자 전삭제 / 앞으로 만든 행사는 관리자 권한으로 삭제). §4-1c 신설 — 권한 축 = 전역 `app_role='admin'`(프로젝트 pm 아님) · 종료는 선행 조건 아님 · 견적은 `set null`로 분리 보존 · 주소록·협력사 무관 · 구현 = `security definer` RPC `public.delete_project`(projects에 delete RLS 정책은 두지 않음) · 연쇄 정정 3건(ProjectContext 저장 id 검증 · mock currentUser 멤버십 0 폴백 · 행사 0건 빈 상태 유도) · 이탈 2건(삭제 자체의 activity_log는 함께 사라짐 · Drive 트리는 남음). **DataProvider v13 재동결(125메서드)**. 직전 v2.7 — **Phase 4 Supabase 이식 정합**(2026-09-07, 사용자 결정 5건: [B] 3단 분할 · 폴링 유지(Realtime 보류) · profiles.title/phone/org + client_contacts.phone 추가 · sheet_status 매핑 추가 · **서버 함수 = Vercel Functions**(Edge Functions 대체)). ① 스키마 구현 정본 = `supabase/migrations`(17개, 멱등) + 통합 `setup.sql` + 생성 `seed.sql`(§18-3) — §4 요약과 다른 지점은 §4 머리말 표에 명시(profiles가 앱의 사람 정본·auth_user_id 분리, FK → profiles, landing_daily_metrics 열 TS 정합, app_config·sheet_source_rows 신설) ② 토큰 경로(`/c`·`/p`)·랜딩 리드·시트 반영·다단계 쓰기 = **security definer SQL RPC**(§6.2·§8 — anon은 표 권한 0·함수 execute만, 로컬 Postgres 85항목 증명) ③ 견적 서버 재계산·시트 읽기 = **Vercel Functions `api/`**(§8·§12 — 같은 레포·같은 배포, D-Day 추가 단계 = Vercel env) ④ 내부 로그인 = 이메일 매직링크 + `app_config.allowed_email_domains` 트리거 게이트(§12) ⑤ DataProvider **v12(124메서드) 그대로** — 새 메서드 0. 직전 v2.6 — UI/UX 고도화(패턴 정본) + 등록 구글 시트 연동 + 행사 유형 4분류(§25 증분). §25 증분(Phase 3.18, 2026-08-29): `projects.format`(conference/dms/exhibition)·`psa_enabled` 신설 — **format 권한은 3가지로 한정**(온보딩 시드·견적 모델·복합 게이트 구성요소), 상시 모듈 게이트는 기존 축 유지. 판매 플래너(dms·exhibition 판매형 도구) 신설, conference 견적 경로 **무접촉**. **DataProvider v11 재동결**(v10은 3.17c에서 소진). 초청제 모드·PSA 모듈은 미착수(§25.6·§25.5). **시각안 없이 진행** — 사용자 지시로 생략, 대체 게이트는 스크린샷 검수. 앞선 v2.6 — (2026-08-28 핸드오프 채택, 2026-08-29 챗 실측 검수 반영). ① 공통 패턴 정본 = 디자인지시서 §7-1(배지 의미 4단계+중립·표 정본·빈 상태 5종·시각화 어휘·인쇄·외부 지면) ② 등록 시트 연동 §24 — 시트가 정본·앱은 읽기만, 자동 감지는 하되 **반영은 항상 사람 확인 후**, 필드 소유 분리, 하드 삭제 금지, 동시 접속 낙관적 잠금(§24.3 R-S1~R-S4) ③ **체크인 배치 = B안(사이드바 S-12 별도 화면)** — 3.17 구현은 A안이었고 이는 Code 판단, 3.17.1에서 B안으로 복원 ④ **DataProvider v10 재동결(10메서드 추가 · 120메서드)**, importVendorQuote는 **v13 예약**(v11은 §25 증분, v12는 §4-2b 담당자 마스터에서 소진 — 2026-08-29). 직전 v2.5 확정 — **운영보드 재구성: 문서 유형 우선 + 시나리오·운영가이드 빌더** (2026-08-28, 시각안 3화면·구조 결정 5가지 전부 승인 — 계기: 사용자 데모 실측 피드백 "운영보드에 큐시트·시나리오·운영가이드가 들어가야 하고 항목별 전용 빌더가 필요"). ① 운영보드 1면 = 유형 카드 4종(큐시트/시나리오/운영가이드/기타 제작물) — "카테고리가 빌더를 결정한다" 원칙의 보드 레벨 확장, 유형 선택 시 빌더 인라인 ② 시나리오 빌더(프로그램표 뼈대 자동·진행 블록·큐시트로 내보내기)·운영가이드 빌더(존/역할/비상/연락망 4섹션·원본 연동 stale 확인) 신설 — 정형 테이블 §4-27, 컨펌·스냅숏은 큐시트 규약 재사용 ③ S9 ⑦비상 대응 섹션 신설·②시나리오 펼침·③존운영 확장(§10.2) ④ **DataProvider v9 재동결(8메서드 · 110메서드)**, importVendorQuote는 v10 예약 순연. 구현 = Phase 3.16(mock·3.15.1 머지 후). 직전 v2.4.1 확정 — **패치: 3.15 머지본 챗 감수(2026-08-27, 조건부 보완) 반영** — ① §15.3b 주최형 R&R 4카드·§15.3c 규약 카드 3종 정의(감수 M4 — 설계 공백 보완, 가정) ② projects에 파트너 안내 필드 2종(partner_guide_url·partner_contact_email — DataProvider v8.1, 필드 추가만) ③ 데모 아티팩트 charset 선두 보장 규약(§13b — 감수 M1, 미선언 서빙 백지 실증) ④ 폴리시 P1~P6은 CLAUDE.md 무개정·지시문 3.15.1로 수행. 직전 v2.4 확정 — **주최형(파트너) 확장 + 견적서 임포트** (2026-08-27, 시각안 4화면·구조 결정 7가지 전부 승인). ① 프로젝트 성격 축 `kind`(대행형/주최형) 신설 — 주최형은 파트너 N곳이 무로그인 링크 `/p/{token}`으로 제출하고 우리가 검토(기존 상태머신 방향 반전 재사용), 파트너 간 완전 격리·계약액 비노출(§21) ② 직접 설계한 견적서 xlsx 업로드 → 자동 인식 → 확인 큐 → 요소 분배 4종(§22, 실서식 3형 계약). DataProvider **v8 재동결(16메서드 · 102메서드)**, WBS 3번째 템플릿 "주최형" 12건(§15.3). 구현은 Phase 3.15(mock 우선·서버 0). 직전 v2.3 확정 — **서버 스프린트: 키 최후 주입 실행 개정(기능 무변경)** (2026-08-27, 범위 게이트 승인). Phase 4(Supabase)·5(Drive)·6(알림)을 운영 자격증명 없이 D-Day(8/31 월, 첫 출근일) 전에 전부 구현·검증하고, D-Day에는 §20 런북의 자격증명 주입(서버 3키·Slack 웹훅·Drive OAuth)만으로 실전 투입 가능 상태를 만든다. 사전 검증은 개발용 무료 Supabase 프로젝트, API 키는 신형 체계(sb_publishable/sb_secret — §12, 웹검증 2026-08-27) 채택. 직전 v2.2 확정 — **정산보드(S-10) 신설** (2026-08-23, 내부정산 실물 13건 분석 기반·시각안 승인). 마진 식(항목 마크업 + PCO 기획료 + RSVP 운영비, 리드젠 제외)을 실물 2건에서 원 단위 검산하고 §19에 정본화한다. §4-23 테이블 4종 + §4-24 계약 R-S1~R-S10, DataProvider **v7 재동결(11메서드 · 86메서드)**. 직전 v2.1 — **랜딩보드(S-3) 정본화 + 랜딩 스코프 계약 + 가격 상수 v1.1 정의** (2026-08-23). 코드가 선행한 Phase 3.13 랜딩보드를 §4-19~§4-22·§8·§10에 정본으로 흡수하고, `listLandingPages`·`createLandingPage`가 현재 행사가 아닌 사용자 첫 멤버십으로 스코프되던 결함을 계약으로 못박는다(§4-21). LED 오퍼레이팅·중계 단가 분리(§17.4)와 골든 데이터셋 출처 규약(§17.3)을 확정. 직전 v2.0: **견적 Configurator(jsx-easy-shift) 단일 플랫폼 통합** (2026-08-22, 시각안 3화면 승인 · 읽기 분석 보고 기반): 견적 모듈 S-2 · 견적→행사 핸드오프 · 새 Supabase 프로젝트 · 인프라 전환 절차. 직전 v1.5: **다중 행사(프로젝트 셀렉터·행사 목록) + 행사 설정 메뉴(개요·담당자 입력) 확장** (2026-08-22, 시각안 3화면 승인). 직전 v1.4.1: v1.4(유형별 WBS·R&R, 2026-08-22 시각안 승인)에 **Phase 3.6·3.7 구현 해석 정본화** 패치: projects.onboarded_at 확정(사용자 승인 2026-08-22) · 임박/지연 배타 산식 · 일반형 28건 파생 규칙 · 재전개 보존 규칙 · 큐시트 스냅숏 mock 규약 (Code PROGRESS 열린 질문 ①~⑤ 종결) |
+| 문서 상태 | **v2.9 확정 — Drive 저장소 연결(Phase 5)**(2026-09-24, 사용자 지시: "작업물 저장소는 이 폴더 — 파트별 폴더링 · 파일 끌어놓기·폴더 업로드·Drive에 직접 올린 뒤 링크로도 작업", 범위 게이트 [A] · 사용자 결정 3건: 한 세션 완료 · **폴더 소유 계정 OAuth** · 코드 완성까지(실키는 다음)). ① 저장소 루트 = 사용자 지정 폴더(`MICE Communicator`, 내 드라이브) — 루트 `00_견적서`·행사 폴더(§7.1 표준 트리)·`99_archive`(§7.1b) ② 업로드 3경로 = 끌어놓기(파일·폴더) · 파일/폴더 선택 · **Drive 링크 등록**(§7.2b — 루트 안 파일만, 행사 폴더 안 = 참조 · 루트 안 다른 곳 = 복사 · 밖 = 403) ③ 서버 = Vercel Function `api/drive` 1개(§8.3) — **4MB 조각 중계 업로드**(Vercel 요청 4.5MB 한도 · 브라우저→Google 직접 PUT은 CORS 불가) · 서명 URL 스트림 프록시(§7.4) · **§7.5 2단계 확정 구현**(06 복사 성공 후 final) · 인박스 = **폴더 목록 비교**(§7.3 이탈 — Changes API는 연결 계정 Drive 전체 변경을 읽어야 함) ④ 인증 = OAuth(갱신 토큰은 앱 '연결하기' → Supabase Vault) · 서비스 계정은 **공유 드라이브 전용**(저장 용량 없음 — Google 공식 문서 2026-09-24 확인) ⑤ 행사 삭제 → 폴더를 루트 `99_archive`로 이동(§4-1c 이탈 2 해소) ⑥ **DataProvider v13.1**(`UploadVersionInput.drive_link`·`onProgress` 필드 추가만 — 125메서드 불변). 직전 v2.8 — **행사 하드 삭제 + 새 출발**(2026-09-07, 사용자 지시: 데모 행사·임시 담당자 전삭제 / 앞으로 만든 행사는 관리자 권한으로 삭제). §4-1c 신설 — 권한 축 = 전역 `app_role='admin'`(프로젝트 pm 아님) · 종료는 선행 조건 아님 · 견적은 `set null`로 분리 보존 · 주소록·협력사 무관 · 구현 = `security definer` RPC `public.delete_project`(projects에 delete RLS 정책은 두지 않음) · 연쇄 정정 3건(ProjectContext 저장 id 검증 · mock currentUser 멤버십 0 폴백 · 행사 0건 빈 상태 유도) · 이탈 2건(삭제 자체의 activity_log는 함께 사라짐 · Drive 트리는 남음). **DataProvider v13 재동결(125메서드)**. 직전 v2.7 — **Phase 4 Supabase 이식 정합**(2026-09-07, 사용자 결정 5건: [B] 3단 분할 · 폴링 유지(Realtime 보류) · profiles.title/phone/org + client_contacts.phone 추가 · sheet_status 매핑 추가 · **서버 함수 = Vercel Functions**(Edge Functions 대체)). ① 스키마 구현 정본 = `supabase/migrations`(17개, 멱등) + 통합 `setup.sql` + 생성 `seed.sql`(§18-3) — §4 요약과 다른 지점은 §4 머리말 표에 명시(profiles가 앱의 사람 정본·auth_user_id 분리, FK → profiles, landing_daily_metrics 열 TS 정합, app_config·sheet_source_rows 신설) ② 토큰 경로(`/c`·`/p`)·랜딩 리드·시트 반영·다단계 쓰기 = **security definer SQL RPC**(§6.2·§8 — anon은 표 권한 0·함수 execute만, 로컬 Postgres 85항목 증명) ③ 견적 서버 재계산·시트 읽기 = **Vercel Functions `api/`**(§8·§12 — 같은 레포·같은 배포, D-Day 추가 단계 = Vercel env) ④ 내부 로그인 = 이메일 매직링크 + `app_config.allowed_email_domains` 트리거 게이트(§12) ⑤ DataProvider **v12(124메서드) 그대로** — 새 메서드 0. 직전 v2.6 — UI/UX 고도화(패턴 정본) + 등록 구글 시트 연동 + 행사 유형 4분류(§25 증분). §25 증분(Phase 3.18, 2026-08-29): `projects.format`(conference/dms/exhibition)·`psa_enabled` 신설 — **format 권한은 3가지로 한정**(온보딩 시드·견적 모델·복합 게이트 구성요소), 상시 모듈 게이트는 기존 축 유지. 판매 플래너(dms·exhibition 판매형 도구) 신설, conference 견적 경로 **무접촉**. **DataProvider v11 재동결**(v10은 3.17c에서 소진). 초청제 모드·PSA 모듈은 미착수(§25.6·§25.5). **시각안 없이 진행** — 사용자 지시로 생략, 대체 게이트는 스크린샷 검수. 앞선 v2.6 — (2026-08-28 핸드오프 채택, 2026-08-29 챗 실측 검수 반영). ① 공통 패턴 정본 = 디자인지시서 §7-1(배지 의미 4단계+중립·표 정본·빈 상태 5종·시각화 어휘·인쇄·외부 지면) ② 등록 시트 연동 §24 — 시트가 정본·앱은 읽기만, 자동 감지는 하되 **반영은 항상 사람 확인 후**, 필드 소유 분리, 하드 삭제 금지, 동시 접속 낙관적 잠금(§24.3 R-S1~R-S4) ③ **체크인 배치 = B안(사이드바 S-12 별도 화면)** — 3.17 구현은 A안이었고 이는 Code 판단, 3.17.1에서 B안으로 복원 ④ **DataProvider v10 재동결(10메서드 추가 · 120메서드)**, importVendorQuote는 **v13 예약**(v11은 §25 증분, v12는 §4-2b 담당자 마스터에서 소진 — 2026-08-29). 직전 v2.5 확정 — **운영보드 재구성: 문서 유형 우선 + 시나리오·운영가이드 빌더** (2026-08-28, 시각안 3화면·구조 결정 5가지 전부 승인 — 계기: 사용자 데모 실측 피드백 "운영보드에 큐시트·시나리오·운영가이드가 들어가야 하고 항목별 전용 빌더가 필요"). ① 운영보드 1면 = 유형 카드 4종(큐시트/시나리오/운영가이드/기타 제작물) — "카테고리가 빌더를 결정한다" 원칙의 보드 레벨 확장, 유형 선택 시 빌더 인라인 ② 시나리오 빌더(프로그램표 뼈대 자동·진행 블록·큐시트로 내보내기)·운영가이드 빌더(존/역할/비상/연락망 4섹션·원본 연동 stale 확인) 신설 — 정형 테이블 §4-27, 컨펌·스냅숏은 큐시트 규약 재사용 ③ S9 ⑦비상 대응 섹션 신설·②시나리오 펼침·③존운영 확장(§10.2) ④ **DataProvider v9 재동결(8메서드 · 110메서드)**, importVendorQuote는 v10 예약 순연. 구현 = Phase 3.16(mock·3.15.1 머지 후). 직전 v2.4.1 확정 — **패치: 3.15 머지본 챗 감수(2026-08-27, 조건부 보완) 반영** — ① §15.3b 주최형 R&R 4카드·§15.3c 규약 카드 3종 정의(감수 M4 — 설계 공백 보완, 가정) ② projects에 파트너 안내 필드 2종(partner_guide_url·partner_contact_email — DataProvider v8.1, 필드 추가만) ③ 데모 아티팩트 charset 선두 보장 규약(§13b — 감수 M1, 미선언 서빙 백지 실증) ④ 폴리시 P1~P6은 CLAUDE.md 무개정·지시문 3.15.1로 수행. 직전 v2.4 확정 — **주최형(파트너) 확장 + 견적서 임포트** (2026-08-27, 시각안 4화면·구조 결정 7가지 전부 승인). ① 프로젝트 성격 축 `kind`(대행형/주최형) 신설 — 주최형은 파트너 N곳이 무로그인 링크 `/p/{token}`으로 제출하고 우리가 검토(기존 상태머신 방향 반전 재사용), 파트너 간 완전 격리·계약액 비노출(§21) ② 직접 설계한 견적서 xlsx 업로드 → 자동 인식 → 확인 큐 → 요소 분배 4종(§22, 실서식 3형 계약). DataProvider **v8 재동결(16메서드 · 102메서드)**, WBS 3번째 템플릿 "주최형" 12건(§15.3). 구현은 Phase 3.15(mock 우선·서버 0). 직전 v2.3 확정 — **서버 스프린트: 키 최후 주입 실행 개정(기능 무변경)** (2026-08-27, 범위 게이트 승인). Phase 4(Supabase)·5(Drive)·6(알림)을 운영 자격증명 없이 D-Day(8/31 월, 첫 출근일) 전에 전부 구현·검증하고, D-Day에는 §20 런북의 자격증명 주입(서버 3키·Slack 웹훅·Drive OAuth)만으로 실전 투입 가능 상태를 만든다. 사전 검증은 개발용 무료 Supabase 프로젝트, API 키는 신형 체계(sb_publishable/sb_secret — §12, 웹검증 2026-08-27) 채택. 직전 v2.2 확정 — **정산보드(S-10) 신설** (2026-08-23, 내부정산 실물 13건 분석 기반·시각안 승인). 마진 식(항목 마크업 + PCO 기획료 + RSVP 운영비, 리드젠 제외)을 실물 2건에서 원 단위 검산하고 §19에 정본화한다. §4-23 테이블 4종 + §4-24 계약 R-S1~R-S10, DataProvider **v7 재동결(11메서드 · 86메서드)**. 직전 v2.1 — **랜딩보드(S-3) 정본화 + 랜딩 스코프 계약 + 가격 상수 v1.1 정의** (2026-08-23). 코드가 선행한 Phase 3.13 랜딩보드를 §4-19~§4-22·§8·§10에 정본으로 흡수하고, `listLandingPages`·`createLandingPage`가 현재 행사가 아닌 사용자 첫 멤버십으로 스코프되던 결함을 계약으로 못박는다(§4-21). LED 오퍼레이팅·중계 단가 분리(§17.4)와 골든 데이터셋 출처 규약(§17.3)을 확정. 직전 v2.0: **견적 Configurator(jsx-easy-shift) 단일 플랫폼 통합** (2026-08-22, 시각안 3화면 승인 · 읽기 분석 보고 기반): 견적 모듈 S-2 · 견적→행사 핸드오프 · 새 Supabase 프로젝트 · 인프라 전환 절차. 직전 v1.5: **다중 행사(프로젝트 셀렉터·행사 목록) + 행사 설정 메뉴(개요·담당자 입력) 확장** (2026-08-22, 시각안 3화면 승인). 직전 v1.4.1: v1.4(유형별 WBS·R&R, 2026-08-22 시각안 승인)에 **Phase 3.6·3.7 구현 해석 정본화** 패치: projects.onboarded_at 확정(사용자 승인 2026-08-22) · 임박/지연 배타 산식 · 일반형 28건 파생 규칙 · 재전개 보존 규칙 · 큐시트 스냅숏 mock 규약 (Code PROGRESS 열린 질문 ①~⑤ 종결) |
 | 목적 | Claude Code가 본 문서만으로 추가 질문 없이 구현 착수 |
 | 정본 관계 | 스키마·상태 머신·API 계약은 본 문서가 SoT. 구현 지침·작업 순서는 동봉 CLAUDE.md |
 | 확정 결정 | 아키텍처=하이브리드(파일=Drive, 상태=Supabase) / 발주처=무로그인 토큰 링크 / 컨펌 발송=PM 단독 / 업로드=웹앱 경유 원칙+Drive 감지 인박스 / 등록 1차=CSV 임포트 / **구현 순서=프론트 우선·서버 후행 이식(DataProvider 어댑터 계층)** / **v1.2: 지시(requested)→제작→컨펌→운영계획서(S9) 조립 파이프라인 — 웹 문서 우선, PPTX·발주처 뷰는 2차** / **v1.3: S0 온보딩(개요→유형→담당자) → 유형(일반형·모객형) 모듈 토글 → 큐시트 정형 에디터(3채널 콘솔, 컨펌 스냅숏 자동)** / **v1.4: 유형별 WBS 템플릿 자동 전개(Configurator 37태스크 이식·호환 코드 체계) + 역할별 R&R 카드** / **v1.4.1: 온보딩 완료 상태는 projects.onboarded_at 컬럼이 정본(DataProvider v3.1 재동결)** / **v1.5: 다중 행사 — 사이드바 프로젝트 셀렉터+S-1 행사 목록, "행사 설정" 메뉴 상시 노출(①개요 ②담당자 ③유형·연동), S0 위저드=같은 폼의 단계형, 행사개요 단일 원천(S9 ①은 읽기 조립)** / **v2.0: 견적 모듈(S-2) 흡수 — 가격 엔진·베뉴 DB를 `src/modules/quote`로 이식, 견적 확정→행사 생성 프리필, 견적은 로그인 내부 전용(금액은 발주처·운영계획서에 구조적 비노출), 데이터는 새 Supabase 프로젝트(옛 Configurator DB는 1회 임포트 후 폐기), 도메인 rmb-mice.com 재연결·jsx-easy-shift 아카이브** |
@@ -58,6 +58,13 @@ MICE 프로젝트 착수 시 역할별(디자인·운영·등록·발주처) 산
 - **OAuth 동의 화면은 반드시 Production 게시** — External+Testing 상태의 refresh token은 7일 만료로 매주 재인증 장애가 난다. Drive 전체 scope는 restricted scope이나, 100인 미만 개인용 앱은 '미확인 앱' 경고 통과로 사용 가능(정식 검증은 불요).
 - OAuth scope: `https://www.googleapis.com/auth/drive` (전체). `drive.file` scope는 앱이 만든 파일만 보여 '직접 업로드 감지'가 불가하므로 전체 scope + **앱 로직에서 프로젝트 루트 폴더 하위로만 접근 제한**.
 
+**Drive 인증 (v2.9 개정 — 사용자 결정 2026-09-24 · 웹검증 2026-09-24)**
+- **연결 계정 = 저장소 폴더 소유 계정의 OAuth**(사용자 지정 폴더가 회사 계정의 내 드라이브에 있음). 전용 운영 계정으로 바꾸는 것은 같은 코드에서 '연결 해제 → 그 계정으로 다시 연결'이면 된다(파일은 폴더 공유로 계속 보인다) — v1.1의 "전용 운영 계정" 원칙은 목표로 유지하고 첫 연결은 소유 계정으로 시작한다.
+- **서비스 계정은 공유 드라이브 폴더에서만**(`DRIVE_AUTH=service_account`) — 서비스 계정은 저장 용량이 없어 내 드라이브 폴더에 파일을 만들 수 없다(Google "Shared drives overview": "Service accounts don't have storage quota and can't own files"). 4.2 견적 시트의 서비스 계정 경로도 같은 제약 → 저장소가 연결돼 있으면 견적 시트도 같은 OAuth 연결로 `00_견적서`에 만든다(§8 `POST /api/quote-gsheet` 행).
+- **동의 화면**: 회사 Workspace 조직의 GCP 프로젝트면 **Internal**(검증·7일 만료 없음), 개인 GCP면 External + **Production 게시**(Testing 금지 — 7일 만료). 리디렉션 URI = `https://{앱 도메인}/api/drive`.
+- **갱신 토큰 보관**: 관리자가 행사 설정 ③ Drive 카드의 **"Drive 연결하기"** → 구글 동의 → 콜백이 **Supabase Vault**(`communicator_drive_refresh_token`)에 저장(§12 "Vault/환경변수"). env `GOOGLE_DRIVE_REFRESH_TOKEN`이 있으면 그것이 우선. 저장 전에 연결 계정이 저장소 루트에 **쓸 수 있는지** 확인한다(못 쓰면 저장하지 않음).
+- **접근 제한(앱 로직)**: 링크 등록·기존 폴더 지정·행사 폴더 보관은 대상의 조상에 저장소 루트가 있을 때만(§7.2b) — 전체 scope 토큰으로 루트 밖 개인 파일을 읽어 들이는 경로가 없다.
+
 ### 2.1 구현 전략 — 프론트 우선·서버 후행 (v1.1 확정)
 
 프론트는 Supabase client를 **직접 호출하지 않는다**. 모든 데이터·파일 접근은 `DataProvider` 인터페이스 경유(도메인 타입은 §4 스키마와 1:1):
@@ -67,10 +74,11 @@ MICE 프로젝트 착수 시 역할별(디자인·운영·등록·발주처) 산
                  ├ 1단계  MockProvider    : 픽스처+메모리, 업로드=blob URL (서버 0)
                  ├ 2단계  SupabaseProvider: DB·Auth·RLS 이식 (파일은 여전히 mock)
                  └ 3단계  DriveFileStore  : Drive 업로드·프록시·스캔·스냅숏 이식
+                          (v2.9 구현 = api/drive + providers/supabase/drive.ts — 인터페이스 v13.1, §7·§8.3)
 ```
 
 - **인터페이스 동결이 전제 조건** — 동결 없이는 이식 시 전 화면 재작업이 발생해 어댑터의 이점이 소멸한다 (감수 Steelman 조건부 판정)
-- 동결 이력: v1(35메서드, Phase 1) → v2(41, v1.2 승인) → v3(53, v1.3·v1.4 승인) → v3.1(v1.4.1 — 필드 추가만) → v4(v1.5 승인 — 다중 행사 5메서드) → **v5(v2.0 승인 — 견적 모듈: `listQuotes`·`getQuote`·`createQuote`·`saveQuoteVersion`·`finalizeQuote`·`createProjectFromQuote`·`exportQuoteXlsx`·`listComplianceCards`·`updateComplianceCard` **9메서드** 추가, `Project`에 모객 필드(guarantee_pax·targeting·kpi_show_rate·quote_id), `WbsTask.target` 추가. 기존 시그니처 불변)** → **v6(v2.1 승인 — 랜딩보드 8메서드: `listLandingPages`·`getLandingPage`·`createLandingPage`·`updateLandingPage`·`publishLandingPage`·`deleteLandingPage`·`listLandingMetrics`·`submitLandingLead`)** → **v6.1(v2.1 정정 — 스코프 결함 해소: `listLandingPages(projectId)`·`createLandingPage(projectId, input)`로 시그니처 변경. 나머지 6메서드는 landingId로 프로젝트를 역참조하므로 불변)** → **v7(v2.2 승인 — 정산보드 11메서드: `getSettlementBoard`·`createSettlementBoard`·`rebaseSettlementBoard`·`createSettlementBucket`·`updateSettlementBucket`·`deleteSettlementBucket`·`createSettlementItem`·`updateSettlementItem`·`deleteSettlementItem`·`listVendors`·`upsertVendor` = **86메서드**. 기존 시그니처 불변. 업로드 파싱(`importVendorQuote`)은 서버 의존이라 v8 예약 슬롯으로 남긴다 — §19.5)**. → v8(102)·v9(110)·v10(120)·v11(120, 3.18 — 메서드 0)·**v12(124, §4-2b 담당자 마스터)**·**v13(125, §4-1c 행사 하드 삭제 — `deleteProject`. 사용자 승인 2026-09-07)**. v5부터는 MockProvider와 SupabaseProvider가 동시에 이 인터페이스를 구현한다(Phase 4 — **v2.7: SupabaseProvider는 v12 124메서드를 무수정 구현, `src/providers/supabase/`**). 매 해제는 사용자 승인+본 문서 개정 동반이 조건 — **v6은 이 조건을 어기고 코드가 선행했다(2026-08-22 Phase 3.13). v2.1이 사후 정본화하며, 재발 방지 규칙은 §4-21 말미에 둔다**
+- 동결 이력: v1(35메서드, Phase 1) → v2(41, v1.2 승인) → v3(53, v1.3·v1.4 승인) → v3.1(v1.4.1 — 필드 추가만) → v4(v1.5 승인 — 다중 행사 5메서드) → **v5(v2.0 승인 — 견적 모듈: `listQuotes`·`getQuote`·`createQuote`·`saveQuoteVersion`·`finalizeQuote`·`createProjectFromQuote`·`exportQuoteXlsx`·`listComplianceCards`·`updateComplianceCard` **9메서드** 추가, `Project`에 모객 필드(guarantee_pax·targeting·kpi_show_rate·quote_id), `WbsTask.target` 추가. 기존 시그니처 불변)** → **v6(v2.1 승인 — 랜딩보드 8메서드: `listLandingPages`·`getLandingPage`·`createLandingPage`·`updateLandingPage`·`publishLandingPage`·`deleteLandingPage`·`listLandingMetrics`·`submitLandingLead`)** → **v6.1(v2.1 정정 — 스코프 결함 해소: `listLandingPages(projectId)`·`createLandingPage(projectId, input)`로 시그니처 변경. 나머지 6메서드는 landingId로 프로젝트를 역참조하므로 불변)** → **v7(v2.2 승인 — 정산보드 11메서드: `getSettlementBoard`·`createSettlementBoard`·`rebaseSettlementBoard`·`createSettlementBucket`·`updateSettlementBucket`·`deleteSettlementBucket`·`createSettlementItem`·`updateSettlementItem`·`deleteSettlementItem`·`listVendors`·`upsertVendor` = **86메서드**. 기존 시그니처 불변. 업로드 파싱(`importVendorQuote`)은 서버 의존이라 v8 예약 슬롯으로 남긴다 — §19.5)**. → v8(102)·v9(110)·v10(120)·v11(120, 3.18 — 메서드 0)·**v12(124, §4-2b 담당자 마스터)**·**v13(125, §4-1c 행사 하드 삭제 — `deleteProject`. 사용자 승인 2026-09-07)**·**v13.1(125 불변 — §7.2b `UploadVersionInput.drive_link`·`onProgress` 필드 추가만. 사용자 승인 2026-09-24, Phase 5 범위 게이트 승인이 동결 해제 승인을 겸함)**. v5부터는 MockProvider와 SupabaseProvider가 동시에 이 인터페이스를 구현한다(Phase 4 — **v2.7: SupabaseProvider는 v12 124메서드를 무수정 구현, `src/providers/supabase/`**). 매 해제는 사용자 승인+본 문서 개정 동반이 조건 — **v6은 이 조건을 어기고 코드가 선행했다(2026-08-22 Phase 3.13). v2.1이 사후 정본화하며, 재발 방지 규칙은 §4-21 말미에 둔다**
 - **현재 행사 컨텍스트(v1.5)**: 프론트는 `PROJECT_ID` 상수를 쓰지 않는다. `ProjectContext`(React)가 선택된 projectId를 보관(localStorage `communicator.currentProjectId`, 없으면 목록 첫 진행 중 행사)하고 모든 화면은 컨텍스트에서 읽는다. 라우트는 불변(`/`, `/board/...`) — URL prefix(`/p/:projectId/...`) 방식은 2차(북마크 공유 요구 발생 시)
 - Mock 단계 산출: UI/UX 전체 검증 + 발주처 데모 라우트(`/c/demo`)
 - 리스크 직렬화: 최대 리스크인 Drive 계층(OAuth·프록시)을 최후행에 배치
@@ -716,17 +724,48 @@ draft ──(담당/PM)──> internal_review ──(PM만)──> pending_appr
 
 영역→폴더 매핑: design → `05_산출물/디자인/{항목명}/` · ops → `04_운영/{항목명}/` · common(회의록) → `03_회의록` · common(예산) → `02_견적·정산` · common(기획) → `01_기획`.
 
+**(v2.9) 구현 규약** — `api/_lib/drive/tree.ts`
+- **저장소 루트**(env `DRIVE_ROOT_FOLDER_ID` — 2026-09-24 사용자 지정 `MICE Communicator`) 바로 아래: `00_견적서/`(견적 스프레드시트 — `GOOGLE_QUOTE_FOLDER_ID`가 없을 때 기본) · 행사 폴더들 · `99_archive/`(삭제된 행사 보관 §7.7). 등록 파트 산출물은 위 매핑대로 `04_운영`(새 트리 발명 금지 — 가정 ①).
+- **행사 폴더 이름** = `YYMMDD_{코드}_{행사명}`(행사일 없으면 `{코드}_{행사명}`) — 이름이 바뀌어도 폴더 id(`projects.drive_root_folder_id`)가 정본이라 자동 개명하지 않는다.
+- **생성 시점**: 행사 생성 직후(기다리지 않음) · 첫 업로드·링크 등록 · 행사 설정 ③ "행사 폴더 만들기·폴더 구조 확인". 새로 만든 행사 폴더에는 파트 7종 + `05_산출물/디자인`을 한 번에 만든다(사람이 Drive에서 처음 볼 때 구조가 다 보이게).
+- **멱등**: 행사·항목 폴더는 `appProperties`(`communicator_project_id`·`communicator_deliverable_id` — 앱 전용 표식)로 다시 찾는다 → DB 기록 전에 끊겨도 두 번째 실행이 같은 폴더를 채택(중복 0 — DoD 61 ①). 파트 폴더는 표준 이름으로 찾는다(사람이 미리 만든 폴더·지운 뒤 복구 모두 같은 규칙).
+- **항목 폴더**: design·ops만 `{항목명}` 하위 폴더를 만든다. 같은 이름의 폴더가 있고 다른 항목 표식이 없으면 채택(사람이 미리 만든 것), 다른 항목 것이면 `{항목명} (2)`. 공통 문서(common)는 파트 폴더에 바로 둔다(하위 폴더 없음).
+- **세션 규약 2파일 템플릿 복사**(위 트리의 CLAUDE.md·PROGRESS.md)는 아직 템플릿 원본 자리가 없어 **이번 단계에서 건너뛴다** — 원본 위치(예: 루트 `90_템플릿/`)를 정하면 트리 생성에 붙인다(열린 질문).
+
+### 7.1b (v2.9) 기존 폴더를 행사 폴더로 지정
+- Drive에서 먼저 만들어 둔 폴더가 있으면 행사 설정 ③에서 **폴더 링크**로 지정한다(pm). 조건: 저장소 루트 **안** · 루트 자체 아님 · 예약 폴더(`00_견적서`·`99_archive`) 아님 · 다른 행사가 쓰지 않음(409). 지정하면 행사 표식을 붙이고 빠진 파트 폴더만 그 안에 채운다(있는 파일·폴더는 건드리지 않음).
+
 ### 7.2 업로드 플로우 (웹앱 경유 — 원칙)
+
+> **(v2.9 구현)** 아래 1~4의 "Edge Function"은 v2.7 결정대로 **Vercel Function `api/drive`**가 맡는다. 바이트 경로는 **4MB 조각 중계**다 —
+> 브라우저 → `PUT /api/drive?action=upload-chunk`(서명 티켓) → Google 재개 업로드 세션. 이유: Vercel 함수 요청 본문 한도 4.5MB(웹검증 2026-09-24),
+> 그리고 브라우저가 Google 세션 주소로 직접 PUT하면 이어받기 응답에 CORS 헤더가 없어 막힌다(실사례 확인). 흐름 = `upload-start`(사용자 JWT로
+> `drive_upload_check` — upload_version과 같은 404·403·409를 **바이트 전송 전에**) → 항목 폴더 보장 → 세션 시작(파일에 1회용 표식 `communicator_upload`)
+> → 조각 전송(끊기면 수신 위치를 물어 이어서, 3회) → `upload-commit`(표식 대조 후 사용자 JWT로 `upload_version(… p_drive_file_id)`) —
+> 등록이 거부되면 올라간 파일을 휴지통으로(고아 0). 파일명 규약은 클라이언트가 `buildVersionFileName`으로 만들어 넘기고 서버는 경로 문자·길이만 정리한다
+> (Phase 4 호출부와 같은 자리 · 버전 번호 경합 시 vN이 한 칸 어긋날 수 있음은 Phase 4와 동일). 업로드 상한 = `DRIVE_MAX_UPLOAD_MB`(기본 2048).
+>
+> **업로드 3경로(화면 — S3 버전 업로드 카드)**: ① 끌어놓기 — 파일·폴더(하위까지, 숨김·시스템 파일 제외) ② 파일 선택·폴더 선택 ③ Drive 링크로 등록(§7.2b).
+> 여러 파일 = **파일마다 버전 1개**(숫자 자연 정렬 이름순 — 올리기 전 목록으로 확인, 맨 아래가 최신 · 가정 ④). Drive 미연결·mock이면 이 세션에만 보관하고 카드가 그 사실을 적는다.
 1. 프론트: 파일 선택 + 버전 노트 → Edge Function `POST /versions/upload`
 2. Edge Function: Drive resumable upload → 항목 폴더에 저장
 3. 파일명 자동 규약화: `YYMMDD_{project.code}_{category}_{title}_v{n}.{ext}` — jc-workspace-ops 표준(`YYMMDD_약칭_문서종류_vN`)의 확장형(문서종류를 category+title 2필드로 세분)
 4. versions insert (version_no 자동 증가) → 상태 changes_requested였으면 draft로 자동 전이 → Slack 알림
+
+### 7.2b (v2.9) Drive 링크로 등록 — "드라이브에 직접 올린 후 링크로"
+- 입력 = Drive 파일 링크(`drive.google.com/file/d/…`·`open?id=`·`docs.google.com/{document|spreadsheets|presentation|drawings}/d/…`·계정 경로 `/u/N/` 포함) 또는 파일 id. 폴더 링크는 422.
+- **루트 안 파일만**: 대상(바로가기는 가리키는 파일)의 조상에 저장소 루트가 있어야 한다 — 없으면 403("먼저 행사 폴더에 올리거나 옮겨 주세요"). 연결 계정 권한으로 개인 파일이 새어 나오는 경로를 막기 위함(가정 ②).
+- **행사 폴더 안** → 복사 없이 그 파일을 버전으로 참조 · **루트 안 다른 곳** → 항목 폴더로 복사해 등록(행사 트리를 자기완결로) · 같은 항목에 같은 파일은 409.
+- 버전 파일명 = Drive 파일 이름 그대로(§7.3과 같은 "rename 기본 off"). 구글 문서·시트·슬라이드는 확장자가 없어 **컨펌 발송 대상이 아니다**(미리보기 포맷 규칙 §5) — 보기는 PDF로 내보내 보여 준다(§7.4).
+- 인박스에 먼저 잡혀 있던 파일이면 등록과 동시에 인박스를 연결 처리한다(`upload_version`이 한 트랜잭션에서).
 
 ### 7.3 직접 업로드 감지 (인박스)
 - Edge Function cron(5분) + 화면의 수동 새로고침 버튼: **Drive Changes API(startPageToken 증분)** — modifiedTime 폴링 대비 이동·삭제 감지와 페이지 경계 유실에 강함 (v1.1, M-5)
 - DB의 versions.drive_file_id에 없는 파일 → unregistered_files insert → 홈 인박스에 노출
 - 인박스에서 원클릭: 기존 항목에 연결(새 버전으로 등록) / 새 항목 생성 / 무시(dismissed)
 - **파일명 규약화 rename은 옵션(기본 off)** — 타인이 직접 올린 파일명을 앱이 임의 변경하면 협업 혼란·파일명 기반 외부 참조 파손 위험 (v1.1, M-5)
+- **(v2.9 이탈) 감지 방식 = 행사 폴더 목록 비교** — Changes API는 연결 계정 Drive **전체**의 변경 피드라, 소유 계정 OAuth(§2 v2.9)에서는 그 사람의 무관한 파일 메타까지 앱이 훑게 된다. 대신 행사 폴더를 끝까지 목록으로 훑어 버전·인박스에 없는 파일을 올린다(매번 전체 비교라 이동·삭제에도 강하다). 제외: `06_발주처공유`·`99_archive`·바로가기·확정 사본 · 커밋 전 업로드(10분 유예). 목록을 끝까지 본 경우에만 사라진 파일의 인박스 행을 무시 처리. 상한 폴더 400개.
+- **(v2.9) 실행 시점**: 홈 인박스 조회 때 행사당 60초에 1회(8초 넘으면 기다리지 않음) + 인박스 카드 **"Drive 지금 확인"**. 5분 cron은 두지 않았다(Vercel Hobby cron은 하루 1회 — 필요하면 Pro 전환 후 추가).
 
 ### 7.4 파일 접근 — 프록시 원칙
 - 발주처는 항상 `GET /files/{version_id}` 프록시 경유 — Edge Function이 `files.get?alt=media`를 **ReadableStream 패스스루**로 중계(메모리 버퍼링 금지). **프록시 사이즈 캡 100MB** — Edge Functions 한도(메모리 150MB heap+150MB external, wall clock 400초, idle 150초 — 웹검증 2026-08-19)상 대용량 원본 중계는 부적합 (v1.1, M-2)
@@ -734,10 +773,23 @@ draft ──(담당/PM)──> internal_review ──(PM만)──> pending_appr
 - 내부 멤버는 Drive 직접 접근 병행 — 행사 루트 폴더를 팀 계정에 1회 공유(Drive UI에서 수행), 앱은 항목마다 webViewLink 버튼 제공
 - 이미지·PDF는 브라우저 인라인 미리보기, 그 외 다운로드
 - **Drive 공유 권한은 앱이 절대 수정하지 않는다** (anyone 링크 생성 금지)
+- **(v2.9 구현)** `api/drive`의 **서명 URL 스트림** — 내부는 `file-urls`(사용자 JWT·RLS로 보이는 버전만, 1시간), 발주처는 `client-file-urls`(토큰이 볼 수 있는 버전 목록은 SQL `client_file_versions`가 정한다 — 컨펌 대기 + 확정본, 2시간). 스트림은 Node 함수 기본 스트리밍이라 응답 4.5MB 한도 밖(웹검증 2026-09-24) · Range는 206으로 전달 · 구글 문서는 PDF로 내보내 보여 준다(Drive 내보내기 10MB).
+- **(v2.9) 우리 도메인에서 여는 형식 제한**: PDF·PNG·JPEG·GIF·WebP·MP4·WebM·MP3·텍스트만 inline, 나머지는 attachment. PDF 외에는 `Content-Security-Policy: sandbox` + `nosniff` — 업로드된 HTML·SVG가 앱 도메인에서 스크립트를 돌리지 못한다.
+- **(v2.9)** 내부 멤버의 "Drive에서 열기"는 항목 폴더 링크(전제: 저장소 루트를 내부 멤버에게 공유해 둔다 — 폴더 권한으로 열린다). 발주처 지면에는 Drive 주소를 싣지 않는다 — mock은 링크 등록 버전을 발주처에 자리표시로 준다(프록시가 없으므로).
 
 ### 7.5 final 스냅숏 (v1.1 원자성 보강 — M-4)
 - approved 처리 직후: 해당 버전 파일 `files.copy` → `06_발주처공유/` (파일명 유지) → **copy 성공 확인 후에만** status=final 커밋
 - copy 실패 시 approved 유지 + 재시도 큐(지수 백오프 3회) → 최종 실패 시 Slack 경보 + 홈 대시보드 노출
+- **(v2.9 구현)** 2단계 조건 = `app_config.drive_enabled`(서버가 Drive 성공 시 켬) **그리고** 행사 폴더 있음 — 이때만 `client_decide`가 approved에서 멈춘다(그 밖·시드·Drive 이전 행사는 즉시 final — 기존 흐름·검증 불변). 발주처 승인 직후 프론트가 `client-finalize`(토큰)를 부르면 서버가 06 폴더에 **같은 버전 표식(`communicator_snapshot`)의 사본이 없을 때만** 복사(재시도 멱등) → `finalize_approved`(service 전용 — final + 연결 WBS done + `drive.snapshot_copied` 로그). 복사 3회 실패(0.4s·1.2s 백오프) → approved 유지 + `drive.snapshot_failed` 로그 → **다음 인박스 스캔이 재시도**(재시도 큐 = approved 상태 자체). 원본이 Drive 파일이 아니거나(Phase 4 자리표시) Drive에서 사라졌으면 복사 없이 마감(`drive.snapshot_skipped`·`drive.snapshot_source_missing`) — approved에 영원히 묶이지 않게. env에서 Drive 설정이 빠졌으면 복사 없이 마감, 토큰만 끊긴 경우는 approved 유지(재연결 후 스캔). Slack 경보는 Phase 6.
+
+### 7.6 (v2.9) 연결(OAuth)·보안
+- 연결·해제 = **관리자(admin)** — 저장소 전체에 걸리는 조작(전역 권한 축, §6.1 행사 삭제와 같은 판단). 행사 폴더 만들기·기존 폴더 지정 = 그 행사 pm, 트리 보장·스캔 = 멤버.
+- OAuth state = 서버 비밀키 HMAC(10분) — 콜백은 로그인 세션이 없으므로 state가 "관리자가 시작한 연결"임을 증명한다. 결과는 `/settings?drive=connected|error&reason=…`로 돌려보내며 토큰·이메일을 URL에 싣지 않는다.
+- 서명 키(업로드 티켓·스트림 URL·state) = `DRIVE_SIGNING_KEY` 또는 `SUPABASE_SECRET_KEY`에서 용도 고정 파생(env 추가 없음 — secret 교체 시 발급된 링크·티켓이 함께 무효가 되는 것은 의도).
+- 갱신 토큰이 취소·만료되면(invalid_grant) 503 + `drive_connection.last_error` 기록 → Drive 카드가 "마지막 오류"로 보여 준다. **permissions API 호출 코드 0건**(DoD 61 ⑩ — 소스·호출 기록 이중 검사).
+
+### 7.7 (v2.9) 행사 삭제와 Drive — §4-1c 이탈 2 해소
+- 행사를 삭제(admin)하면 DB는 §4-1c대로 지우고, 행사 폴더는 **지우지 않고 루트 `99_archive/`로 옮기며 이름 끝에 `(삭제됨 YYMMDD)`**를 붙인다(가정 ⑤). 폴더 id는 삭제 전에 관리자 전용 RPC `drive_project_folder`로 확인한다(관리자가 그 행사 멤버가 아니어도). 보관은 best-effort — 실패해도 삭제는 끝나고 폴더는 제자리에 남는다.
 
 ---
 
@@ -822,6 +874,25 @@ draft ──(담당/PM)──> internal_review ──(PM만)──> pending_appr
 | POST /deliverables/{id}/guide-seed | pm·ops | 존별 운영(존운영 항목)·역할 체크리스트(R&R)에서 초기 로드. 기존 섹션 있으면 409 |
 | POST /deliverables/{id}/doc-snapshot | pm | 정형 문서(큐시트·시나리오·운영가이드) 인쇄 스냅숏 → 버전 등록(§8 cue-snapshot 일반화 — 기존 경로는 위임 유지). 컨펌 발송 전처리 |
 
+### 8.3 (v2.9) Drive 저장소 API — Vercel Function `api/drive`
+
+| Method·액션 | 권한 | 동작 |
+|---|---|---|
+| GET /api/drive | 공개 | `{configured}`만(자격증명 값 없음) |
+| GET /api/drive?code&state | OAuth 콜백 | 코드 교환 → 저장소 루트 쓰기 확인 → Vault 저장 → 루트 `00_견적서`·`99_archive` 보장 → `/settings?drive=…` 302 |
+| POST `status` | 로그인 | 설정·연결 여부·연결 계정·마지막 오류·루트 링크(관리자만 리디렉션 URI) |
+| POST `oauth-start` · `disconnect` | admin | 구글 동의 URL(offline·consent·서명 state) / 연결 해제(Vault 삭제 + 토큰 revoke + drive_enabled=false) |
+| POST `ensure-tree` | 멤버 | 행사 폴더 + 파트 7종 보장(멱등) |
+| POST `adopt-folder` | pm | 기존 폴더를 행사 폴더로 지정(§7.1b) |
+| POST `upload-start` · PUT `upload-chunk` · POST `upload-status` · POST `upload-commit` | 로그인(조각·상태는 서명 티켓) | 4MB 조각 중계 업로드(§7.2) |
+| POST `link` | 로그인(역할-영역) | Drive 링크 등록(§7.2b) |
+| POST `file-urls` · GET `?action=stream&t=` | 로그인 / 서명 | 서명 스트림 URL 발급·스트림(§7.4) |
+| POST `client-file-urls` · `client-finalize` | 발주처 토큰 | 발주처 파일 서명 URL / §7.5 확정 복사 |
+| POST `scan` | 멤버 | 인박스 스캔 + 확정 복사 재시도(§7.3·§7.5) |
+| POST `archive-project` | admin | 삭제된 행사 폴더를 루트 `99_archive`로(§7.7) |
+
+SQL(`…20260924000100_drive.sql`): `upload_version` 5인자판(`p_drive_file_id` — 4인자판은 drop) · `drive_upload_check`(authenticated) · `drive_project_folder`(admin) · service 전용 `drive_known_file_ids`·`client_file_versions`·`client_snapshot_target`·`drive_pending_snapshots`·`finalize_approved`·`drive_token_read`·`drive_connection_save/clear/error` · `client_decide` 2단계 · 표 `drive_connection`(RLS on·정책 없음) · `app_config.drive_enabled`. DataProvider는 v13.1(필드 추가만) — 연결·폴더·스캔 같은 운영 작업은 인터페이스 밖 연동 층 `src/lib/drive/driveClient.ts`(4.2 견적 시트 선례).
+
 ---
 
 ## 9. 알림 매트릭스
@@ -904,6 +975,7 @@ UI 공통: 한국어, 데스크톱 우선 + 반응형(발주처 화면은 모바
 - 감사: 모든 상태 전이·토큰 접근·파일 프록시 요청은 activity_log 기록.
 - 회사명·실명 하드코딩 금지(#RULE-NO-COMPANY) — 발주처·행사명은 전부 데이터.
 - 백업: DB는 Supabase 자동 백업, 파일은 Drive 자체가 원본.
+- **(v2.9) Drive 서버 env(Vercel, VITE_ 없이)**: `DRIVE_ROOT_FOLDER_ID` · `GOOGLE_OAUTH_CLIENT_ID` · `GOOGLE_OAUTH_CLIENT_SECRET` · (선택) `GOOGLE_DRIVE_REFRESH_TOKEN`(없으면 앱 '연결하기' → Vault) · (선택) `DRIVE_AUTH=service_account`(공유 드라이브 + `GOOGLE_SHEETS_SA_JSON`) · (선택) `DRIVE_MAX_UPLOAD_MB` · (선택) `DRIVE_SIGNING_KEY` · (선택) `DRIVE_OAUTH_REDIRECT_URI`. 프론트 번들에 Drive 토큰·클라이언트 secret 0건.
 - (v2.0) 금액 비노출 4중 차단 — 분석 보고에서 확인된 Configurator의 노출 경로를 전부 닫는다: ① `/quote` 공개 렌더 → 로그인+app_role 게이트 ② estimates RLS 개방 → quotes RLS(§6.2) + 새 프로젝트 ③ Excel 다운로드 시 외부 Edge Function으로 자동 Drive 업로드 → 제거(Phase 5 Drive 모듈의 명시 버튼만) ④ `?client_view=1` URL 파라미터 공유 → 폐기(발주처는 `/c/{token}`만). 운영계획서·활동 로그·알림 본문에 금액 필드 포함 금지(테스트로 증명).
 - (v2.2) 정산 비노출 — 금지 키에 `settlement`·`ordered_amount`·`actual_amount`·`markup`·`margin`을 추가하고, 검사 범위에 `pages/Landing*`·`lib/landing*`를 추가한다(랜딩은 토큰조차 없는 유일한 완전 공개 지면인데 v2.1까지 검사 밖이었다). 가드는 결함을 되돌려 넣어 **실제로 실패하는지 역검증**한 뒤 통과로 인정한다. 상세는 §19.7.
 - (v2.4.1 §13b) **데모 아티팩트 charset 규약**: 빌드된 단일 HTML은 `<meta charset="utf-8">`이 문서 선두 1,024바이트 안에 있어야 한다(HTML 프리스캔 규칙). 근거 = 2026-08-27 감수 실증: charset 미선언 서빙에서 한글 정규식 파싱 오류로 전면 백지(빌드가 meta를 51KB 지점으로 밀어냄, 자체 검증 스크립트는 charset 주입 서빙이라 미탐지). 데모 검증(browser-check)에 **charset 미명시 서빙 케이스**를 포함한다.
@@ -938,6 +1010,7 @@ UI 공통: 한국어, 데스크톱 우선 + 반응형(발주처 화면은 모바
 
 ## 14. 개정 이력
 
+- **v2.9** (2026-09-24): **Drive 저장소 연결(Phase 5)** — 사용자 지시(작업물 저장소 = 지정 폴더, 파트별 폴더링, 끌어놓기·폴더 업로드·Drive 링크 등록). ① §2 Drive 인증 개정(폴더 소유 계정 OAuth · 서비스 계정 = 공유 드라이브 전용 · Vault 보관 · Internal 동의 화면) ② §7.1 구현 규약·루트 규약 + §7.1b 기존 폴더 지정 ③ §7.2 4MB 조각 중계·업로드 3경로 + §7.2b 링크 등록 ④ §7.3 **이탈** — 폴더 목록 비교(Changes API 대신) ⑤ §7.4 서명 스트림·형식 제한 ⑥ §7.5 2단계 확정 구현 ⑦ §7.6 연결·보안 · §7.7 행사 삭제 → 99_archive(§4-1c 이탈 2 해소) ⑧ §8.3 `api/drive` · SQL 1건 ⑨ §12 env ⑩ §20 T4·T5 개정. **DataProvider v13.1**(필드 2개 추가만 — 125메서드 불변). 가정 7건은 PROGRESS 결정 로그
 - **v2.8** (2026-09-07): **행사 하드 삭제 + 새 출발** — 사용자 지시(데모 행사·임시 담당자 전삭제 / 앞으로 만든 행사는 관리자 권한으로 삭제 가능). ① §4-1c 신설 — 권한 축 = 전역 `app_role='admin'`(프로젝트 pm 아님, §6.1에 pm 열이 `—`인 첫 행) · 종료는 선행 조건 아님(`require_writable` 미경유) · 견적은 `set null`로 분리 보존 · 주소록·협력사 무관 ② §8 `DELETE /projects/{id}` + `security definer` RPC `public.delete_project`, **`projects`에 delete RLS 정책은 두지 않는다**(정책 부재 + definer 단일 경로 = 이중 방어) ③ 연쇄 정정 3건 — `ProjectContext` 저장 id 검증 · mock `currentUser()` 멤버십 0 폴백(서버 쪽에 맞춤) · 행사 0건 빈 상태 유도 ④ 이탈 2건 명시(삭제 자체의 activity_log는 cascade로 함께 사라짐 · Drive 트리는 남음). **DataProvider v13 재동결(125메서드)**, `importVendorQuote`는 v14 예약
 
 - **v2.7** (2026-09-07): **Phase 4 Supabase 이식 정합** — 사용자 결정 5건([B] 3단 분할 · 시트 감지 폴링 유지 · profiles.title/phone/org+client_contacts.phone 추가 · sheet_status 매핑 추가 · 서버 함수 = Vercel Functions). ① §4 머리말에 구현 정합표 신설(profiles 독립 PK+auth_user_id, FK → profiles, metrics 열 TS 정합, app_config·sheet_source_rows 신설) ② §6.2 토큰 경로 = security definer SQL RPC(anon 표 권한 0) ③ §8 실행 자리 매핑(PostgREST / RPC 1600·1700 / Vercel `api/`) ④ §12 허용 도메인 DB 게이트·admin 승격 SQL·서버 시크릿 자리 ⑤ §18-3 산출 규약 실물(17 마이그레이션·setup/seed 생성기·remote·local-check 85항목) ⑥ §24.2 sheet_status·sheet_source_rows, §24.3 열린 질문 종결 ⑦ (3단 dev 실검증 2026-09-07 오후) 토큰·견적 참조 FK on-delete 규칙 — §4 머리말 표 마지막 행. DataProvider v12(124) 무변경. Edge Functions(Deno) 서술은 역사로 남기고 실행 자리는 위 매핑으로 읽는다
@@ -1181,7 +1254,7 @@ UI 공통: 한국어, 데스크톱 우선 + 반응형(발주처 화면은 모바
 같은 cascade에 포함되기 때문이다. 행사 단위 감사 추적은 삭제와 함께 사라진다 — 이것이 하드 삭제의 본질이며,
 되돌리려면 별도의 프로젝트 비종속 감사 표가 필요하다(2차 로드맵 §13).
 
-**이탈 2(Drive)** — DB만 지운다. Phase 5 이후 Drive 트리는 남는다(§12 "파일은 Drive 자체가 원본").
+**이탈 2(Drive)** — DB만 지운다. Phase 5 이후 Drive 트리는 남는다(§12 "파일은 Drive 자체가 원본"). **(v2.9 해소 — §7.7)** 삭제 뒤 행사 폴더를 루트 `99_archive/`로 옮기고 `(삭제됨 YYMMDD)`를 붙인다(파일은 지우지 않는다).
 Drive 정리는 D-Day 런북(§20) 수동 절차로 둔다.
 
 **연쇄 정정 — 행사 0건 상태가 처음으로 도달 가능해진다.** 삭제 이전에는 `projects`가 빌 수 없었고,
@@ -1436,7 +1509,7 @@ PDF·엑셀·사진에서 항목·단가·수량을 읽어 버킷에 배정하�
 | 1 | **서버(Supabase)** | 운영 프로젝트 생성 → setup.sql 1회 실행 → 3키 확보 | 25분 | Project URL · publishable key · secret key |
 | 2 | **배포(Vercel)** | 레포 import → env 입력 → 배포 확인 (■ rmb-mice.com 이전은 별도 결정) | 20분 | 접속 URL |
 | 3 | **슬랙** | 리멤버 워크스페이스에 Incoming Webhook 생성 → 등록 | 15분 | SLACK_WEBHOOK_URL |
-| 4 | **구글드라이브** | 전용 운영 계정 확보(■ 회사 계정 정책 확인) → OAuth 클라이언트 생성·Production 게시 → 최초 1회 동의 → refresh token 저장 | 30분 | Drive OAuth 자격증명 4종 |
+| 4 | **구글드라이브** | (v2.9) GCP OAuth 웹 클라이언트 생성(동의 화면 Internal 권장) → Vercel env 3종(`DRIVE_ROOT_FOLDER_ID`·`GOOGLE_OAUTH_CLIENT_ID`·`GOOGLE_OAUTH_CLIENT_SECRET`) → 재배포 → 관리자가 앱에서 **"Drive 연결하기"**(폴더 소유 계정으로 동의 — 갱신 토큰은 Vault) | 20분 | Drive 연결됨(행사 설정 ③) |
 | 5 | **스모크** | `scripts/drive-smoke.ts` 5단계 + 알림 1건 + 로그인 매직링크 왕복 + 데모 시나리오 1개 | 15분 | 전 항목 통과 확인 |
 
 ### 20.2 트랙별 정본 절차
@@ -1447,9 +1520,9 @@ PDF·엑셀·사진에서 항목·단가·수량을 읽어 버킷에 배정하�
 
 **T3 슬랙**: 리멤버 워크스페이스에 앱 생성 → Incoming Webhooks 활성 → 알림 채널 지정 → Webhook URL 복사 → Supabase Edge Function secrets에 `SLACK_WEBHOOK_URL` 등록 → 앱 설정 화면(S6 ③연동 탭)에서 프로젝트별 웹훅 확인. ■ 워크스페이스 앱 설치 권한이 관리자 승인제면 당일 요청 발송으로 대체하고, 그동안 no-op 폴백(§9)으로 사용 개시.
 
-**T4 드라이브**: §2 정본 그대로 — 전용 운영 Google 계정(■ 회사 Workspace 계정 발급 가능 여부에 따라 개인 보조 계정으로 임시 시작 가능, 단 실파일 축적 전에 확정) → Google Cloud Console에서 OAuth 클라이언트 생성 → 동의 화면 **Production 게시**(Testing 금지 — 7일 만료) → scope `auth/drive` → 최초 1회 동의로 refresh token 발급(`scripts/drive-auth.ts` 안내 절차) → Supabase secrets에 `GOOGLE_CLIENT_ID`·`GOOGLE_CLIENT_SECRET`·`GOOGLE_REFRESH_TOKEN`·`DRIVE_ROOT_FOLDER_ID` 등록.
+**T4 드라이브 (v2.9 개정)**: ① Google Cloud Console(회사 조직의 프로젝트 권장) → Drive API 사용 설정 → OAuth 동의 화면(**Internal**, 개인 GCP면 External + Production 게시) → OAuth 클라이언트(웹) 생성, 승인된 리디렉션 URI = `https://{앱 도메인}/api/drive` ② Vercel env: `DRIVE_ROOT_FOLDER_ID`(저장소 폴더 링크의 `folders/` 뒤 id) · `GOOGLE_OAUTH_CLIENT_ID` · `GOOGLE_OAUTH_CLIENT_SECRET` → 재배포 ③ `select app.promote_admin('본인@회사')`로 admin인지 확인 → 행사 설정 ③ Drive 카드 **"Drive 연결하기"** → 저장소 폴더 소유 계정으로 동의 → `/settings?drive=connected` 확인. (`scripts/drive-auth.ts` 안내 절차는 앱 '연결하기'로 대체 — env로 넣고 싶으면 `GOOGLE_DRIVE_REFRESH_TOKEN`.) 절차 상세 = `supabase/README.md` §3d.
 
-**T5 스모크**: ① `drive-smoke` 5단계(refresh 교환→트리 생성→업로드→copy→스트리밍) 전부 통과 ② 아무 항목 상태 전이 1건 → 슬랙 채널에 알림 도착 ③ 본인 이메일 매직링크 로그인 왕복 ④ 데모 시나리오 1개(항목 생성→업로드→컨펌 발송→토큰 링크 열람) 실기 왕복. 전부 통과 시 실전 투입 가능 — 첫 행사 온보딩(후보: DMS 2026)으로 진행.
+**T5 스모크**: ① `npm run drive:smoke`(`scripts/drive-smoke.ts` — 토큰 교환→루트 쓰기→임시 트리 2회 멱등→5MB 조각 업로드→06 복사·Range 스트림 대조, 임시 폴더는 휴지통) 전부 통과 ② 아무 항목 상태 전이 1건 → 슬랙 채널에 알림 도착 ③ 본인 이메일 매직링크 로그인 왕복 ④ 데모 시나리오 1개(항목 생성→업로드→컨펌 발송→토큰 링크 열람) 실기 왕복. 전부 통과 시 실전 투입 가능 — 첫 행사 온보딩(후보: DMS 2026)으로 진행.
 
 ### 20.3 되돌림
 - T1~T4 중 실패한 트랙은 해당 env만 비우면 즉시 이전 상태(mock 또는 no-op)로 복귀 — 다른 트랙 진행을 막지 않는다.

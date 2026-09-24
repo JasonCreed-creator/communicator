@@ -233,11 +233,21 @@ export interface CreateDeliverableInput {
 }
 
 export interface UploadVersionInput {
-  /** 원본 파일명 — 확장자 추출·규약화(§7.2)에 사용 */
+  /**
+   * 원본 파일명 — 확장자 추출·규약화(§7.2)에 사용.
+   * drive_link 등록이면 표시 이름 힌트일 뿐이다(실서버는 Drive의 파일명을 쓴다 · mock은 비었으면 "Drive 파일(…)").
+   */
   file_name: string
   note?: string
-  /** Mock 단계: blob URL 생성용. 없으면 자리표시 URL */
+  /** 파일 바이트 — Mock은 blob URL, 실서버는 Drive에 조각 업로드(v2.9 §7.2). 없으면 자리표시 URL */
   file?: Blob
+  /**
+   * v13.1(2026-09-24, 설계서 v2.9 §7.2b) — Drive에 직접 올린 파일의 링크로 버전 등록. 있으면 file은 무시한다.
+   * MICE Communicator 루트 안 파일만 — 행사 폴더 안이면 그대로 참조, 루트의 다른 곳이면 항목 폴더로 복사, 밖이면 403.
+   */
+  drive_link?: string
+  /** v13.1 — 업로드 진행률(보낸 바이트, 전체 바이트). 조각 업로드 중 여러 번 불린다 */
+  onProgress?: (sent: number, total: number) => void
 }
 
 export interface RequestApprovalInput {

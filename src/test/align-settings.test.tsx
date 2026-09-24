@@ -157,9 +157,11 @@ describe('S6 행사 설정 — 필수 스트립 · 탭 배지 · 연동 빈 상�
     await screen.findByRole('heading', { name: '행사 설정' })
     await userEvent.click(screen.getByRole('button', { name: '③ 유형·연동' }))
 
-    const drive = await screen.findByTestId('drive-empty')
+    // v2.9(Phase 5): 'Phase 5 예정' 자리표시 → Drive 카드. mock은 연결을 흉내 내지 않고 효용·표준 트리·개시 시점을 적는다
+    const drive = await screen.findByTestId('drive-card')
     expect(drive.textContent).toContain('미등록 인박스')
-    expect(drive.textContent).toContain('Phase 5 예정')
+    expect(drive.textContent).toContain('실서버')
+    expect(drive.textContent).toContain('05_산출물/디자인')
 
     const slack = screen.getByTestId('slack-empty')
     expect(slack.textContent).toContain('컨펌 요청·수정요청·지연 알림')

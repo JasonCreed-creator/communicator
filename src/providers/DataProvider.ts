@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────
-// DataProvider 인터페이스 v13 — 2026-09-07 재동결 (설계서 v2.8 §4-1c) — 125메서드
+// DataProvider 인터페이스 v13.1 — 2026-09-24 재동결 (설계서 v2.9 §7.2b) — 125메서드
 //   (아래 이력 전체를 유지한다. v7 표기는 2026-08-23 시점의 스냅숏이었다 — v8·v8.1·v9은
 //   그 뒤에 이어 붙은 것이므로 제목 줄만 최신으로 갱신한다.)
 //   v1: 2026-08-19 동결(35메서드). v2: v1.2 승인 근거로 41메서드 재동결.
@@ -67,6 +67,11 @@
 //   **기존 124메서드 시그니처 불변** 후 재동결. 권한 축은 프로젝트 역할(pm)이 아니라 **전역 app_role='admin'**
 //   이다 — 되돌릴 수 없는 유일한 행사 단위 조작이라 행사 안의 역할로는 판정하지 않는다(설계서 §6.1).
 //   `importVendorQuote`는 이제 **v14 예약 — 지금 만들지 않는다**(§19.5).
+//   v13.1: 사용자 승인(2026-09-24 — Phase 5 Drive 저장소 착수 범위 게이트 [A] 승인이 동결 해제 승인을 겸함) +
+//   설계서 v2.9 §7.2b를 근거로 동결 해제 → **UploadVersionInput 선택 필드 2개(drive_link·onProgress) 추가만**,
+//   메서드 수 125 불변(v3.1·v8.1 전례). 링크 등록·조각 업로드·진행률은 기존 uploadVersion 한 경로로 들어온다.
+//   Drive 연결·폴더·스캔 같은 운영 작업은 인터페이스 밖 연동 층(lib/drive/driveClient — 4.2 견적 시트 선례)이 맡는다.
+//   `importVendorQuote`는 계속 **v14 예약**.
 //
 // 프로젝트 스코프 규칙(설계서 v2.1 §4-21 R-L1): 프로젝트 단위 조회·생성 메서드는 projectId를
 // 인자로 받는다. currentUser()는 행위자 신원·권한 판정 전용이며 스코프 유도에 쓰지 않는다.
@@ -74,7 +79,7 @@
 // 프론트(S-2·S0~S9)는 이 인터페이스만 호출한다. 구현체:
 //   1단계 MockProvider     — 픽스처+메모리, 업로드=blob URL (Phase 1·3.5~3.11)
 //   2단계 SupabaseProvider — DB·Auth·RLS 이식 (Phase 4, v2.0 스키마 기준 — 견적 저장은 서버 재계산)
-//   3단계 + DriveFileStore — Drive 업로드·프록시 이식 (Phase 5)
+//   3단계 + Drive 저장소 — Drive 업로드·프록시 이식 (Phase 5 — providers/supabase/drive.ts + api/drive, v2.9 §7)
 //
 // 동결 후 변경은 사용자 승인 + 설계서 개정을 동반한다 (CLAUDE.md §9).
 // 오류는 ProviderError(code: validation|forbidden|not_found|conflict|gone)로 던진다.
@@ -252,6 +257,8 @@ export interface DataProvider {
    * 새 버전 업로드 (§7.2). version_no 자동 증가, 파일명 규약화.
    * 상태가 requested(v1.2 첫 업로드)·changes_requested면 draft로 자동 전이(assertTransition 경유).
    * requested·draft·internal_review·changes_requested 외 상태에서는 409.
+   * v13.1(§7.2b): input.drive_link면 Drive 파일 링크 등록(루트 밖 403 · 같은 항목 중복 409) — 파일명은 Drive 이름 그대로.
+   * 실서버는 Drive가 연결돼 있으면 파일을 4MB 조각으로 행사 폴더에 올리고 input.onProgress로 진행률을 알린다.
    */
   uploadVersion(deliverableId: UUID, input: UploadVersionInput): Promise<Version>
   /**

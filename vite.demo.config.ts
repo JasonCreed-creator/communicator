@@ -22,6 +22,8 @@ export default defineConfig({
       { find: /^\.\/supabase\/authAdapter$/, replacement: fileURLToPath(new URL('./demo/stubs/supabaseStub.ts', import.meta.url)) },
       // 견적서 → 구글 스프레드시트 생성(서버 함수 호출)은 데모에 싣지 않는다 — fetch 호출부 1건(브랜드 자산) 가드 유지.
       { find: /^\.\.\/\.\.\/modules\/quote\/export\/createQuoteSpreadsheet$/, replacement: fileURLToPath(new URL('./demo/stubs/quoteGsheetStub.ts', import.meta.url)) },
+      // v2.9 Drive 연동(api/drive 호출)도 싣지 않는다 — 화면용 게이트웨이(lib/drive/driveGateway)가 mock이면 부르지 않는다.
+      { find: /^\.\/driveClient$/, replacement: fileURLToPath(new URL('./demo/stubs/driveClientStub.ts', import.meta.url)) },
     ],
   },
   plugins: [inlineBrandAssets(), react(), tailwindcss(), singleFileArtifact()],

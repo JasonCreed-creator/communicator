@@ -1,8 +1,9 @@
-import { Fragment, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react'
+import { Fragment, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import CuesheetEditor from '../components/cue/CuesheetEditor'
 import GuideBuilder from '../components/guide/GuideBuilder'
 import ScenarioBuilder from '../components/scenario/ScenarioBuilder'
+import VersionUploadCard, { UPLOAD_FORM_ID, UPLOAD_INPUT_ID } from '../components/upload/VersionUploadCard'
 import BriefCard from '../components/internal/BriefCard'
 import Card from '../components/internal/Card'
 import DdayBadge from '../components/internal/DdayBadge'
@@ -53,10 +54,7 @@ const DECISION_LABELS: Record<ApprovalDecision, string> = {
 /** 헤더 복귀 경로 — S2 보드 라우트가 있는 영역만 링크로(공통 문서는 보드가 없다) */
 const BOARD_AREAS: DeliverableArea[] = ['design', 'ops']
 
-/** 버전 업로드 폼 앵커 — 헤더·'다음 단계' 버튼이 같은 폼으로 시선을 옮긴다(상태 전이 없음) */
-const UPLOAD_FORM_ID = 'version-upload-form'
-const UPLOAD_INPUT_ID = 'version-upload-file'
-
+/** 버전 업로드 카드 앵커 — 헤더·'다음 단계' 버튼이 같은 카드로 시선을 옮긴다(상태 전이 없음) */
 function focusVersionUpload() {
   const form = document.getElementById(UPLOAD_FORM_ID)
   form?.scrollIntoView?.({ behavior: 'smooth', block: 'center' })
@@ -232,7 +230,12 @@ function ItemDetail({ itemId }: { itemId: string }) {
           ) : isBuilderDoc ? (
             <GuideBuilder deliverableId={d.id} canEdit={canEditCue} onStatusChanged={detail.reload} />
           ) : (
-            <VersionUploadForm deliverableId={d.id} canWrite={canWriteArea} onUploaded={detail.reload} />
+            <VersionUploadCard
+              deliverableId={d.id}
+              driveFolderId={d.drive_folder_id}
+              canWrite={canWriteArea}
+              onUploaded={detail.reload}
+            />
           )}
 
           <CommentThread deliverableId={d.id} comments={d.comments} memberName={memberName} onAdded={detail.reload} />
@@ -957,70 +960,6 @@ function StatusActionBar({
         {status === 'draft' && canWriteArea && <ErrorAlert message={toReview.error} />}
       </div>
     </Card>
-  )
-}
-
-// ── 버전 업로드 ───────────────────────────────────────────────────────
-function VersionUploadForm({
-  deliverableId,
-  canWrite,
-  onUploaded,
-}: {
-  deliverableId: string
-  canWrite: boolean
-  onUploaded: () => void
-}) {
-  const [file, setFile] = useState<File | null>(null)
-  const [note, setNote] = useState('')
-  const upload = useMutation(() => {
-    if (!file) throw new Error('파일을 선택하세요.')
-    return provider.uploadVersion(deliverableId, { file_name: file.name, note: note || undefined, file })
-  })
-
-  if (!canWrite) return null
-
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault()
-    if (!file) {
-      upload.setError('파일을 선택하세요.')
-      return
-    }
-    const result = await upload.run()
-    if (result) {
-      setFile(null)
-      setNote('')
-      onUploaded()
-    }
-  }
-
-  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-    setFile(e.target.files?.[0] ?? null)
-  }
-
-  return (
-    <div id={UPLOAD_FORM_ID}>
-      <Card title="버전 업로드">
-        <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-3">
-          <label className="flex flex-col gap-1 t-caption">
-            파일
-            <input id={UPLOAD_INPUT_ID} type="file" onChange={handleFileChange} className="ui-input" />
-          </label>
-          <label className="flex flex-col gap-1 t-caption">
-            노트
-            <input
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder="버전 노트(선택)"
-              className="ui-input w-64"
-            />
-          </label>
-          <button type="submit" disabled={upload.pending} className="btn btn-primary">
-            업로드
-          </button>
-        </form>
-        <ErrorAlert message={upload.error} />
-      </Card>
-    </div>
   )
 }
 
