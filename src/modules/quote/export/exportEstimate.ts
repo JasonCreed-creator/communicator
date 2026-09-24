@@ -29,7 +29,7 @@ import { amountInWordsFormula, amountInWordsKo } from "./koreanAmountFormula";
 // 사용자 명시 지시(#RULE-NO-COMPANY 예외) — 자산은 public/brand 주입, 로드 실패 시 로고 없이 출력.
 const REMEMBER_LOGO_URL = "/brand/remember-logo-offwhite.png";
 // 리멤버 직인(2026-09-10 사용자 지시 "견적서 내 (인) 위에 붙이기" → 2026-09-24 사용자 제공 직인 반영). 파일이
-// 없거나 PNG가 아니면 직인 없이 "(인)" 글자만 출력한다. 리멤버 브랜드 견적서에만 쓴다. 규격은 public/brand/README.md.
+// 없거나 PNG가 아니면 직인 없이 "(인)" 글자만 출력한다. 리멤버 브랜드 국문 견적서에만 쓴다. 규격은 public/brand/README.md.
 const REMEMBER_SEAL_URL = "/brand/remember-seal.png";
 /** 직인 렌더 크기(px, 96dpi) — 공급자 행 H열 "(인)" 중심에 앵커. 2026-09-24 사용자 선택(60·72·84 실렌더 비교):
  *  2.5행에 걸치고 테두리 글자가 읽히는 크기. A4 한 장 맞춤 인쇄 시 지름 약 12mm */
@@ -228,9 +228,9 @@ const REMEMBER_BRAND = {
   sheetName: "리멤버MICE솔루션",
   supplierKo: "㈜리멤버앤컴퍼니",
   supplierEn: "Remember & Company",
-  // 직인 자리 표식 — 공급자 행의 H열에 따로 두고 그 위에 직인 이미지를 앵커한다(리멤버 기본 레이아웃)
+  // 직인 자리 표식 — 공급자 행의 H열에 따로 두고 그 위에 직인 이미지를 앵커한다(리멤버 기본 레이아웃, 국문만 —
+  // 영문은 표식도 직인도 없다: 2026-09-24 사용자 결정)
   sealMarkKo: "(인)",
-  sealMarkEn: "(Seal)",
   addressKo: "서울시 강남구 테헤란로 134",
   addressEn: "134 Teheran-ro, Gangnam-gu, Seoul, Korea",
   filePrefix: "리멤버견적서",
@@ -652,7 +652,9 @@ export async function exportEstimate(
     // 공급자 문자열에 "(인)"이 딸려 온 화이트라벨 브랜드는 표식을 떼어 H열로 옮긴다(구 supplierKo 호환)
     const supplierRaw = String((en ? B.supplierEn : B.supplierKo) ?? "");
     const supplierName = supplierRaw.replace(/\s*\((?:인|Seal)\)\s*$/i, "").trim();
-    const sealMark = (en ? B.sealMarkEn : B.sealMarkKo) || (en ? "(Seal)" : "(인)");
+    // 영문 견적서는 직인도 "(Seal)" 표식도 두지 않는다 — 공급자 행도 다른 행처럼 G:H 병합(2026-09-24 사용자 결정:
+    // 영문 주소가 길어 직인이 끝 글자를 덮었다 → 직인 삭제 → 표식도 삭제)
+    const sealMark = en ? "" : B.sealMarkKo || "(인)";
     const SUPPLIER_ROW = 2;
     const rightInfo: [string, any][] = [
       [T.proposalDate, `${today.getFullYear()}. ${today.getMonth() + 1}. ${today.getDate()}`],
@@ -663,8 +665,8 @@ export async function exportEstimate(
     ];
     rightInfo.forEach(([label, val], i) => {
       setCell(ws, r + i, 6, label, { bold: true, bg: "FFF5F5F5", align: "center" });
-      if (i === SUPPLIER_ROW) {
-        // 공급자 행만 G·H를 나눈다 — G 상호 / H "(인)" 표식(직인 이미지가 이 칸 중심에 얹힌다)
+      if (i === SUPPLIER_ROW && sealMark) {
+        // 국문 공급자 행만 G·H를 나눈다 — G 상호 / H "(인)" 표식(직인 이미지가 이 칸 중심에 얹힌다)
         setCell(ws, r + i, 7, val);
         setCell(ws, r + i, 8, sealMark, { align: "center" });
       } else {
@@ -672,7 +674,7 @@ export async function exportEstimate(
         setCell(ws, r + i, 7, val);
       }
     });
-    stdSealRow = r + SUPPLIER_ROW;
+    stdSealRow = sealMark ? r + SUPPLIER_ROW : null; // 표식이 없으면(영문) 직인 앵커도 없다
     headerRowCount = Math.max(leftRows, rightInfo.length);
     for (let i = 0; i < headerRowCount; i++) { setCell(ws, r + i, 4, ""); setCell(ws, r + i, 5, ""); }
   }
@@ -701,6 +703,7 @@ export async function exportEstimate(
   }
   // 리멤버 기본 레이아웃 직인 — 공급자 행 H열 "(인)" 중심에 앵커. 자산 = brand.sealBase64(주입) 또는 public/brand/remember-seal.png.
   // 공개 경로 직인은 리멤버 브랜드 전용 — 다른 공급자 명의 견적서에 리멤버 직인이 찍히면 안 된다(자기 sealBase64가 있을 때만 직인)
+  // 영문 견적서는 표식이 없어 stdSealRow가 null — 직인 파일을 받지도 찍지도 않는다
   if (!B.richSupplier && stdSealRow) {
     const injected = B.sealBase64 ? String(B.sealBase64) : "";
     const sealB64 = injected

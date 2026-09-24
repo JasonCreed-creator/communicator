@@ -3,7 +3,9 @@
 //
 // 계약:
 // ① 커밋된 remember-seal.png는 정사각 투명 PNG(300px+)다 — JPG·흰 배경이면 "(인)" 글자와 행 선을 가린다
-// ② 그 파일이 공급자 행 H7 "(인)" 중심에 72px로 얹힌다(사용자 선택 72px — 60/72/84 실렌더 비교)
+// ② 그 파일이 국문 견적서 공급자 행 H7 "(인)" 중심에 72px로 얹힌다(사용자 선택 72px — 60/72/84 실렌더 비교).
+//    영문 견적서에는 직인도 "(Seal)" 표식도 없다 — 공급자 행은 다른 행처럼 G:H 병합(2026-09-24 사용자 결정: 영문 주소가 길어
+//    직인이 끝 글자를 덮었다 → 직인 삭제 → 표식도 삭제)
 // ③ 없는 자산 경로에 호스트가 index.html을 200으로 돌려줘도(Vercel SPA rewrite) 이미지로 넣지 않는다
 //    — 2026-09-24 실측: 운영 사이트에서 직인 파일이 없을 때 모든 견적서에 HTML 917B가 PNG로 박혀 나갔다
 // ④ 리멤버가 아닌 브랜드 견적서에는 리멤버 직인을 쓰지 않는다(자기 sealBase64가 있을 때만 직인)
@@ -113,11 +115,14 @@ describe("견적서 직인 삽입 — 리멤버 기본 레이아웃", () => {
     expect(media.buffer.byteLength).toBe(seal.byteLength);
   });
 
-  it("영문 견적서도 '(Seal)' 위에 같은 직인이 얹힌다", async () => {
-    stubAssets({ [SEAL_URL]: { status: 200, body: new Uint8Array(readFileSync(SEAL_PATH)) } });
+  it("영문 견적서에는 직인도 '(Seal)' 표식도 없다 — 공급자 행은 G:H 병합, 직인 파일을 받지도 않는다", async () => {
+    const calls = stubAssets({ [SEAL_URL]: { status: 200, body: new Uint8Array(readFileSync(SEAL_PATH)) } });
     const { ws } = await exportFresh(CFG, { lang: "en" });
-    expect(ws.getCell("H7").value).toBe("(Seal)");
-    expect(ws.getImages()).toHaveLength(1);
+    expect(String(ws.getCell("G7").value)).toBe("Remember & Company");
+    expect(ws.getCell("G7").isMerged).toBe(true);
+    expect(ws.getCell("H7").value).not.toBe("(Seal)");
+    expect(ws.getImages()).toHaveLength(0);
+    expect(calls).not.toContain(SEAL_URL);
   });
 
   it("없는 자산에 호스트가 index.html(200)을 돌려줘도 이미지로 넣지 않는다 — SPA 폴백", async () => {
