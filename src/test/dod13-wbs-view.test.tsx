@@ -3,10 +3,22 @@
 // 전개된 날짜 표기·pm 전용 템플릿 재전개 버튼 (CLAUDE.md v1.4 §4 3.7c).
 import { cleanup, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { mockProvider, renderRoute } from './testUtils'
 
 afterEach(cleanup)
+
+// 샘플 행사 WBS는 event_date '2026-10-22' 고정으로 전개된다 — 실제 날짜가 앞쪽 태스크 마감을 넘기면 조작하지 않은 태스크도
+// '지연'이 되어 간트 바의 역할 컬러 기대가 어긋난다(2026-09-24 실측 — origin/main에서도 같은 실패). partner-board.test와 같은 방식으로
+// 시계를 픽스처 가정일에 고정한다. Date만 가짜로 — 타이머는 실제여야 findBy·userEvent 대기가 산다.
+const FIXTURE_TODAY = new Date('2026-08-27T09:00:00')
+beforeAll(() => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(FIXTURE_TODAY)
+})
+afterAll(() => {
+  vi.useRealTimers()
+})
 
 // SchedulePage에는 마일스톤 영역 필터도 '전체' 라벨을 쓰므로, WBS 카드로 스코프를 좁혀야 모호성이 없다.
 function wbsCard(): HTMLElement {

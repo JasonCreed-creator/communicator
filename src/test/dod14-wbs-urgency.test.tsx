@@ -4,15 +4,21 @@
 // (CLAUDE.md v1.4 §4 3.7c DoD-14).
 import { cleanup, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { addDays, toIsoDate } from '../lib/wbs'
 import { mockProvider, renderRoute } from './testUtils'
 
 afterEach(cleanup)
 
-const today = toIsoDate(new Date())
+// 샘플 행사 WBS는 event_date '2026-10-22' 고정으로 전개된다 — 실제 날짜가 앞쪽 태스크 마감을 넘기면 조작하지 않은 태스크도
+// '지연'이 되어 홈 지연·임박 큐 건수(1건)가 어긋난다(2026-09-24 실측 — origin/main에서도 같은 실패). partner-board.test와 같은 방식으로
+// 시계를 픽스처 가정일에 고정한다. Date만 가짜로 — 타이머는 실제여야 findBy·userEvent 대기가 산다.
+const FIXTURE_TODAY = new Date('2026-08-27T09:00:00')
+const today = toIsoDate(FIXTURE_TODAY)
 
 beforeAll(async () => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(FIXTURE_TODAY)
   const p = mockProvider()
   p.switchUser('usr-pm')
   const tasks = await p.listWbsTasks('prj-stc26')
@@ -20,6 +26,9 @@ beforeAll(async () => {
   // 6.5 → 어제 마감(지연), 6.6 → 오늘 마감(임박)
   await p.updateWbsTask(byCode('6.5'), { end_date: addDays(today, -1) })
   await p.updateWbsTask(byCode('6.6'), { end_date: today })
+})
+afterAll(() => {
+  vi.useRealTimers()
 })
 
 describe('DoD-14 WBS 지연/임박 UI 반영', () => {
