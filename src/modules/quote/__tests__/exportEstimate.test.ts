@@ -508,12 +508,19 @@ describe("exportEstimate — 리멤버 기본 레이아웃 직인 (인)", () => 
     // H열(0-based 7) — 앵커는 공급자 행(7행) 중심에 오도록 한 행 위(6행, 0-based 5)에서 시작
     expect(range.tl.nativeCol).toBe(7);
     expect(range.tl.nativeRow).toBe(5);
-    expect(range.ext).toMatchObject({ width: 60, height: 60 });
+    expect(range.ext).toMatchObject({ width: 72, height: 72 });
   });
 
-  it("영문 견적서는 '(Seal)' 표식", async () => {
+  it("영문 견적서는 직인 표식이 없다 — 공급자 행도 다른 행처럼 G:H 병합", async () => {
     const { ws } = await buildSheet(SAMPLE_CFG, { lang: "en" });
-    expect(ws.getCell("H7").value).toBe("(Seal)");
     expect(String(ws.getCell("G7").value)).toBe("Remember & Company");
+    expect(ws.getCell("G7").isMerged).toBe(true);
+    expect(collectTexts(ws).some((t) => /\((?:Seal|인)\)/.test(t))).toBe(false);
+  });
+
+  it("영문 견적서는 sealBase64가 주어져도 직인을 찍지 않는다", async () => {
+    const { ws } = await buildSheet(SAMPLE_CFG, { lang: "en", brand: { sealBase64: TINY_PNG } });
+    expect(ws.getCell("G7").isMerged).toBe(true);
+    expect(ws.getImages().length).toBe(0);
   });
 });

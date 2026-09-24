@@ -109,7 +109,8 @@ for (const api of ['new WebSocket', 'new Worker(', 'serviceWorker', 'sendBeacon'
   ;(got === 0 ? ok : bad)(`네트워크 API ${api}`, `${got}개`)
 }
 
-// ── 5. 브랜드 PNG 인라인 (BrandLogo 2 + exportEstimate 1) ──
+// ── 5. 브랜드 PNG 인라인 (BrandLogo 2 + exportEstimate 로고 1) ──
+// 직인은 싣지 않는다(demo/plugins.ts — 링크 공유 페이지에 실직인 원본이 퍼진다). 4개면 직인이 샌 것이다.
 const pngs = count('data:image/png;base64,')
 ;(pngs === 3 ? ok : bad)('브랜드 PNG data: URI', `${pngs}개 (기대 3)`)
 

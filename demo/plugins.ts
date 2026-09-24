@@ -1,7 +1,7 @@
 // 데모 아티팩트 전용 Vite 플러그인 2종 — vite.demo.config.ts에서만 쓴다.
 // 앱 소스(src/)는 건드리지 않는다: 브랜드 경로 치환은 빌드 타임 transform으로,
 // 단일 파일 조립은 generateBundle에서 수행한다.
-import { existsSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Plugin } from 'vite'
@@ -24,8 +24,9 @@ function pngDataUri(relPath: string): string {
  * 대상 4곳: BrandLogo.tsx(black/offwhite), exportEstimate.ts(REMEMBER_LOGO_URL·REMEMBER_SEAL_URL).
  * exportEstimate의 자산 fetch(loadAssetBase64)는 그대로 둔다 — data: URI는 브라우저 fetch가
  * 지원하고 외부 오리진이 아니므로 DoD 22("외부 http(s) 호출 0건")의 의미도 그대로 유지된다.
- * 직인(remember-seal.png)은 사용자가 파일을 넣기 전까지 없을 수 있다 — 없으면 빈 data: URI로 치환해
- * exportEstimate가 "자산 없음"으로 읽게 한다(0바이트 → 직인 미삽입).
+ * 직인(remember-seal.png)은 파일이 있어도 **싣지 않는다**(2026-09-24) — 데모 아티팩트는 링크로 공유되는
+ * 페이지이고 파일 내려받기가 막혀 있어 직인이 쓰일 곳이 없다. 실직인 원본만 퍼질 뿐이라 빈 data: URI로
+ * 치환해 exportEstimate가 "자산 없음"으로 읽게 한다(0바이트 → 직인 미삽입). 치환 건수(4건)는 그대로다.
  */
 export function inlineBrandAssets(): Plugin {
   let table: Array<[string, string]> = []
@@ -39,7 +40,7 @@ export function inlineBrandAssets(): Plugin {
       table = [
         ['/brand/remember-logo-black.png', pngDataUri('public/brand/remember-logo-black.png')],
         ['/brand/remember-logo-offwhite.png', pngDataUri('public/brand/remember-logo-offwhite.png')],
-        ['/brand/remember-seal.png', existsSync(resolve(REPO_ROOT, 'public/brand/remember-seal.png')) ? pngDataUri('public/brand/remember-seal.png') : 'data:,'],
+        ['/brand/remember-seal.png', 'data:,'],
       ]
     },
     transform(code, id) {

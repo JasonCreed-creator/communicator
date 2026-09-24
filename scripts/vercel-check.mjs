@@ -118,6 +118,23 @@ if (assetPath) {
   )
 }
 
+// 견적서가 fetch하는 브랜드 자산(로고·직인)은 실제 PNG여야 한다. 파일이 빠지면 rewrite가 index.html을 200으로
+// 돌려주고 — 2026-09-24 운영 실측: 직인 파일이 없던 동안 이 HTML이 견적서에 PNG로 박혀 나갔다.
+const PNG_SIG = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
+for (const [path, label] of [
+  ['/brand/remember-logo-offwhite.png', '견적서 로고'],
+  ['/brand/remember-seal.png', '견적서 직인'],
+]) {
+  const res = await fetch(`${ORIGIN}${path}`)
+  const bytes = new Uint8Array(await res.arrayBuffer())
+  const isPng = PNG_SIG.every((b, i) => bytes[i] === b)
+  check(
+    res.status === 200 && (res.headers.get('content-type') ?? '').startsWith('image/png') && isPng,
+    `${label} ${path}이 PNG로 서빙된다(SPA 폴백 아님)`,
+    `${res.status} ${res.headers.get('content-type') ?? ''} ${bytes.length}B`,
+  )
+}
+
 // ── C. 보안 헤더 ──
 const root = await fetch(`${ORIGIN}/`)
 for (const [key, want] of [
