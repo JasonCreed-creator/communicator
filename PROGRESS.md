@@ -16,7 +16,7 @@
   **링크 등록**(루트 안만 — 행사 폴더 안 참조 · 루트 안 다른 곳 복사 · 밖 403) · **서명 URL 스트림**(PDF 외 sandbox CSP·100MB·Range·구글 문서 PDF) · **인박스 스캔**(폴더 목록 비교 —
   Changes API **이탈**) · **§7.5 2단계 확정**(06 복사 성공 후에만 final, 3회 실패 → approved 유지 → 스캔 재시도) · 행사 삭제 → 폴더 `99_archive` 이동(4.1 이탈 2 해소) ·
   견적 시트 = 같은 연결로 `00_견적서`. **permissions 호출 코드 0건**.
-  ④ **SQL** `20260924000100_drive.sql`(18번째): `upload_version` 5인자(4인자 drop) · `drive_upload_check` · `drive_project_folder`(admin) · service 전용 8함수 · `client_decide` 2단계 ·
+  ④ **SQL** `20260924000100_drive.sql`(18번째): `upload_version` 5인자(4인자 drop) · `drive_upload_check` · `drive_project_folder`(admin) · service 전용 9함수 · `client_decide` 2단계 ·
   `drive_connection`(RLS·정책 없음) · `app_config.drive_enabled`. 로컬 Postgres **123/123**(기준 95 + Drive 28).
   ⑤ **화면**: S3 **버전 업로드 카드**(끌어놓기 — 폴더 하위까지 · 파일/폴더 선택 · 이름순 목록 → 파일마다 버전 · 진행률 · **Drive 링크로 등록** · Drive에서 열기) ·
   행사 설정 ③ **Drive 카드**(연결 상태·연결하기/해제(admin)·행사 폴더 만들기·기존 폴더 지정(pm)·표준 트리·OAuth 복귀 문구) · 홈 인박스 **"Drive 지금 확인"**.
