@@ -7,7 +7,7 @@
 //  ④ 일자별 막대에 범례 + 4점 축 라벨 + 최고점 해설
 //  ⑤ 견적 총액 열 = .ui-num(우측정렬 tabular)
 //  ⑥ 견적 요약에 구성 스택 막대 — **accent 3단 + rest(중립)**, 4번째 그룹은 램프가 아니라 rest
-//  ⑦ '이전 버전 대비' 블록 — 증감액·증감률 + 사유는 데이터에 없으므로 '미기재'
+//  ⑦ '이전 버전 대비' 블록 — PR-6(§7-2.10): 한 문장 'vN보다 …원 줄었습니다 (−x%)' + '바뀐 것'(사실만) · 사유는 지어내지 않는다
 import { cleanup, render, screen, within } from '@testing-library/react'
 import { MemoryRouter, Outlet, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -170,21 +170,22 @@ describe('S-2 견적 — 표 정본 · 구성 막대 · 이전 버전 대비', (
     }
   })
 
-  it('⑦ 이전 버전 대비 — 증감액·증감률이 뜨고 사유는 지어내지 않고 미기재다', async () => {
+  it('⑦ 이전 버전 대비 — 한 문장(vN보다 …원 줄었/늘었습니다 (±x%)) + 바뀐 것(사실만) · 사유는 지어내지 않는다', async () => {
     renderAt('/quotes')
     const block = await screen.findByTestId('quote-version-delta')
 
     // 픽스처 기본 선택 = 확정(v3) → 직전은 v2
-    expect(within(block).getByText('v2 → v3')).toBeTruthy()
     expect(within(block).getByTestId('quote-delta-amount').textContent).toMatch(
-      /^[+−±][\d,]+원 \([+−±]\d+\.\d%\)$/,
+      /^v2보다 [\d,]+원 (줄었|늘었)습니다 \([+−]\d+\.\d%\)$/,
     )
-    // 사유 필드는 스키마에 없다 — '미기재'
-    expect(within(block).getByTestId('quote-delta-reason').textContent).toBe('미기재')
     // 변경점은 입력 스냅숏의 사실 차이만(게런티·추가옵션 — 추정 아님)
     expect(within(block).getByTestId('quote-delta-changes').textContent).toMatch(
-      /게런티 \d+ → \d+명 · 추가옵션 \d+ → \d+종/,
+      /^바뀐 것: .*게런티 \d+ → \d+명 · 추가옵션 \d+ → \d+종/,
     )
+    // 변경 사유 필드는 스키마에 없다 — 사유 문구를 지어내지 않는다(캔버스의 '이유 적기'는 저장할 곳이 없어 미구현)
+    expect(block.textContent).not.toMatch(/이유|사유/)
+    // 증감은 좋고 나쁨이 아니라 사실 — 색을 입히지 않는다(빨강은 지연 전용 · §7-2)
+    expect(block.innerHTML).not.toMatch(/text-negative|text-positive/)
   })
 
   it('⑦-b previousVersion은 같은 계열(같은 행사 연결) 안에서만 직전 버전을 찾는다', async () => {

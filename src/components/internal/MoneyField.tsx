@@ -48,10 +48,6 @@ export default function MoneyField({
   placeholder?: string
   inputClassName?: string
 }) {
-  // 편집 중에만 draft가 산다 — blur하면 null로 돌아가 저장 값에서 다시 포맷한다
-  const [draft, setDraft] = useState<string | null>(null)
-
-  const display = draft ?? formatKrw(value)
   // 값이 있으면 에코가 힌트 줄을 쓴다(오류가 있으면 Field가 둘 다 밀어낸다)
   const support =
     echo === null || value == null
@@ -60,25 +56,63 @@ export default function MoneyField({
 
   return (
     <Field id={id} label={label} required={required} hint={support} error={error} align="right" span={span}>
-      <input
+      <MoneyInput
         id={id}
-        type="text"
-        inputMode="decimal"
-        value={display}
+        value={value}
+        onChange={onChange}
         placeholder={placeholder}
         disabled={disabled}
-        aria-label={ariaLabel ?? label}
-        aria-invalid={error ? true : undefined}
-        onFocus={() => setDraft(value == null ? '' : String(value))}
-        onChange={(e) => {
-          setDraft(e.target.value)
-          onChange(parseKrw(e.target.value))
-        }}
-        onBlur={() => setDraft(null)}
-        className={`ui-input ui-input-num${error ? ' ui-input-error' : ''}${
-          inputClassName ? ` ${inputClassName}` : ''
-        }`}
+        ariaLabel={ariaLabel ?? label}
+        invalid={!!error}
+        className={inputClassName}
       />
     </Field>
+  )
+}
+
+/**
+ * 금액 입력 칸만 — 라벨·힌트 줄 없이 한 줄 행 안에 놓을 때(예: 견적 옵션의 부스 단가 `× 단가 [ ] 원`).
+ * 표시·편집·저장 규칙은 MoneyField와 같다(천단위 · 편집 중 raw · 빈 칸 = null). 접근성 이름은 ariaLabel로 준다.
+ */
+export function MoneyInput({
+  id,
+  value,
+  onChange,
+  placeholder,
+  disabled,
+  ariaLabel,
+  invalid,
+  className,
+}: {
+  id?: string
+  value: number | null
+  onChange: (next: number | null) => void
+  placeholder?: string
+  disabled?: boolean
+  ariaLabel: string
+  invalid?: boolean
+  className?: string
+}) {
+  // 편집 중에만 draft가 산다 — blur하면 null로 돌아가 저장 값에서 다시 포맷한다
+  const [draft, setDraft] = useState<string | null>(null)
+  const display = draft ?? formatKrw(value)
+  return (
+    <input
+      id={id}
+      type="text"
+      inputMode="decimal"
+      value={display}
+      placeholder={placeholder}
+      disabled={disabled}
+      aria-label={ariaLabel}
+      aria-invalid={invalid ? true : undefined}
+      onFocus={() => setDraft(value == null ? '' : String(value))}
+      onChange={(e) => {
+        setDraft(e.target.value)
+        onChange(parseKrw(e.target.value))
+      }}
+      onBlur={() => setDraft(null)}
+      className={`ui-input ui-input-num${invalid ? ' ui-input-error' : ''}${className ? ` ${className}` : ''}`}
+    />
   )
 }

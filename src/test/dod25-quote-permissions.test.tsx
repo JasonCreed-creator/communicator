@@ -47,9 +47,10 @@ describe('DoD-25 (a) app_role 게이트', () => {
     provider.setAppRole('admin')
     renderRoute('/quotes')
     await screen.findByRole('heading', { name: '견적' })
-    // 픽스처: ① 연결 3버전 + 미연결 1건 — 그룹 캡션 렌더
-    await screen.findByText(/행사 연결 · 샘플 테크 컨퍼런스 2026/)
-    await screen.findByText(/견적만 있음 · 행사 미생성/)
+    // 픽스처: ① 연결 3버전 + 미연결 1건 — 묶음 제목(행사명 · '행사 없이 견적만') + 캡션 렌더(PR-6 §7-2.10)
+    await screen.findByRole('heading', { name: '샘플 테크 컨퍼런스 2026' })
+    await screen.findByText('행사 연결 · 버전 3개')
+    await screen.findByRole('heading', { name: '행사 없이 견적만' })
   })
 })
 

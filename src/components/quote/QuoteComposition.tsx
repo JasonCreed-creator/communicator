@@ -33,8 +33,8 @@ export function compositionGroups(b: QuoteBreakdown): CompositionGroups {
 export default function QuoteComposition({ breakdown }: { breakdown: QuoteBreakdown }) {
   const g = compositionGroups(breakdown)
   return (
+    // PR-6(§7-2.10) — 요약 패널 머리('선택한 견적')가 무엇의 구성인지 말하므로 '구성' 캡션은 뺐다
     <div data-testid="quote-composition">
-      <p className="t-caption mb-2">구성</p>
       <StackedBar
         segments={[
           { label: '공간·시공', value: g.space },

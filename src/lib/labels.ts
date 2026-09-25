@@ -271,6 +271,11 @@ export function objectParticle(n: number): '을' | '를' {
   return d !== 0 && [2, 4, 5, 9].includes(d) ? '를' : '을'
 }
 
+/** 숫자 뒤 주격 조사 — objectParticle과 같은 받침 규칙. 예: v2가 · v3이 · v10이 */
+export function subjectParticle(n: number): '이' | '가' {
+  return objectParticle(n) === '를' ? '가' : '이'
+}
+
 /** 요청·발송 뒤 지난 날수 — 시각 기준(음수 방지). 컨펌·파트너 제출처럼 '보낸 지 n일'에 쓴다 */
 export function waitingDays(requestedAt: string, now: Date = new Date()): number {
   const diff = Math.floor((now.getTime() - new Date(requestedAt).getTime()) / 86_400_000)

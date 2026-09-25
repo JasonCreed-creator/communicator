@@ -1,9 +1,10 @@
-// '이전 버전 대비' 블록 — 3.17b 시안 정렬('랜딩보드 · 견적.dc.html' 선택 버전 요약).
-// 증감액 · 증감률 · 사유를 한 자리에 남긴다.
+// '이전 버전 대비' 블록 — 디자인지시서 v1.4 §7-2.10(PR-6 · 캔버스 견적 목록 요약 패널).
+// 한 문장으로 읽힌다: 'v2보다 1,750,000원 줄었습니다 (−1.3%)' + '바뀐 것: 게런티 100 → 80명 · 추가옵션 2 → 3종'.
 //
-// ⚠ 사유는 스키마에 없다(quotes에 변경 사유 필드가 없음). **지어내지 않고 '미기재'로 표시**한다.
-//    대신 입력 스냅숏(input)에서 사실로 확인되는 변경점(인원·베뉴·모객 포함 여부)만 덧붙인다 —
-//    이건 추정이 아니라 두 버전의 저장값 차이다.
+// ⚠ 바꾼 이유는 스키마에 없다(quotes에 변경 사유 필드가 없음) — 지어내지 않는다. 캔버스의 '이유 적기'는
+//    저장할 곳이 없어 구현하지 않았고, 이유를 말하는 줄도 두지 않는다(할 수 있는 동작이 없는 안내라서).
+//    대신 입력 스냅숏(input)에서 사실로 확인되는 변경점만 적는다 — 추정이 아니라 두 버전의 저장값 차이다.
+//    증감은 좋고 나쁨이 아니라 사실이라 색을 입히지 않는다(빨강은 지연 전용 — §7-2).
 import { fmtWon } from './quoteFormState'
 import { venueDisplayName } from '../../modules/quote/engine/quoteInput'
 import type { Quote } from '../../types/entities'
@@ -40,6 +41,17 @@ export function inputChanges(prev: Quote, cur: Quote): string[] {
   return out
 }
 
+/** 증감 문장 — 'v2보다 1,750,000원 줄었습니다' · 'v2보다 …원 늘었습니다' · '금액은 v2 그대로입니다' */
+export function deltaSentence(prev: Quote, cur: Quote): { text: string; rate: string | null } {
+  const diff = cur.total_amount - prev.total_amount
+  if (diff === 0) return { text: `금액은 v${prev.version} 그대로입니다`, rate: null }
+  const rate = prev.total_amount === 0 ? null : (diff / prev.total_amount) * 100
+  return {
+    text: `v${prev.version}보다 ${fmtWon(Math.abs(diff), false)} ${diff < 0 ? '줄었습니다' : '늘었습니다'}`,
+    rate: rate === null ? null : `(${diff < 0 ? '−' : '+'}${Math.abs(rate).toFixed(1)}%)`,
+  }
+}
+
 export default function QuoteVersionDelta({
   current,
   previous,
@@ -49,41 +61,32 @@ export default function QuoteVersionDelta({
 }) {
   if (!previous) {
     return (
-      <div className="rounded-md border border-border bg-canvas px-3.5 py-3" data-testid="quote-version-delta">
-        <p className="t-caption">이전 버전 대비</p>
-        <p className="mt-1.5 text-xs text-ink-cap">첫 버전입니다 — 비교할 이전 버전이 없습니다.</p>
+      <div className="flex flex-col gap-1 rounded-[10px] bg-canvas px-3.5 py-3" data-testid="quote-version-delta">
+        <p className="text-sm font-semibold text-ink">첫 버전입니다</p>
+        <p className="t-caption">비교할 이전 버전이 없습니다.</p>
       </div>
     )
   }
 
-  const diff = current.total_amount - previous.total_amount
-  const rate = previous.total_amount === 0 ? null : (diff / previous.total_amount) * 100
-  const sign = diff > 0 ? '+' : diff < 0 ? '−' : '±'
-  // 증감 방향은 부호 글리프로 먼저 읽히게 하고(색만으로 구분 금지) 색은 보조로만 쓴다
-  const tone = diff > 0 ? 'text-positive' : diff < 0 ? 'text-negative' : 'text-ink-sub'
+  const { text, rate } = deltaSentence(previous, current)
   const changes = inputChanges(previous, current)
 
   return (
-    <div className="rounded-md border border-border bg-canvas px-3.5 py-3" data-testid="quote-version-delta">
-      <p className="t-caption">이전 버전 대비</p>
-      <div className="mt-1.5 flex justify-between gap-3 text-[13px]">
-        <span className="text-ink-sub">
-          v{previous.version} → v{current.version}
-        </span>
-        <span className={`font-semibold ${tone}`} data-testid="quote-delta-amount">
-          {sign}
-          {fmtWon(Math.abs(diff), false)}
-          {rate !== null && ` (${sign}${Math.abs(rate).toFixed(1)}%)`}
-        </span>
-      </div>
+    <div className="flex flex-col gap-1 rounded-[10px] bg-canvas px-3.5 py-3" data-testid="quote-version-delta">
+      <p className="text-sm font-semibold text-ink" data-testid="quote-delta-amount">
+        {text}
+        {rate && (
+          <>
+            {' '}
+            <span className="font-medium text-ink-sub">{rate}</span>
+          </>
+        )}
+      </p>
       {changes.length > 0 && (
-        <p className="mt-1.5 text-[11px] leading-relaxed text-ink-cap" data-testid="quote-delta-changes">
-          변경점 {changes.join(' · ')}
+        <p className="t-caption text-ink-sub" data-testid="quote-delta-changes">
+          바뀐 것: {changes.join(' · ')}
         </p>
       )}
-      <p className="mt-1 text-[11px] leading-relaxed text-ink-cap">
-        사유 <span data-testid="quote-delta-reason">미기재</span>
-      </p>
     </div>
   )
 }

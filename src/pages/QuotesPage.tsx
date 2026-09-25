@@ -1,38 +1,161 @@
-// S-2 견적 목록 (§10) — 좌: 견적 버전 표(버전·인원·베뉴·모객·총액·상태) / 우: 선택 버전 요약.
-// 상단: Excel 내려받기 · 구글 시트로 만들기 · ＋ 새 버전 · ＋ 새 견적. 금액은 이 화면(와 Excel·구글 시트)에만 — 접근 = admin·sales.
+// 견적 목록 — 디자인지시서 v1.4 §7-2.10(PR-6 · 캔버스 '견적 목록 — 동작은 고른 견적 옆으로').
+// 좌: 행사별 버전 표(행사 연결 묶음 → 행사 없이 견적만) / 우 380: 고른 견적 요약 + 그 견적에 대한 동작.
 //
-// 3.17b 시안 정렬('랜딩보드 · 견적.dc.html'):
-//  · 버전 표를 **표 정본**(.ui-table + .ui-th)으로 — 44 고정·zebra·스티키 첫 열,
-//    총액 열은 .ui-num(우측정렬 tabular)로 세워 버전 간 금액 비교가 세로로 되게 한다.
-//  · 상태 pill을 **배지 정본**(LevelBadge · rounded-full · 12/500)으로 통일.
-//  · 요약 8행 **위에 구성 스택 막대**, 아래에 **'이전 버전 대비'** 블록.
+//  · 머리 = '견적서 가져오기'(ghost) + '＋ 새 견적'(채운 버튼 1개) — 고른 견적에만 걸리는 동작
+//    (Excel·구글 시트·새 버전으로 고치기)은 머리에서 요약 패널 아래로 옮겼다(무엇에 대한 동작인지 옆에서 읽힌다).
+//  · 표 = 표 정본 6열 고정 폭(버전 76 · 인원 72 · 베뉴 · 모객 56 · 총액 156 · 상태 84), 최신 버전 위.
+//    고른 행 = accent-tint 면 + 첫 칸 3px accent 줄. 확정본은 버전 옆 자물쇠(이모지 대신 선 아이콘).
+//  · 요약 = 제목 · 구성 막대 · 8행 · 합계 3줄 · 이전 버전 대비(바뀐 것 — 사실만) · 동작.
+// 금액은 이 화면(와 Excel·구글 시트)에만 — 접근 = admin·sales.
 // ⚠ 엔진 상수·산식은 손대지 않는다 — 이 화면은 표시 계층만 바꾼다(DoD 21·22).
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import EmptyState from '../components/internal/EmptyState'
 import LoadFailedState from '../components/internal/LoadFailedState'
 import PageHeader from '../components/internal/PageHeader'
-import SortableTh, { type SortDirection } from '../components/internal/SortableTh'
 import { LevelBadge } from '../components/internal/StatusBadge'
 import TableSkeleton from '../components/internal/TableSkeleton'
 import QuoteComposition from '../components/quote/QuoteComposition'
 import QuoteGate from '../components/quote/QuoteGate'
+import QuoteSheetResultCard from '../components/quote/QuoteSheetResultCard'
 import QuoteVersionDelta, { previousVersion } from '../components/quote/QuoteVersionDelta'
+import { ActionIcon, LockMark } from '../components/quote/quoteIcons'
 import { fmtWon } from '../components/quote/quoteFormState'
 import { QUOTE_STATUS_LEVEL } from '../components/quote/quoteStatus'
-import QuoteSheetResultCard from '../components/quote/QuoteSheetResultCard'
-import QUOTE_STR from '../components/quote/quoteStrings'
+import QUOTE_STR, { type QuoteStrings } from '../components/quote/quoteStrings'
 import { useQuoteSpreadsheet } from '../components/quote/useQuoteSpreadsheet'
 import { useProject } from '../context/ProjectContext'
 import { useAsync } from '../hooks/useAsync'
+import { subjectParticle } from '../lib/labels'
 import { venueDisplayName } from '../modules/quote/engine/quoteInput'
+import type { QuoteSpreadsheetResult } from '../modules/quote/export/createQuoteSpreadsheet'
 import { saveQuoteFile } from '../modules/quote/export/saveQuoteFile'
 import { getDataProvider } from '../providers'
 import type { Quote } from '../types/entities'
 
 const provider = getDataProvider()
 
-type SortKey = 'version' | 'total'
+const byVersionDesc = (a: Quote, b: Quote) => b.version - a.version
+
+function venueOf(q: Quote, t: QuoteStrings): string {
+  return q.input.selected_venue ? venueDisplayName(q.input.selected_venue) : t.tbd
+}
+
+/** 행사 하나(또는 '행사 없이 견적만')의 버전 표 카드 */
+function QuoteGroupCard({
+  title,
+  caption,
+  rows,
+  selectedId,
+  onSelect,
+  onGoProject,
+  t,
+}: {
+  title: string
+  caption: string
+  rows: Quote[]
+  selectedId: string | null
+  onSelect: (id: string) => void
+  onGoProject?: () => void
+  t: QuoteStrings
+}) {
+  return (
+    <section className="ui-card overflow-hidden" aria-label={title}>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-3.5">
+        <div className="flex min-w-0 flex-wrap items-baseline gap-x-2.5 gap-y-1">
+          <h2 className="t-card-title">{title}</h2>
+          <span className="t-caption">{caption}</span>
+        </div>
+        {onGoProject && (
+          <button type="button" onClick={onGoProject} className="text-[13px] font-medium text-accent-deep hover:underline">
+            {t.listGoProject}
+          </button>
+        )}
+      </div>
+      <div className="overflow-x-auto">
+        <table className="ui-table min-w-[600px] table-fixed text-sm">
+          <colgroup>
+            <col className="w-[76px]" />
+            <col className="w-[72px]" />
+            <col />
+            <col className="w-[56px]" />
+            <col className="w-[156px]" />
+            <col className="w-[84px]" />
+          </colgroup>
+          <thead>
+            <tr>
+              <th className="ui-th">{t.listColVersion}</th>
+              <th className="ui-th">{t.listColHeadcount}</th>
+              <th className="ui-th">{t.listColVenue}</th>
+              <th className="ui-th">{t.listColLeads}</th>
+              {/* 금액 열 — 우측정렬 tabular(.ui-num) */}
+              <th className="ui-th ui-num text-right">{t.listColTotal}</th>
+              <th className="ui-th">{t.listColStatus}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((q) => {
+              const isSel = q.id === selectedId
+              const venue = venueOf(q, t)
+              return (
+                <tr
+                  key={q.id}
+                  data-testid={`quote-row-${q.id}`}
+                  data-selected={isSel || undefined}
+                  onClick={() => onSelect(q.id)}
+                  className="cursor-pointer"
+                  // 고른 행 = accent-tint 면 — 스티키 첫 열이 background:inherit라 tr에 인라인으로 건다
+                  style={isSel ? { background: 'var(--accent-tint)' } : undefined}
+                >
+                  <td
+                    className="font-semibold text-ink"
+                    style={{ boxShadow: `inset 3px 0 0 ${isSel ? 'var(--accent)' : 'transparent'}` }}
+                  >
+                    <span className="inline-flex items-center gap-1.5">
+                      {/* 키보드로 고르는 자리 — 행 누르기와 같은 동작 */}
+                      <button
+                        type="button"
+                        aria-pressed={isSel}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onSelect(q.id)
+                        }}
+                        className="font-semibold text-ink hover:underline"
+                      >
+                        v{q.version}
+                      </button>
+                      {q.is_final && <LockMark />}
+                    </span>
+                  </td>
+                  <td className="text-ink">
+                    {q.input.headcount}
+                    {t.pax}
+                  </td>
+                  {/* …처리 — 잘린 값은 title로 전체 확인(§05 조건 2) */}
+                  <td className="text-ink-sub" title={venue}>
+                    <span className="flex min-w-0 items-center gap-1.5">
+                      {/* v2.4 §22.4 — 가져온 견적은 목록에서 바로 구분된다(DoD 34). 버전 칸이 좁아 베뉴 앞에 둔다 */}
+                      {q.source === 'imported' && <LevelBadge level="progress" label="임포트" className="shrink-0" />}
+                      <span className="truncate">{venue}</span>
+                    </span>
+                  </td>
+                  <td className="text-ink-sub">{q.input.include_leads ? t.listLeadsOn : t.listLeadsOff}</td>
+                  <td className="ui-num font-semibold text-ink">{fmtWon(q.total_amount, false)}</td>
+                  <td>
+                    <LevelBadge
+                      level={QUOTE_STATUS_LEVEL[q.status] ?? 'neutral'}
+                      label={t.statusLabels[q.status] ?? q.status}
+                    />
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  )
+}
 
 function QuotesBody() {
   const t = QUOTE_STR.ko
@@ -45,24 +168,13 @@ function QuotesBody() {
   const [actionError, setActionError] = useState<string | null>(null)
   const [downloading, setDownloading] = useState(false)
   const gsheet = useQuoteSpreadsheet()
-  // 기본 정렬 = 최신 버전 위로(시안의 활성 화살표 ↓)
-  const [sortKey, setSortKey] = useState<SortKey>('version')
-  const [sortDir, setSortDir] = useState<SortDirection>('desc')
-
-  const toggleSort = (key: SortKey) => {
-    if (key === sortKey) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
-    else {
-      setSortKey(key)
-      setSortDir('desc')
-    }
-  }
 
   const selected: Quote | null = useMemo(() => {
     if (quotes.length === 0) return null
     return quotes.find((q) => q.id === selectedId) ?? quotes.find((q) => q.is_final) ?? quotes[quotes.length - 1]
   }, [quotes, selectedId])
 
-  // 그룹: 행사 연결(프로젝트별) → 견적만 있음
+  // 묶음: 행사 연결(행사별) → 행사 없이 견적만. 묶음 안은 최신 버전이 위
   const groups = useMemo(() => {
     const linked = new Map<string, Quote[]>()
     const unlinked: Quote[] = []
@@ -75,7 +187,10 @@ function QuotesBody() {
         unlinked.push(q)
       }
     }
-    return { linked, unlinked }
+    return {
+      linked: [...linked.entries()].map(([projectId, rows]) => [projectId, [...rows].sort(byVersionDesc)] as const),
+      unlinked: [...unlinked].sort(byVersionDesc),
+    }
   }, [quotes])
 
   const projectName = (id: string) => summaries.find((s) => s.id === id)?.name ?? id
@@ -104,86 +219,6 @@ function QuotesBody() {
     }
   }
 
-  const sortRows = (rows: Quote[]): Quote[] => {
-    const sign = sortDir === 'asc' ? 1 : -1
-    return [...rows].sort((a, b) =>
-      sortKey === 'version'
-        ? (a.version - b.version) * sign
-        : (a.total_amount - b.total_amount) * sign || (a.version - b.version) * sign,
-    )
-  }
-
-  const QuoteTable = ({ rows }: { rows: Quote[] }) => (
-    <div className="overflow-x-auto">
-      <table className="ui-table min-w-[640px] text-sm">
-        <thead>
-          <tr>
-            <SortableTh
-              active={sortKey === 'version'}
-              direction={sortDir}
-              onSort={() => toggleSort('version')}
-              className="w-[132px]"
-            >
-              {t.listColVersion}
-            </SortableTh>
-            <th className="ui-th w-[84px]">{t.listColHeadcount}</th>
-            <th className="ui-th">{t.listColVenue}</th>
-            <th className="ui-th w-[76px]">{t.listColLeads}</th>
-            {/* 03 금액 열 — 우측정렬 tabular(.ui-num) */}
-            <SortableTh
-              numeric
-              active={sortKey === 'total'}
-              direction={sortDir}
-              onSort={() => toggleSort('total')}
-              className="w-[168px]"
-            >
-              {t.listColTotal}
-            </SortableTh>
-            <th className="ui-th w-[92px]">{t.listColStatus}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {sortRows(rows).map((q) => {
-            const isSel = selected?.id === q.id
-            const venue = q.input.selected_venue ? venueDisplayName(q.input.selected_venue) : t.tbd
-            return (
-              <tr
-                key={q.id}
-                data-testid={`quote-row-${q.id}`}
-                onClick={() => setSelectedId(q.id)}
-                className="cursor-pointer"
-                // 선택 행은 accent-tint 면 — 스티키 첫 열이 background:inherit라 tr에 인라인으로 건다
-                style={isSel ? { background: 'var(--accent-tint)' } : undefined}
-              >
-                <td className="text-ink">
-                  v{q.version}
-                  {q.is_final && <span aria-hidden className="ml-1">🔒</span>}
-                  {/* v2.4 §22.4 — 임포트로 등록된 견적은 목록에서 바로 구분된다(DoD 34) */}
-                  {q.source === 'imported' && (
-                    <LevelBadge level="progress" label="임포트" className="ml-1.5 font-medium" />
-                  )}
-                </td>
-                <td className="text-ink">{q.input.headcount}명</td>
-                {/* 07 …처리 — 잘린 값은 title 툴팁으로 전체 확인 가능(§05 조건 2) */}
-                <td className="max-w-44 text-ink-sub" title={venue}>
-                  {venue}
-                </td>
-                <td className="text-ink-sub">{q.input.include_leads ? t.listLeadsOn : t.listLeadsOff}</td>
-                <td className="ui-num font-semibold text-ink">{fmtWon(q.total_amount, false)}</td>
-                <td>
-                  <LevelBadge
-                    level={QUOTE_STATUS_LEVEL[q.status] ?? 'neutral'}
-                    label={t.statusLabels[q.status] ?? q.status}
-                  />
-                </td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
-    </div>
-  )
-
   return (
     <div className="space-y-6 p-4 md:p-6">
       <PageHeader
@@ -191,23 +226,10 @@ function QuotesBody() {
         title={t.listTitle}
         action={
           <>
-            <button type="button" className="btn btn-ghost" onClick={() => void handleDownload()} disabled={!selected || downloading}>
-              {t.listDownload}
-            </button>
-            <button type="button" className="btn btn-ghost" onClick={() => void handleCreateSheet()} disabled={!selected || gsheet.pending}>
-              {gsheet.pending ? t.gsheetPending : t.listGsheet}
-            </button>
-            <button
-              type="button"
-              className="btn btn-ghost"
-              onClick={() => selected && navigate(`/quotes/${selected.id}/edit`)}
-              disabled={!selected}
-            >
-              {t.listNewVersion}
-            </button>
             {/* v2.4 §10.1 화면 D — 견적서 가져오기 위저드 진입점(§10 진입점 원칙: 버튼으로 도달) */}
             <button type="button" className="btn btn-ghost" onClick={() => navigate('/quotes/import')}>
-              견적서 가져오기
+              <ActionIcon name="upload" />
+              {t.listImport}
             </button>
             <button type="button" className="btn btn-accent" onClick={() => navigate('/quotes/new')}>
               {t.listNewQuote}
@@ -215,14 +237,6 @@ function QuotesBody() {
           </>
         }
       />
-
-      {gsheet.resultFor(selected?.id) && <QuoteSheetResultCard result={gsheet.resultFor(selected?.id)!} t={t} />}
-
-      {actionError && (
-        <p role="alert" className="rounded-md bg-negative-tint px-3 py-2 text-sm text-negative">
-          {actionError}
-        </p>
-      )}
 
       {list.loading ? (
         // ① 로딩 — 실제 행 구조와 같은 스켈레톤(스피너 금지)
@@ -242,108 +256,182 @@ function QuotesBody() {
           />
         </div>
       ) : (
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
-          {/* 좌: 버전 표 (행사별 그룹) */}
-          <div className="min-w-0 space-y-5">
-            {[...groups.linked.entries()].map(([projectId, rows]) => (
-              <section key={projectId} className="ui-card p-4">
-                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                  <p className="t-card-title">{t.listLinkedGroup(projectName(projectId))}</p>
-                  <button
-                    type="button"
-                    className="btn btn-ghost btn-sm"
-                    onClick={() => {
-                      setProject(projectId)
-                      navigate('/home')
-                    }}
-                  >
-                    행사로 이동 →
-                  </button>
-                </div>
-                <QuoteTable rows={rows} />
-              </section>
+        <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
+          {/* 좌: 행사별 버전 표 */}
+          <div className="min-w-0 space-y-4">
+            {groups.linked.map(([projectId, rows]) => (
+              <QuoteGroupCard
+                key={projectId}
+                title={projectName(projectId)}
+                caption={t.listLinkedCaption(rows.length)}
+                rows={rows}
+                selectedId={selected?.id ?? null}
+                onSelect={setSelectedId}
+                onGoProject={() => {
+                  setProject(projectId)
+                  navigate('/home')
+                }}
+                t={t}
+              />
             ))}
             {groups.unlinked.length > 0 && (
-              <section className="ui-card p-4">
-                <p className="t-card-title mb-2">{t.listUnlinkedGroup}</p>
-                <QuoteTable rows={groups.unlinked} />
-              </section>
+              <QuoteGroupCard
+                title={t.listUnlinkedGroup}
+                caption={t.listUnlinkedCaption}
+                rows={groups.unlinked}
+                selectedId={selected?.id ?? null}
+                onSelect={setSelectedId}
+                t={t}
+              />
             )}
           </div>
 
-          {/* 우: 선택 버전 요약 */}
+          {/* 우: 고른 견적 요약 + 그 견적에 대한 동작 */}
           {selected && (
-            <aside>
-              <div className="ui-card sticky top-6 p-5">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <p className="t-caption">{t.summaryTitle}</p>
-                    <p className="t-card-title mt-1">
-                      {selected.title} · v{selected.version}
-                    </p>
-                  </div>
-                  <LevelBadge
-                    level={QUOTE_STATUS_LEVEL[selected.status] ?? 'neutral'}
-                    label={`${selected.is_final ? '🔒 ' : ''}${t.statusLabels[selected.status] ?? selected.status}`}
-                  />
-                </div>
-                {/* 구성 스택 막대 — 8행 금액 나열보다 먼저 '어디서 비용이 났는가'를 보여준다 */}
-                <div className="mt-4">
-                  <QuoteComposition breakdown={selected.breakdown} />
-                </div>
-                <dl className="mt-4 space-y-1.5 text-sm">
-                  {[
-                    [t.adjS1, selected.breakdown.s1],
-                    [t.adjS2, selected.breakdown.s2],
-                    [t.adjS3, selected.breakdown.s3],
-                    [t.adjS4, selected.breakdown.s4],
-                    ['5. PCO 기획료', selected.breakdown.s5],
-                    ['추가옵션', selected.breakdown.options],
-                    ['모객 솔루션', selected.breakdown.recruit],
-                    ['일반 참관객 관리', selected.breakdown.attendee],
-                  ].map(([label, value]) => (
-                    <div key={label as string} className="flex justify-between">
-                      <dt className="text-ink-sub">{label}</dt>
-                      <dd className={`font-semibold ${(value as number) === 0 ? 'text-ink-cap' : 'text-ink'}`}>
-                        {fmtWon(value as number, false)}
-                      </dd>
-                    </div>
-                  ))}
-                </dl>
-                <dl className="mt-3 space-y-1.5 border-t border-border pt-3 text-sm">
-                  <div className="flex justify-between">
-                    <dt className="font-bold text-ink">합계 (VAT 별도)</dt>
-                    <dd className="font-bold text-accent-deep">{fmtWon(selected.breakdown.subtotal, false)}</dd>
-                  </div>
-                  <div className="flex justify-between">
-                    <dt className="text-ink-sub">VAT (10%)</dt>
-                    <dd className="font-semibold text-ink">{fmtWon(selected.breakdown.vat, false)}</dd>
-                  </div>
-                  <div className="flex justify-between">
-                    <dt className="text-ink-sub">합계 (VAT 포함)</dt>
-                    <dd className="font-semibold text-ink">{fmtWon(selected.breakdown.total, false)}</dd>
-                  </div>
-                </dl>
-                {/* 이전 버전 대비 — 증감액·증감률·사유(사유는 스키마에 없어 '미기재') */}
-                <div className="mt-4">
-                  <QuoteVersionDelta current={selected} previous={previousVersion(quotes, selected)} />
-                </div>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => navigate(`/quotes/${selected.id}/edit`)}>
-                    {selected.is_final ? t.summaryEdit : t.summaryEditDraft}
-                  </button>
-                  {selected.is_final && !selected.project_id && (
-                    <button type="button" className="btn btn-accent btn-sm" onClick={() => navigate(`/quotes/${selected.id}/edit?step=5`)}>
-                      {t.s5CreateBtn}
-                    </button>
-                  )}
-                </div>
-              </div>
-            </aside>
+            <QuoteSummaryPanel
+              quote={selected}
+              quotes={quotes}
+              t={t}
+              downloading={downloading}
+              sheetPending={gsheet.pending}
+              sheetResult={gsheet.resultFor(selected.id)}
+              error={actionError}
+              onDownload={() => void handleDownload()}
+              onCreateSheet={() => void handleCreateSheet()}
+              onEdit={() => navigate(`/quotes/${selected.id}/edit`)}
+              onCreateProject={() => navigate(`/quotes/${selected.id}/edit?step=5`)}
+            />
           )}
         </div>
       )}
     </div>
+  )
+}
+
+function QuoteSummaryPanel({
+  quote,
+  quotes,
+  t,
+  downloading,
+  sheetPending,
+  sheetResult,
+  error,
+  onDownload,
+  onCreateSheet,
+  onEdit,
+  onCreateProject,
+}: {
+  quote: Quote
+  quotes: Quote[]
+  t: QuoteStrings
+  downloading: boolean
+  sheetPending: boolean
+  sheetResult: QuoteSpreadsheetResult | null
+  error: string | null
+  onDownload: () => void
+  onCreateSheet: () => void
+  onEdit: () => void
+  onCreateProject: () => void
+}) {
+  const b = quote.breakdown
+  const rows: [string, number][] = [
+    ['베뉴 사용료', b.s1],
+    ['시스템 구축', b.s2],
+    ['디자인·브랜딩', b.s3],
+    ['운영·등록·보험', b.s4],
+    ['PCO 기획료', b.s5],
+    ['추가옵션', b.options],
+    ['모객 솔루션', b.recruit],
+    ['일반 참관객 관리', b.attendee],
+  ]
+  // 고치기는 늘 새 버전을 만든다(§4-18 스냅숏). 이미 뒤 버전이 있으면 저장이 409라 막고 이유를 적는다
+  const newer = quote.superseded_by ? quotes.find((q) => q.id === quote.superseded_by) ?? null : null
+  const verWithSubject = (n: number) => `v${n}${subjectParticle(n)}`
+  const note = newer
+    ? t.summarySupersededNote(verWithSubject(newer.version))
+    : quote.is_final
+      ? t.summaryFinalNote(verWithSubject(quote.version + 1))
+      : t.summaryDraftNote(verWithSubject(quote.version + 1))
+
+  return (
+    <aside className="ui-card flex flex-col gap-4 p-5 xl:sticky xl:top-6" aria-label={t.summaryTitle} data-testid="quote-summary">
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-center justify-between gap-2">
+          <span className="t-caption">{t.summaryTitle}</span>
+          <LevelBadge level={QUOTE_STATUS_LEVEL[quote.status] ?? 'neutral'} label={t.statusLabels[quote.status] ?? quote.status} />
+        </div>
+        <h2 className="t-section-title text-lg">
+          {quote.title} · v{quote.version}
+        </h2>
+        <p className="t-caption text-ink-sub">
+          {quote.input.headcount}
+          {t.pax} · {venueOf(quote, t)} · {quote.input.include_leads ? t.summaryLeadsOn : t.summaryLeadsOff}
+        </p>
+      </div>
+
+      {/* 구성 막대 — 8행 금액 나열보다 먼저 '어디서 비용이 났는가' */}
+      <QuoteComposition breakdown={b} />
+
+      <dl className="flex flex-col text-sm">
+        {rows.map(([label, value]) => (
+          <div key={label} className="flex justify-between gap-3 py-1">
+            <dt className="text-brown">{label}</dt>
+            <dd className={`ui-num ${value === 0 ? 'text-ink-cap' : 'text-ink'}`}>{fmtWon(value, false)}</dd>
+          </div>
+        ))}
+      </dl>
+
+      <dl className="flex flex-col gap-1 border-t border-border pt-3">
+        <div className="flex items-baseline justify-between gap-3">
+          <dt className="text-sm font-semibold text-ink">합계 (VAT 별도)</dt>
+          <dd className="ui-num text-lg font-bold text-ink">{fmtWon(b.subtotal, false)}</dd>
+        </div>
+        <div className="flex justify-between gap-3 text-[13px] text-ink-sub">
+          <dt>부가세 10%</dt>
+          <dd className="ui-num">{fmtWon(b.vat, false)}</dd>
+        </div>
+        <div className="flex justify-between gap-3 text-[13px] text-ink-sub">
+          <dt>합계 (VAT 포함)</dt>
+          <dd className="ui-num">{fmtWon(b.total, false)}</dd>
+        </div>
+      </dl>
+
+      {/* 이전 버전 대비 — 증감과 입력 스냅숏에서 확인되는 사실(바뀐 것)만 */}
+      <QuoteVersionDelta current={quote} previous={previousVersion(quotes, quote)} />
+
+      <div className="flex flex-col gap-2">
+        {/* 좁은 폰에서는 두 버튼 글자가 반 칸에 안 들어가 한 줄씩 쌓는다 */}
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <button type="button" className="btn btn-ghost px-2" onClick={onDownload} disabled={downloading}>
+            <ActionIcon name="download" />
+            {t.listDownload}
+          </button>
+          <button type="button" className="btn btn-ghost px-2" onClick={onCreateSheet} disabled={sheetPending}>
+            <ActionIcon name="sheet" />
+            {sheetPending ? t.gsheetPending : t.listGsheet}
+          </button>
+        </div>
+        <button type="button" className="btn btn-ghost" onClick={onEdit} disabled={!!newer}>
+          {t.summaryEditNew}
+        </button>
+        {/* 확정됐지만 행사가 없는 견적 — 이 자리에서 행사 만들기로(§16). 머리의 '새 견적'이 채운 버튼이라 ghost */}
+        {quote.is_final && !quote.project_id && (
+          <button type="button" className="btn btn-ghost" onClick={onCreateProject}>
+            {t.s5CreateBtn} →
+          </button>
+        )}
+        <p className="t-caption text-center" data-testid="quote-edit-note">
+          {note}
+        </p>
+      </div>
+
+      {error && (
+        <p role="alert" className="rounded-md bg-negative-tint px-3 py-2 text-sm text-negative">
+          {error}
+        </p>
+      )}
+      {sheetResult && <QuoteSheetResultCard result={sheetResult} t={t} />}
+    </aside>
   )
 }
 

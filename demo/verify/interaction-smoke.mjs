@@ -16,7 +16,8 @@
 //       4.7: 협력사 견적서 불러오기 — 가상 엑셀 읽기 → 확인 큐(부가세·버킷·공급가 대조) → 확정 → 이력 ·
 //       3.23: UX 개편 — PR-1 기반(날짜 표기·대비) · PR-2 홈 '오늘 할 일' · PR-3 디자인 보드(다음 행동 표·차례 칩·갤러리) ·
 //             PR-4 항목 상세(다음 단계 카드·큰 미리보기·⋯ 메뉴·코멘트 공개 범위) · PR-4b 큐시트(행 메뉴·끌어 옮기기·큐 추가·대본 칸) ·
-//             PR-5 행사 목록(먼저 확인할 행사·진행 중·종료 묶음·카드 ⋯ 메뉴))
+//             PR-5 행사 목록(먼저 확인할 행사·진행 중·종료 묶음·카드 ⋯ 메뉴) ·
+//             PR-6 견적 목록(고른 견적 옆 동작·구버전 고치기 막힘)·옵션(체크 카드·막힌 이유·고른 옵션 요약))
 // 캡처는 dist-demo/shots-interaction/ 에 남긴다. 실패 시 exit 1.
 import { createServer } from 'node:http'
 import { readFileSync, mkdirSync } from 'node:fs'
@@ -150,7 +151,48 @@ check(
   `${docCountBefore} → ${docRequests.length}`,
 )
 
-// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — **Phase 3.23 PR-5 행사 목록(2026-09-25)**.
+// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — **Phase 3.23 PR-6 견적 목록·옵션(2026-09-25)**.
+//     일정(②에서 도착) → 사이드바 '견적' → 채운 버튼 1개(새 견적) · 요약 패널 아래 동작 → v2(구버전) 고르기 → 고치기 막힘 + 이유 →
+//     '＋ 새 견적' → 단계 줄 '옵션' → 사회자 체크 → 묶음 머리 '1개 고름 · 150만원' · 옆 요약 '고른 옵션' · 중계는 막힘 + 이유 → 다시 '일정'으로.
+{
+  const docBefore = docRequests.length
+  await tab.locator('aside nav').first().getByRole('link', { name: '견적', exact: true }).click()
+  await tab.waitForURL(/#\/quotes$/, { timeout: 10_000 })
+  const summary = tab.getByTestId('quote-summary')
+  await summary.waitFor({ timeout: 10_000 })
+  const filled = (await tab.locator('main .btn-accent, main .btn-primary').allInnerTexts()).map((t) => t.trim())
+  check(filled.join('|') === '＋ 새 견적', '견적 목록 채운 버튼 1개(새 견적)', filled.join(' · '))
+  check(
+    (await summary.getByRole('button', { name: 'Excel 내려받기' }).count()) === 1 &&
+      (await summary.getByRole('button', { name: '새 버전으로 고치기' }).count()) === 1,
+    '고른 견적에 대한 동작(Excel·고치기)은 요약 패널 아래',
+  )
+  await tab.getByTestId('quote-row-quo-002').getByRole('button', { name: 'v2' }).click()
+  const note = (await summary.getByTestId('quote-edit-note').innerText()).trim()
+  check(
+    (await summary.getByRole('button', { name: '새 버전으로 고치기' }).isDisabled()) && /이미 있어 이 버전은 고칠 수 없습니다/.test(note),
+    '구버전(v2) 고르기 → 고치기 비활성 + 이유',
+    note,
+  )
+  await tab.screenshot({ path: resolve(SHOTS, '03-quotes-list.png'), fullPage: true })
+  await tab.getByRole('button', { name: '＋ 새 견적' }).click()
+  await tab.waitForURL(/#\/quotes\/new/, { timeout: 10_000 })
+  await tab.getByRole('navigation', { name: '견적 단계' }).getByRole('button', { name: /옵션/ }).click()
+  await tab.getByTestId('opt-emcee').click()
+  const solo = (await tab.getByTestId('opt-solo-summary').innerText()).trim()
+  check(solo === '1개 고름 · 150만원', '옵션: 사회자 체크 → 묶음 머리 건수·합계', solo)
+  check(/사회자/.test(await tab.getByTestId('editor-picked-options').innerText()), '옆 요약 "고른 옵션"에 사회자')
+  const relayReason = (await tab.getByTestId('opt-screenRelay').getByTestId('opt-reason').innerText()).trim()
+  check(/LED 화면일 때만/.test(relayReason), '빔프로젝터면 화면중계가 막히고 이유가 카드 안에', relayReason)
+  const optFilled = (await tab.locator('main .btn-accent, main .btn-primary').allInnerTexts()).map((t) => t.trim())
+  check(optFilled.join('|') === '다음: 확인·확정', '옵션 단계 채운 버튼 1개(다음: 확인·확정)', optFilled.join(' · '))
+  await tab.screenshot({ path: resolve(SHOTS, '03-quote-options.png'), fullPage: true })
+  check(docRequests.length === docBefore, '견적 목록·옵션 이동·체크에 전체 리로드 0', `${docBefore} → ${docRequests.length}`)
+  await tab.locator('aside nav a', { hasText: '일정' }).first().click()
+  await tab.waitForURL(/#\/schedule/, { timeout: 10_000 })
+}
+
+// ── ③-이전(2026-09-25 Phase 3.23 PR-5) 행사 목록 — 직전 PR ③을 회귀 가드로 유지.
 //     일정(②에서 도착) → 사이드바 '행사 목록' → 세 묶음(먼저 확인할 행사 줄 · 진행 중 카드 · 종료된 행사 접힘) · 채운 버튼 1개 ·
 //     카드 ⋯ 메뉴 열고 Esc(카드로 들어가지 않음) → 종료된 행사 펼치기 → 다시 '일정'으로.
 {
@@ -669,7 +711,7 @@ const docBeforeQuotes = docRequests.length
 await tab.evaluate(() => {
   window.location.hash = '#/quotes'
 })
-await tab.getByRole('heading', { name: '견적' }).waitFor({ timeout: 10_000 })
+await tab.getByRole('heading', { name: '견적', exact: true }).waitFor({ timeout: 10_000 })
 const excelBtn = tab.getByRole('button', { name: 'Excel 내려받기' })
 const sheetBtn = tab.getByRole('button', { name: '구글 시트로 만들기' })
 check((await excelBtn.count()) === 1 && (await sheetBtn.count()) === 1, 'S-2 목록: Excel 내려받기 · 구글 시트로 만들기 버튼 2종')
@@ -701,16 +743,16 @@ check(
 const sealMark = wbx.worksheets[0].getCell('H7').value
 check(sealMark === '(인)', "Excel 공급자 행 H7 '(인)' 표식", String(sealMark))
 
-// 에디터 ④ — 목록에서 '＋ 새 버전'으로 견적 id를 얻고, ?step=4 딥링크로 확인·확정 단계에 진입한다
-await tab.getByRole('button', { name: '＋ 새 버전' }).click()
+// 에디터 ④ — 목록에서 '새 버전으로 고치기'(PR-6: 머리 '＋ 새 버전' → 요약 패널 아래)로 견적 id를 얻고, ?step=4 딥링크로 확인·확정 단계에 진입한다
+await tab.getByRole('button', { name: '새 버전으로 고치기' }).click()
 await tab.waitForURL(/#\/quotes\/[^/]+\/edit/, { timeout: 10_000 })
 const editHash = await tab.evaluate(() => window.location.hash)
 const quoteId = editHash.match(/#\/quotes\/([^/?]+)\/edit/)?.[1]
-check(Boolean(quoteId), '＋ 새 버전 → 에디터 진입(견적 id 확보)', quoteId)
+check(Boolean(quoteId), '새 버전으로 고치기 → 에디터 진입(견적 id 확보)', quoteId)
 await tab.evaluate(() => {
   window.location.hash = '#/quotes'
 })
-await tab.getByRole('heading', { name: '견적' }).waitFor({ timeout: 10_000 })
+await tab.getByRole('heading', { name: '견적', exact: true }).waitFor({ timeout: 10_000 })
 await tab.evaluate((id) => {
   window.location.hash = `#/quotes/${id}/edit?step=4`
 }, quoteId)
