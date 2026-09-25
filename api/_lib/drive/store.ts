@@ -79,6 +79,10 @@ export interface DriveStore {
   memberRole(profileId: string, projectId: string): Promise<MemberRole | null>
   project(projectId: string): Promise<ProjectRow | null>
   projectByRoot(folderId: string): Promise<{ id: string } | null>
+  /** v15 — 사용자 JWT로 `drive_settlement_file_check`: 협력사 견적서 원본을 올릴 수 있는가(pm · 확인 대기) + 행사 정보 */
+  settlementFileCheck(jwt: string, importId: string): Promise<{ import_id: string; file_name: string; project: ProjectRow }>
+  /** v15 — 원본 파일 id 기록(service) */
+  setSettlementImportFile(importId: string, fileId: string): Promise<void>
   /** 항목이 아직 DB에 있는가 — 항목 폴더 보관(archive-item)은 지워진 항목에만 허용한다 */
   deliverableExists(deliverableId: string): Promise<boolean>
   /** 사용자 JWT로 `drive_upload_check` — upload_version과 같은 판정(404·403·409)을 바이트 전송 전에 */
@@ -190,6 +194,15 @@ export function supabaseDriveStore(env: StoreEnv): DriveStore {
     async projectByRoot(folderId) {
       const rows = must(await admin.from('projects').select('id').eq('drive_root_folder_id', folderId).limit(1)) as { id: string }[] | null
       return rows?.[0] ?? null
+    },
+    async settlementFileCheck(jwt, importId) {
+      const res = await asUser(jwt).rpc('drive_settlement_file_check', { p_import: importId })
+      const data = must(res as Res<{ import_id: string; file_name: string; project: ProjectRow }>)
+      if (!data) throw new DriveError(404, 'not_found', '견적서 가져오기를 찾을 수 없습니다.')
+      return data
+    },
+    async setSettlementImportFile(importId, fileId) {
+      must(await admin.rpc('settlement_import_set_file', { p_import: importId, p_file: fileId }))
     },
     async deliverableExists(deliverableId) {
       return Boolean(must(await admin.from('deliverables').select('id').eq('id', deliverableId).maybeSingle()))

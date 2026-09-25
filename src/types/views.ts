@@ -1,6 +1,7 @@
 // 화면(S1~S9)·API 계약(설계서 §8)이 요구하는 뷰 모델과 입력 타입.
 // 엔티티(§4)와 달리 여기는 조합 형태라 프론트 편의에 맞춰 정의하되, 필드명은 snake_case로 통일한다.
 import type { SettlementBoard, SettlementBucket, SettlementItem } from './entities'
+import type { VendorQuoteParsed, VendorQuoteQuestion } from '../lib/vendorQuote'
 import type { SettlementTotals } from '../lib/settlement'
 import type { SectionMapping } from '../modules/quote/import/types'
 import type {
@@ -249,6 +250,39 @@ export interface UpdateDeliverableInput {
   spec_qty?: number | null
   spec_location?: string | null
   spec_type?: string | null
+}
+
+// ── v15 협력사 견적서 불러오기 (설계서 v2.11 §19.5 · Phase 4.7) ───────────────
+/** 가져오기 입력 — 엑셀 파일 원본 바이트(견적서 임포트 importQuoteFile과 같은 방식)와 (고른 경우) 협력사 */
+export interface VendorQuoteImportInput {
+  file_name: string
+  data: ArrayBuffer
+  vendor_id?: UUID | null
+}
+
+/** 가져오기 한 건 — 저장된 제안(parsed)과 묻는 것(questions). 금액은 내부 전용(정산) */
+export interface VendorQuoteImportView {
+  id: UUID
+  board_id: UUID
+  file_name: string
+  /** Drive 원본(실서버 · 연결돼 있을 때) — 없으면 null */
+  drive_file_id: string | null
+  vendor_id: UUID | null
+  vendor_name: string | null
+  status: 'parsed' | 'confirmed' | 'discarded'
+  created_at: IsoDateTime
+  parsed: VendorQuoteParsed
+  questions: VendorQuoteQuestion[]
+  /** 확정 때 만든 항목 수(확정 전 0) */
+  item_count: number
+}
+
+/** 확정 — 포함할 행만 보낸다(행 번호 + 버킷 + 고친 제목). 금액은 서버가 저장된 제안에서 읽는다 */
+export interface VendorQuoteConfirmInput {
+  /** 견적서 금액에 부가세가 들어 있는가(포함이면 저장 직전 round(v/1.1) 분리 — §19.4) */
+  vat_included: boolean
+  vendor_id?: UUID | null
+  rows: { index: number; bucket_id: UUID; title?: string }[]
 }
 
 /** v14(§8 DELETE /deliverables/{id}, Phase 4.5) — 지운 항목과 Drive 항목 폴더 보관 결과(화면이 알린다) */

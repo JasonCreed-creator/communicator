@@ -30,6 +30,7 @@ export function createFakeDriveStore() {
   const inbox: { id: string; project_id: string; drive_file_id: string; file_name: string; detected_folder: string; linked: string | null; dismissed: boolean }[] = []
   const logs: { projectId: string; action: string; targetId: string | null; meta?: Record<string, unknown> }[] = []
   const clientTokens = new Map<string, string>() // token → project_id
+  const settlementImports = new Map<string, { project_id: string; file_name: string; status: 'parsed' | 'confirmed' | 'discarded'; drive_file_id: string | null }>()
   const approvals = new Map<string, { id: string; deliverable_id: string; version_id: string; decision: 'approved' | 'changes_requested' | null }>()
   let refreshToken: string | null = null
   let connection: { account_email: string | null; connected_at: string | null; last_error: string | null; last_error_at: string | null } | null = null
@@ -58,6 +59,18 @@ export function createFakeDriveStore() {
     async projectByRoot(folderId) {
       const p = [...projects.values()].find((x) => x.drive_root_folder_id === folderId)
       return p ? { id: p.id } : null
+    },
+    async settlementFileCheck(jwt, importId) {
+      const u = userByJwt(jwt)
+      const imp = settlementImports.get(importId)
+      if (!imp) throw new DriveError(404, 'not_found', '견적서 가져오기를 찾을 수 없습니다.')
+      const role = u ? members.get(`${u.profileId}:${imp.project_id}`) : undefined
+      if (role !== 'pm') throw new DriveError(403, 'forbidden', 'PM 전용 기능입니다.')
+      if (imp.status !== 'parsed') throw new DriveError(409, 'conflict', '이미 확정했거나 버린 견적서입니다 — 다시 불러오세요.')
+      return { import_id: importId, file_name: imp.file_name, project: { ...projects.get(imp.project_id)! } }
+    },
+    async setSettlementImportFile(importId, fileId) {
+      settlementImports.get(importId)!.drive_file_id = fileId
     },
     async deliverableExists(deliverableId) {
       return deliverables.has(deliverableId)
@@ -118,6 +131,8 @@ export function createFakeDriveStore() {
       const ids = new Set<string>()
       for (const v of versions) if (deliverables.get(v.deliverable_id)?.project_id === projectId) ids.add(v.drive_file_id)
       for (const r of inbox) if (r.project_id === projectId) ids.add(r.drive_file_id)
+      // v15 — 정산 가져오기 원본(SQL drive_known_file_ids 재정의와 같은 범위)
+      for (const i of settlementImports.values()) if (i.project_id === projectId && i.drive_file_id) ids.add(i.drive_file_id)
       return ids
     },
     async openInbox(projectId) {
@@ -216,6 +231,7 @@ export function createFakeDriveStore() {
     inbox,
     logs,
     clientTokens,
+    settlementImports,
     approvals,
     finalizeCalls,
     get refreshToken() {

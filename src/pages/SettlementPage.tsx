@@ -21,6 +21,7 @@ import PageHeader from '../components/internal/PageHeader'
 import MarginSummaryCard from '../components/settlement/MarginSummaryCard'
 import SettlementBucketTable from '../components/settlement/SettlementBucketTable'
 import SettlementItems from '../components/settlement/SettlementItems'
+import VendorQuoteImport from '../components/settlement/VendorQuoteImport'
 import { canUseQuotes } from '../components/quote/QuoteGate'
 import { useProject } from '../context/ProjectContext'
 import { useAsync, useMutation } from '../hooks/useAsync'
@@ -448,8 +449,8 @@ export default function SettlementPage() {
         )}
       />
 
-      {/* 행사별 추가 버킷 (pm) — 견적에 없던 비용은 0원에서 시작한다(§19.2) */}
-      {isPm && !readOnly && (
+      {/* 행사별 추가 버킷 (pm) — 견적에 없던 비용은 0원에서 시작한다(§19.2). 입력 중일 때만 그린다(빈 줄 방지) */}
+      {isPm && !readOnly && addingBucket && (
         <section className="flex flex-wrap items-center gap-2">
           {addingBucket && (
             <>
@@ -487,12 +488,18 @@ export default function SettlementPage() {
               </button>
             </>
           )}
-
-          {/* 업로드 파싱은 서버 의존이라 v8 예약이다(§19.5) — 자리만 두고 시점을 밝힌다 */}
-          <button type="button" className="btn btn-ghost ml-auto" disabled title="Phase 4.7에서 열립니다">
-            협력사 견적서 불러오기 · Phase 4.7에서 열립니다
-          </button>
         </section>
+      )}
+
+      {/* v2.11 §19.5(Phase 4.7) — 협력사 견적서 → 확인 큐 → 발주 항목. 확인 전에는 정산에 들어가지 않는다 */}
+      {view && (
+        <VendorQuoteImport
+          projectId={projectId}
+          buckets={view.buckets.map((b) => b.bucket)}
+          vendors={vendors.data ?? []}
+          canEdit={isPm && !readOnly}
+          onChanged={board.reload}
+        />
       )}
     </div>
   )

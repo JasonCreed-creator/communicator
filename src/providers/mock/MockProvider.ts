@@ -50,6 +50,7 @@ import type {
   SheetSourceRow,
   SettlementBoard,
   SettlementBucket,
+  SettlementImport,
   SettlementItem,
   Vendor,
   Milestone,
@@ -94,6 +95,9 @@ import type {
   CreateDeliverableInput,
   DeleteDeliverableResult,
   UpdateDeliverableInput,
+  VendorQuoteConfirmInput,
+  VendorQuoteImportInput,
+  VendorQuoteImportView,
   CsvImportResult,
   CsvImportRow,
   CueInput,
@@ -171,6 +175,16 @@ import { buildCuesFromScenario, scenarioCueCandidates } from '../../lib/scenario
 import { SCENARIO_KIND_LABELS } from '../../lib/labels'
 import { UPLOADABLE_STATUSES, uploadBlockedMessage } from '../../lib/uploadGate'
 import { normalizeSlackWebhook, SLACK_WEBHOOK_INVALID_MESSAGE } from '../../lib/slackWebhook'
+import {
+  buildVendorQuote,
+  isVendorQuoteFile,
+  parseVendorQuoteWorkbook,
+  VENDOR_QUOTE_FILE_MESSAGE,
+  VENDOR_QUOTE_NO_BOARD_MESSAGE,
+  VENDOR_QUOTE_NOT_PARSED_MESSAGE,
+  type VendorQuoteParsed,
+  type VendorQuoteQuestion,
+} from '../../lib/vendorQuote'
 
 /** 3.18.1 §2 — 발주처 담당자 블록의 스태프 정렬(PM을 맨 위로). 표시 순서일 뿐 권한과 무관하다. */
 const CLIENT_STAFF_ROLE_ORDER: readonly MemberRole[] = ['pm', 'design', 'ops', 'reg']
@@ -4517,6 +4531,142 @@ export class MockProvider implements DataProvider {
     this.assertWritable(this.projectOfBucket(bucket))
     this.assertItemWritable(item)
     this.state.settlement_items = this.state.settlement_items.filter((i) => i.id !== itemId)
+  }
+
+  // ── v15 협력사 견적서 불러오기 (§19.5 Phase 4.7) ─────────────────────
+  // 확인 큐는 settlement_imports(실서버)와 같은 모양으로 메모리에 둔다 — 픽스처 상태(createFixtureState)는 건드리지 않는다.
+  private vendorImports: SettlementImport[] = []
+
+  private vendorImportView(imp: SettlementImport): VendorQuoteImportView {
+    const vendor = imp.vendor_id ? this.state.vendors.find((v) => v.id === imp.vendor_id) : undefined
+    return {
+      id: imp.id,
+      board_id: imp.board_id,
+      file_name: imp.file_name,
+      drive_file_id: imp.drive_file_id,
+      vendor_id: imp.vendor_id,
+      vendor_name: vendor?.name ?? null,
+      status: imp.status,
+      created_at: imp.created_at,
+      parsed: imp.parsed as VendorQuoteParsed,
+      questions: (imp.questions as VendorQuoteQuestion[]) ?? [],
+      item_count: this.state.settlement_items.filter((i) => i.import_id === imp.id).length,
+    }
+  }
+
+  private mustFindVendorImport(importId: UUID): { imp: SettlementImport; projectId: UUID } {
+    const imp = this.vendorImports.find((x) => x.id === importId)
+    if (!imp) throw new ProviderError('not_found', '견적서 가져오기를 찾을 수 없습니다.')
+    const board = this.state.settlement_boards.find((b) => b.id === imp.board_id)
+    if (!board) throw new ProviderError('not_found', '정산 보드가 없습니다.')
+    return { imp, projectId: board.project_id }
+  }
+
+  async importVendorQuote(projectId: UUID, input: VendorQuoteImportInput): Promise<VendorQuoteImportView> {
+    this.assertWritable(projectId)
+    const user = this.assertPm()
+    const board = this.state.settlement_boards.find((b) => b.project_id === projectId)
+    if (!board) throw new ProviderError('conflict', VENDOR_QUOTE_NO_BOARD_MESSAGE)
+    if (!isVendorQuoteFile(input.file_name)) throw new ProviderError('validation', VENDOR_QUOTE_FILE_MESSAGE)
+    if (input.vendor_id && !this.state.vendors.some((v) => v.id === input.vendor_id)) {
+      throw new ProviderError('validation', '협력사를 찾을 수 없습니다.')
+    }
+    const doc = parseVendorQuoteWorkbook(input.data, input.file_name)
+    const buckets = this.state.settlement_buckets.filter((b) => b.board_id === board.id)
+    const { parsed, questions } = buildVendorQuote(doc, buckets)
+    const imp: SettlementImport = {
+      id: this.nextId('sim'),
+      board_id: board.id,
+      file_name: input.file_name,
+      drive_file_id: null,
+      vendor_id: input.vendor_id ?? null,
+      parsed,
+      questions,
+      status: 'parsed',
+      created_by: user.id,
+      created_at: nowIso(),
+    }
+    this.vendorImports.push(imp)
+    return this.vendorImportView(imp)
+  }
+
+  async listVendorQuoteImports(projectId: UUID): Promise<VendorQuoteImportView[]> {
+    this.mustFindProject(projectId)
+    const board = this.state.settlement_boards.find((b) => b.project_id === projectId)
+    if (!board) return []
+    return this.vendorImports
+      .filter((x) => x.board_id === board.id)
+      .sort((a, b) => b.created_at.localeCompare(a.created_at) || b.id.localeCompare(a.id))
+      .map((x) => this.vendorImportView(x))
+  }
+
+  /**
+   * v15 — 확정. SQL `public.confirm_vendor_quote_import`와 같은 판정·문구다: pm · 확인 대기만 · 행 0개 422 · 같은 행 두 번 422 ·
+   * 버킷은 이 보드의 원가 버킷만 · 금액은 저장된 제안에서(화면이 보낸 값이 아니다) · 발주 항목(status='ordered').
+   */
+  async confirmVendorQuoteImport(importId: UUID, input: VendorQuoteConfirmInput): Promise<SettlementItem[]> {
+    const { imp, projectId } = this.mustFindVendorImport(importId)
+    this.assertWritable(projectId)
+    this.assertPm()
+    if (imp.status !== 'parsed') throw new ProviderError('conflict', VENDOR_QUOTE_NOT_PARSED_MESSAGE)
+    if (input.rows.length === 0) throw new ProviderError('validation', '만들 항목이 없습니다 — 한 줄 이상 고르세요.')
+    if (new Set(input.rows.map((r) => r.index)).size !== input.rows.length) {
+      throw new ProviderError('validation', '같은 행을 두 번 보낼 수 없습니다.')
+    }
+    if (input.vendor_id && !this.state.vendors.some((v) => v.id === input.vendor_id)) {
+      throw new ProviderError('validation', '협력사를 찾을 수 없습니다.')
+    }
+    const parsed = imp.parsed as VendorQuoteParsed
+    const plan = input.rows.map((r) => {
+      const row = parsed.rows.find((x) => x.index === r.index)
+      if (!row) throw new ProviderError('validation', `견적서에 없는 행입니다(${r.index + 1}번).`)
+      const bucket = this.state.settlement_buckets.find((b) => b.id === r.bucket_id)
+      if (!bucket || bucket.board_id !== imp.board_id) throw new ProviderError('validation', '이 정산보드의 버킷이 아닙니다.')
+      if (!bucket.has_cost) {
+        throw new ProviderError('validation', `'${bucket.label}'은 원가가 없는 항목이라 발주·실비를 넣을 수 없습니다.`)
+      }
+      const title = (r.title ?? row.title).trim()
+      if (!title) throw new ProviderError('validation', '항목명은 필수입니다.')
+      return { row, bucket, title }
+    })
+    const vendorId = input.vendor_id !== undefined ? input.vendor_id : imp.vendor_id
+    const now = nowIso()
+    const created = plan.map(({ row, bucket, title }): SettlementItem => ({
+      id: this.nextId('sti'),
+      board_id: imp.board_id,
+      bucket_id: bucket.id,
+      title,
+      spec: row.spec,
+      vendor_id: vendorId ?? null,
+      assignee_id: null,
+      ordered_amount: toVatExcluded(row.amount, input.vat_included),
+      actual_amount: null,
+      input_amount_raw: input.vat_included ? row.amount : null,
+      vat_included_input: input.vat_included,
+      status: 'ordered',
+      evidence: `협력사 견적서 ${imp.file_name}`,
+      import_id: imp.id,
+      note: null,
+      created_at: now,
+      updated_at: now,
+    }))
+    this.state.settlement_items.push(...created)
+    imp.status = 'confirmed'
+    imp.vendor_id = vendorId ?? null
+    const user = this.currentUser()
+    this.log(projectId, `user:${user.id}`, 'settlement.imported', 'settlement_import', imp.id, {
+      file_name: imp.file_name,
+      count: created.length,
+    })
+    return created.map((x) => ({ ...x }))
+  }
+
+  async discardVendorQuoteImport(importId: UUID): Promise<void> {
+    const { imp, projectId } = this.mustFindVendorImport(importId)
+    this.assertWritable(projectId)
+    this.assertPm()
+    if (imp.status !== 'parsed') throw new ProviderError('conflict', VENDOR_QUOTE_NOT_PARSED_MESSAGE)
+    imp.status = 'discarded'
   }
 
   async listVendors(): Promise<Vendor[]> {

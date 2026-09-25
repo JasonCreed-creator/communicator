@@ -158,6 +158,26 @@ export function createDriveClient(opts: DriveClientOptions) {
       post<{ archived: boolean }>({ action: 'archive-project', folder_id: folderId, project_name: projectName }),
     archiveItem: (input: { project_id: string; deliverable_id: string; folder_id: string; title: string }) =>
       post<{ archived: boolean; reason?: string }>({ action: 'archive-item', ...input }),
+
+    /**
+     * v15(§19.5 Phase 4.7) — 협력사 견적서 원본을 행사 폴더 02_견적·정산/협력사 견적서에 보관(한 번에 — 4MB 이하).
+     * 권한(그 행사 pm · 확인 대기)은 서버가 사용자 세션으로 SQL(drive_settlement_file_check)에 묻는다.
+     */
+    async settlementFile(importId: string, fileName: string, data: ArrayBuffer): Promise<{ file_id: string }> {
+      const token = await opts.accessToken()
+      if (!token) throw new ProviderError('forbidden', '로그인이 필요합니다.')
+      const q = new URLSearchParams({ action: 'settlement-file', import_id: importId, name: fileName })
+      const res = await send({
+        url: `${endpoint}?${q.toString()}`,
+        method: 'PUT',
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        },
+        body: new Blob([data]),
+      })
+      return parse<{ file_id: string }>(res)
+    },
     scan: (projectId: string) => post<DriveScanResult>({ action: 'scan', project_id: projectId }),
 
     async fileUrls(versionIds: string[]): Promise<Record<string, string | null>> {

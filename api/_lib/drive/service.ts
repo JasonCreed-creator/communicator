@@ -378,6 +378,39 @@ export async function archiveItemOp(ctx: DriveCtx, user: CallerIdentity, body: R
   return { archived: true, folder_id: f.id }
 }
 
+/** v15(§19.5) 협력사 견적서 원본 폴더 — 행사 폴더 02_견적·정산 아래 */
+export const VENDOR_QUOTE_FOLDER = '협력사 견적서'
+export const APP_SETTLEMENT_KEY = 'communicator_settlement_import'
+
+/**
+ * v15(§19.5 Phase 4.7) — 협력사 견적서 원본을 근거로 보관한다(한 번에 — 조각 중계 한도 4MB 이하). 권한은 사용자 JWT로
+ * SQL(drive_settlement_file_check: pm · 확인 대기 · 종료 행사 아님)이 판정 → 행사 폴더 02_견적·정산/협력사 견적서에 올리고 →
+ * service로 settlement_imports.drive_file_id 기록. 인박스는 이 원본을 아는 파일로 친다(drive_known_file_ids 재정의).
+ */
+export async function settlementFileOp(ctx: DriveCtx, jwt: string, importId: string, fileName: string, mimeType: string, bytes: Uint8Array) {
+  if (!UUID_RE.test(importId)) throw new DriveError(400, 'validation', '가져오기 id 형식이 올바르지 않습니다.')
+  if (bytes.byteLength > CHUNK_BYTES) {
+    throw new DriveError(413, 'validation', `원본 보관은 ${CHUNK_BYTES / 1024 / 1024}MB 이하 파일만 합니다 — 견적서 가져오기는 그대로 진행됩니다.`)
+  }
+  const root = driveRoot(ctx)
+  const target = await ctx.store.settlementFileCheck(jwt, importId)
+  const api = driveApiFor(ctx)
+  const { rootId } = await ensureProjectRoot(api, ctx.store, root, target.project)
+  const folderId = await ensurePartPath(api, rootId, [PART.money, VENDOR_QUOTE_FOLDER])
+  const name = sanitizeName(fileName || target.file_name, 200)
+  const session = await api.startResumable(
+    { name, parents: [folderId], appProperties: { [APP_SETTLEMENT_KEY]: importId }, description: '협력사 견적서 원본(정산보드 가져오기)' },
+    { mimeType: mimeType || 'application/octet-stream', size: bytes.byteLength },
+  )
+  const size = bytes.byteLength
+  const progress = await api.putChunk(session, bytes, 0, Math.max(0, size - 1), size)
+  if (!progress.done) throw new DriveError(502, 'validation', '원본을 다 올리지 못했습니다 — 잠시 후 다시 불러오세요.')
+  await ctx.store.setSettlementImportFile(importId, progress.file.id)
+  await ctx.store.log(target.project.id, 'drive.settlement_file', 'settlement_import', importId, { file_id: progress.file.id })
+  await markLive(ctx)
+  return { file_id: progress.file.id, folder_id: folderId }
+}
+
 // ── 업로드 (4MB 조각 중계 — 브라우저→Google 직접 PUT은 CORS로 막힌다) ──────────
 interface UploadTicket {
   k: 'up'
