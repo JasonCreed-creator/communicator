@@ -17,7 +17,8 @@
 //       3.23: UX 개편 — PR-1 기반(날짜 표기·대비) · PR-2 홈 '오늘 할 일' · PR-3 디자인 보드(다음 행동 표·차례 칩·갤러리) ·
 //             PR-4 항목 상세(다음 단계 카드·큰 미리보기·⋯ 메뉴·코멘트 공개 범위) · PR-4b 큐시트(행 메뉴·끌어 옮기기·큐 추가·대본 칸) ·
 //             PR-5 행사 목록(먼저 확인할 행사·진행 중·종료 묶음·카드 ⋯ 메뉴) ·
-//             PR-6 견적 목록(고른 견적 옆 동작·구버전 고치기 막힘)·옵션(체크 카드·막힌 이유·고른 옵션 요약))
+//             PR-6 견적 목록(고른 견적 옆 동작·구버전 고치기 막힘)·옵션(체크 카드·막힌 이유·고른 옵션 요약) ·
+//             PR-7 정산보드(머리 불러오기·할 일 알림·KPI 검산 배지·원가 없는 그룹행·발주 항목 ⋯ 메뉴))
 // 캡처는 dist-demo/shots-interaction/ 에 남긴다. 실패 시 exit 1.
 import { createServer } from 'node:http'
 import { readFileSync, mkdirSync } from 'node:fs'
@@ -151,7 +152,43 @@ check(
   `${docCountBefore} → ${docRequests.length}`,
 )
 
-// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — **Phase 3.23 PR-6 견적 목록·옵션(2026-09-25)**.
+// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — **Phase 3.23 PR-7 정산보드(2026-09-25)**.
+//     샘플 행사의 정산보드(?project=) → 머리 채운 버튼 1개(협력사 견적서 불러오기) · 최종 마진 칸 '검산 일치' ·
+//     견적 초과 알림 '항목 보기' → 시스템 구축이 펼쳐지고 메모 안내 · 발주 항목 ⋯ 메뉴(PM) 열고 Esc · 원가 없는 그룹행 →
+//     데모 기본 행사(RB27)로 되돌리고 '일정'으로.
+{
+  const docBefore = docRequests.length
+  await tab.evaluate(() => {
+    window.location.hash = '#/settlement?project=prj-stc26'
+  })
+  await tab.getByTestId('settlement-kpis').waitFor({ timeout: 10_000 })
+  await tab.getByRole('button', { name: '협력사 견적서 불러오기' }).waitFor({ timeout: 10_000 })
+  await tab.waitForFunction(() => !document.querySelector('main .btn-accent')?.hasAttribute('disabled'), null, { timeout: 10_000 })
+  const filled = (await tab.locator('main .btn-accent, main .btn-primary').allInnerTexts()).map((t) => t.trim())
+  check(filled.join('|') === '협력사 견적서 불러오기', '정산보드 채운 버튼 1개(협력사 견적서 불러오기)', filled.join(' · '))
+  const identity = (await tab.getByTestId('margin-identity').innerText()).trim()
+  check(identity === '검산 일치', "최종 마진 칸 '검산 일치' 배지", identity)
+  await tab.getByTestId('alert-over-s2').getByRole('button', { name: '항목 보기' }).click()
+  const panel = tab.getByTestId('bucket-panel-s2')
+  await panel.waitFor({ timeout: 10_000 })
+  check(/메모로 이유를 남겨/.test(await panel.getByTestId('over-reason-hint').innerText()), "견적 초과 알림 '항목 보기' → 버킷 펼침 + 메모 안내")
+  await panel.getByRole('button', { name: /^발주 항목 메뉴 / }).first().click()
+  const menuItems = (await tab.getByRole('menu').first().getByRole('menuitem').allInnerTexts()).map((t) => t.trim())
+  check(menuItems.join('|') === '금액·상태 입력|항목 지우기', '발주 항목 ⋯ 메뉴(PM) = 금액·상태 입력 · 항목 지우기', menuItems.join(' · '))
+  await tab.keyboard.press('Escape')
+  check((await tab.getByRole('menu').count()) === 0, '메뉴 Esc로 닫힘')
+  check((await tab.getByTestId('no-cost-group').count()) === 1, "원가 없는 버킷은 그룹행 '원가 없는 항목' 아래")
+  await tab.screenshot({ path: resolve(SHOTS, '03-settlement.png'), fullPage: true })
+  check(docRequests.length === docBefore, '정산보드 알림·펼침·메뉴에 전체 리로드 0', `${docBefore} → ${docRequests.length}`)
+  await tab.evaluate(() => {
+    window.location.hash = '#/home?project=prj-rebuild27'
+  })
+  await tab.getByTestId('today-list').waitFor({ timeout: 10_000 })
+  await tab.locator('aside nav a', { hasText: '일정' }).first().click()
+  await tab.waitForURL(/#\/schedule/, { timeout: 10_000 })
+}
+
+// ── ③-이전(2026-09-25 Phase 3.23 PR-6) 견적 목록·옵션 — 직전 PR ③을 회귀 가드로 유지.
 //     일정(②에서 도착) → 사이드바 '견적' → 채운 버튼 1개(새 견적) · 요약 패널 아래 동작 → v2(구버전) 고르기 → 고치기 막힘 + 이유 →
 //     '＋ 새 견적' → 단계 줄 '옵션' → 사회자 체크 → 묶음 머리 '1개 고름 · 150만원' · 옆 요약 '고른 옵션' · 중계는 막힘 + 이유 → 다시 '일정'으로.
 {
@@ -421,7 +458,7 @@ check(
 }
 
 // ── ③-이전(2026-09-25 Phase 4.7) 협력사 견적서 불러오기 — 직전 세션 ③을 회귀 가드로 유지.
-//     정산보드가 있는 샘플 행사로 옮겨(`?project=` — Phase 6 알림 링크 경로) → 불러오기 카드(옛 "Phase 4.7에서 열립니다" 자리) →
+//     정산보드가 있는 샘플 행사로 옮겨(`?project=` — Phase 6 알림 링크 경로) → 머리의 '협력사 견적서 불러오기'(PR-7 — 옛 아래 카드) →
 //     가상 협력사 견적(A형 — 부가세 줄·할인 행. 이 자리에서 exceljs로 만든다: 실파일·바이너리 커밋 금지 R-Q4) 고르기 → 읽기 →
 //     확인 큐(부가세 별도 미리 선택 · 부가세 '확인 필요' 없음 · 공급가 대조 '=' · 원가 없는 버킷은 선택지에 없음) → 확정 →
 //     '발주 항목 6개' → 닫기 → 이력 '확정 · 항목 6개'. 끝나면 데모 기본 행사(RB27)로 되돌린다 — 아래 ③-이전 블록들은 RB27 기준이다.
@@ -431,10 +468,9 @@ const docBeforeVendor = docRequests.length
 await tab.evaluate(() => {
   window.location.hash = '#/settlement?project=prj-stc26'
 })
-const vqSection = tab.getByTestId('vendor-quote-import')
-await vqSection.waitFor({ timeout: 10_000 })
-check((await tab.getByText('Phase 4.7에서 열립니다').count()) === 0, '정산보드: 옛 "Phase 4.7에서 열립니다" 안내 없음 → 불러오기 카드')
-await vqSection.getByRole('button', { name: '견적서 불러오기' }).click()
+await tab.getByTestId('settlement-kpis').waitFor({ timeout: 10_000 })
+check((await tab.getByText('Phase 4.7에서 열립니다').count()) === 0, '정산보드: 옛 "Phase 4.7에서 열립니다" 안내 없음 → 머리의 불러오기 버튼')
+await tab.getByRole('button', { name: '협력사 견적서 불러오기' }).click()
 const vqDialog = tab.getByTestId('vendor-quote-dialog')
 await vqDialog.waitFor({ timeout: 10_000 })
 const { default: ExcelJSv } = await import('exceljs')
@@ -487,7 +523,7 @@ await vqDialog.getByRole('button', { name: '확정 — 발주 항목 6개 만들
 await vqDialog.getByRole('heading', { name: '발주 항목 6개를 만들었습니다' }).waitFor({ timeout: 10_000 })
 check(true, '확정 → 발주 항목 6개')
 await vqDialog.getByRole('button', { name: '닫기' }).click()
-const vqList = vqSection.getByRole('list', { name: '불러온 견적서' })
+const vqList = tab.getByTestId('vendor-quote-import').getByRole('list', { name: '불러온 견적서' })
 await vqList.waitFor({ timeout: 10_000 })
 await tab.waitForFunction(
   () => /확정 · 항목 6개/.test(document.querySelector('[aria-label="불러온 견적서"]')?.textContent ?? ''),

@@ -8,8 +8,16 @@
 //
 // 금액 칸은 MoneyField다 — 자릿수 한 자리가 마진을 열 배로 틀리므로 저장 값을 `number | null`로
 // 잡고(빈 칸 = 미정, 0과 구분) 한글 에코로 사람 눈이 자릿수를 검산하게 한다.
+//
+// PR-7(디자인지시서 v1.4 §7-2.11 · 캔버스 정산보드): 펼친 버킷 = canvas 면 안의 항목 표 7칸
+// (발주 항목(이름 + 규격·증빙 한 줄 · 메모) · 협력사 · 담당(역할 도트) · 발주액 · 실집행 · 상태 배지 · ⋯).
+// 칸마다 '입력' 버튼 대신 행 끝 ⋯ 메뉴(금액·상태 입력 · 지우기 — 공용 ActionMenu) · 표 아래 `＋ 발주 항목 추가`(글자 단추).
+// **초과 사유는 항목 메모(note)에 남긴다** — 버킷에는 사유 칸이 없다(스키마·DataProvider 동결 — 캔버스의 버킷 한 칸 입력은 이탈).
 import { useState } from 'react'
+import ActionMenu from '../internal/ActionMenu'
 import MoneyField from '../internal/MoneyField'
+import { LevelBadge } from '../internal/StatusBadge'
+import { ROLE_BAR_CLASSES, type StatusLevel } from '../../lib/labels'
 import { toVatExcluded } from '../../lib/settlement'
 import type { SettlementItem, SettlementItemStatus, Vendor } from '../../types/entities'
 import type { MemberWithProfile } from '../../types/views'
@@ -19,15 +27,16 @@ import type { SettlementItemInput } from '../../providers/DataProvider'
 const STATUS_LABEL: Record<SettlementItemStatus, string> = {
   planned: '계획',
   ordered: '발주',
-  settled: '정산완료',
+  settled: '정산 완료',
   cancelled: '취소',
 }
 
-const STATUS_PILL: Record<SettlementItemStatus, string> = {
-  planned: 'bg-track text-ink-sub',
-  ordered: 'bg-accent-tint text-accent-deep',
-  settled: 'bg-positive-tint text-positive',
-  cancelled: 'bg-track text-ink-cap line-through',
+/** 항목 상태 → 배지 정본(의미 4단계 + 중립) */
+const STATUS_LEVEL: Record<SettlementItemStatus, StatusLevel> = {
+  planned: 'neutral',
+  ordered: 'progress',
+  settled: 'positive',
+  cancelled: 'neutral',
 }
 
 function krw(n: number | null): string {
@@ -54,6 +63,7 @@ interface AmountFormValue {
   vatIncluded: boolean
   status: SettlementItemStatus
   evidence: string
+  note: string
 }
 
 function amountFormOf(item: SettlementItem): AmountFormValue {
@@ -63,6 +73,7 @@ function amountFormOf(item: SettlementItem): AmountFormValue {
     vatIncluded: false,
     status: item.status,
     evidence: item.evidence ?? '',
+    note: item.note ?? '',
   }
 }
 
@@ -163,8 +174,7 @@ export default function SettlementItems({
 
   const hasCost = view.bucket.has_cost
   const vendorName = (id: string | null) => vendors.find((v) => v.id === id)?.name ?? '—'
-  const memberName = (id: string | null) =>
-    members.find((m) => m.user_id === id)?.profile.name ?? '—'
+  const memberOf = (id: string | null) => members.find((m) => m.user_id === id) ?? null
 
   const canEditAmount = (item: SettlementItem) =>
     !readOnly && (isPm || (item.assignee_id != null && item.assignee_id === currentUserId))
@@ -180,6 +190,7 @@ export default function SettlementItems({
     const patch: Partial<SettlementItemInput> = {
       status: form.status,
       evidence: form.evidence.trim() === '' ? null : form.evidence.trim(),
+      note: form.note.trim() === '' ? null : form.note.trim(),
     }
     if (hasCost) {
       patch.ordered_amount = form.ordered
@@ -219,64 +230,119 @@ export default function SettlementItems({
     }
   }
 
+  const removeItem = async (item: SettlementItem) => {
+    if (!window.confirm(`발주 항목 '${item.title}'을(를) 지울까요? 금액도 함께 사라집니다.`)) return
+    setBusy(true)
+    await onDelete(item.id)
+    setBusy(false)
+    if (editingId === item.id) {
+      setEditingId(null)
+      setForm(null)
+    }
+  }
+
   // 이 패널은 버킷 표(.ui-table)의 펼침 행 안쪽에 들어가지만, 표 정본 선택자가 직계 자식으로
   // 좁혀져 있어 중첩된 항목 표에는 규칙이 흘러들지 않는다(되돌리는 유틸리티가 필요 없다).
   return (
-    <div className="bg-canvas px-4 py-3">
+    <div className="bg-canvas py-2 pl-9 pr-4" data-testid="settlement-items">
       {!hasCost && (
         <p className="mb-2 text-sm text-ink-sub">
           원가가 없는 버킷입니다 — 견적액 전체가 마진으로 잡히므로 발주·실비를 넣지 않습니다.
         </p>
       )}
+      {view.over_budget && (
+        <p className="mb-1 text-[13px] text-accent-deep" data-testid="over-reason-hint">
+          견적을 넘었습니다 — 초과를 만든 항목의 ⋯ → 금액·상태 입력에서 메모로 이유를 남겨 두세요(막지는 않습니다).
+        </p>
+      )}
 
       {view.items.length === 0 ? (
-        <p className="text-sm text-ink-sub">아직 등록된 발주 항목이 없습니다.</p>
+        <p className="py-2 text-sm text-ink-sub">아직 등록된 발주 항목이 없습니다.</p>
       ) : (
-        <table className="w-full text-sm">
+        <table className="w-full table-fixed text-sm">
+          <colgroup>
+            <col />
+            <col className="w-[120px]" />
+            <col className="w-[96px]" />
+            <col className="w-[130px]" />
+            <col className="w-[130px]" />
+            <col className="w-[96px]" />
+            <col className="w-10" />
+          </colgroup>
           <thead>
             <tr>
-              <th className="ui-th">항목</th>
+              <th className="ui-th">발주 항목</th>
               <th className="ui-th">협력사</th>
               <th className="ui-th">담당</th>
               <th className="ui-th text-right">발주액</th>
               <th className="ui-th text-right">실집행</th>
               <th className="ui-th">상태</th>
-              <th className="ui-th" />
+              <th className="ui-th px-0" aria-label="메뉴" />
             </tr>
           </thead>
           <tbody>
-            {view.items.map((item) => (
-              <tr key={item.id} className="border-t border-border align-top">
-                <td className="px-3 py-2">
-                  <span className="font-medium text-ink">{item.title}</span>
-                  {item.spec && <span className="block text-xs text-ink-sub">{item.spec}</span>}
-                  {item.evidence && <span className="block text-xs text-ink-cap">{item.evidence}</span>}
-                </td>
-                <td className="px-3 py-2 text-ink-sub">{vendorName(item.vendor_id)}</td>
-                <td className="px-3 py-2 text-ink-sub">{memberName(item.assignee_id)}</td>
-                <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-ink-sub">{krw(item.ordered_amount)}</td>
-                <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums font-medium text-ink">
-                  {krw(item.actual_amount)}
-                  {item.vat_included_input && item.input_amount_raw != null && (
-                    <span className="block text-xs font-normal text-ink-cap">
-                      부가세 포함 {item.input_amount_raw.toLocaleString('ko-KR')} 입력
+            {view.items.map((item) => {
+              const member = memberOf(item.assignee_id)
+              const sub = [item.spec, item.evidence].filter(Boolean).join(' · ')
+              const canAmount = canEditAmount(item)
+              const canDelete = isPm && !readOnly
+              return (
+                <tr key={item.id} className="border-t border-border align-top" data-testid="settlement-item-row">
+                  <td className="px-3 py-2.5">
+                    <span className="block truncate font-medium text-ink" title={item.title}>
+                      {item.title}
                     </span>
-                  )}
-                </td>
-                <td className="px-3 py-2">
-                  <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-xs ${STATUS_PILL[item.status]}`}>
-                    {STATUS_LABEL[item.status]}
-                  </span>
-                </td>
-                <td className="px-3 py-2 text-right">
-                  {canEditAmount(item) && editingId !== item.id && (
-                    <button type="button" className="btn btn-sm btn-ghost" onClick={() => startEdit(item)}>
-                      입력
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
+                    {sub && <span className="block truncate text-xs text-ink-cap" title={sub}>{sub}</span>}
+                    {item.note && (
+                      <span className="block text-xs text-ink-sub" data-testid="settlement-item-note">
+                        메모 · {item.note}
+                      </span>
+                    )}
+                  </td>
+                  <td className="truncate px-3 py-2.5 text-ink-sub" title={vendorName(item.vendor_id)}>
+                    {vendorName(item.vendor_id)}
+                  </td>
+                  <td className="px-3 py-2.5">
+                    {member ? (
+                      <span className="inline-flex min-w-0 items-center gap-1.5 text-ink-sub">
+                        <span aria-hidden className={`size-2 shrink-0 rounded-full ${ROLE_BAR_CLASSES[member.role]}`} />
+                        <span className="truncate">{member.profile.name}</span>
+                      </span>
+                    ) : (
+                      <span className="text-ink-cap">—</span>
+                    )}
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums text-ink">{krw(item.ordered_amount)}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5 text-right font-semibold tabular-nums text-ink">
+                    {krw(item.actual_amount)}
+                    {item.vat_included_input && item.input_amount_raw != null && (
+                      <span className="block text-xs font-normal text-ink-cap">
+                        부가세 포함 {item.input_amount_raw.toLocaleString('ko-KR')} 입력
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2.5">
+                    <LevelBadge level={STATUS_LEVEL[item.status]} label={STATUS_LABEL[item.status]} />
+                  </td>
+                  <td className="px-0 py-1.5 text-center">
+                    {(canAmount || canDelete) && (
+                      <ActionMenu
+                        label={`발주 항목 메뉴 ${item.title}`}
+                        width={188}
+                        items={[
+                          ...(canAmount
+                            ? [{ label: '금액·상태 입력', onSelect: () => startEdit(item), testId: 'item-edit' }]
+                            : []),
+                          ...(canDelete
+                            ? [{ label: '항목 지우기', onSelect: () => void removeItem(item), danger: true, testId: 'item-delete' }]
+                            : []),
+                        ]}
+                      />
+                    )}
+                  </td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       )}
@@ -325,6 +391,15 @@ export default function SettlementItems({
                 onChange={(e) => setForm({ ...form, evidence: e.target.value })}
               />
             </label>
+            <label className="flex flex-col gap-1 sm:col-span-2">
+              <span className="t-caption">메모 · 견적을 넘었다면 이유</span>
+              <input
+                className="ui-input"
+                placeholder="예: 발주처 요청으로 현장 음향·조명 1식 추가"
+                value={form.note}
+                onChange={(e) => setForm({ ...form, note: e.target.value })}
+              />
+            </label>
           </div>
           {hasCost && (
             <div className="mt-2 flex flex-wrap items-center gap-3">
@@ -362,23 +437,6 @@ export default function SettlementItems({
             >
               취소
             </button>
-            {isPm && (
-              <button
-                type="button"
-                className="btn btn-ghost-negative ml-auto"
-                disabled={busy}
-                onClick={async () => {
-                  if (!editingId) return
-                  setBusy(true)
-                  await onDelete(editingId)
-                  setBusy(false)
-                  setEditingId(null)
-                  setForm(null)
-                }}
-              >
-                항목 삭제
-              </button>
-            )}
           </div>
         </div>
       )}
@@ -468,7 +526,11 @@ export default function SettlementItems({
             </div>
           </div>
         ) : (
-          <button type="button" className="btn btn-sm btn-ghost mt-3" onClick={() => setAdding(true)}>
+          <button
+            type="button"
+            className="mt-2 inline-flex items-center py-1.5 text-sm font-semibold text-accent-deep hover:underline"
+            onClick={() => setAdding(true)}
+          >
             ＋ 발주 항목 추가
           </button>
         )
