@@ -15,7 +15,8 @@
 //       6: Slack 알림 — 행사 설정 ③ 채널 등록(형식 검증 → 등록 → 가림 표시) · 홈 리마인드는 mock 사실 안내 ·
 //       4.7: 협력사 견적서 불러오기 — 가상 엑셀 읽기 → 확인 큐(부가세·버킷·공급가 대조) → 확정 → 이력 ·
 //       3.23: UX 개편 — PR-1 기반(날짜 표기·대비) · PR-2 홈 '오늘 할 일' · PR-3 디자인 보드(다음 행동 표·차례 칩·갤러리) ·
-//             PR-4 항목 상세(다음 단계 카드·큰 미리보기·⋯ 메뉴·코멘트 공개 범위) · PR-4b 큐시트(행 메뉴·끌어 옮기기·큐 추가·대본 칸))
+//             PR-4 항목 상세(다음 단계 카드·큰 미리보기·⋯ 메뉴·코멘트 공개 범위) · PR-4b 큐시트(행 메뉴·끌어 옮기기·큐 추가·대본 칸) ·
+//             PR-5 행사 목록(먼저 확인할 행사·진행 중·종료 묶음·카드 ⋯ 메뉴))
 // 캡처는 dist-demo/shots-interaction/ 에 남긴다. 실패 시 exit 1.
 import { createServer } from 'node:http'
 import { readFileSync, mkdirSync } from 'node:fs'
@@ -149,7 +150,35 @@ check(
   `${docCountBefore} → ${docRequests.length}`,
 )
 
-// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — **Phase 3.23 PR-4b 큐시트(2026-09-25)**.
+// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — **Phase 3.23 PR-5 행사 목록(2026-09-25)**.
+//     일정(②에서 도착) → 사이드바 '행사 목록' → 세 묶음(먼저 확인할 행사 줄 · 진행 중 카드 · 종료된 행사 접힘) · 채운 버튼 1개 ·
+//     카드 ⋯ 메뉴 열고 Esc(카드로 들어가지 않음) → 종료된 행사 펼치기 → 다시 '일정'으로.
+{
+  const docBefore = docRequests.length
+  await tab.locator('aside nav a', { hasText: '행사 목록' }).first().click()
+  await tab.waitForURL(/#\/projects/, { timeout: 10_000 })
+  await tab.getByTestId('project-card').first().waitFor({ timeout: 10_000 })
+  const attention = tab.getByRole('region', { name: '먼저 확인할 행사' })
+  const rows = (await attention.getByTestId('setup-row').count()) + (await attention.getByTestId('past-row').count())
+  const cards = await tab.getByTestId('project-card').count()
+  check(rows > 0 && cards > 0, '행사 목록 세 묶음: 먼저 확인할 행사 줄 + 진행 중 카드', `${rows}줄 · ${cards}장`)
+  const filled = (await tab.locator('main .btn-accent, main .btn-primary').allInnerTexts()).map((t) => t.trim())
+  check(filled.join('|') === '＋ 새 행사 만들기', '행사 목록 채운 버튼 1개(새 행사 만들기)', filled.join(' · '))
+  await tab.getByRole('button', { name: /^행사 메뉴 / }).first().click()
+  await tab.getByRole('menu').getByRole('menuitem', { name: '행사 설정 열기' }).waitFor({ timeout: 5_000 })
+  await tab.keyboard.press('Escape')
+  check((await tab.getByRole('menu').count()) === 0 && /#\/projects/.test(tab.url()), '카드 ⋯ 메뉴 열고 Esc — 카드로 들어가지 않음')
+  const closedToggle = tab.getByRole('button', { name: /^종료된 행사 \d+$/ })
+  await closedToggle.click()
+  await tab.getByRole('button', { name: '종료된 행사 접기' }).waitFor({ timeout: 5_000 })
+  check((await tab.getByTestId('project-card').count()) > cards, '종료된 행사 펼치기 → 카드가 늘어난다')
+  await tab.screenshot({ path: resolve(SHOTS, '03-project-list.png'), fullPage: true })
+  check(docRequests.length === docBefore, '행사 목록 이동·메뉴·펼치기에 전체 리로드 0', `${docBefore} → ${docRequests.length}`)
+  await tab.locator('aside nav a', { hasText: '일정' }).first().click()
+  await tab.waitForURL(/#\/schedule/, { timeout: 10_000 })
+}
+
+// ── ③-이전(2026-09-25 Phase 3.23 PR-4b) 큐시트 — 직전 PR ③을 회귀 가드로 유지.
 //     샘플 행사의 '개막식 큐시트'(dlv-004 — 큐 4개, ?project=로 행사 전환) → 표 머리 7칸 · 행 끝 ⋯ · **실제 브라우저 끌어 옮기기**(C01 → C03 뒤) →
 //     맨 위 행 '위로 옮기기'는 막히고 이유 · '큐 추가' → C05 편집 줄 → 시간 넣고 저장 → '대본 모아 보기' → 데모 기본 행사(RB27)로 되돌리고 '일정'으로.
 {

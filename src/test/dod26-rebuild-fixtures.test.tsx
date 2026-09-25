@@ -26,11 +26,11 @@ afterEach(cleanup)
 describe('DoD-26 (a) RE:BUILD 26 — 종료 행사', () => {
   it('S-1 목록에서 기본은 접혀 있고, 펼치면 종료 그룹에 나타난다', async () => {
     renderRoute('/projects')
-    await screen.findByRole('heading', { name: '내 행사' })
+    await screen.findByRole('heading', { name: '행사 목록' })
 
     // 접힘 상태 — 종료 카드 이름이 렌더되지 않는다
     expect(screen.queryByText('리멤버 RE:BUILD 26')).toBeNull()
-    const toggle = screen.getByRole('button', { name: /^종료 \d+$/ })
+    const toggle = screen.getByRole('button', { name: /^종료된 행사 \d+$/ })
     await userEvent.click(toggle)
     expect(await screen.findByText('리멤버 RE:BUILD 26')).toBeTruthy()
     // 기존 종료 행사(④)도 함께 유지된다 — 기존 픽스처 비파괴

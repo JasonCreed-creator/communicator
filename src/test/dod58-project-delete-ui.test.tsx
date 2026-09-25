@@ -24,22 +24,46 @@ afterEach(() => {
   provider.setAppRole('sales') // 픽스처 기본으로 복원(dod25와 같은 관용구)
 })
 
+/**
+ * Phase 3.23 PR-5 — 카드의 드문 동작(행사 설정 열기·종료·재개·삭제)은 ⋯ 메뉴에 있다. 권한(admin)은 비동기로 도착하므로
+ * 메뉴를 열었을 때 삭제가 보일 때까지 다시 열어 본다.
+ */
+async function openCardMenu(cardEl?: HTMLElement): Promise<HTMLElement> {
+  const scope = cardEl ? within(cardEl) : screen
+  const buttons = await scope.findAllByRole('button', { name: /^행사 메뉴 / })
+  await userEvent.click(buttons[0])
+  return screen.getByRole('menu')
+}
+
+async function deleteItem(cardEl?: HTMLElement): Promise<HTMLElement> {
+  let found: HTMLElement | null = null
+  await waitFor(async () => {
+    if (screen.queryByRole('menu')) await userEvent.keyboard('{Escape}')
+    const menu = await openCardMenu(cardEl)
+    found = within(menu).queryByTestId('card-delete')
+    expect(found).not.toBeNull()
+  })
+  return found!
+}
+
 describe('DoD 58 화면 — 진입점 2곳의 권한 표시', () => {
-  it('S-1 카드: admin이면 카드마다 삭제 버튼이 붙는다', async () => {
+  it('S-1 카드: admin이면 카드 ⋯ 메뉴에 삭제…(관리자만 · 되돌릴 수 없음)가 있다', async () => {
     provider.setAppRole('admin')
     renderRoute('/projects')
-    // getCurrentUser()는 비동기라 카드보다 늦게 도착한다 — find*로 기다린다
-    const buttons = await screen.findAllByTestId('card-delete')
-    expect(buttons.length).toBeGreaterThan(0)
+    const item = await deleteItem()
+    expect(item.textContent).toContain('삭제…')
+    expect(item.textContent).toContain('관리자만 · 되돌릴 수 없음')
   })
 
-  it('S-1 카드: admin이 아니면 버튼 자체가 없다 (카드마다 죽은 버튼을 박지 않는다)', async () => {
+  it('S-1 카드: admin이 아니면 메뉴에 삭제 자체가 없다 (카드마다 죽은 버튼을 박지 않는다)', async () => {
     provider.setAppRole('sales')
     renderRoute('/projects')
     // 사이드바 견적 링크도 같은 getCurrentUser()에서 나온다 — 이게 떴다면 역할 판정은 끝났다
     await screen.findByRole('link', { name: /견적/ })
     await screen.findAllByTestId('project-card')
-    expect(screen.queryAllByTestId('card-delete')).toHaveLength(0)
+    const menu = await openCardMenu()
+    expect(within(menu).getByRole('menuitem', { name: '행사 설정 열기' })).toBeTruthy()
+    expect(within(menu).queryByTestId('card-delete')).toBeNull()
   })
 
   it('행사 설정 ③: admin이 아니어도 카드는 보이고 사유가 읽힌다 (§10 진입점 원칙)', async () => {
@@ -71,9 +95,8 @@ describe('DoD 58 화면 — 확인 단계', () => {
     const before = (await provider.listProjects()).length
 
     renderRoute('/projects')
-    const first = (await screen.findAllByTestId('card-delete'))[0]
-    // 카드 자체가 role="button"이므로 삭제를 눌러도 행사로 진입하지 않아야 한다
-    await userEvent.click(first)
+    // 카드 자체가 role="button"이므로 메뉴에서 삭제를 눌러도 행사로 진입하지 않아야 한다
+    await userEvent.click(await deleteItem())
 
     const dialog = await screen.findByTestId('delete-project-dialog')
     const confirm = within(dialog).getByRole('button', { name: '영구 삭제' })
@@ -86,7 +109,7 @@ describe('DoD 58 화면 — 확인 단계', () => {
     await userEvent.click(within(dialog).getByRole('button', { name: '취소' }))
     expect((await provider.listProjects()).length).toBe(before)
     // 모달을 닫고 S-1에 그대로 있다(삭제 클릭이 카드 진입으로 새지 않았다)
-    expect(screen.getByRole('heading', { name: '내 행사' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: '행사 목록' })).toBeTruthy()
   })
 })
 
@@ -96,11 +119,11 @@ describe('DoD 58 화면 — 삭제 후 컨텍스트 자가 복구 (파괴적)', 
     localStorage.setItem(STORAGE_KEY, PROJECT_ID)
 
     renderRoute('/projects')
-    await screen.findAllByTestId('card-delete')
+    await screen.findAllByTestId('project-card')
     const target = screen
       .getAllByTestId('project-card')
       .find((c) => c.getAttribute('data-project-id') === PROJECT_ID)!
-    await userEvent.click(within(target).getByTestId('card-delete'))
+    await userEvent.click(await deleteItem(target))
 
     const dialog = await screen.findByTestId('delete-project-dialog')
     await userEvent.type(within(dialog).getByLabelText(/행사명/), SAMPLE_NAME)

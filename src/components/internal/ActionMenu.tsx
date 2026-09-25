@@ -12,6 +12,9 @@ export interface ActionMenuItem {
   reason?: string
   /** 되돌릴 수 없는 동작(지우기) — negative 글자, 앞에 구분선 */
   danger?: boolean
+  /** 이름 아래 작은 설명 — 예: '관리자만 · 되돌릴 수 없음' */
+  note?: string
+  testId?: string
 }
 
 export default function ActionMenu({
@@ -50,7 +53,16 @@ export default function ActionMenu({
   }, [open])
 
   return (
-    <div ref={wrapRef} className="relative inline-flex">
+    // 카드·행 전체가 눌리는 자리(role="button")에 놓여도 메뉴 안의 누르기·Enter가 바깥으로 번지지 않게 한다
+    // (Esc는 문서 수준에서 메뉴를 닫아야 하므로 막지 않는다)
+    <div
+      ref={wrapRef}
+      className="relative inline-flex"
+      onClick={(e) => e.stopPropagation()}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') e.stopPropagation()
+      }}
+    >
       <button
         ref={buttonRef}
         type="button"
@@ -83,6 +95,7 @@ export default function ActionMenu({
               <button
                 type="button"
                 role="menuitem"
+                data-testid={it.testId}
                 disabled={it.disabled}
                 onClick={(e) => {
                   e.stopPropagation()
@@ -95,6 +108,7 @@ export default function ActionMenu({
               >
                 {it.label}
                 {it.disabled && it.reason ? ` — ${it.reason}` : ''}
+                {it.note && <span className="t-caption mt-0.5 block">{it.note}</span>}
               </button>
             </div>
           ))}

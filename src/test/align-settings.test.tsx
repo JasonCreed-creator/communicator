@@ -1,19 +1,18 @@
 /** @vitest-environment jsdom */
-// Phase 3.17 시안 정렬 — 행사 목록(S-1) · 행사 설정(S6) 핵심 계약.
-// 시안: design_handoff_mice_communicator_ui/행사 설정 · 행사 목록.dc.html + 패턴 기준 시트 §03·§06·§07.
-// (1) 카드 3층 = 정체 / D-day pill + 진행률 / 주의 신호  (2) 주의 없으면 positive 한 칩
-// (3) 현재 행사 = 2px accent 보더 + '현재' 배지  (4) 세팅 미완료 = canvas 면 + negative 보더 +
-// 남은 필수 항목·온보딩 진행률·액션  (5) 설정 상단 필수 4 체크 스트립  (6) 탭 미입력 개수 배지
-// (7) Drive·Slack 미연결 = 빈 상태 정본(무엇이 좋아지는지 + 언제 열리는지, accent CTA 없음).
+// Phase 3.17 시안 정렬 → Phase 3.23 PR-5(디자인지시서 v1.4 §7-2.9) — 행사 목록(S-1) · 행사 설정(S6) 핵심 계약.
+// (1) 진행 중 카드 = 정체 / D-day pill + 진행률 / 확인할 것 + PM  (2) 확인할 것이 없으면 중립 '확인할 것 없음' 한 칩
+// (3) 지금 보는 행사 = accent 테두리 + '지금 보는 행사' 배지  (4) 세팅 미완료 = '먼저 확인할 행사' 줄(세팅 n/3단계 · 남은 필수 ·
+// 이어서 세팅하기)  (5) 설정 상단 필수 4 체크 스트립  (6) 탭 미입력 개수 배지  (7) Drive·Slack 미연결 = 빈 상태 정본.
 import { cleanup, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { PROJECT_ID } from '../fixtures/sampleProject'
+import { addDays, toIsoDate } from '../lib/wbs'
 import { mockProvider, renderRoute } from './testUtils'
 
 afterEach(cleanup)
 
-/** 필수 미입력(행사일·장소)만 비어 있는 세팅 미완료 행사 — 시안 3번째 카드의 실데이터 대응물 */
+/** 필수 미입력(행사일·장소)만 비어 있는 세팅 미완료 행사 — 시안 '먼저 확인할 행사' 첫 줄의 실데이터 대응물 */
 let draftId = ''
 
 beforeAll(async () => {
@@ -21,6 +20,8 @@ beforeAll(async () => {
   p.switchUser('usr-pm')
   const created = await p.createProject({ name: '가상 정렬 점검 행사', code: 'ALIGN17' })
   draftId = created.id
+  // 샘플 행사가 언제 돌려도 '진행 중'(행사일 전)에 있도록 오늘 기준으로 옮긴다
+  await p.updateProject(PROJECT_ID, { event_date: addDays(toIsoDate(new Date()), 27) })
 })
 
 function card(id: string): HTMLElement {
@@ -31,78 +32,76 @@ function card(id: string): HTMLElement {
   return el
 }
 
-describe('S-1 행사 목록 — 카드 3층', () => {
-  it('(1)(3) 현재 행사 카드는 정체·D-day+진행률·주의 신호 3층이고 2px accent 보더 + 현재 배지', async () => {
+describe('S-1 행사 목록 — 진행 중 카드', () => {
+  it('(1)(3) 지금 보는 행사 카드 = 정체 · D-day + 진행률 · 확인할 것 + PM, accent 테두리 + 배지', async () => {
     localStorage.setItem('communicator.currentProjectId', PROJECT_ID)
     renderRoute('/projects')
-    await screen.findByRole('heading', { name: '내 행사' })
+    await screen.findByRole('heading', { name: '행사 목록' })
 
     const summary = (await mockProvider().listProjects()).find((s) => s.id === PROJECT_ID)!
     const el = card(PROJECT_ID)
 
-    // ① 정체 — 유형 · 일자 · 장소 한 줄 + 행사명
+    // ① 정체 — 유형 · 요일 날짜 + 행사명 + 장소
     expect(within(el).getByRole('heading', { name: summary.name })).toBeTruthy()
     expect(el.textContent).toContain(summary.venue!)
+    expect(el.textContent).toMatch(/\d+월 \d+일 \([일월화수목금토]\)/)
 
-    // ② D-day pill + 확정 진행률(바 아래 줄 우측 수치)
+    // ② D-day pill(dark) + 확정 진행률
     const dday = within(el).getByTestId('card-dday')
-    expect(dday.textContent).toMatch(/^(D-\d+|\d+일 지남|D-day|일정 미정)$/)
+    expect(dday.textContent).toBe('D-27')
+    expect(dday.className).toContain('bg-dark')
     expect(within(el).getByText(`확정 ${summary.finals}/${summary.deliverable_total}`)).toBeTruthy()
 
-    // ③ 주의 신호 층이 분리선 아래 별도 블록으로 존재
+    // ③ 확인할 것 — 분리선 아래 줄, 오른쪽에 PM
     const signals = within(el).getByTestId('card-signals')
-    expect(signals.className).toContain('border-t')
+    expect(signals.parentElement!.className).toContain('border-t')
+    expect(signals.parentElement!.textContent).toContain(`PM ${summary.pm_name}`)
 
-    // 현재 행사 = 2px accent 보더 + '현재' 배지(화면 통틀어 1개)
-    expect(el.className).toContain('border-2')
+    // 지금 보는 행사 = accent 테두리 + 배지(화면 통틀어 1개)
     expect(el.className).toContain('border-accent')
+    expect(el.getAttribute('aria-current')).toBe('true')
     expect(screen.getAllByTestId('current-badge')).toHaveLength(1)
+    expect(screen.getByTestId('current-badge').textContent).toBe('지금 보는 행사')
   })
 
-  it('(2) 미결·지연이 없는 행사는 주의 신호가 positive "주의 없음" 한 칩뿐이다', async () => {
+  it('(2) 확인할 것이 없는 행사는 중립 "확인할 것 없음" 한 칩, 있으면 발주처 답 대기(도트)·지연', async () => {
     localStorage.setItem('communicator.currentProjectId', PROJECT_ID)
     renderRoute('/projects')
-    await screen.findByRole('heading', { name: '내 행사' })
-    // 종료 섹션까지 펼쳐 조용한 행사를 찾는다(종료 행사도 3층 규격을 따른다)
-    await userEvent.click(screen.getByRole('button', { name: /^종료 \d+$/ }))
+    await screen.findByRole('heading', { name: '행사 목록' })
+    // 종료 묶음까지 펼쳐 조용한 행사를 찾는다(종료 행사도 같은 카드 규격)
+    await userEvent.click(screen.getByRole('button', { name: /^종료된 행사 \d+$/ }))
 
     const summaries = await mockProvider().listProjects()
-    const quiet = summaries.find(
-      (s) => s.onboarded && s.pending_approvals === 0 && s.delayed_tasks === 0,
-    )!
-    const noisy = summaries.find((s) => s.onboarded && s.pending_approvals > 0)!
+    const onScreen = (id: string) => screen.queryAllByTestId('project-card').some((c) => c.dataset.projectId === id)
+    const quiet = summaries.find((s) => s.pending_approvals === 0 && s.delayed_tasks === 0 && onScreen(s.id))!
+    const noisy = summaries.find((s) => s.pending_approvals > 0 && s.kind !== 'host' && onScreen(s.id))!
 
     const quietSignals = within(card(quiet.id)).getByTestId('card-signals')
-    expect(quietSignals.textContent).toBe('주의 없음')
+    expect(quietSignals.textContent).toBe('확인할 것 없음')
     expect(quietSignals.querySelectorAll('.ui-badge')).toHaveLength(1)
-    expect(quietSignals.querySelector('[data-level="positive"]')).toBeTruthy()
+    expect(quietSignals.querySelector('[data-level="neutral"]')).toBeTruthy()
 
-    // 반대로 미결이 있는 행사는 주의(attention) 배지 + 도트를 단다
     const noisySignals = within(card(noisy.id)).getByTestId('card-signals')
-    expect(noisySignals.textContent).toContain(`미결 컨펌 ${noisy.pending_approvals}`)
+    expect(noisySignals.textContent).toContain(`발주처 답 대기 ${noisy.pending_approvals}`)
     expect(noisySignals.querySelector('[data-level="attention"]')).toBeTruthy()
-    expect(noisySignals.textContent).not.toContain('주의 없음')
+    expect(noisySignals.textContent).not.toContain('확인할 것 없음')
   })
 
-  it('(4) 세팅 미완료 카드는 canvas 면 + negative 보더 + 남은 필수·온보딩 진행률·액션을 품는다', async () => {
+  it('(4) 세팅 미완료 행사는 카드가 아니라 "먼저 확인할 행사" 줄 — 세팅 n/3단계 · 남은 필수 · 이어서 세팅하기', async () => {
     localStorage.setItem('communicator.currentProjectId', PROJECT_ID)
     renderRoute('/projects')
-    await screen.findByRole('heading', { name: '내 행사' })
+    await screen.findByRole('heading', { name: '행사 목록' })
 
-    const el = card(draftId)
-    expect(el.dataset.needsSetup).toBe('true')
-    expect(el.className).toContain('bg-canvas')
-    expect(el.className).toContain('border-negative')
-
-    const panel = within(el).getByTestId('setup-panel')
-    // 남은 필수 항목이 이름으로 적힌다(행사명·코드는 입력됨 → 행사일·장소만 남음)
-    expect(panel.textContent).toContain('필수 2개 남음')
-    expect(panel.textContent).toContain('행사일 · 장소')
-    expect(panel.textContent).toContain('온보딩 1/3') // 생성자가 PM으로 자동 등록 → 1단계 완료
-
-    // 액션 버튼이 카드 안에 있고, D-day/진행률 층은 이 카드에 없다
-    expect(within(el).getByRole('button', { name: '온보딩 이어서 하기' })).toBeTruthy()
-    expect(within(el).queryByTestId('card-dday')).toBeNull()
+    expect(screen.queryAllByTestId('project-card').some((c) => c.dataset.projectId === draftId)).toBe(false)
+    const group = screen.getByRole('region', { name: '먼저 확인할 행사' })
+    const row = within(group)
+      .getAllByTestId('setup-row')
+      .find((r) => r.dataset.projectId === draftId)!
+    expect(within(row).getByText('세팅 1/3단계').getAttribute('data-level')).toBe('attention') // 생성자 PM 자동 등록 → 1단계
+    // 남은 필수 항목이 이름으로(행사명·코드는 입력됨 → 행사일·장소만 남음)
+    expect(row.textContent).toContain('필수 2개 남음 — 행사일 · 장소')
+    await userEvent.click(within(row).getByRole('button', { name: '이어서 세팅하기' }))
+    expect(await screen.findByRole('heading', { name: '① 행사개요' })).toBeTruthy()
   })
 })
 

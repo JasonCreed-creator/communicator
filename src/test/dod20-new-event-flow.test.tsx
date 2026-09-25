@@ -14,7 +14,7 @@ describe('DoD-20 새 행사 흐름·유도', () => {
     const before = await p.listProjects()
 
     renderRoute('/projects')
-    await screen.findByRole('heading', { name: '내 행사' })
+    await screen.findByRole('heading', { name: '행사 목록' })
     // 헤더 버튼·dashed 카드 둘 다 같은 이름 — 첫 번째로 생성
     await userEvent.click(screen.getAllByRole('button', { name: '＋ 새 행사 만들기' })[0])
 
