@@ -4,7 +4,7 @@
 //   ③ 멘션: 주소록 Slack ID → 없으면 이메일로 찾아 적어 둔다(한 번만) → 못 찾으면 '이름(Slack 미연결)' · 웹훅은 아는 ID만
 //   ④ 카드: 새 지시 = 담당자 제작 요청 카드(같은 사람 여러 건 = 한 장) · 내부검토 요청·파트너 제출 = PM 검토 카드 ·
 //          올린 카드는 기록(항목·받는 사람·ts) · 발주처 결정 = 담당자+PM 멘션 줄 + 공유 코멘트 인용 · 시안 올림은 멘션 없음
-//   ⑤ 실패: 봇 오류는 failed + 한국어 사유, 카드 기록 없음 · 테스트 보내기의 오류 문구(봇 초대)
+//   ⑤ 실패: 봇 오류는 failed + 한국어 사유, 카드 기록 없음 · 테스트 보내기의 오류 문구(채널에 앱 추가)
 //   ⑥ 버튼: 서명(위조·5분 밖 401 · 비밀 없음 503) · 멘션된 사람 → 카드 교체(버튼 → ✓ 확인함) · 다른 사람 → 나만 보기 안내 ·
 //          주소록에 Slack ID 없으면 이메일로 찾아 적어 둔다 · 이미 확인 · 응답 주소는 hooks.slack.com만
 //   ⑦ 리마인드: 24시간 미확인 = 원래 카드 링크 + 멘션 · 항목 마감 D-1 = 담당자
@@ -370,7 +370,7 @@ describe('DoD 79 · ⑤ 실패해도 막지 않는다', () => {
     const slack = fakeSlack({ fail: 'not_in_channel' })
     expect(await drain(s, slack)).toMatchObject({ failed: 1, sent: 0 })
     expect(s.marks[0]).toMatchObject({ keys: ['act:1'], status: 'failed' })
-    expect(s.marks[0].error).toContain('/invite @micecommunicator')
+    expect(s.marks[0].error).toContain('에이전트 및 앱 → 앱 추가')
     expect(s.cards).toHaveLength(0)
   })
 
@@ -387,7 +387,7 @@ describe('DoD 79 · ⑤ 실패해도 막지 않는다', () => {
     expect(ok.posts()[0].body).toMatchObject({ channel: 'C0PROJ001', thread_ts: '1727251234.567890', text: '[VST26] 알림 테스트 — 가상 서밋 2026의 알림이 이 스레드로 옵니다.' })
     const bad = await call(fakeSlack({ fail: 'not_in_channel' }))
     expect(bad.status).toBe(502)
-    expect((await bad.json()).error.message).toContain('/invite @micecommunicator')
+    expect((await bad.json()).error.message).toContain('에이전트 및 앱 → 앱 추가')
   })
 
   it('상태: 봇 토큰 유무만 알린다(값 없음)', async () => {

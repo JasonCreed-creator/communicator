@@ -20,9 +20,9 @@ const API = 'https://slack.com/api/'
 export function slackErrorMessage(code: string | undefined): string {
   switch (code) {
     case 'not_in_channel':
-      return '봇이 이 채널에 없습니다 — 채널에서 /invite @micecommunicator 로 초대하세요.'
+      return '봇이 이 채널에 없습니다 — 채널 세부정보 → 에이전트 및 앱 → 앱 추가로 커뮤니케이터 앱을 넣으세요(또는 /invite @앱이름).'
     case 'channel_not_found':
-      return '채널을 찾을 수 없습니다 — 비공개 채널이면 먼저 봇을 초대하고, 링크가 이 워크스페이스의 것인지 확인하세요.'
+      return '채널을 찾을 수 없습니다 — 비공개 채널이면 먼저 채널 세부정보 → 에이전트 및 앱 → 앱 추가로 커뮤니케이터 앱을 넣고, 링크가 이 워크스페이스의 것인지 확인하세요.'
     case 'thread_not_found':
     case 'message_not_found':
       return '스레드를 찾을 수 없습니다 — 스레드 첫 글의 링크를 다시 복사해 주세요.'

@@ -175,8 +175,8 @@ export default function SlackCard({
               />
               {threadTrimmed && !threadValid && <p className="text-xs text-negative">{SLACK_THREAD_INVALID_MESSAGE}</p>}
               <p className="text-xs leading-relaxed text-ink-cap">
-                Slack에서 이 행사 스레드 첫 글의 ⋯ → 링크 복사로 받은 주소를 붙여 넣으세요. 비공개 채널이면 먼저 채널에서{' '}
-                <span className="font-mono">/invite @micecommunicator</span>로 봇을 초대하세요.
+                Slack에서 이 행사 스레드 첫 글의 ⋯ → 링크 복사로 받은 주소를 붙여 넣으세요. 봇이 그 채널에 있어야 합니다 — 채널
+                세부정보 → 에이전트 및 앱 → 앱 추가로 커뮤니케이터 앱을 넣으세요(비공개 채널은 반드시).
               </p>
             </>
           ) : (
