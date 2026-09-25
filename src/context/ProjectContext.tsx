@@ -19,7 +19,7 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useAsync, useMutation } from '../hooks/useAsync'
 import { getDataProvider } from '../providers'
 import type { UUID } from '../types/entities'
@@ -107,6 +107,21 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     setSelectedId(id)
     writeStored(id)
   }, [])
+
+  // Phase 6(§9) — Slack 알림 링크는 `?project={id}`를 단다: 다른 행사를 보던 사람이 눌러도 그 행사로 연다.
+  // 목록에 있는 행사일 때만 전환하고(권한 없음·삭제됨은 무시), 적용한 뒤 주소에서 지운다 — 남겨 두면 셀렉터로
+  // 다른 행사를 골라도 다시 끌려온다. 다른 쿼리(`?tab=`·Drive 복귀 `?drive=`)와 해시는 그대로 둔다.
+  const location = useLocation()
+  const navigate = useNavigate()
+  const wantedProject = new URLSearchParams(location.search).get('project')
+  useEffect(() => {
+    if (list.loading || list.error || !wantedProject) return
+    if (wantedProject !== selectedId && summaries.some((s) => s.id === wantedProject)) setProject(wantedProject)
+    const params = new URLSearchParams(location.search)
+    params.delete('project')
+    const search = params.toString()
+    navigate({ pathname: location.pathname, search: search ? `?${search}` : '', hash: location.hash }, { replace: true })
+  }, [list.loading, list.error, wantedProject, selectedId, summaries, setProject, navigate, location.pathname, location.search, location.hash])
 
   if (list.loading) {
     return (

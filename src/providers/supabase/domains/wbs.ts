@@ -4,6 +4,7 @@
 // R&R/컴플라이언스 시드 판단은 여기(앱)의 몫이고, 원자적 치환·onboarded_at 기록·pm 단언 이중화는 RPC의 몫이다.
 import type { DataProvider } from '../../DataProvider'
 import { SupabaseCtx, newId, nowIso } from '../ctx'
+import { notifyFor } from '../notify'
 import { ProviderError } from '../../../lib/errors'
 import { offsetToDate } from '../../../lib/wbs'
 import {
@@ -246,6 +247,7 @@ export function wbsDomain(ctx: SupabaseCtx): Pick<DataProvider, WbsMethods> {
         }),
       ),
     )
+    if (inbound.length > 0) notifyFor(ctx).ping() // Phase 6 §9 — 새 지시(파트너 제출 항목) 묶음 알림
   }
 
   const api: Pick<DataProvider, WbsMethods> = {

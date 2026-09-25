@@ -11,7 +11,8 @@
 //       Phase 5: 업로드 3경로 — 파일 선택 여러 개·끌어놓기·Drive 링크 등록 ·
 //       3.22: 담당자 배정 카드 — 빼기 → 끌어놓기 배정 · 빼기 → 누르기 배정 ·
 //       4.3.1: 업로드 잠금 안내 — 컨펌대기 항목은 고르기·업로드 대신 이유, 헤더 버튼 비활성 ·
-//       4.5: 항목 고치기·지우기 — 제목 고쳐 저장 → 이름 입력 확인 후 지우기 → 보드 복귀)
+//       4.5: 항목 고치기·지우기 — 제목 고쳐 저장 → 이름 입력 확인 후 지우기 → 보드 복귀 ·
+//       6: Slack 알림 — 행사 설정 ③ 채널 등록(형식 검증 → 등록 → 가림 표시) · 홈 리마인드는 mock 사실 안내)
 // 캡처는 dist-demo/shots-interaction/ 에 남긴다. 실패 시 exit 1.
 import { createServer } from 'node:http'
 import { readFileSync, mkdirSync } from 'node:fs'
@@ -145,7 +146,45 @@ check(
   `${docCountBefore} → ${docRequests.length}`,
 )
 
-// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — **Phase 4.5 항목 고치기·지우기(2026-09-25)**.
+// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — **Phase 6 Slack 알림(2026-09-25)**.
+//     행사 설정 ③ Slack 카드: 틀린 주소 → 형식 문구 + 등록 비활성 → Incoming Webhook 주소 → 등록 → 끝 토큰이 가려진 표시 →
+//     해제(확인창 수락). 데모는 mock이라 '테스트 보내기'가 없고 발송하지 않는다는 사실만 적는다. 홈 '담당에게 리마인드'도 mock 안내.
+const noticeS = tab.getByRole('button', { name: '안내 닫기' })
+if (await noticeS.count()) await noticeS.click()
+const docBeforeSlack = docRequests.length
+await tab.evaluate(() => {
+  window.location.hash = '#/settings?tab=integration'
+})
+const slackCard = tab.getByTestId('slack-card')
+await slackCard.waitFor({ timeout: 10_000 })
+check(/데모\(mock\)에서는 알림을 보내지 않습니다/.test(await slackCard.innerText()), 'Slack 카드: mock은 발송하지 않는다는 사실 안내')
+const hookInput = slackCard.getByLabel('Slack 웹훅 주소')
+await hookInput.fill('https://example.com/hook')
+check(await slackCard.getByRole('button', { name: '등록' }).isDisabled(), 'Slack 카드: Incoming Webhook 주소가 아니면 등록 비활성')
+check(/hooks\.slack\.com\/services\/… 형식/.test(await slackCard.innerText()), 'Slack 카드: 형식 문구')
+await hookInput.fill('https://hooks.slack.com/services/TDEMO/BDEMO/demoSecretToken')
+await slackCard.getByRole('button', { name: '등록' }).click()
+const masked = tab.getByTestId('slack-webhook-masked')
+await masked.waitFor({ timeout: 10_000 })
+check((await masked.innerText()).endsWith('/••••') && !(await tab.evaluate(() => document.body.innerText)).includes('demoSecretToken'), '등록 → 끝 토큰 가림 표시(원문 0)', await masked.innerText())
+check((await slackCard.getByRole('button', { name: '테스트 보내기' }).count()) === 0, 'mock: 테스트 보내기 없음')
+await tab.screenshot({ path: resolve(SHOTS, '03-slack-card.png'), fullPage: true })
+tab.once('dialog', (d) => d.accept())
+await slackCard.getByRole('button', { name: '해제' }).click()
+await slackCard.getByLabel('Slack 웹훅 주소').waitFor({ timeout: 10_000 })
+check(true, '해제 → 입력 칸으로 돌아감')
+await tab.evaluate(() => {
+  window.location.hash = '#/home'
+})
+const remindBtn = tab.getByRole('button', { name: '담당에게 리마인드' })
+await remindBtn.waitFor({ timeout: 10_000 })
+await remindBtn.click()
+const remindStatus = tab.getByRole('status').filter({ hasText: '데모(mock)에서는 알림을 보내지 않습니다' })
+await remindStatus.first().waitFor({ timeout: 10_000 })
+check(true, '홈 리마인드: mock은 보내는 흉내 없이 사실 안내')
+check(docRequests.length === docBeforeSlack, 'Slack 카드·홈 리마인드에 전체 리로드 0', `${docBeforeSlack} → ${docRequests.length}`)
+
+// ── ③-이전(2026-09-25 Phase 4.5) 항목 고치기·지우기 — 직전 세션 ③을 회귀 가드로 유지.
 //     RB27 '유튜브 중계 템플릿'(dlv-rb27-prd-005): 보드에 있는지 먼저 보고 → 항목 관리 카드 → 고치기 → 제목 바꿔 저장(헤더 반영) →
 //     지우기 → 이름 입력 전 '영구 삭제' 비활성 → 정확히 치면 활성 → 지움 → 결과 창(데모는 Drive 문구 없음) → '디자인 보드로' →
 //     보드에 그 항목 없음. 다른 블록이 쓰는 항목(prd-001·prd-007)은 건드리지 않는다.

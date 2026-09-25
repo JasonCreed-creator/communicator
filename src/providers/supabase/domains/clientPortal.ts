@@ -10,6 +10,7 @@
 import type { DataProvider } from '../../DataProvider'
 import type { SupabaseCtx } from '../ctx'
 import { driveFor } from '../drive'
+import { notifyFor } from '../notify'
 import { fileUrlFor } from '../files'
 import { ProviderError } from '../../../lib/errors'
 import type { ClientFinalItem, ClientQueue, ClientQueueItem, ClientStatusData } from '../../../types/views'
@@ -86,6 +87,7 @@ export function clientPortalDomain(ctx: SupabaseCtx): ClientPortalDomain {
         p_decision: input.decision,
         p_comment: input.comment ?? null,
       })
+      notifyFor(ctx).pingToken(token) // Phase 6 §9 — 승인·수정요청 알림(발주처 화면은 로그인이 없어 링크 토큰으로)
       if (input.decision === 'approved') {
         // §7.5 — 06_발주처공유 복사 성공 후 final(실패해도 approved로 남고 스캔이 재시도 — 발주처 화면은 막지 않는다)
         await driveFor(ctx)

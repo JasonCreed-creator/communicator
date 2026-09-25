@@ -468,6 +468,56 @@ ${assertSql(`(drive_project_folder('${PRJ_CLOSED}') ->> 'drive_root_folder_id') 
   scenario('Drive drive_project_folder: admin이 아니면 403(sales pm)', `select drive_project_folder('${PRJ}');`,
     { role: 'authenticated', sub: authId.pm, expect: 'error', match: '관리자\\(admin\\)' })
 
+  // 5g. Slack 알림 (Phase 6 · 설계서 v2.10.1 §9) — service 전용 · 선점(한 번만) · 리마인드 날짜 키 · 수동 리마인드 시간당 1회 · 금액 0
+  for (const [fn, call] of [
+    ['notify_claim_events', 'notify_claim_events(10)'],
+    ['notify_claim_reminders', 'notify_claim_reminders()'],
+    ['notify_claim_manual', `notify_claim_manual('${PRJ}', 'delayed')`],
+    ['notify_mark', `notify_mark(array['x'], 'sent')`],
+  ]) {
+    scenario(`알림 ${fn}: authenticated 실행 불가(service 전용)`, `select ${call};`, { role: 'authenticated', sub: authId.pm, expect: 'error', match: 'permission denied' })
+    scenario(`알림 ${fn}: anon 실행 불가`, `select ${call};`, { role: 'anon', expect: 'error', match: 'permission denied' })
+  }
+  scenario('알림 notification_log: authenticated는 표 권한 없음', `select count(*) from notification_log;`,
+    { role: 'authenticated', sub: authId.pm, expect: 'error', match: 'permission denied' })
+  scenario('알림 사건 선점: 새 버전 → 행사 코드·항목 제목과 함께 한 번만(두 번째 선점 0건) · 금액 키 0 · mark → sent', `select upload_version('${designItem}', 'n.pdf', null, 'n.pdf', 'drv-notify-1');
+reset role;
+do $$ declare r jsonb; r2 jsonb; k text; begin
+  r := notify_claim_events(50);
+  select e->>'key' into k from jsonb_array_elements(r) e where e->>'action' = 'version.uploaded' and e->>'title' is not null and e->>'project_code' is not null limit 1;
+  if k is null then raise exception 'ASSERT_FAILED: claim %', r; end if;
+  if r::text ~ 'total_amount|breakdown|contract_amount|ordered_amount|actual_amount' then raise exception 'ASSERT_FAILED: money'; end if;
+  r2 := notify_claim_events(50);
+  if jsonb_array_length(r2) <> 0 then raise exception 'ASSERT_FAILED: dedupe %', r2; end if;
+  perform notify_mark(array[k], 'sent');
+  if (select status from notification_log where key = k) <> 'sent' or (select sent_at from notification_log where key = k) is null then raise exception 'ASSERT_FAILED: mark'; end if;
+end $$;`, { role: 'authenticated', sub: authId.design })
+  scenario('알림 사건 선점: 오래된 사건(2일 밖 — 시드 로그)은 선점하지 않는다', `do $$ begin
+  if exists (select 1 from jsonb_array_elements(notify_claim_events(200)) e where (e->>'at')::timestamptz < now() - interval '2 days') then raise exception 'ASSERT_FAILED: old'; end if;
+end $$;`)
+  scenario('알림 리마인드: 내일(KST) 기한 컨펌·마일스톤 + 미등록 파일 묶음 → 같은 날 두 번째는 0건 · 종료 행사 제외', `update approvals set due_at = ((now() at time zone 'Asia/Seoul')::date + 1 + time '12:00') at time zone 'Asia/Seoul' where id = '${pendingApprovals[0]}';
+insert into milestones (project_id, title, due_date) values ('${PRJ}', '알림 검사 마일스톤', (now() at time zone 'Asia/Seoul')::date + 1);
+insert into milestones (project_id, title, due_date) values ('${PRJ_CLOSED}', '종료 행사 마일스톤', (now() at time zone 'Asia/Seoul')::date + 1);
+do $$ declare r jsonb; begin
+  r := notify_claim_reminders();
+  if not exists (select 1 from jsonb_array_elements(r) e where e->>'kind' = 'approval_due' and e->>'deliverable_id' is not null) then raise exception 'ASSERT_FAILED: approval_due %', r; end if;
+  if not exists (select 1 from jsonb_array_elements(r) e where e->>'kind' = 'milestone_due' and e->>'title' = '알림 검사 마일스톤') then raise exception 'ASSERT_FAILED: milestone'; end if;
+  if exists (select 1 from jsonb_array_elements(r) e where e->>'title' = '종료 행사 마일스톤') then raise exception 'ASSERT_FAILED: closed'; end if;
+  if not exists (select 1 from jsonb_array_elements(r) e where e->>'kind' = 'inbox_digest' and (e->>'count')::int >= 1) then raise exception 'ASSERT_FAILED: inbox'; end if;
+  if jsonb_array_length(notify_claim_reminders()) <> 0 then raise exception 'ASSERT_FAILED: same-day dedupe'; end if;
+end $$;`)
+  scenario('알림 수동 리마인드: 목록(건수·상위 10)과 함께 선점 → 같은 시간 두 번째는 null · 실패하면 다시 선점 가능 · 대상 검증 422', `do $$ declare r jsonb; begin
+  r := notify_claim_manual('${PRJ}', 'approval');
+  if r is null or (r->>'total')::int < 1 or jsonb_array_length(r->'items') < 1 then raise exception 'ASSERT_FAILED: manual %', r; end if;
+  if notify_claim_manual('${PRJ}', 'approval') is not null then raise exception 'ASSERT_FAILED: hourly'; end if;
+  if notify_claim_manual('${PRJ}', 'delayed') is null then raise exception 'ASSERT_FAILED: other target'; end if;
+  perform notify_mark(array[r->>'key'], 'failed', 'Slack 403');
+  if notify_claim_manual('${PRJ}', 'approval') is null then raise exception 'ASSERT_FAILED: retry after failure'; end if;
+  if notify_claim_manual('${PRJ}', 'approval') is not null then raise exception 'ASSERT_FAILED: hourly after retry'; end if;
+end $$;
+select notify_claim_manual('${PRJ}', 'x');`, { expect: 'error', match: '리마인드 대상' })
+  scenario('알림 notify_mark: 알 수 없는 결과 422', `select notify_mark(array['k'], 'maybe');`, { expect: 'error', match: '알 수 없는 결과' })
+
   // 6. 시크릿 커밋 가드 (§8 DoD 9) — 실키 값 패턴이 레포 파일에 없는가
   const grep = spawnSync('grep', ['-rnE', 'sb_secret_[A-Za-z0-9_-]{10,}|sbp_[A-Za-z0-9]{20,}', 'src', 'supabase', 'scripts', '--include=*.ts', '--include=*.tsx', '--include=*.sql', '--include=*.mjs', '--include=*.md'], { encoding: 'utf8' })
   record('시크릿 커밋 가드: sb_secret_/sbp_ 실키 패턴 0건 (DoD 9)', grep.status === 1, grep.stdout)
