@@ -9,7 +9,7 @@
 // **내부 전용** — 금액은 이 화면과 정산보드에만(§4-24 R-S9).
 import { useMemo, useState } from 'react'
 import ErrorAlert from '../internal/ErrorAlert'
-import { useAsync, useMutation } from '../../hooks/useAsync'
+import { useMutation } from '../../hooks/useAsync'
 import { toVatExcluded } from '../../lib/settlement'
 import {
   isVendorQuoteFile,
@@ -50,94 +50,58 @@ function draftsOf(view: VendorQuoteImportView, buckets: readonly SettlementBucke
   return out
 }
 
-export default function VendorQuoteImport({
-  projectId,
-  buckets,
-  vendors,
+/**
+ * 불러온 협력사 견적서 이력 — PR-7(디자인지시서 v1.4 §7-2.11)부터 **불러오기 버튼은 정산보드 머리**에 있고
+ * 확인 대기 건은 머리 아래 알림이 먼저 알린다. 이 칸은 기록(파일 · 협력사 · 상태 · 원본 보관)만 — 이력이 있을 때만 그린다.
+ */
+export default function VendorQuoteHistory({
+  imports,
   canEdit,
-  onChanged,
+  onOpen,
 }: {
-  projectId: string
-  buckets: readonly SettlementBucket[]
-  vendors: readonly Vendor[]
-  /** pm이고 종료 행사가 아닐 때 */
+  imports: readonly VendorQuoteImportView[]
+  /** pm이고 종료 행사가 아닐 때 — 확인 대기 건을 다시 열 수 있다 */
   canEdit: boolean
-  /** 확정으로 항목이 생겼을 때 — 정산보드를 다시 읽는다 */
-  onChanged: () => void
+  onOpen: (view: VendorQuoteImportView) => void
 }) {
-  const imports = useAsync(() => provider.listVendorQuoteImports(projectId), [projectId])
-  const [open, setOpen] = useState<VendorQuoteImportView | 'new' | null>(null)
-  const pending = (imports.data ?? []).filter((x) => x.status === 'parsed')
-
+  const pending = imports.filter((x) => x.status === 'parsed')
+  if (imports.length === 0) return null
   return (
-    <section className="ui-card p-5" data-testid="vendor-quote-import">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="t-card-title">협력사 견적서 불러오기</h2>
-          <p className="mt-1 text-sm text-ink-sub">
-            엑셀 견적서의 항목을 읽어 버킷별 발주 항목으로 넣습니다. 버킷·부가세는 제안만 하고, 확인한 뒤에 저장합니다.
-          </p>
-        </div>
-        <button
-          type="button"
-          className="btn btn-ghost"
-          disabled={!canEdit}
-          title={canEdit ? undefined : 'PM 전용 — 종료된 행사는 재개 후'}
-          onClick={() => setOpen('new')}
-        >
-          견적서 불러오기
-        </button>
+    <section className="ui-card p-5" data-testid="vendor-quote-import" aria-label="불러온 협력사 견적서">
+      <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
+        <h2 className="t-card-title">불러온 협력사 견적서</h2>
+        <span className="t-caption">확정한 건만 발주 항목이 됩니다 · 원본은 행사 Drive 폴더(02_견적·정산)에 보관</span>
       </div>
-
-      {(imports.data ?? []).length > 0 && (
-        <ul className="mt-4 divide-y divide-border rounded-md border border-border" aria-label="불러온 견적서">
-          {(imports.data ?? []).map((x) => (
-            <li key={x.id} className="flex flex-wrap items-center gap-3 px-3 py-2 text-sm">
-              <span className="min-w-0 flex-1 truncate text-ink" title={x.file_name}>
-                {x.file_name}
-              </span>
-              <span className="text-ink-sub">{x.vendor_name ?? '협력사 미지정'}</span>
-              <span className="whitespace-nowrap text-xs text-ink-cap">
-                {STATUS_LABEL[x.status]}
-                {x.status === 'confirmed' ? ` · 항목 ${x.item_count}개` : ''}
-                {x.drive_file_id ? ' · 원본 Drive 보관' : ''}
-              </span>
-              {x.status === 'parsed' && canEdit && (
-                <button type="button" className="btn btn-ghost btn-sm" onClick={() => setOpen(x)}>
-                  확인하기
-                </button>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
+      <ul className="mt-3 divide-y divide-border rounded-md border border-border" aria-label="불러온 견적서">
+        {imports.map((x) => (
+          <li key={x.id} className="flex flex-wrap items-center gap-3 px-3 py-2 text-sm">
+            <span className="min-w-0 flex-1 truncate text-ink" title={x.file_name}>
+              {x.file_name}
+            </span>
+            <span className="text-ink-sub">{x.vendor_name ?? '협력사 미지정'}</span>
+            <span className="whitespace-nowrap text-xs text-ink-cap">
+              {STATUS_LABEL[x.status]}
+              {x.status === 'confirmed' ? ` · 항목 ${x.item_count}개` : ''}
+              {x.drive_file_id ? ' · 원본 Drive 보관' : ''}
+            </span>
+            {x.status === 'parsed' && canEdit && (
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => onOpen(x)}>
+                확인하기
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
       {pending.length > 0 && (
         <p className="mt-2 text-xs text-ink-cap" data-testid="vendor-quote-pending">
           확인을 기다리는 견적서 {pending.length}건 — 확정하기 전에는 정산에 들어가지 않습니다.
         </p>
       )}
-
-      {open && (
-        <VendorQuoteDialog
-          projectId={projectId}
-          initial={open === 'new' ? null : open}
-          buckets={buckets}
-          vendors={vendors}
-          onClose={() => {
-            setOpen(null)
-            imports.reload()
-          }}
-          onConfirmed={() => {
-            imports.reload()
-            onChanged()
-          }}
-        />
-      )}
     </section>
   )
 }
 
-function VendorQuoteDialog({
+export function VendorQuoteDialog({
   projectId,
   initial,
   buckets,

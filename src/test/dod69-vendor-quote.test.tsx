@@ -173,10 +173,13 @@ describe('DoD 69 · ②③ provider — 확인 뒤에만 저장', () => {
 })
 
 describe('DoD 69 · ④ 화면 — 정산보드에서 불러오기', () => {
+  // PR-7(디자인지시서 v1.4 §7-2.11): 불러오기 버튼은 정산보드 머리의 채운 버튼 — 아래 칸은 이력만
   async function openDialog() {
     renderRoute('/settlement')
-    const section = await screen.findByTestId('vendor-quote-import')
-    await userEvent.click(within(section).getByRole('button', { name: '견적서 불러오기' }))
+    await screen.findByTestId('settlement-kpis')
+    const btn = screen.getByRole('button', { name: '협력사 견적서 불러오기' })
+    await waitFor(() => expect((btn as HTMLButtonElement).disabled).toBe(false))
+    await userEvent.click(btn)
     return screen.findByTestId('vendor-quote-dialog')
   }
 
@@ -224,6 +227,10 @@ describe('DoD 69 · ④ 화면 — 정산보드에서 불러오기', () => {
     renderRoute('/settlement')
     const section = await screen.findByTestId('vendor-quote-import')
     expect((await within(section).findByTestId('vendor-quote-pending')).textContent).toContain('1건')
+    // 머리 아래 알림이 먼저 알린다 — 확인할 것(부가세·버킷)까지
+    const alert = screen.getByTestId('alert-vendor-pending')
+    expect(alert.textContent).toContain('협력사 견적서 1건 — 대기_견적.xlsx')
+    expect(alert.textContent).toContain('확인할 것: 부가세 포함 여부 · 버킷')
     const row = within(section).getAllByRole('listitem').find((li) => li.textContent?.includes('대기_견적.xlsx'))!
     await userEvent.click(within(row).getByRole('button', { name: '확인하기' }))
     const dialog = await screen.findByTestId('vendor-quote-dialog')
@@ -239,8 +246,8 @@ describe('DoD 69 · ④ 화면 — 정산보드에서 불러오기', () => {
   it('pm이 아니면 불러오기 버튼은 비활성(이유 title)', async () => {
     mockProvider().switchUser('usr-design')
     renderRoute('/settlement')
-    const section = await screen.findByTestId('vendor-quote-import')
-    const btn = within(section).getByRole('button', { name: '견적서 불러오기' }) as HTMLButtonElement
+    await screen.findByTestId('settlement-kpis')
+    const btn = screen.getByRole('button', { name: '협력사 견적서 불러오기' }) as HTMLButtonElement
     await waitFor(() => expect(btn.disabled).toBe(true))
     expect(btn.title).toContain('PM 전용')
   })

@@ -1,12 +1,13 @@
 /** @vitest-environment jsdom */
-// 시안 정렬(S-10 정산보드) — '정산보드.dc.html' + 패턴 기준 시트 §05·§07.
-// 이번 정렬의 핵심 계약만 단언한다:
-//  ① KPI 4장에 보조 수치 1줄(계약액=산식 / 실집행=발주 대비 / 마진=변동·고정 / 마진율=참고 밴드)
+// 시안 정렬(S-10 정산보드) — 3.17b '정산보드.dc.html' → **Phase 3.23 PR-7 캔버스 '정산보드 — 금액 색은 의미대로'**
+// (디자인지시서 v1.4 §7-2.11) + 패턴 기준 시트 §05·§07. 핵심 계약만 단언한다:
+//  ① KPI 4장 = 캡션 · 숫자 · 보조 한 줄(계약 − 마진 밖(리드젠) / 발주 중 n% 집행 / 마크업·PCO·RSVP / 참고 범위 안·밖)
 //  ② 마진율 밴드 = 막대 위 마커. 밴드 밖이어도 **경고하지 않고 위치만** 표시(§19.1 유지)
-//  ③ 마진 구성 막대 + 검산이 **한 카드**, 초과 경보는 그 카드 하단 negative-tint 바
+//  ③ 옛 '마진 구성 · 검산' 카드 퇴역 — 검산 = 최종 마진 칸 배지, 구성 = 그 칸의 막대(주황 없음) ·
+//     초과 경보 = 머리 아래 알림(버킷마다) → '항목 보기'가 그 버킷을 편다
 //  ④ 버킷 표 = 표 정본 — 초과 행의 전체 배경 제거(배지 + 수치 색으로만) · 금액 .ui-num ·
 //     셀 내 막대는 집행률 열에만 · 고정 합계행(.ui-table-total)
-//  ⑤ 원가 없음·마진 밖 버킷은 숨기지 않고 canvas 면으로 가라앉는다
+//  ⑤ 원가 없음·마진 밖 버킷은 숨기지 않고 그룹행 '원가 없는 항목' 아래 — 펼침 단추 없음 · 발주·실집행 '—'
 //  ⑥ 밀집 모드 토글(내부 화면이므로 허용)이 표 행 높이 규격을 바꾼다
 import { cleanup, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -26,10 +27,10 @@ describe('S-10 KPI · 마진율 밴드', () => {
     renderRoute('/settlement')
     await screen.findByText('마진 기준 계약액')
 
-    expect(screen.getByTestId('kpi-support-contract').textContent).toMatch(/^계약 [\d,]+ − 마진 밖 [\d,]+$/)
-    expect(screen.getByTestId('kpi-support-spent').textContent).toMatch(/^발주 [\d,]+ 대비 [\d.]+%$/)
-    expect(screen.getByTestId('kpi-support-margin').textContent).toMatch(/^변동 [\d,-]+ \+ 고정 [\d,]+$/)
-    expect(screen.getByText(/참고: 사내 실측 27\.5~69\.0%/)).toBeTruthy()
+    expect(screen.getByTestId('kpi-support-contract').textContent).toMatch(/^계약 [\d,]+ − 마진 밖\(리드젠\) [\d,]+$/)
+    expect(screen.getByTestId('kpi-support-spent').textContent).toMatch(/^발주 [\d,]+원 중 [\d.]+% 집행$/)
+    expect(screen.getByTestId('kpi-support-margin').textContent).toMatch(/^마크업 -?[\d,]+ · PCO [\d,]+ · RSVP [\d,]+$/)
+    expect(screen.getByTestId('kpi-support-rate').textContent).toMatch(/^참고 범위 27\.5~69\.0% (안|밖) · 판정 아님$/)
   })
 
   it('② 마진율은 막대 위 마커로 위치만 표시하고 밴드 밖이라 경고하지 않는다', async () => {
@@ -47,38 +48,31 @@ describe('S-10 KPI · 마진율 밴드', () => {
   })
 })
 
-describe('S-10 마진 구성 · 검산 통합 카드', () => {
-  it('③ 구성 막대와 검산이 한 카드에 있고 초과 경보가 카드 하단 바로 붙는다', async () => {
+describe('S-10 검산 · 구성 — 최종 마진 칸 / 초과 경보 — 머리 아래 알림', () => {
+  it('③ 옛 통합 카드는 없고, 최종 마진 칸에 검산 배지와 구성 막대(주황 없음 · 변동 + 고정)가 있다', async () => {
     renderRoute('/settlement')
-    const card = await screen.findByTestId('margin-summary-card')
+    await screen.findByTestId('settlement-kpis')
+    expect(screen.queryByTestId('margin-summary-card')).toBeNull()
 
-    // 구성 막대(변동 + 고정)와 검산 표가 같은 카드 안
-    expect(within(card).getByTestId('margin-seg-variable')).toBeTruthy()
-    expect(within(card).getByText('검산')).toBeTruthy()
-    expect(within(card).getByText('− 실집행')).toBeTruthy()
-    expect(within(card).getByText('항등식 성립')).toBeTruthy()
-
-    // 초과 경보 = 같은 카드 하단의 negative-tint 바
-    const alert = within(card).getByText(/견적 초과 버킷 \d+건/)
-    const bar = alert.parentElement as HTMLElement
-    expect(bar.className).toContain('bg-negative-tint')
-    expect(within(bar).getByRole('button', { name: '초과 버킷만 보기' })).toBeTruthy()
+    expect(within(screen.getByTestId('margin-identity')).getByText('검산 일치')).toBeTruthy()
+    const segs = ['variable', 's5', 'rc'].map((k) => screen.getByTestId(`margin-seg-${k}`))
+    expect(segs.map((el) => el.className)).toEqual(['bg-brown', 'bg-steel', 'bg-border-strong'])
+    // 금액 구성은 강조가 아니다 — 막대에 주황 계열 0
+    expect(segs.some((el) => /accent|role-reg/.test(el.className))).toBe(false)
   })
 
-  it('③ 초과 버킷만 보기가 버킷 표를 필터링하고 초기화로 되돌아온다', async () => {
+  it('③ 초과 경보는 버킷마다 머리 아래 알림 — 항목 보기가 그 버킷을 펴고 메모 안내를 보인다', async () => {
     const user = userEvent.setup()
-    const { container } = renderRoute('/settlement')
-    await screen.findByTestId('bucket-row-s2')
-    const allRows = table(container).querySelectorAll('tbody tr[data-testid^="bucket-row-"]').length
+    renderRoute('/settlement')
+    const alert = await screen.findByTestId('alert-over-s2')
+    expect(alert.className).toContain('bg-accent-tint')
+    expect(within(alert).getByText('견적 초과')).toBeTruthy()
+    expect(alert.textContent).toContain('초과는 막지 않아요')
 
-    await user.click(screen.getByRole('button', { name: '초과 버킷만 보기' }))
-    const filtered = table(container).querySelectorAll('tbody tr[data-testid^="bucket-row-"]').length
-    expect(filtered).toBeGreaterThan(0)
-    expect(filtered).toBeLessThan(allRows)
-    expect(screen.getByTestId('bucket-row-s2')).toBeTruthy()
-
-    await user.click(screen.getByRole('button', { name: '필터 초기화' }))
-    expect(table(container).querySelectorAll('tbody tr[data-testid^="bucket-row-"]').length).toBe(allRows)
+    await user.click(within(alert).getByRole('button', { name: '항목 보기' }))
+    const panel = await screen.findByTestId('bucket-panel-s2')
+    expect(within(panel).getByTestId('over-reason-hint').textContent).toContain('메모로 이유를 남겨 두세요')
+    expect(within(screen.getByTestId('bucket-row-s2')).getByRole('button', { name: '시스템 구축' }).getAttribute('aria-expanded')).toBe('true')
   })
 })
 
@@ -115,17 +109,23 @@ describe('S-10 버킷 표 — 표 정본', () => {
     expect(within(total).getByText('합계')).toBeTruthy()
   })
 
-  it('⑤ 원가 없음·마진 밖 버킷은 숨지 않고 canvas 면으로 가라앉는다', async () => {
-    renderRoute('/settlement')
+  it('⑤ 원가 없음·마진 밖 버킷은 숨지 않고 그룹행 아래에 — 펼침 단추 없음 · 발주·실집행 칸은 —', async () => {
+    const { container } = renderRoute('/settlement')
     const s5 = await screen.findByTestId('bucket-row-s5')
     const ld = screen.getByTestId('bucket-row-ld')
+    const group = screen.getByTestId('no-cost-group')
 
+    // 표 순서: 원가 있는 버킷 → 그룹행 → 원가 없는 버킷
+    const rows = [...table(container).querySelectorAll('tbody > tr')]
+    expect(rows.indexOf(group)).toBeGreaterThan(rows.indexOf(screen.getByTestId('bucket-row-s1')))
     for (const row of [s5, ld]) {
+      expect(rows.indexOf(row)).toBeGreaterThan(rows.indexOf(group))
       expect(row.getAttribute('data-muted')).toBe('true')
-      expect((row as HTMLTableRowElement).style.background).toBe('var(--canvas)')
+      expect(within(row).queryByRole('button')).toBeNull()
     }
     // has_cost=false 버킷은 발주·실비 칸 자체가 없다(422 + UI 부재 유지)
     expect(within(s5).getAllByText('—').length).toBeGreaterThan(0)
+    expect(within(ld).getByText('마진 계산 밖')).toBeTruthy()
   })
 
   it('⑥ 밀집 모드 토글이 표 행 높이 규격을 바꾼다', async () => {
