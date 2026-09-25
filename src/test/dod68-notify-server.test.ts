@@ -79,6 +79,20 @@ function setup(opts: { events?: EventRow[]; reminders?: ReminderRow[]; manual?: 
     async project(projectId) {
       return projectId === P1 ? { code: 'STC26', name: '가상 컨퍼런스', webhook: opts.env?.SLACK_WEBHOOK_URL === undefined ? PROJECT_HOOK : null } : null
     },
+    // v2.12 봇 경로(DoD 79가 검사) — 웹훅 계약에서는 쓰이지 않는다
+    async setSlackUser() {},
+    async recordCard() {
+      return 0
+    },
+    async ackCard() {
+      return { status: 'not_found' as const }
+    },
+    async profileBySlack() {
+      return null
+    },
+    async profileByEmail() {
+      return null
+    },
   }
   const fetchImpl = (async (url: RequestInfo | URL, init?: RequestInit) => {
     posts.push({ url: String(url), body: JSON.parse(String(init?.body)) })
@@ -250,7 +264,7 @@ describe('DoD 68 · ④ 인증 — 누가 무엇을 부를 수 있나', () => {
     })
     const status = await s.call('GET')
     const body = await status.json()
-    expect(body).toEqual({ slack: true, cron: true })
+    expect(body).toEqual({ slack: true, bot: false, cron: true })
     expect(JSON.stringify(body)).not.toContain('hooks.slack.com')
     expect((await s.call('GET', undefined, 'wrong')).status).toBe(401)
     const noSecret = await handleNotifyRequest(new Request(`${BASE}/api/notify`, { headers: { authorization: 'Bearer x' } }), {}, { store: s.store })

@@ -83,6 +83,9 @@
 //   **v8부터 예약해 둔 importVendorQuote를 소진** + 확인 큐 3메서드(listVendorQuoteImports·confirmVendorQuoteImport·
 //   discardVendorQuoteImport) = 4메서드 추가 = **131메서드**. **기존 127메서드 시그니처 불변** 후 재동결.
 //   §19.5 "읽은 결과는 항상 담당자 확인을 거쳐 저장" — 가져오기는 제안(settlement_imports)만 만들고 항목은 확정 때 생긴다.
+//   v15.1: Phase 6.1 착수 지시(2026-09-26 — "진행해", 1턴 시안 승인)가 동결 해제 승인을 겸함(v13.1·v14.1 전례) + 설계서 v2.12 §9 →
+//   **필드 추가만, 메서드 수 131 불변**: ProjectPatch.slack_thread_url(행사 스레드) · PersonInput/PersonWithAssignments.slack_user_id ·
+//   DeliverableDetail.request_acks(Slack 의뢰 확인 표식 — 상태 아님). 봇 발송·버튼 응답은 서버 함수(api/notify · api/slack-interact) 몫.
 //
 // 프로젝트 스코프 규칙(설계서 v2.1 §4-21 R-L1): 프로젝트 단위 조회·생성 메서드는 projectId를
 // 인자로 받는다. currentUser()는 행위자 신원·권한 판정 전용이며 스코프 유도에 쓰지 않는다.

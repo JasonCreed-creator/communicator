@@ -11,7 +11,9 @@ import ErrorAlert from '../internal/ErrorAlert'
 import { ClientLinkButton, type ClientLinkTarget } from '../board/DesignNextAction'
 import { useMutation } from '../../hooks/useAsync'
 import { STATUS_STRIP_CLASSES, daysUntil, formatDate, objectParticle, subjectParticle, waitingDays } from '../../lib/labels'
+import { requestAckLine } from '../../lib/requestAck'
 import { uploadLock } from '../../lib/uploadGate'
+import RequestAckNote from './RequestAckNote'
 import { getDataProvider } from '../../providers'
 import type { DeliverableStatus } from '../../types/enums'
 import type { DeliverableDetail } from '../../types/views'
@@ -284,6 +286,7 @@ export default function NextStepCard({
           <div className="min-w-0 space-y-1">
             <h2 className="t-card-title">{title}</h2>
             <p className="text-sm leading-relaxed text-ink-sub">{description}</p>
+            <RequestAckNote line={requestAckLine(d.request_acks, status, { hasPartner })} />
             {canWriteArea && lock && !autoSnapshotDoc && (
               <p data-testid="upload-locked" className="t-caption">
                 지금은 새 버전을 올릴 수 없습니다 — {lock.label} · {lock.reason}

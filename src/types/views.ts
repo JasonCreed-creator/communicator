@@ -113,6 +113,20 @@ export interface DeliverableDetail extends Deliverable {
   comments: Comment[]
   /** 요청순 */
   approvals: Approval[]
+  /**
+   * v15.1(Phase 6.1 §9) — 봇이 Slack 스레드에 올린 의뢰 카드의 확인 기록(최근 것 먼저). 표식이지 상태가 아니다(§5 무변경).
+   * 선택 필드 — Slack을 쓰지 않는 행사·mock은 비어 있다
+   */
+  request_acks?: RequestAck[]
+}
+
+/** v15.1 — 의뢰 카드 한 장의 확인 기록(항목 기준) */
+export interface RequestAck {
+  /** work = 제작 요청(담당자) · review = 검토 요청·파트너 제출(PM) */
+  kind: 'work' | 'review'
+  requested_at: IsoDateTime
+  acknowledged_at: IsoDateTime | null
+  acknowledged_by_name: string | null
 }
 
 // ── S4 등록 ────────────────────────────────────────────────────────
@@ -427,6 +441,11 @@ export interface ProjectPatch {
    * `https://hooks.slack.com/services/…`만 받는다(그 밖은 422). pm 전용(updateProject 권한 그대로)
    */
   slack_webhook_url?: string | null
+  /**
+   * v15.1(Phase 6.1 §9) — 행사 스레드 링크. null·빈 칸 = 해제(웹훅 → 공용 채널로 간다).
+   * Slack 메시지 링크(`https://….slack.com/archives/{C|G…}/p…`)만 받는다(그 밖은 422 — src/lib/slackThread). pm 전용
+   */
+  slack_thread_url?: string | null
 }
 
 /** v1.5 — POST /projects 입력(§8): S0 ① 저장 시 개요 필드 일괄 수신, onboarded_at은 null.
@@ -465,6 +484,11 @@ export interface PersonInput {
   email: string
   title?: string | null
   phone?: string | null
+  /**
+   * v15.1(Phase 6.1 §9) — Slack 멤버 ID(U…). 비우면 서버가 이메일로 찾아 적어 둔다.
+   * 주소록 이메일과 Slack 이메일이 다를 때만 손으로 넣는다. 이메일을 바꾸면 다시 찾도록 비운다
+   */
+  slack_user_id?: string | null
 }
 
 export type PersonPatch = Partial<PersonInput>
@@ -478,6 +502,8 @@ export interface PersonAssignment {
 
 export interface PersonWithAssignments extends UserRef {
   assignments: PersonAssignment[]
+  /** v15.1 — Slack 멤버 ID(없으면 null — 멘션 대신 이름만 적힌다) */
+  slack_user_id?: string | null
 }
 
 export interface MemberInput {

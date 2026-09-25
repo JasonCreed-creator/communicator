@@ -51,7 +51,8 @@ describe('Phase 4 · supabase 스키마 정적 계약', () => {
     // 1400 뒤 마이그레이션이 만든 표는 그 파일에서 직접 켠다(v2.9 drive_connection) — 켜는 문장이 어딘가 있어야 한다
     for (const m of allSql.matchAll(/alter table (\w+) enable row level security/g)) enabled.add(m[1])
     for (const t of tables) expect(enabled.has(t), `${t} RLS 활성 누락`).toBe(true)
-    const withPolicy = new Set([...rlsSql.matchAll(/create policy \w+ on (\w+)/g)].map((m) => m[1]))
+    // 1400 뒤 마이그레이션이 만든 표의 정책은 그 파일에 있다(v2.12 request_acks) — 전체에서 모은다
+    const withPolicy = new Set([...allSql.matchAll(/create policy \w+ on (\w+)/g)].map((m) => m[1]))
     for (const t of tables) {
       if (SERVICE_ONLY_TABLES.includes(t)) {
         expect(withPolicy.has(t), `${t}는 서비스 전용 — 정책이 있으면 안 된다`).toBe(false)

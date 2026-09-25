@@ -175,6 +175,7 @@ import { buildCuesFromScenario, scenarioCueCandidates } from '../../lib/scenario
 import { SCENARIO_KIND_LABELS } from '../../lib/labels'
 import { UPLOADABLE_STATUSES, uploadBlockedMessage } from '../../lib/uploadGate'
 import { normalizeSlackWebhook, SLACK_WEBHOOK_INVALID_MESSAGE } from '../../lib/slackWebhook'
+import { normalizeSlackThreadLink, normalizeSlackUserId, SLACK_THREAD_INVALID_MESSAGE, SLACK_USER_ID_INVALID_MESSAGE } from '../../lib/slackThread'
 import {
   buildVendorQuote,
   isVendorQuoteFile,
@@ -259,6 +260,8 @@ export class MockProvider implements DataProvider {
   private state: MockState
   private idCounters = new Map<string, number>()
   private uploadedFileUrls = new Map<UUID, string>()
+  /** v15.1 — 주소록 사람의 Slack 멤버 ID(mock은 보내지 않지만 담당자 화면 왕복을 위해 보관). UserRef에 싣지 않는다 — /c 담당자 표기로 새지 않게 */
+  private slackUserIds = new Map<UUID, string>()
 
   constructor(state: MockState = createFixtureState()) {
     this.state = state
@@ -695,6 +698,7 @@ export class MockProvider implements DataProvider {
     return this.state.users
       .map((u) => ({
         ...u,
+        slack_user_id: this.slackUserIds.get(u.id) ?? null,
         assignments: this.state.members
           .filter((m) => m.user_id === u.id)
           .map((m) => ({
@@ -714,6 +718,8 @@ export class MockProvider implements DataProvider {
     if (this.state.users.some((u) => u.email?.toLowerCase() === email.toLowerCase())) {
       throw new ProviderError('conflict', '이미 등록된 이메일입니다.')
     }
+    const slackId = normalizeSlackUserId(input.slack_user_id)
+    if (slackId === 'invalid') throw new ProviderError('validation', SLACK_USER_ID_INVALID_MESSAGE)
     const person: UserRef = {
       id: this.nextId('usr'),
       name,
@@ -722,6 +728,7 @@ export class MockProvider implements DataProvider {
       phone: input.phone?.trim() || null,
     }
     this.state.users.push(person)
+    if (slackId) this.slackUserIds.set(person.id, slackId)
     return { ...person }
   }
 
@@ -741,7 +748,15 @@ export class MockProvider implements DataProvider {
         (u) => u.id !== personId && u.email?.toLowerCase() === email.toLowerCase(),
       )
       if (taken) throw new ProviderError('conflict', '이미 등록된 이메일입니다.')
+      // v15.1 — 이메일이 바뀌면 Slack ID도 다시 찾게 비운다(같은 요청에 ID를 함께 보냈으면 그 값)
+      if (email.toLowerCase() !== (person.email ?? '').toLowerCase() && patch.slack_user_id === undefined) this.slackUserIds.delete(personId)
       person.email = email
+    }
+    if (patch.slack_user_id !== undefined) {
+      const slackId = normalizeSlackUserId(patch.slack_user_id)
+      if (slackId === 'invalid') throw new ProviderError('validation', SLACK_USER_ID_INVALID_MESSAGE)
+      if (slackId) this.slackUserIds.set(personId, slackId)
+      else this.slackUserIds.delete(personId)
     }
     // 직함·전화는 비우는 것도 뜻이 있는 편집이라 빈 문자열을 null로 받아 적는다
     if (patch.title !== undefined) person.title = patch.title?.trim() || null
@@ -2107,6 +2122,12 @@ export class MockProvider implements DataProvider {
       const webhook = normalizeSlackWebhook(patch.slack_webhook_url)
       if (webhook === 'invalid') throw new ProviderError('validation', SLACK_WEBHOOK_INVALID_MESSAGE)
       project.slack_webhook_url = webhook
+    }
+    // v15.1(Phase 6.1 §9) — 행사 스레드. Slack 메시지 링크만(서버가 여기서 채널·스레드를 읽는다)
+    if (patch.slack_thread_url !== undefined) {
+      const thread = normalizeSlackThreadLink(patch.slack_thread_url)
+      if (thread === 'invalid') throw new ProviderError('validation', SLACK_THREAD_INVALID_MESSAGE)
+      project.slack_thread_url = thread
     }
     // v2.0 — 행사 설정 ① 모객형 전용 그룹 (일반형이면 UI 숨김·데이터 보존)
     if (patch.guarantee_pax !== undefined) project.guarantee_pax = patch.guarantee_pax

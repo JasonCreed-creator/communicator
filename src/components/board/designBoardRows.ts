@@ -3,6 +3,7 @@
 // 판정은 여기 한 곳이다. provider·상태 머신은 건드리지 않는다(전이는 기존 경로 그대로 — 여기서는 "무엇을 할 차례인가"만 읽는다).
 // 다음 행동 문구는 항목 상세의 '다음 단계'(ItemDetailPage NextStepBlock)와 같은 뜻을 쓴다.
 import { daysUntil, waitingDays } from '../../lib/labels'
+import { requestAckLine, type RequestAckLine } from '../../lib/requestAck'
 import type { Approval, Deliverable, Version } from '../../types/entities'
 import type { DeliverableDetail } from '../../types/views'
 
@@ -16,13 +17,16 @@ export interface DesignRow {
   latest: Version | null
   /** 아직 답이 없는 컨펌 요청(발주처에 가 있는 것) — '보낸 지 n일'의 기준 */
   openApproval: Approval | null
+  /** v15.1(Phase 6.1) — Slack 의뢰 카드 확인 한 줄(없으면 null) */
+  ack?: RequestAckLine | null
 }
 
 export function toDesignRow(detail: DeliverableDetail): DesignRow {
-  const { versions, approvals, comments: _comments, ...deliverable } = detail
+  const { versions, approvals, comments: _comments, request_acks, ...deliverable } = detail
   let openApproval: Approval | null = null
   for (const a of approvals) if (a.decided_at === null) openApproval = a
-  return { deliverable, latest: versions[0] ?? null, openApproval }
+  const ack = requestAckLine(request_acks, deliverable.status, { hasPartner: deliverable.partner_id !== null })
+  return { deliverable, latest: versions[0] ?? null, openApproval, ack }
 }
 
 /**

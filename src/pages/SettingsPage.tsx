@@ -174,7 +174,7 @@ export default function SettingsPage() {
     integration: {
       required: 0,
       optional: project.data
-        ? (project.data.drive_root_folder_id ? 0 : 1) + (project.data.slack_webhook_url ? 0 : 1)
+        ? (project.data.drive_root_folder_id ? 0 : 1) + (project.data.slack_thread_url || project.data.slack_webhook_url ? 0 : 1)
         : 0,
     },
   }
@@ -402,6 +402,7 @@ export default function SettingsPage() {
                 <SlackCard
                   projectId={projectId}
                   webhook={project.data.slack_webhook_url}
+                  thread={project.data.slack_thread_url ?? null}
                   isPm={isPm}
                   onChanged={handleSaved}
                 />

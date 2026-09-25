@@ -19,7 +19,8 @@
 //             PR-5 행사 목록(먼저 확인할 행사·진행 중·종료 묶음·카드 ⋯ 메뉴) ·
 //             PR-6 견적 목록(고른 견적 옆 동작·구버전 고치기 막힘)·옵션(체크 카드·막힌 이유·고른 옵션 요약) ·
 //             PR-7 정산보드(머리 불러오기·할 일 알림·KPI 검산 배지·원가 없는 그룹행·발주 항목 ⋯ 메뉴) ·
-//             PR-8 행사 설정(번호 없는 탭·섹션 목록·고정 저장 바·변경 취소)·온보딩(진행 줄·2열·나중에 하기 확인))
+//             PR-8 행사 설정(번호 없는 탭·섹션 목록·고정 저장 바·변경 취소)·온보딩(진행 줄·2열·나중에 하기 확인) ·
+//       6.1: Slack 봇 — 행사 설정 ③ 스레드 링크(DM 링크 거부 → 등록 → 채널·Slack에서 열기 → 웹훅 예비 접힘 → 해제) · 담당자 Slack 칸)
 // 캡처는 dist-demo/shots-interaction/ 에 남긴다. 실패 시 exit 1.
 import { createServer } from 'node:http'
 import { readFileSync, mkdirSync } from 'node:fs'
@@ -153,7 +154,57 @@ check(
   `${docCountBefore} → ${docRequests.length}`,
 )
 
-// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — **Phase 3.23 PR-8 행사 설정·온보딩(2026-09-25)**.
+// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — **Phase 6.1 Slack 봇(2026-09-26)**.
+//     일정(②에서 도착) → 행사 설정 ③ Slack 카드: DM 채널 링크 → 형식 문구 + '스레드 등록' 비활성 → 스레드 첫 글 링크 → 등록 →
+//     채널 id·'Slack에서 열기'(링크 그대로) · 웹훅은 예비로 접힘('예비 웹훅 보기' → 펼침) → '스레드 해제'(확인 수락) → 입력 칸 ·
+//     담당자(S-13): Slack 칸 머리 + 비어 있는 사람 '이메일로 자동' → 다시 '일정'으로(아래 ③-이전 블록이 일정에서 시작한다).
+{
+  const notice61 = tab.getByRole('button', { name: '안내 닫기' })
+  if (await notice61.count()) await notice61.click()
+  const docBefore = docRequests.length
+  await tab.evaluate(() => {
+    window.location.hash = '#/settings?tab=integration'
+  })
+  const card = tab.getByTestId('slack-card')
+  await card.waitFor({ timeout: 10_000 })
+  check(/스레드에 답글로 남기고, 할 일이 생긴 사람을 멘션합니다/.test(await card.innerText()), 'Slack 카드: 행사 스레드 · 멘션 안내')
+  const threadInput = card.getByLabel('Slack 스레드 링크')
+  await threadInput.fill('https://acme.slack.com/archives/D0DMCHAN1/p1727251234567890')
+  check(
+    (await card.getByRole('button', { name: '스레드 등록' }).isDisabled()) && /Slack 스레드 링크가 아닙니다/.test(await card.innerText()),
+    'DM 채널 링크 → 형식 문구 + 스레드 등록 비활성',
+  )
+  const THREAD = 'https://acme.slack.com/archives/C0DEMO001/p1727251234567890'
+  await threadInput.fill(THREAD)
+  await card.getByRole('button', { name: '스레드 등록' }).click()
+  const saved = tab.getByTestId('slack-thread-saved')
+  await saved.waitFor({ timeout: 10_000 })
+  const openLink = saved.getByRole('link', { name: 'Slack에서 열기' })
+  check(/C0DEMO001/.test(await saved.innerText()) && (await openLink.getAttribute('href')) === THREAD, '등록 → 채널 id · Slack에서 열기(링크 그대로)', await saved.innerText())
+  check((await tab.getByTestId('slack-webhook-box').count()) === 0, '스레드가 있으면 웹훅(예비)은 접힘')
+  await card.getByRole('button', { name: '예비 웹훅 보기' }).click()
+  check((await card.getByLabel('Slack 웹훅 주소').count()) === 1, "'예비 웹훅 보기' → 웹훅 칸 펼침")
+  check((await card.getByRole('button', { name: '테스트 보내기' }).count()) === 0, 'mock: 테스트 보내기 없음')
+  await tab.screenshot({ path: resolve(SHOTS, '03-slack-thread.png'), fullPage: true })
+  tab.once('dialog', (d) => d.accept())
+  await card.getByRole('button', { name: '스레드 해제' }).click()
+  await card.getByLabel('Slack 스레드 링크').waitFor({ timeout: 10_000 })
+  check(true, "'스레드 해제' → 입력 칸으로 돌아감")
+  await tab.evaluate(() => {
+    window.location.hash = '#/people'
+  })
+  const table = tab.getByRole('table', { name: '담당자 목록' })
+  await table.waitFor({ timeout: 10_000 })
+  const heads = (await table.locator('thead th').allInnerTexts()).map((t) => t.trim())
+  const autoCells = await tab.locator('[data-testid^="person-slack-"]').allInnerTexts()
+  check(heads.includes('Slack') && autoCells.length > 0 && autoCells.every((t) => t.trim() === '이메일로 자동'), "담당자: Slack 칸 · 비어 있으면 '이메일로 자동'", `${heads.join('|')} / ${autoCells.length}행`)
+  await tab.screenshot({ path: resolve(SHOTS, '03-people-slack.png'), fullPage: true })
+  check(docRequests.length === docBefore, 'Slack 카드·담당자 화면 이동·등록에 전체 리로드 0', `${docBefore} → ${docRequests.length}`)
+  await tab.locator('aside nav a', { hasText: '일정' }).first().click()
+  await tab.waitForURL(/#\/schedule/, { timeout: 10_000 })
+}
+
+// ── ③-이전(2026-09-25 Phase 3.23 PR-8) 행사 설정·온보딩 — 직전 PR ③을 회귀 가드로 유지.
 //     일정(②에서 도착) → 행사 설정(RB27): 탭 이름에 번호 없음 · 탭 줄 필수 요약 · 쉴 때 채운 버튼 0 →
 //     예상 인원 고치기 → 고정 저장 바 '저장하지 않은 변경 1개 · 예상 인원' + 채운 버튼 = 저장 하나 → 변경 취소로 원래 값 ·
 //     세팅 미완료 행사 온보딩(?project=prj-forum-h2): 진행 줄 '3단계 중 1단계 · 필수 4개 중 m개' · 2열 · 채운 버튼 = 다음: 담당자 →
@@ -642,17 +693,17 @@ await slackCard.waitFor({ timeout: 10_000 })
 check(/데모\(mock\)에서는 알림을 보내지 않습니다/.test(await slackCard.innerText()), 'Slack 카드: mock은 발송하지 않는다는 사실 안내')
 const hookInput = slackCard.getByLabel('Slack 웹훅 주소')
 await hookInput.fill('https://example.com/hook')
-check(await slackCard.getByRole('button', { name: '등록' }).isDisabled(), 'Slack 카드: Incoming Webhook 주소가 아니면 등록 비활성')
+check(await slackCard.getByRole('button', { name: '등록', exact: true }).isDisabled(), 'Slack 카드: Incoming Webhook 주소가 아니면 등록 비활성')
 check(/hooks\.slack\.com\/services\/… 형식/.test(await slackCard.innerText()), 'Slack 카드: 형식 문구')
 await hookInput.fill('https://hooks.slack.com/services/TDEMO/BDEMO/demoSecretToken')
-await slackCard.getByRole('button', { name: '등록' }).click()
+await slackCard.getByRole('button', { name: '등록', exact: true }).click()
 const masked = tab.getByTestId('slack-webhook-masked')
 await masked.waitFor({ timeout: 10_000 })
 check((await masked.innerText()).endsWith('/••••') && !(await tab.evaluate(() => document.body.innerText)).includes('demoSecretToken'), '등록 → 끝 토큰 가림 표시(원문 0)', await masked.innerText())
 check((await slackCard.getByRole('button', { name: '테스트 보내기' }).count()) === 0, 'mock: 테스트 보내기 없음')
 await tab.screenshot({ path: resolve(SHOTS, '03-slack-card.png'), fullPage: true })
 tab.once('dialog', (d) => d.accept())
-await slackCard.getByRole('button', { name: '해제' }).click()
+await slackCard.getByRole('button', { name: '해제', exact: true }).click()
 await slackCard.getByLabel('Slack 웹훅 주소').waitFor({ timeout: 10_000 })
 check(true, '해제 → 입력 칸으로 돌아감')
 await tab.evaluate(() => {
