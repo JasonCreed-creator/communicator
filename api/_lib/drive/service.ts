@@ -340,6 +340,44 @@ export async function archiveProjectOp(ctx: DriveCtx, user: CallerIdentity, fold
   return { archived: true, folder_id: f.id }
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/**
+ * Phase 4.5 — 지운 항목의 폴더를 그 행사 폴더의 99_archive로 옮긴다(pm, best-effort — 파일은 지우지 않는다).
+ * 판정 순서: 요청자가 그 행사의 PM → 항목이 DB에서 이미 지워졌다(살아 있는 항목의 폴더는 못 옮긴다) → 폴더가 이 항목의
+ * 표식(appProperties)을 달고 행사 폴더 안에 있다. 공통 영역 항목은 파트 폴더 자체를 쓰므로(표식 없음) 옮기지 않는다 —
+ * 다른 항목의 파일까지 딸려 가기 때문이다. 99_archive는 인박스 스캔 제외 파트라 옮긴 파일이 인박스에 다시 뜨지 않는다.
+ */
+export async function archiveItemOp(ctx: DriveCtx, user: CallerIdentity, body: Record<string, unknown>) {
+  const projectId = str(body.project_id, '행사 id', 100)
+  const deliverableId = str(body.deliverable_id, '항목 id', 100)
+  const folderId = str(body.folder_id, '폴더 id', 200)
+  if (!UUID_RE.test(deliverableId)) throw new DriveError(400, 'validation', '항목 id 형식이 올바르지 않습니다.')
+  const role = await requireMember(ctx, user, projectId)
+  if (role !== 'pm') throw new DriveError(403, 'forbidden', '항목 폴더 보관은 PM만 할 수 있습니다.')
+  if (!driveConfigured(ctx.env)) return { archived: false, reason: 'not_configured' }
+  if (await ctx.store.deliverableExists(deliverableId)) {
+    throw new DriveError(409, 'conflict', '아직 있는 항목의 폴더는 보관할 수 없습니다 — 항목을 먼저 지우세요.')
+  }
+  const project = await mustProject(ctx, projectId)
+  const projectRoot = project.drive_root_folder_id
+  if (!projectRoot) return { archived: false, reason: 'no_project_folder' }
+  const api = driveApiFor(ctx)
+  const f = await api.getFile(folderId)
+  if (!f || f.trashed || f.mimeType !== FOLDER_MIME) return { archived: false, reason: 'missing' }
+  if (f.appProperties?.[APP_DELIVERABLE_KEY] !== deliverableId) return { archived: false, reason: 'not_item_folder' }
+  if (f.id === projectRoot || !(await ancestorIds(api, f, projectRoot)).has(projectRoot)) {
+    throw new DriveError(403, 'forbidden', '이 행사 폴더 밖의 폴더입니다.')
+  }
+  const archive = await ensureChildFolder(api, projectRoot, PART.archive)
+  if (f.parents?.includes(archive)) return { archived: true, folder_id: f.id }
+  const stamp = new Date(ctx.now() + 9 * 3600 * 1000).toISOString().slice(2, 10).replace(/-/g, '')
+  const name = `${sanitizeName(typeof body.title === 'string' && body.title.trim() ? body.title : f.name, 100)} (삭제됨 ${stamp})`
+  await api.update(f.id, { name }, { addParents: archive, removeParents: f.parents?.[0] })
+  await ctx.store.log(projectId, 'drive.item_archived', 'deliverable', deliverableId, { folder_id: f.id })
+  return { archived: true, folder_id: f.id }
+}
+
 // ── 업로드 (4MB 조각 중계 — 브라우저→Google 직접 PUT은 CORS로 막힌다) ──────────
 interface UploadTicket {
   k: 'up'

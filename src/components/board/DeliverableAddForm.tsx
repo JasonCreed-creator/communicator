@@ -292,19 +292,24 @@ function AddFormBody({
 /**
  * 영역별 카테고리 선택 — 프리셋 목록 + '직접 입력'.
  * 자유 입력을 막지 않되, 기본값은 그 보드에 맞는 항목만 보이게 한다(src/lib/boardPresets.ts 정본).
+ * Phase 4.5 — 항목 고치기(ItemManageCard)도 같은 선택기를 쓴다. `exclude`는 목록에서 뺄 카테고리
+ * (고치기에서는 큐시트·시나리오·운영가이드 — 종류 전환은 409라 고를 수 없게 한다).
  */
-function CategoryPicker({
+export function CategoryPicker({
   area,
   value,
   onChange,
   id,
+  exclude = [],
 }: {
   area: DeliverableArea
   value: string
   onChange: (next: string) => void
   id: string
+  exclude?: readonly string[]
 }) {
-  const preset = areaPreset(area)
+  const base = areaPreset(area)
+  const preset = { ...base, categories: base.categories.filter((c) => !exclude.includes(c.name)) }
   const known = preset.categories.some((c) => c.name === value)
   // 값이 비었거나 프리셋에 있으면 select 모드, 사용자가 직접 입력을 고르면 자유 입력 모드
   const [freeform, setFreeform] = useState(false)

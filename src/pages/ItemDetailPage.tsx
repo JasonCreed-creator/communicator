@@ -5,6 +5,7 @@ import GuideBuilder from '../components/guide/GuideBuilder'
 import ScenarioBuilder from '../components/scenario/ScenarioBuilder'
 import VersionUploadCard, { UPLOAD_FORM_ID, UPLOAD_INPUT_ID } from '../components/upload/VersionUploadCard'
 import BriefCard from '../components/internal/BriefCard'
+import ItemManageCard from '../components/item/ItemManageCard'
 import ClientLinkWarning from '../components/internal/ClientLinkWarning'
 import Card from '../components/internal/Card'
 import DdayBadge from '../components/internal/DdayBadge'
@@ -149,6 +150,16 @@ function ItemDetail({ itemId }: { itemId: string }) {
     .slice()
     .reverse()
     .find((a) => a.decision === 'changes_requested')
+  // Phase 4.5 — 항목 고치기·지우기(권한 없는 역할에는 카드 자체가 없다). 일반 항목은 메타 열 맨 아래, 정형 문서는 본문 맨 아래
+  const manageCard = (
+    <ItemManageCard
+      deliverable={d}
+      role={role}
+      members={members.data ?? undefined}
+      closed={project.data?.status === 'closed'}
+      onUpdated={detail.reload}
+    />
+  )
 
   return (
     <section className="space-y-5 p-6">
@@ -296,6 +307,8 @@ function ItemDetail({ itemId }: { itemId: string }) {
               </div>
             )}
           </Card>
+
+          {isStructuredPanel && manageCard}
         </div>
 
         {/* 3.16.3 T3② — 정형 문서(큐시트·빌더)는 메타가 상단 스트립에 이미 있으므로
@@ -351,6 +364,8 @@ function ItemDetail({ itemId }: { itemId: string }) {
               </ul>
             )}
           </Card>
+
+          {manageCard}
         </aside>
         )}
       </div>

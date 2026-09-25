@@ -79,6 +79,8 @@ export interface DriveStore {
   memberRole(profileId: string, projectId: string): Promise<MemberRole | null>
   project(projectId: string): Promise<ProjectRow | null>
   projectByRoot(folderId: string): Promise<{ id: string } | null>
+  /** 항목이 아직 DB에 있는가 — 항목 폴더 보관(archive-item)은 지워진 항목에만 허용한다 */
+  deliverableExists(deliverableId: string): Promise<boolean>
   /** 사용자 JWT로 `drive_upload_check` — upload_version과 같은 판정(404·403·409)을 바이트 전송 전에 */
   uploadCheck(jwt: string, deliverableId: string): Promise<UploadTarget>
   /** 사용자 JWT로 `upload_version` — 버전 번호·§5 자동 전이·로그·인박스 연결 표시는 SQL이 한다 */
@@ -188,6 +190,9 @@ export function supabaseDriveStore(env: StoreEnv): DriveStore {
     async projectByRoot(folderId) {
       const rows = must(await admin.from('projects').select('id').eq('drive_root_folder_id', folderId).limit(1)) as { id: string }[] | null
       return rows?.[0] ?? null
+    },
+    async deliverableExists(deliverableId) {
+      return Boolean(must(await admin.from('deliverables').select('id').eq('id', deliverableId).maybeSingle()))
     },
     async uploadCheck(jwt, deliverableId) {
       const res = await asUser(jwt).rpc('drive_upload_check', { p_deliverable: deliverableId })

@@ -1,4 +1,4 @@
-// SupabaseProvider ↔ api/drive 다리 — 설계서 v2.9 §7 · Phase 5 (DataProvider 125메서드 불변, 도메인 내부 동작만 바뀐다).
+// SupabaseProvider ↔ api/drive 다리 — 설계서 v2.9 §7 · Phase 5 (DataProvider 메서드 수 불변, 도메인 내부 동작만 바뀐다).
 //   · ready(): Drive가 설정·연결됐는가(60초 캐시) — 아니면 업로드는 Phase 4 경로(세션 메모리)로 간다
 //   · fileUrl(): 버전 파일 서명 URL — 같은 틱에 요청된 버전을 한 번에 묻는다(항목 상세의 버전 N개 = 요청 1회)
 //   · scanThrottled(): 인박스 조회 전 Drive 스캔 — 행사당 60초에 1회, 8초 넘으면 기다리지 않는다

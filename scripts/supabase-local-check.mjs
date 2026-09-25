@@ -310,6 +310,86 @@ ${assertSql(`not exists (select 1 from projects where id='${PRJ_CLOSED}')`)}`,
   scenario('RPC delete_project: anon(토큰 경로 롤)은 실행 불가', `select delete_project('${PRJ}');`,
     { role: 'anon', expect: 'error', match: 'permission denied' })
 
+  // 5f. RPC — 항목 고치기·지우기 (Phase 4.5 · DataProvider v14 updateDeliverable·deleteDeliverable)
+  const KV = seedUuid('dlv-001')      // design · pending_approval · 버전·컨펌·코멘트 있음
+  const DRAFT = seedUuid('dlv-003')   // design · draft
+  const CUE = seedUuid('dlv-004')     // ops · 큐시트(정형) · 큐 있음
+  const upd = (id, patch) => `select update_deliverable('${id}', '${JSON.stringify(patch).replace(/'/g, "''")}'::jsonb);`
+  scenario('RPC update_deliverable: pm이 제목·마감·담당자를 한 번에 → 보낸 키만 바뀌고 로그(fields)', `${upd(DRAFT, { title: '  고친 제목  ', due_date: '2026-10-01', assignee_id: seedUuid('usr-pm') })}
+reset role;
+${assertSql(`(select title from deliverables where id='${DRAFT}') = '고친 제목'`)}
+${assertSql(`(select due_date from deliverables where id='${DRAFT}') = '2026-10-01'`)}
+${assertSql(`(select assignee_id from deliverables where id='${DRAFT}') = '${seedUuid('usr-pm')}'`)}
+${assertSql(`(select category from deliverables where id='${DRAFT}') = '배너'`)}
+${assertSql(`exists (select 1 from activity_log where target_id='${DRAFT}' and action='deliverable.updated' and meta->'fields' ? 'title' and meta->'fields' ? 'due_date' and not (meta->'fields' ? 'category'))`)}`,
+    { role: 'authenticated', sub: authId.pm })
+  scenario('RPC update_deliverable: 상태는 이 경로로 바뀌지 않는다(status 키 무시 · 컨펌대기 그대로)', `${upd(KV, { status: 'final', title: '키비주얼 v2' })}
+reset role;
+${assertSql(`(select status from deliverables where id='${KV}') = 'pending_approval'`)}
+${assertSql(`(select title from deliverables where id='${KV}') = '키비주얼 v2'`)}`,
+    { role: 'authenticated', sub: authId.pm })
+  scenario('RPC update_deliverable: design은 자기 영역 항목의 제목을 고칠 수 있다', upd(DRAFT, { title: 'x' }),
+    { role: 'authenticated', sub: authId.design })
+  scenario('RPC update_deliverable: design의 ops 항목 수정 403', upd(CUE, { title: 'x' }),
+    { role: 'authenticated', sub: authId.design, expect: 'error', match: '고칠 권한이 없습니다' })
+  scenario('RPC update_deliverable: design이 담당자·가이드를 고치면 403(PM 전용)', upd(DRAFT, { brief: 'x' }),
+    { role: 'authenticated', sub: authId.design, expect: 'error', match: 'PM만 고칠 수' })
+  scenario('RPC update_deliverable: reg는 403', upd(DRAFT, { title: 'x' }),
+    { role: 'authenticated', sub: authId.reg, expect: 'error', match: '고칠 권한이 없습니다' })
+  scenario('RPC update_deliverable: 빈 제목 422', upd(DRAFT, { title: '   ' }),
+    { role: 'authenticated', sub: authId.pm, expect: 'error', match: '제목은 비울 수 없' })
+  scenario('RPC update_deliverable: 큐시트 → 다른 종류 409(빌더 데이터 보호)', upd(CUE, { category: '기타' }),
+    { role: 'authenticated', sub: authId.pm, expect: 'error', match: '종류를 바꿀 수 없' })
+  scenario('RPC update_deliverable: 일반 항목 → 시나리오 409', upd(DRAFT, { category: '시나리오' }),
+    { role: 'authenticated', sub: authId.pm, expect: 'error', match: '종류를 바꿀 수 없' })
+  scenario('RPC update_deliverable: 행사 멤버가 아닌 담당자 422', upd(DRAFT, { assignee_id: seedUuid('usr-nobody') }),
+    { role: 'authenticated', sub: authId.pm, expect: 'error', match: '멤버여야' })
+  scenario('RPC update_deliverable: 마감일 형식 422', upd(DRAFT, { due_date: '10/01' }),
+    { role: 'authenticated', sub: authId.pm, expect: 'error', match: '마감일 형식' })
+  scenario('RPC update_deliverable: 수량 음수·소수 422', upd(DRAFT, { spec_qty: 1.5 }),
+    { role: 'authenticated', sub: authId.pm, expect: 'error', match: '0 이상의 정수' })
+  // 종료 행사(prj-ai-summit)에는 시드 항목이 없다 — 서비스 경로로 하나 넣어 두고(종료 가드는 서비스 경로를 통과시킨다) 판정한다
+  const CLOSED_ITEM = seedUuid('chk-closed-item')
+  const closedItem = `reset role;
+insert into deliverables (id, project_id, area, category, title) values ('${CLOSED_ITEM}', '${PRJ_CLOSED}', 'design', '배너', 'x');
+set local role authenticated;`
+  scenario('RPC update_deliverable: 종료 행사 항목 409', `${closedItem}
+${upd(CLOSED_ITEM, { title: 'y' })}`,
+    { role: 'authenticated', sub: authId.pm, expect: 'error', match: '종료된 행사' })
+  scenario('RPC update_deliverable: anon 실행 불가', upd(DRAFT, { title: 'x' }),
+    { role: 'anon', expect: 'error', match: 'permission denied' })
+  scenario('RPC delete_deliverable: pm이 컨펌대기 항목 삭제 → 버전·컨펌·코멘트 cascade · WBS 연결 해제 · 인박스 닫힘 · 버전 파일은 처리됨 행 · 로그', `reset role;
+update wbs_tasks set linked_deliverable_id = '${KV}' where id = (select id from wbs_tasks where project_id='${PRJ}' order by sort_order limit 1);
+update unregistered_files set linked_deliverable_id = '${KV}' where drive_file_id = 'drv-f-inbox-001';
+set local role authenticated;
+select delete_deliverable('${KV}');
+reset role;
+${assertSql(`not exists (select 1 from deliverables where id='${KV}')`)}
+${assertSql(`not exists (select 1 from versions where deliverable_id='${KV}')`)}
+${assertSql(`not exists (select 1 from approvals where deliverable_id='${KV}')`)}
+${assertSql(`not exists (select 1 from comments where deliverable_id='${KV}')`)}
+${assertSql(`not exists (select 1 from wbs_tasks where linked_deliverable_id='${KV}')`)}
+${assertSql(`(select dismissed and linked_deliverable_id is null from unregistered_files where drive_file_id='drv-f-inbox-001')`)}
+${assertSql(`(select count(*) from unregistered_files where project_id='${PRJ}' and dismissed and starts_with(detected_folder, '삭제된 항목:')) > 0`)}
+${assertSql(`exists (select 1 from activity_log where target_id='${KV}' and action='deliverable.deleted' and meta->>'status'='pending_approval')`)}`,
+    { role: 'authenticated', sub: authId.pm })
+  const delRes = scenario('RPC delete_deliverable: 반환값 = 지운 항목 id·행사·영역·Drive 항목 폴더(앱이 99_archive로 옮긴다)', `select delete_deliverable('${DRAFT}');`,
+    { role: 'authenticated', sub: authId.pm })
+  record('delete_deliverable 반환에 drive_folder_id·area 포함', /"drive_folder_id"/.test(delRes) && /"area": ?"design"/.test(delRes), delRes.slice(0, 160))
+  scenario('RPC delete_deliverable: 큐시트 항목 삭제 → 큐도 함께', `select delete_deliverable('${CUE}');
+reset role;
+${assertSql(`not exists (select 1 from cues where deliverable_id='${CUE}')`)}`,
+    { role: 'authenticated', sub: authId.pm })
+  scenario('RPC delete_deliverable: design은 자기 영역이어도 403(PM 전용)', `select delete_deliverable('${DRAFT}');`,
+    { role: 'authenticated', sub: authId.design, expect: 'error', match: 'PM 전용' })
+  scenario('RPC delete_deliverable: 종료 행사 409', `${closedItem}
+select delete_deliverable('${CLOSED_ITEM}');`,
+    { role: 'authenticated', sub: authId.pm, expect: 'error', match: '종료된 행사' })
+  scenario('RPC delete_deliverable: 없는 항목 404', `select delete_deliverable('${seedUuid('nope-dlv')}');`,
+    { role: 'authenticated', sub: authId.pm, expect: 'error', match: 'NOT_FOUND|찾을 수 없' })
+  scenario('RPC delete_deliverable: anon 실행 불가', `select delete_deliverable('${DRAFT}');`,
+    { role: 'anon', expect: 'error', match: 'permission denied' })
+
   // 5e. Drive 저장소 (v2.9 §7 · Phase 5) — 5인자 upload_version · 인박스 연결 · service 전용 RPC 권한 · Vault 토큰 · §7.5 2단계 확정
   const DRV = '1AbCdEfGhIjKlMnOpQrStUvWxYz012345'   // 실제 Drive id 모양(20자+, drv- 접두 아님)
   const designItem = psql(['-c', `select id from deliverables where project_id='${PRJ}' and area='design' and status in ('draft','changes_requested','requested','internal_review') and partner_id is null order by created_at limit 1`]).out

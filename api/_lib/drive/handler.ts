@@ -8,6 +8,7 @@ import { driveConfigured } from './auth.js'
 import { DriveError, errorResponse, json } from './errors.js'
 import {
   adoptFolderOp,
+  archiveItemOp,
   archiveProjectOp,
   clientFileUrlsOp,
   clientFinalizeOp,
@@ -101,6 +102,8 @@ export async function handleDriveRequest(request: Request, env: DriveEnv, deps: 
         return json(200, await adoptFolderOp(ctx, user, String(body.project_id ?? ''), String(body.url ?? '')))
       case 'archive-project':
         return json(200, await archiveProjectOp(ctx, user, String(body.folder_id ?? ''), String(body.project_name ?? '')))
+      case 'archive-item':
+        return json(200, await archiveItemOp(ctx, user, body))
       case 'upload-start':
         return json(200, await uploadStartOp(ctx, jwt, user, body))
       case 'upload-commit':

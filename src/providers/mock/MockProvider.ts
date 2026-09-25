@@ -92,6 +92,8 @@ import type {
   ComplianceCardPatch,
   QuoteExportResult,
   CreateDeliverableInput,
+  DeleteDeliverableResult,
+  UpdateDeliverableInput,
   CsvImportResult,
   CsvImportRow,
   CueInput,
@@ -923,6 +925,125 @@ export class MockProvider implements DataProvider {
       this.markGuideZoneStale(deliverable.project_id)
     }
     return deliverable
+  }
+
+  /**
+   * v14(§8 PATCH /deliverables/{id}, Phase 4.5) — 보낸 키만 바꾼다. 권한: PM·해당 영역 담당(업로드와 같다),
+   * 담당자·가이드 필드는 PM 전용. 큐시트·시나리오·운영가이드로/에서 카테고리를 바꾸면 409 — 빌더 데이터(큐·블록·섹션)가
+   * 카테고리에 매여 있어 종류가 바뀌면 화면이 그 데이터를 잃는다. 상태·영역·파트너는 이 경로로 바꾸지 않는다.
+   * SQL `public.update_deliverable`과 같은 판정·같은 문구다.
+   */
+  async updateDeliverable(deliverableId: UUID, patch: UpdateDeliverableInput): Promise<Deliverable> {
+    const user = this.currentUser()
+    const d = this.mustFindDeliverable(deliverableId)
+    this.assertWritable(d.project_id)
+    if (!(user.role === 'pm' || ((user.role === 'design' || user.role === 'ops') && d.area === user.role))) {
+      throw new ProviderError('forbidden', '이 항목을 고칠 권한이 없습니다(PM 또는 해당 영역 담당).')
+    }
+    const pmOnly = (['assignee_id', 'brief', 'brief_refs', 'spec_size', 'spec_qty', 'spec_location', 'spec_type'] as const).filter(
+      (k) => patch[k] !== undefined,
+    )
+    if (pmOnly.length > 0 && user.role !== 'pm') {
+      throw new ProviderError('forbidden', '담당자·가이드는 PM만 고칠 수 있습니다.')
+    }
+    const changed: string[] = []
+    const next: Deliverable = { ...d }
+    if (patch.title !== undefined) {
+      const title = patch.title.trim()
+      if (!title) throw new ProviderError('validation', '제목은 비울 수 없습니다.')
+      if (title !== d.title) {
+        next.title = title
+        changed.push('title')
+      }
+    }
+    if (patch.category !== undefined) {
+      const category = patch.category.trim()
+      if (!category) throw new ProviderError('validation', '카테고리는 비울 수 없습니다.')
+      if (category !== d.category) {
+        if (isStructuredDocCategory(d.category) || isStructuredDocCategory(category)) {
+          throw new ProviderError(
+            'conflict',
+            '큐시트·시나리오·운영가이드 항목은 종류를 바꿀 수 없습니다 — 새 항목으로 만드세요.',
+          )
+        }
+        next.category = category
+        changed.push('category')
+      }
+    }
+    if (patch.due_date !== undefined && patch.due_date !== d.due_date) {
+      next.due_date = patch.due_date
+      changed.push('due_date')
+    }
+    if (patch.assignee_id !== undefined && patch.assignee_id !== d.assignee_id) {
+      if (
+        patch.assignee_id !== null &&
+        !this.state.members.some((m) => m.project_id === d.project_id && m.user_id === patch.assignee_id)
+      ) {
+        throw new ProviderError('validation', '담당자는 이 행사 멤버여야 합니다.')
+      }
+      next.assignee_id = patch.assignee_id
+      changed.push('assignee_id')
+    }
+    if (patch.spec_qty != null && (!Number.isInteger(patch.spec_qty) || patch.spec_qty < 0)) {
+      throw new ProviderError('validation', '수량은 0 이상의 정수여야 합니다.')
+    }
+    const text = (v: string | null | undefined): string | null => (v == null ? null : v.trim() || null)
+    const guide: [keyof UpdateDeliverableInput & keyof Deliverable, unknown][] = [
+      ['brief', patch.brief === undefined ? undefined : text(patch.brief)],
+      ['brief_refs', patch.brief_refs === undefined ? undefined : patch.brief_refs && patch.brief_refs.length > 0 ? patch.brief_refs : null],
+      ['spec_size', patch.spec_size === undefined ? undefined : text(patch.spec_size)],
+      ['spec_qty', patch.spec_qty],
+      ['spec_location', patch.spec_location === undefined ? undefined : text(patch.spec_location)],
+      ['spec_type', patch.spec_type === undefined ? undefined : text(patch.spec_type)],
+    ]
+    for (const [key, value] of guide) {
+      if (value === undefined) continue
+      if (JSON.stringify(value) !== JSON.stringify(d[key])) {
+        ;(next as unknown as Record<string, unknown>)[key] = value
+        changed.push(key)
+      }
+    }
+    if (changed.length === 0) return d
+    next.updated_at = nowIso()
+    Object.assign(d, next)
+    this.log(d.project_id, `user:${user.id}`, 'deliverable.updated', 'deliverable', d.id, { fields: changed })
+    if (d.area === 'ops' && !isStructuredDocCategory(d.category)) this.markGuideZoneStale(d.project_id)
+    return d
+  }
+
+  /**
+   * v14(§8 DELETE /deliverables/{id}, Phase 4.5) — PM 전용 · 모든 상태(사용자 결정 2026-09-25) · 종료 행사 409.
+   * SQL `public.delete_deliverable`과 같은 범위를 지운다(버전·컨펌·코멘트·큐·시나리오·가이드 cascade, WBS 연결 set null,
+   * 이 항목으로 등록된 인박스 파일은 닫는다). mock에는 Drive가 없어 drive_archived는 항상 false다.
+   */
+  async deleteDeliverable(deliverableId: UUID): Promise<DeleteDeliverableResult> {
+    const user = this.currentUser()
+    const d = this.mustFindDeliverable(deliverableId)
+    if (user.role !== 'pm') throw new ProviderError('forbidden', 'PM 전용 기능입니다.')
+    this.assertWritable(d.project_id)
+    const id = d.id
+    this.state.versions = this.state.versions.filter((v) => v.deliverable_id !== id)
+    this.state.approvals = this.state.approvals.filter((a) => a.deliverable_id !== id)
+    this.state.comments = this.state.comments.filter((c) => c.deliverable_id !== id)
+    this.state.cues = this.state.cues.filter((c) => c.deliverable_id !== id)
+    this.state.scenario_blocks = this.state.scenario_blocks.filter((b) => b.deliverable_id !== id)
+    this.state.guide_sections = this.state.guide_sections.filter((g) => g.deliverable_id !== id)
+    for (const t of this.state.wbs_tasks) if (t.linked_deliverable_id === id) t.linked_deliverable_id = null
+    for (const f of this.state.unregistered_files) {
+      if (f.linked_deliverable_id === id) {
+        f.linked_deliverable_id = null
+        f.dismissed = true
+      }
+    }
+    this.state.deliverables = this.state.deliverables.filter((x) => x.id !== id)
+    this.log(d.project_id, `user:${user.id}`, 'deliverable.deleted', 'deliverable', id, {
+      title: d.title,
+      category: d.category,
+      area: d.area,
+      status: d.status,
+    })
+    if (d.area === 'ops' && !isStructuredDocCategory(d.category)) this.markGuideZoneStale(d.project_id)
+    return { id, project_id: d.project_id, area: d.area, drive_archived: false }
   }
 
   /** v2.5 §23 R-O4 — 이 프로젝트의 운영가이드 문서(들)의 zone 섹션에 stale=true를 마킹한다 */

@@ -156,6 +156,8 @@ export function createDriveClient(opts: DriveClientOptions) {
     adoptFolder: (projectId: string, url: string) => post<DriveFolderResult>({ action: 'adopt-folder', project_id: projectId, url }),
     archiveProject: (folderId: string, projectName: string) =>
       post<{ archived: boolean }>({ action: 'archive-project', folder_id: folderId, project_name: projectName }),
+    archiveItem: (input: { project_id: string; deliverable_id: string; folder_id: string; title: string }) =>
+      post<{ archived: boolean; reason?: string }>({ action: 'archive-item', ...input }),
     scan: (projectId: string) => post<DriveScanResult>({ action: 'scan', project_id: projectId }),
 
     async fileUrls(versionIds: string[]): Promise<Record<string, string | null>> {

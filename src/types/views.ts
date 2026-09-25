@@ -232,6 +232,34 @@ export interface CreateDeliverableInput {
   content?: string
 }
 
+/**
+ * v14(§8 PATCH /deliverables/{id}, Phase 4.5) — 항목 고치기. **보낸 키만 바꾼다**(null = 비우기).
+ * 상태·영역·파트너는 이 경로로 바꾸지 않는다(상태 전이는 transitionStatus, 영역 이동은 새 항목).
+ */
+export interface UpdateDeliverableInput {
+  title?: string
+  category?: string
+  due_date?: IsoDate | null
+  /** PM 전용 */
+  assignee_id?: UUID | null
+  /** PM 전용 — 제작 가이드(브리프·참고·규격 4종) */
+  brief?: string | null
+  brief_refs?: string[] | null
+  spec_size?: string | null
+  spec_qty?: number | null
+  spec_location?: string | null
+  spec_type?: string | null
+}
+
+/** v14(§8 DELETE /deliverables/{id}, Phase 4.5) — 지운 항목과 Drive 항목 폴더 보관 결과(화면이 알린다) */
+export interface DeleteDeliverableResult {
+  id: UUID
+  project_id: UUID
+  area: DeliverableArea
+  /** Drive 항목 폴더를 행사 폴더의 99_archive로 옮겼는가 — Drive 미연결·폴더 없음·실패면 false(파일은 그대로) */
+  drive_archived: boolean
+}
+
 export interface UploadVersionInput {
   /**
    * 원본 파일명 — 확장자 추출·규약화(§7.2)에 사용.
