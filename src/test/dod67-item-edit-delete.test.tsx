@@ -4,7 +4,7 @@
 //   ② 큐시트·시나리오·운영가이드는 종류를 바꿀 수 없다(양방향 409) · 빈 제목 422 · 멤버 아닌 담당 422 · 종료 행사 409
 //   ③ 지우기 = PM만 · 모든 상태 · 항목 이름 입력 확인. 버전·컨펌·코멘트·큐가 함께 사라지고 WBS 연결은 풀리며
 //      이 항목으로 등록된 인박스 파일은 닫힌다(다시 뜨지 않는다)
-//   ④ 화면: 항목 관리 카드(권한 없는 역할에는 없음) · 편집 폼(담당·가이드는 PM만) · 지우기 확인 → 결과 → 보드로
+//   ④ 화면: 머리 ⋯ 메뉴(권한 없는 역할에는 없음 — Phase 3.23 PR-4가 '항목 관리' 카드를 대신) · 편집 폼(담당·가이드는 PM만) · 지우기 확인 → 결과 → 보드로
 //   ⑤ Drive 폴더 보관은 dod67-item-archive-drive.test.ts(node 환경 — 가짜 Drive 서버 계약)
 // 픽스처 초기화 단위 = 이 파일 — 시나리오 순서대로 이어진다(testUtils 주석).
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
@@ -35,17 +35,28 @@ async function reason(p: Promise<unknown>): Promise<{ code: string; message: str
   )
 }
 
-describe('DoD 67 · ④ 화면 — 항목 관리 카드', () => {
-  it('PM: 일반 항목 메타 열 맨 아래에 고치기·지우기 → 제목·마감을 고치면 헤더에 바로 반영', async () => {
-    renderRoute('/items/dlv-003')
-    const card = await screen.findByRole('heading', { name: '항목 관리' })
-    const box = card.closest('.ui-card') as HTMLElement
-    expect((within(box).getByRole('button', { name: '고치기' }) as HTMLButtonElement).disabled).toBe(false)
-    expect((within(box).getByRole('button', { name: '지우기' }) as HTMLButtonElement).disabled).toBe(false)
-    expect(card.closest('aside')).not.toBeNull()
+/** Phase 3.23 PR-4(§7-2.7) — 고치기·지우기는 머리의 ⋯ 메뉴에서 연다('항목 관리' 카드를 대신한다) */
+async function openMenu(): Promise<HTMLElement> {
+  await userEvent.click(await screen.findByRole('button', { name: '항목 메뉴' }))
+  return screen.getByRole('menu', { name: '항목 메뉴' })
+}
 
-    await userEvent.click(within(box).getByRole('button', { name: '고치기' }))
+describe('DoD 67 · ④ 화면 — 머리의 ⋯ 메뉴', () => {
+  it('PM: 머리 ⋯ 메뉴에 고치기·지우기 → 고치기 폼은 본문 맨 위 · 제목·마감을 고치면 머리에 바로 반영', async () => {
+    renderRoute('/items/dlv-003')
+    const menuButton = await screen.findByRole('button', { name: '항목 메뉴' })
+    expect(menuButton.closest('aside')).toBeNull()
+    expect(screen.queryByRole('heading', { name: '항목 관리' })).toBeNull()
+    const menu = await openMenu()
+    expect((within(menu).getByRole('menuitem', { name: '고치기' }) as HTMLButtonElement).disabled).toBe(false)
+    expect((within(menu).getByRole('menuitem', { name: '지우기' }) as HTMLButtonElement).disabled).toBe(false)
+    // Esc로 닫힌다
+    await userEvent.keyboard('{Escape}')
+    expect(screen.queryByRole('menu')).toBeNull()
+
+    await userEvent.click(within(await openMenu()).getByRole('menuitem', { name: '고치기' }))
     const form = await screen.findByTestId('item-edit-form')
+    expect(screen.queryByRole('menu')).toBeNull()
     const title = within(form).getByLabelText('제목')
     await userEvent.clear(title)
     await userEvent.type(title, '무대 백월 배너 (최종 규격)')
@@ -63,11 +74,9 @@ describe('DoD 67 · ④ 화면 — 항목 관리 카드', () => {
     expect(d.status).toBe('draft')
   })
 
-  it('정형 문서(큐시트): 카드는 본문 맨 아래 · 카테고리는 잠금 문구(선택기 없음)', async () => {
+  it('정형 문서(큐시트)도 머리 ⋯ 메뉴 · 카테고리는 잠금 문구(선택기 없음)', async () => {
     renderRoute('/items/dlv-004')
-    const card = await screen.findByRole('heading', { name: '항목 관리' })
-    expect(card.closest('aside')).toBeNull()
-    await userEvent.click(within(card.closest('.ui-card') as HTMLElement).getByRole('button', { name: '고치기' }))
+    await userEvent.click(within(await openMenu()).getByRole('menuitem', { name: '고치기' }))
     const form = await screen.findByTestId('item-edit-form')
     expect(within(form).getByText(/종류를 바꿀 수 없습니다/)).toBeTruthy()
     expect(form.querySelector('#item-edit-category')).toBeNull()
@@ -76,10 +85,9 @@ describe('DoD 67 · ④ 화면 — 항목 관리 카드', () => {
   it('영역 담당(design): 자기 영역은 고치기만 — 담당·가이드 칸 없음 · 남의 영역(운영)과 reg에는 카드 자체가 없다', async () => {
     mockProvider().switchUser('usr-design')
     renderRoute('/items/dlv-003')
-    const card = await screen.findByRole('heading', { name: '항목 관리' })
-    const box = card.closest('.ui-card') as HTMLElement
-    expect(within(box).queryByRole('button', { name: '지우기' })).toBeNull()
-    await userEvent.click(within(box).getByRole('button', { name: '고치기' }))
+    const menu = await openMenu()
+    expect(within(menu).queryByRole('menuitem', { name: '지우기' })).toBeNull()
+    await userEvent.click(within(menu).getByRole('menuitem', { name: '고치기' }))
     const form = await screen.findByTestId('item-edit-form')
     expect(within(form).queryByLabelText('담당')).toBeNull()
     expect(within(form).queryByLabelText('제작 가이드 추가')).toBeNull()
@@ -88,24 +96,31 @@ describe('DoD 67 · ④ 화면 — 항목 관리 카드', () => {
 
     renderRoute('/items/dlv-004')
     await screen.findByRole('heading', { level: 1 })
-    expect(screen.queryByRole('heading', { name: '항목 관리' })).toBeNull()
+    await screen.findByTestId('next-step-card')
+    expect(screen.queryByRole('button', { name: '항목 메뉴' })).toBeNull()
     cleanup()
 
     mockProvider().switchUser('usr-reg')
     renderRoute('/items/dlv-003')
     await screen.findByRole('heading', { level: 1 })
-    expect(screen.queryByRole('heading', { name: '항목 관리' })).toBeNull()
+    await screen.findByTestId('next-step-card')
+    expect(screen.queryByRole('button', { name: '항목 메뉴' })).toBeNull()
   })
 
   it('종료 행사: 버튼은 비활성 + 이유(재개 후 가능)', async () => {
     await mockProvider().closeProject('prj-stc26', true)
     try {
       renderRoute('/items/dlv-003')
-      const card = await screen.findByRole('heading', { name: '항목 관리' })
-      const box = card.closest('.ui-card') as HTMLElement
-      await waitFor(() => expect((within(box).getByRole('button', { name: '고치기' }) as HTMLButtonElement).disabled).toBe(true))
-      expect((within(box).getByRole('button', { name: '지우기' }) as HTMLButtonElement).disabled).toBe(true)
-      expect(within(box).getByTestId('item-manage-closed').textContent).toContain('재개(pm) 후')
+      // 종료 여부(행사 정보)가 도착한 뒤 메뉴를 연다
+      await waitFor(async () => {
+        const menu = await openMenu()
+        const edit = within(menu).getByRole('menuitem', { name: '고치기' }) as HTMLButtonElement
+        if (!edit.disabled) await userEvent.keyboard('{Escape}')
+        expect(edit.disabled).toBe(true)
+      })
+      const menu = screen.getByRole('menu', { name: '항목 메뉴' })
+      expect((within(menu).getByRole('menuitem', { name: '지우기' }) as HTMLButtonElement).disabled).toBe(true)
+      expect(within(menu).getByTestId('item-manage-closed').textContent).toContain('재개(pm) 후')
     } finally {
       await mockProvider().closeProject('prj-stc26', false)
     }
@@ -113,14 +128,12 @@ describe('DoD 67 · ④ 화면 — 항목 관리 카드', () => {
 
   it('지우기: 이름을 정확히 쳐야 열림 · Esc는 취소 · 지우면 결과 → 보드로(목록에서 사라짐) · mock에는 Drive 문구 없음', async () => {
     renderRoute('/items/dlv-007')
-    const card = await screen.findByRole('heading', { name: '항목 관리' })
-    const box = card.closest('.ui-card') as HTMLElement
-    await userEvent.click(within(box).getByRole('button', { name: '지우기' }))
+    await userEvent.click(within(await openMenu()).getByRole('menuitem', { name: '지우기' }))
     let dialog = await screen.findByTestId('delete-item-dialog')
     await userEvent.keyboard('{Escape}')
     expect(screen.queryByTestId('delete-item-dialog')).toBeNull()
 
-    await userEvent.click(within(box).getByRole('button', { name: '지우기' }))
+    await userEvent.click(within(await openMenu()).getByRole('menuitem', { name: '지우기' }))
     dialog = await screen.findByTestId('delete-item-dialog')
     expect(dialog.textContent).toContain('되돌릴 수 없습니다')
     expect(dialog.textContent).not.toContain('Drive')

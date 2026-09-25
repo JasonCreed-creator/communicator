@@ -14,7 +14,8 @@
 //       4.5: 항목 고치기·지우기 — 제목 고쳐 저장 → 이름 입력 확인 후 지우기 → 보드 복귀 ·
 //       6: Slack 알림 — 행사 설정 ③ 채널 등록(형식 검증 → 등록 → 가림 표시) · 홈 리마인드는 mock 사실 안내 ·
 //       4.7: 협력사 견적서 불러오기 — 가상 엑셀 읽기 → 확인 큐(부가세·버킷·공급가 대조) → 확정 → 이력 ·
-//       3.23: UX 개편 — PR-1 기반(날짜 표기·대비) · PR-2 홈 '오늘 할 일' · PR-3 디자인 보드(다음 행동 표·차례 칩·갤러리))
+//       3.23: UX 개편 — PR-1 기반(날짜 표기·대비) · PR-2 홈 '오늘 할 일' · PR-3 디자인 보드(다음 행동 표·차례 칩·갤러리) ·
+//             PR-4 항목 상세(다음 단계 카드·큰 미리보기·⋯ 메뉴·코멘트 공개 범위))
 // 캡처는 dist-demo/shots-interaction/ 에 남긴다. 실패 시 exit 1.
 import { createServer } from 'node:http'
 import { readFileSync, mkdirSync } from 'node:fs'
@@ -148,7 +149,55 @@ check(
   `${docCountBefore} → ${docRequests.length}`,
 )
 
-// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — **Phase 3.23 PR-3 디자인 보드(2026-09-25)**.
+// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — **Phase 3.23 PR-4 항목 상세(2026-09-25)**.
+//     일정(②에서 도착) → 컨펌대기 항목(RB27 '외관 대형 현수막') → 다음 단계 카드(5단계 레일 · 4단계 · 발주처 답 기다림) · 머리 = 최신본 내려받기 + ⋯ ·
+//     채운 버튼 0 · 큰 미리보기 16:9 · ⋯ 메뉴 열고 Esc · 코멘트 공개 범위 토글 → 공유 안내 → 내부검토 항목(prd-001)에서 채운 버튼 = 컨펌 발송 하나 →
+//     다시 '일정'으로(아래 ③-이전 블록이 일정 화면에서 시작한다).
+{
+  const docBefore = docRequests.length
+  await tab.evaluate(() => {
+    window.location.hash = '#/items/dlv-rb27-prd-007'
+  })
+  const card = tab.getByTestId('next-step-card')
+  await card.waitFor({ timeout: 10_000 })
+  const steps = await card.locator('li[data-step-state]').count()
+  const current = (await card.locator('li[aria-current="step"]').innerText()).trim()
+  check(steps === 5 && /발주처 컨펌/.test(current), '다음 단계 카드: 5단계 레일 · 지금 = 발주처 컨펌', `${steps}칸 · ${current}`)
+  const heading = (await card.getByRole('heading').first().innerText()).trim()
+  check(heading === '발주처 답을 기다리는 중', '컨펌대기 = 한 문장 제목', heading)
+  const headerLinks = await tab.getByRole('link', { name: '최신본 내려받기' }).count()
+  check(headerLinks === 1 && (await tab.getByRole('button', { name: '항목 메뉴' }).count()) === 1, '머리 = 최신본 내려받기 + ⋯ 메뉴')
+  const filled = await tab.locator('main .btn-accent, main .btn-primary').count()
+  check(filled === 0, '컨펌대기 항목 채운 버튼 0(할 일이 발주처에 있다)', `${filled}개`)
+  const box = await tab.getByTestId('version-preview').locator('.aspect-video').boundingBox()
+  check(!!box && Math.abs(box.width / box.height - 16 / 9) < 0.02 && box.width > 600, '큰 미리보기 16:9 · 본문 폭', box ? `${Math.round(box.width)}×${Math.round(box.height)}` : '없음')
+  await tab.getByRole('button', { name: '항목 메뉴' }).click()
+  await tab.getByRole('menu', { name: '항목 메뉴' }).waitFor({ timeout: 5_000 })
+  await tab.keyboard.press('Escape')
+  check((await tab.getByRole('menu').count()) === 0, '⋯ 메뉴 열고 Esc로 닫힘')
+  const thread = tab.getByRole('region', { name: '코멘트' })
+  await thread.getByRole('button', { name: '발주처와 공유' }).click()
+  const note = (await thread.getByTestId('comment-visibility-note').innerText()).trim()
+  check(note === '발주처 화면에도 보입니다.', '코멘트 공개 범위 = 발주처와 공유 → 안내 바뀜', note)
+  await tab.screenshot({ path: resolve(SHOTS, '03-item-detail-pending.png'), fullPage: true })
+  await tab.evaluate(() => {
+    window.location.hash = '#/items/dlv-rb27-prd-001'
+  })
+  await card.getByRole('heading', { name: '검토하고 발주처로 보낼 차례' }).waitFor({ timeout: 10_000 })
+  // 업로드 카드(자체 제출·보기 전환)는 셈에서 뺀다 — vitest DoD 73과 같은 기준
+  const filledReview = await tab.evaluate(() =>
+    [...document.querySelectorAll('main .btn-accent, main .btn-primary')]
+      .filter((el) => !el.closest('#version-upload-form'))
+      .map((el) => (el.textContent ?? '').trim()),
+  )
+  check(filledReview.join('|') === '컨펌 발송', '내부검토 항목: 채운 버튼 = 컨펌 발송 하나(업로드 카드 제외)', filledReview.join(' · '))
+  await tab.screenshot({ path: resolve(SHOTS, '03-item-detail-review.png'), fullPage: true })
+  check(docRequests.length === docBefore, '항목 상세 이동·메뉴·토글에 전체 리로드 0', `${docBefore} → ${docRequests.length}`)
+  await tab.locator('aside nav a', { hasText: '일정' }).first().click()
+  await tab.waitForURL(/#\/schedule/, { timeout: 10_000 })
+}
+
+// ── ③-이전(2026-09-25 Phase 3.23 PR-3) 디자인 보드 — 직전 PR ③을 회귀 가드로 유지.
 //     일정(②에서 도착) → 사이드바 '디자인 보드' → 표 6열(다음 행동 칸) · 행마다 다음 행동 1줄 · 채운 버튼 1개(＋ 항목 추가) ·
 //     '지연만' 칩 → 남은 행 전부 'n일 지남' → 해제 · '갤러리' → 카드 = 행 수 · 썸네일(이미지 또는 빈 자리) → '목록'으로 되돌리고
 //     다시 '일정'으로(아래 ③-이전 블록이 일정 화면에서 시작한다).
@@ -182,7 +231,7 @@ check(
   await cards.first().waitFor({ timeout: 10_000 })
   const cardCount = await cards.count()
   check(cardCount === rowCount, '갤러리 카드 = 목록 행 수', `${cardCount}장`)
-  const thumbs = await tab.locator('[data-testid="design-thumb-image"], [data-testid="design-thumb-file"], [data-testid="design-thumb-empty"]').count()
+  const thumbs = await tab.locator('[data-testid="version-picture"], [data-testid="version-file-cover"], [data-testid="design-thumb-empty"]').count()
   check(thumbs === cardCount, '카드마다 16:9 썸네일 자리(이미지·파일 표지·빈 자리)', `${thumbs}/${cardCount}`)
   await tab.waitForTimeout(300)
   await tab.screenshot({ path: resolve(SHOTS, '03-design-board-gallery.png'), fullPage: true })
@@ -374,7 +423,7 @@ check(true, '홈 리마인드: mock은 보내는 흉내 없이 사실 안내')
 check(docRequests.length === docBeforeSlack, 'Slack 카드·홈 리마인드에 전체 리로드 0', `${docBeforeSlack} → ${docRequests.length}`)
 
 // ── ③-이전(2026-09-25 Phase 4.5) 항목 고치기·지우기 — 직전 세션 ③을 회귀 가드로 유지.
-//     RB27 '유튜브 중계 템플릿'(dlv-rb27-prd-005): 보드에 있는지 먼저 보고 → 항목 관리 카드 → 고치기 → 제목 바꿔 저장(헤더 반영) →
+//     RB27 '유튜브 중계 템플릿'(dlv-rb27-prd-005): 보드에 있는지 먼저 보고 → 머리 ⋯ 메뉴(Phase 3.23 PR-4 — 옛 '항목 관리' 카드) → 고치기 → 제목 바꿔 저장(헤더 반영) →
 //     지우기 → 이름 입력 전 '영구 삭제' 비활성 → 정확히 치면 활성 → 지움 → 결과 창(데모는 Drive 문구 없음) → '디자인 보드로' →
 //     보드에 그 항목 없음. 다른 블록이 쓰는 항목(prd-001·prd-007)은 건드리지 않는다.
 const noticeE = tab.getByRole('button', { name: '안내 닫기' })
@@ -388,16 +437,18 @@ check(true, '지우기 전: 디자인 보드에 대상 항목 있음')
 await tab.evaluate(() => {
   window.location.hash = '#/items/dlv-rb27-prd-005'
 })
-const manage = tab.locator('.ui-card', { has: tab.getByRole('heading', { name: '항목 관리' }) })
-await manage.waitFor({ timeout: 10_000 })
-await manage.getByRole('button', { name: '고치기' }).click()
+const itemMenu = tab.getByRole('button', { name: '항목 메뉴' })
+await itemMenu.waitFor({ timeout: 10_000 })
+await itemMenu.click()
+await tab.getByRole('menu', { name: '항목 메뉴' }).getByRole('menuitem', { name: '고치기' }).click()
 const editForm = tab.getByTestId('item-edit-form')
 await editForm.getByLabel('제목').fill('유튜브 중계 템플릿 (27 개정)')
 await editForm.getByRole('button', { name: '저장' }).click()
 await tab.getByRole('heading', { level: 1, name: '유튜브 중계 템플릿 (27 개정)' }).waitFor({ timeout: 10_000 })
 check((await tab.getByTestId('item-edit-form').count()) === 0, '고치기 → 저장 → 헤더 제목 반영 · 폼 닫힘')
 await tab.screenshot({ path: resolve(SHOTS, '03-item-edited.png'), fullPage: true })
-await manage.getByRole('button', { name: '지우기' }).click()
+await itemMenu.click()
+await tab.getByRole('menu', { name: '항목 메뉴' }).getByRole('menuitem', { name: '지우기' }).click()
 const delDialog = tab.getByTestId('delete-item-dialog')
 await delDialog.waitFor({ timeout: 10_000 })
 const goDelete = delDialog.getByRole('button', { name: '영구 삭제' })
@@ -416,8 +467,8 @@ check(docRequests.length === docBeforeEdit, '고치기·지우기·보드 복귀
 await tab.screenshot({ path: resolve(SHOTS, '03-item-deleted-board.png'), fullPage: true })
 
 // ── ③-이전(2026-09-25 Phase 4.3.1) 업로드 잠금 안내 — 직전 세션 ③을 회귀 가드로 유지.
-//     컨펌대기 항목(RB27 '외관 대형 현수막')의 버전 업로드 카드는 고르기·끌어놓기·업로드 대신 이유를 먼저 보이고,
-//     헤더 '새 버전 업로드'는 자리는 지키되 비활성이다(예전에는 파일을 고르고 누른 뒤에야 영문 상태 코드로 실패했다).
+//     컨펌대기 항목(RB27 '외관 대형 현수막')은 고르기·끌어놓기·업로드 대신 '다음 단계' 카드가 이유를 보이고, 올리기 버튼이
+//     어디에도 없다(Phase 3.23 PR-4 — 올리기는 머리가 아니라 다음 단계 카드 한 곳. 예전에는 누른 뒤에야 영문 상태 코드로 실패했다).
 //     업로드가 되는 항목의 폼은 아래 ③-이전(Phase 5) 블록이 그대로 잡는다. 발송 경고·저장 위치·Drive 경고 상자는
 //     실서버 전용이라 vitest(dod66)가 잡는다.
 const noticeL = tab.getByRole('button', { name: '안내 닫기' })
@@ -431,7 +482,7 @@ await locked.waitFor({ timeout: 10_000 })
 const lockText = (await locked.innerText()).replace(/\s+/g, ' ')
 check(/지금은 새 버전을 올릴 수 없습니다 — 컨펌대기/.test(lockText), '컨펌대기 항목: 업로드 폼 대신 이유 안내', lockText.slice(0, 48))
 check((await tab.locator('input[type="file"]').count()) === 0, '컨펌대기 항목: 파일 입력 0(고르기·끌어놓기 없음)')
-check(await tab.getByRole('button', { name: '새 버전 업로드' }).isDisabled(), "헤더 '새 버전 업로드' = 비활성(자리 유지)")
+check((await tab.getByRole('button', { name: /올리기|새 버전 업로드/ }).count()) === 0, '컨펌대기 항목: 올리기 버튼 0(이유만)')
 const bodyText = await tab.evaluate(() => document.body.innerText)
 check(!/pending_approval/.test(bodyText), '화면 글자에 영문 상태 코드 0')
 check(docRequests.length === docBeforeLock, '항목 이동에 전체 리로드 0', `${docBeforeLock} → ${docRequests.length}`)

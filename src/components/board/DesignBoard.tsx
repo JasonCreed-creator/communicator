@@ -3,7 +3,6 @@
 // 급한 순 한 표(카테고리 묶음 대신 카테고리는 제목 아래 한 줄), 목록 ↔ 갤러리(최신 시안 썸네일 — 사용자 결정 2026-09-25).
 // 운영 보드는 v2.5 유형 우선 구조(유형 카드 + 인라인 빌더)를 그대로 둔다 — 이 파일은 디자인 영역만 그린다.
 import { useEffect, useMemo, useState } from 'react'
-import { activeClientLinks } from '../internal/ClientLinkWarning'
 import EmptyState from '../internal/EmptyState'
 import ErrorAlert from '../internal/ErrorAlert'
 import FilterChip from '../internal/FilterChip'
@@ -15,13 +14,12 @@ import SegmentedToggle from '../internal/SegmentedToggle'
 import TableSkeleton from '../internal/TableSkeleton'
 import { useProject } from '../../context/ProjectContext'
 import { useAsync } from '../../hooks/useAsync'
-import { appUrl } from '../../lib/basePath'
 import { BOARD_HELP } from '../../lib/helpTexts'
 import { getDataProvider } from '../../providers'
 import type { MemberRole } from '../../types/enums'
 import BoardStatusLegend from './BoardStatusLegend'
 import { DeliverableAddFormBody } from './DeliverableAddForm'
-import type { ClientLinkTarget } from './DesignNextAction'
+import { useClientLinkTarget } from './DesignNextAction'
 import DesignBoardGallery from './DesignBoardGallery'
 import DesignBoardTable, { type DesignRowView } from './DesignBoardTable'
 import {
@@ -89,16 +87,8 @@ export default function DesignBoard() {
   const canWrite = !isClosed && (role === 'pm' || role === 'design')
   const isPm = !isClosed && role === 'pm'
 
-  // 발주처 링크(재전달용) — PM에게만 필요하다. 권한이 없어 조회가 실패하면 버튼을 그리지 않는다(추측 금지)
-  const tokens = useAsync(
-    () => (isPm && !isHost ? provider.listClientTokens(projectId) : Promise.resolve(null)),
-    [projectId, isPm, isHost],
-  )
-  const clientLink = useMemo<ClientLinkTarget | null>(() => {
-    if (!tokens.data) return null
-    const active = activeClientLinks(tokens.data)
-    return active.length === 1 ? { kind: 'copy', url: appUrl(`c/${active[0].token}`) } : { kind: 'settings' }
-  }, [tokens.data])
+  // 발주처 링크(재전달용) — 대행형 PM에게만 필요하다. 권한이 없어 조회가 실패하면 버튼을 그리지 않는다(추측 금지)
+  const clientLink = useClientLinkTarget(projectId, isPm && !isHost)
 
   const memberOf = (userId: string | null) => members.data?.find((m) => m.user_id === userId)
 

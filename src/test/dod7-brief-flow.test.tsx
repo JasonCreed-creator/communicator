@@ -78,15 +78,19 @@ describe('DoD-7 가이드 발행 흐름', () => {
   it('(c) S3 상세에 가이드 카드(브리프+스펙 칩)가 렌더된다', async () => {
     renderRoute(`/items/${issuedItemId}`)
 
-    expect(await screen.findByRole('heading', { name: '가이드 카드' })).toBeTruthy()
+    // Phase 3.23 PR-4 — 제목 '제작 가이드'(디자인 항목), 항목 상세 오른쪽 열
+    expect(await screen.findByRole('heading', { name: '제작 가이드' })).toBeTruthy()
     expect(screen.getByText('입구 사이니지 시안 요청.')).toBeTruthy()
     expect(screen.getByText('https://example.com/refs/signage')).toBeTruthy()
     expect(screen.getByText('2000×3000mm')).toBeTruthy()
     expect(screen.getByText('2개')).toBeTruthy()
     expect(screen.getByText('로비 입구')).toBeTruthy()
     expect(screen.getByText('현수막')).toBeTruthy()
-    // 상태 액션 바 — requested 안내 문구
-    expect(screen.getByText(/첫 버전을 업로드하면 자동으로 초안\(draft\) 상태로 전환됩니다/)).toBeTruthy()
+    // 다음 단계 카드 — 가이드됨: 첫 시안을 올릴 차례(채운 버튼 1개)
+    const next = screen.getByTestId('next-step-card')
+    expect(within(next).getByRole('heading', { name: '첫 시안을 올릴 차례' })).toBeTruthy()
+    expect(within(next).getByText('첫 시안을 올리면 초안으로 바뀝니다.')).toBeTruthy()
+    expect(within(next).getByRole('button', { name: '첫 시안 올리기' }).className).toContain('btn-accent')
   })
 
   it('(d) 첫 버전 업로드 시 초안 상태로 자동 전환된다', async () => {

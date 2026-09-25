@@ -124,12 +124,14 @@ describe('T3② — S3 정형 문서 하단 메타 카드 제거', () => {
     expect(document.querySelectorAll('main aside')).toHaveLength(0)
   })
 
-  it('레거시 파일 문서(dlv-005 운영 시나리오)는 2단 유지 — 우측 메타 카드가 남는다', async () => {
+  it('레거시 파일 문서(dlv-005 운영 시나리오)는 2단 유지 — 오른쪽 열(버전 이력·컨펌 기록)이 남는다', async () => {
+    // Phase 3.23 PR-4(§7-2.7) — 오른쪽 열의 상태·담당·마감 카드는 머리와 겹쳐 뺐다. 2단 구조 자체는 그대로다
     localStorage.setItem('communicator.currentProjectId', PROJECT_ID)
     renderRoute('/items/dlv-005')
     await screen.findByRole('heading', { name: '운영 시나리오' })
-    await screen.findByText('상태')
+    await screen.findByText('버전 이력')
     expect(document.querySelectorAll('main aside')).toHaveLength(1)
     expect(screen.getAllByText('버전 이력')).toHaveLength(1)
+    expect(screen.getAllByText('컨펌 기록')).toHaveLength(1)
   })
 })

@@ -1,18 +1,14 @@
 // 디자인 보드 갤러리 보기 — 최신 시안 썸네일 16:9 + 제목·버전·담당·마감 + 다음 행동(§7-2.6, 사용자 결정 2026-09-25 "보드에 갤러리 보기 추가").
 // 썸네일은 이미지 파일만 그린다(provider.getFileUrl — 실서버는 서명 스트림 주소, mock은 자리표시). PDF·기타는 파일 표지.
 // 시안이 없으면 점선 자리 — 올릴 수 있으면 항목 상세의 업로드 카드로 보낸다(보드에서 바로 올리지 않는다: 잠금·Drive 경고·진행률은 한 곳).
-import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useAsync } from '../../hooks/useAsync'
 import { categoryGroupLabel } from '../../lib/boardPresets'
 import { formatDate } from '../../lib/labels'
-import { getDataProvider } from '../../providers'
-import type { Version } from '../../types/entities'
+import { VersionPicture } from '../item/VersionMedia'
 import DesignNextActionView, { type ClientLinkTarget } from './DesignNextAction'
 import { DesignAssignee, DesignDue, DesignStatusBadge, type DesignRowView } from './DesignBoardTable'
-import { designSpecParts, fileKindLabel, isThumbnailFile, type DesignRow } from './designBoardRows'
+import { designSpecParts, type DesignRow } from './designBoardRows'
 
-const provider = getDataProvider()
 
 export default function DesignBoardGallery({
   views,
@@ -113,38 +109,7 @@ function Thumb({ row, canUpload }: { row: DesignRow; canUpload: boolean }) {
       aria-label={`${d.title} v${row.latest.version_no} 크게 보기`}
       className="block aspect-video overflow-hidden bg-track"
     >
-      {isThumbnailFile(row.latest.file_name) ? <ImageThumb version={row.latest} /> : <FileCover version={row.latest} />}
+      <VersionPicture version={row.latest} />
     </Link>
-  )
-}
-
-function ImageThumb({ version }: { version: Version }) {
-  const url = useAsync(() => provider.getFileUrl(version.id), [version.id])
-  const [failed, setFailed] = useState(false)
-  if (failed || url.error) return <FileCover version={version} />
-  if (!url.data) return <span className="block h-full w-full animate-pulse bg-track" aria-hidden />
-  // 시안은 잘리지 않게 전체를 보인다(object-contain) — 가로로 긴 현수막도 비율 그대로
-  return (
-    <img
-      src={url.data}
-      alt=""
-      loading="lazy"
-      data-testid="design-thumb-image"
-      className="h-full w-full object-contain"
-      onError={() => setFailed(true)}
-    />
-  )
-}
-
-function FileCover({ version }: { version: Version }) {
-  return (
-    <span className="flex h-full w-full flex-col items-center justify-center gap-1.5 px-4 text-center" data-testid="design-thumb-file">
-      <span className="rounded-md border border-border-strong bg-card px-2 py-1 text-xs font-semibold tracking-wide text-brown">
-        {fileKindLabel(version.file_name)}
-      </span>
-      <span className="max-w-full truncate text-xs text-ink-sub" title={version.file_name}>
-        {version.file_name}
-      </span>
-    </span>
   )
 }

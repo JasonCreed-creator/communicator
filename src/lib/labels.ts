@@ -265,6 +265,12 @@ export function daysUntil(isoDate: string, today: Date = new Date()): number {
   return Math.round((target.getTime() - base.getTime()) / 86_400_000)
 }
 
+/** 숫자 뒤 목적격 조사 — 읽는 소리의 끝 받침으로 고른다(2 이·4 사·5 오·9 구 → '를', 그 외·10 단위 → '을'). 예: v2를 · v1을 · v10을 */
+export function objectParticle(n: number): '을' | '를' {
+  const d = Math.abs(n) % 10
+  return d !== 0 && [2, 4, 5, 9].includes(d) ? '를' : '을'
+}
+
 /** 요청·발송 뒤 지난 날수 — 시각 기준(음수 방지). 컨펌·파트너 제출처럼 '보낸 지 n일'에 쓴다 */
 export function waitingDays(requestedAt: string, now: Date = new Date()): number {
   const diff = Math.floor((now.getTime() - new Date(requestedAt).getTime()) / 86_400_000)

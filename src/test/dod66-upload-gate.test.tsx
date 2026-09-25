@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 // DoD 66 (Phase 4.3.1 · 2026-09-25 실서버 실사용 중 나온 결함 5건):
 //   ① 업로드가 막힌 상태(컨펌대기·승인·확정·파트너 첫 제출 전)는 고르기·끌어놓기·업로드 대신 이유와 다음 할 일부터 —
-//      헤더 '새 버전 업로드'는 자리는 지키되(3.17b 주 액션 2개) 비활성 + 이유
+//      올리기 버튼은 '다음 단계' 카드 한 곳(Phase 3.23 PR-4 — 머리에서 옮겼다) — 막힌 상태면 버튼 없이 이유만
 //   ② 업로드 거부 문구에 영문 상태 코드가 없다 — provider 가드(mock·실서버)와 서버 SQL·Drive 함수 문구까지
 //   ③ 발주처 링크가 0개인 행사에서 컨펌을 보내려 하면 경고(발송은 막지 않는다) → 행사 설정 ② 담당자로 가는 링크
 //   ④ 버전마다 파일이 실제로 어디 있는지(실서버만): Drive · 임시(저장 안 됨)
@@ -102,18 +102,18 @@ describe('DoD 66 · ② 거부 문구에 영문 상태 코드가 없다', () => 
 })
 
 describe('DoD 66 · ①′ 업로드 카드 — 막힌 상태는 고르기·업로드 없이 이유부터', () => {
-  it('컨펌대기(dlv-001): 파일 입력 0 · 업로드 버튼 0 · 안내 1 · 헤더 버튼은 비활성 + 이유', async () => {
+  it('컨펌대기(dlv-001): 파일 입력 0 · 업로드 버튼 0 · 안내 1(다음 단계 카드 안) · 올리기 버튼 없음', async () => {
     const { container } = renderRoute('/items/dlv-001')
     const note = await screen.findByTestId('upload-locked')
     expect(note.textContent).toContain('지금은 새 버전을 올릴 수 없습니다 — 컨펌대기')
     expect(note.textContent).toContain('발주처가 수정요청을 보내면 다시 올릴 수 있습니다')
+    expect(screen.getAllByTestId('upload-locked')).toHaveLength(1)
+    // Phase 3.23 PR-4(§7-2.7) — 올리기는 머리가 아니라 '다음 단계' 카드 한 곳에서만. 막힌 상태면 그 버튼이 아예 없다
+    expect(screen.getByTestId('next-step-card').contains(note)).toBe(true)
     expect(container.querySelectorAll('input[type="file"]')).toHaveLength(0)
     expect(screen.queryByTestId('upload-dropzone')).toBeNull()
     expect(screen.queryByRole('button', { name: '업로드' })).toBeNull()
-    // 3.17b 주 액션 슬롯은 유지 — 누를 수 없고 이유가 붙는다
-    const headerButton = screen.getByRole('button', { name: '새 버전 업로드' }) as HTMLButtonElement
-    expect(headerButton.disabled).toBe(true)
-    expect(headerButton.title).toContain('컨펌대기')
+    expect(screen.queryByRole('button', { name: /올리기|새 버전 업로드/ })).toBeNull()
     expect(container.textContent).not.toMatch(/pending_approval/)
   })
 
@@ -124,12 +124,13 @@ describe('DoD 66 · ①′ 업로드 카드 — 막힌 상태는 고르기·업�
     expect(note.textContent).toContain('새 항목을 만들어 진행하세요')
   })
 
-  it('초안(dlv-003): 기존 업로드 폼 그대로 — 헤더 버튼도 살아 있다', async () => {
+  it('초안(dlv-003): 기존 업로드 폼 그대로 — 다음 단계 카드의 올리기도 살아 있다', async () => {
     renderRoute('/items/dlv-003')
     await screen.findByTestId('upload-dropzone')
     expect(screen.queryByTestId('upload-locked')).toBeNull()
     expect(screen.getByRole('button', { name: '업로드' })).toBeTruthy()
-    expect((screen.getByRole('button', { name: '새 버전 업로드' }) as HTMLButtonElement).disabled).toBe(false)
+    const next = screen.getByTestId('next-step-card')
+    expect((within(next).getByRole('button', { name: '시안 올리기' }) as HTMLButtonElement).disabled).toBe(false)
   })
 })
 
