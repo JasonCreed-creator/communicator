@@ -33,7 +33,8 @@
   사용자가 권한 모드를 **'편집 자동 수락'**으로 바꾼 뒤 재개. `api/gate`(GET 상태·인물 목록 = 이름·직함·권한만 / POST 주소록 id → 필요 시 auth 사용자 생성 →
   magiclink `token_hash`만) · 로그인 화면 '시험용 입구'(경고·KST 마감·인물 카드) · 사이드바 로그아웃(실서버만) · 여닫기 = 서버 env `AUTH_GATE`+`AUTH_GATE_UNTIL`(14일 이내).
   DoD 64 신설(22건) · ESM 가드 보정(진입점별 그래프 비지 않음 + 전체 중 src 도달 1개 이상 — 입구 함수는 src를 쓰지 않는다).
-  ⑩ **Phase 4.4 회사 도메인 하위 경로 — 코드 완성, 회사 CloudFront 대기**(§18a-2): 사용자 지시 "도메인은 mkt.rememberapp.co.kr/leadgen/communicator로 교체".
+  ⑩ **Phase 4.4 회사 도메인 하위 경로 — 코드 완성·머지, 연결은 후순위**(§18a-2 — 사용자 2026-09-25 "리멤버 도메인 연결은 후순위로 미루자. 지금 세팅해놓은 상태에서
+  굳이 필요 없을 것 같아"): `VITE_BASE_PATH`를 넣기 전까지 코드는 잠들어 있다(루트 배포 그대로). 요청서는 연결할 때 쓴다. 당시 지시 "도메인은 mkt.rememberapp.co.kr/leadgen/communicator로 교체".
   실측: 그 주소는 회사 S3+CloudFront의 **9/21 mock 정적 사본**(레포 밖 로컬 수정 빌드 — base·basename 하드코딩) — 화면의 행사 7개가 앱 내장 데모인 것이
   증거(실DB는 행사 0). 사용자 선택 = **CloudFront → Vercel**. `VITE_BASE_PATH` → `src/lib/basePath.ts` 단일 파생(basename·`{base}api`·로고/직인·공유 링크·새 탭·
   매직링크 복귀) · `main.tsx` 기본 경로 밖 진입 이동 · `vercel.json` 접두어 규칙(+30줄) · Drive OAuth 복귀 주소를 리디렉트 URI에서 파생(같은 오리진 = 기존 동작) ·
@@ -41,7 +42,11 @@
   **검증**: vitest 118파일 **1,184 통과 · 1 실패**(LibreOffice Calc 없는 컨테이너 — 기존 환경 문제) · 1 건너뜀 · tsc · 루트 빌드 `deploy:check`(실브라우저 포함) ·
   **하위 경로 빌드 `deploy:check` 전 항목**(딥링크·새로고침·런처·옛 라우트·루트 이동·로고 경로·예외 0) · demo 4단(브라우저 단계는 헤드리스 셸 — 전체판 Chrome은
   `/favicon.ico`를 자동 요청해 '요청 1건'으로 잡힌다, 코드 무관) · 상호작용 스모크 33항목.
-  남은 것: PR 머지 → Vercel env(아래 §3) → 회사 CloudFront → Supabase Auth URL·GCP 리디렉션 → 3턴(Drive 연결 → `drive:smoke` → 실사용 1회) → 맨 끝 Okta SSO.
+  ⑪ **PR #47 머지**(사용자 지시 "머지 진행") — merge commit `982da8f`(3커밋: 1턴 기록 · 결정 기록 · 입구+하위 경로). **운영 실측**(06:1x UTC): `/api/gate` 200
+  `{"open":false,"reason":"off"}`(입구 함수 배포 · env 없어 닫힘) · `/api/drive` JSON 불변 · `/leadgen/communicator/api/drive` JSON · `…/brand/remember-seal.png` PNG
+  (접두어 rewrite가 **실제 Vercel에서** 함수·파일로 연결됨 — `:path*` 규칙 실증) · `/`·`/home` 루트 자산(`/assets/…`) 그대로(mock).
+  남은 것: Vercel env(§3 — 도메인 관련 2개 제외) + Redeploy → 입구로 admin 입장 → Supabase Auth URL(Site `https://www.rmb-mice.com`) → 3턴(GCP OAuth → Drive 연결 →
+  `drive:smoke` → 실사용 1회) → 맨 끝 Okta SSO. 회사 도메인 연결은 후순위.
 
 - **완료: Phase 3.22 — 담당자 배정 카드(누르기·끌어놓기)**(2026-09-24, 사용자 지시: 온보딩 ② 캡처와 함께 "여기서 이미 구성원이 포함되어야 함" →
   제안 3안 중 '사람별 기본 역할' 승인 직후 **"미리 배치하지 말고 인물카드를 만들어서 인물을 클릭하거나 드래그앤드랍으로 설정할 수 있도록"**으로 방향 변경).
@@ -1132,12 +1137,13 @@ DoD-29뿐 아니라 **실물 검산 2건에서 바로** 잡힌다(위 표의 "2 
 - ~~(2026-09-25) `reset-demo --yes` 실행 여부 = 사용자 승인 대기~~ → **실행 완료**(사용자 "지금 실행" — §1 ⑦). 되돌리려면 `npm run supabase:seed`(멱등).
 - ~~(2026-09-25) 시험 입장 수단 = 사용자 결정 대기(차단됨)~~ → **해소**: 사용자가 권한 모드를 '편집 자동 수락'으로 바꾼 뒤 완전 개방 입구 완성(§1 ⑨).
   **열 때 주의**: 열려 있는 동안 주소만 알면 누구나 회사 Drive 폴더·DB에 쓸 수 있다 — 기한을 짧게(사용자 선택 3일), 실제 고객 자료 금지, 끝나면 `AUTH_GATE` 삭제.
-- **(2026-09-25) 운영 전환 env 목록(PR 머지 뒤 기획자님 — Vercel Production, 값은 문서·대화 재인쇄 금지)**: `VITE_DATA_PROVIDER=supabase` · `VITE_SUPABASE_URL` ·
-  `VITE_SUPABASE_PUBLISHABLE_KEY` · `SUPABASE_URL` · `SUPABASE_SECRET_KEY` · `VITE_BASE_PATH=/leadgen/communicator/` · `DRIVE_OAUTH_REDIRECT_URI`(회사 주소 …/api/drive) ·
-  `AUTH_GATE=open` · `AUTH_GATE_UNTIL`(3일 뒤) → Redeploy. 3턴에 `DRIVE_ROOT_FOLDER_ID` · `GOOGLE_OAUTH_CLIENT_ID` · `GOOGLE_OAUTH_CLIENT_SECRET` 추가.
-  **env를 PR 머지 전에 넣으면** 머지 전 main 배포가 로그인 필수(입구 없음)로 바뀌어 잠긴다 — 머지와 같이 또는 뒤에.
-- **(2026-09-25) 회사 CloudFront 연결 대기(회사 AWS 담당자)** — 요청서 `docs/회사도메인-CloudFront-연결-요청서.md`. 순서 = Vercel env·재배포 먼저 → CloudFront →
-  확인(회사 주소 `…/api/drive` JSON · `…/home` 새로고침). 확인 필요 2건: 배포 수준 사용자 지정 오류 응답(있으면 API 404 JSON이 바뀜) · WAF의 PUT/POST 본문 제한.
+- **(2026-09-25) 운영 전환 env 목록(PR #47 머지됨 — 기획자님, Vercel Production, 값은 문서·대화 재인쇄 금지)**: `VITE_DATA_PROVIDER=supabase` · `VITE_SUPABASE_URL` ·
+  `VITE_SUPABASE_PUBLISHABLE_KEY` · `SUPABASE_URL` · `SUPABASE_SECRET_KEY` · `AUTH_GATE=open` · `AUTH_GATE_UNTIL`(3일 뒤) → Redeploy. 주소는 `www.rmb-mice.com` 그대로.
+  3턴에 `DRIVE_ROOT_FOLDER_ID` · `GOOGLE_OAUTH_CLIENT_ID` · `GOOGLE_OAUTH_CLIENT_SECRET` 추가(GCP 리디렉션 URI = `https://www.rmb-mice.com/api/drive` — env 불필요).
+  `VITE_BASE_PATH`·`DRIVE_OAUTH_REDIRECT_URI`는 **회사 도메인 연결 때만**(후순위).
+- **(2026-09-25) 회사 도메인 연결 — 후순위(사용자 결정)** — 코드(Phase 4.4)는 머지돼 잠들어 있다. 연결할 때: 요청서 `docs/회사도메인-CloudFront-연결-요청서.md` ·
+  순서 = Vercel env(`VITE_BASE_PATH`·`DRIVE_OAUTH_REDIRECT_URI`)·재배포 먼저 → 회사 CloudFront → 확인(회사 주소 `…/api/drive` JSON · `…/home` 새로고침) →
+  Supabase Auth URL·GCP 리디렉션 URI를 회사 주소로. 확인 필요 2건: 배포 수준 사용자 지정 오류 응답 · WAF의 PUT/POST 본문 제한. 그 사이 회사 주소는 9/21 mock 사본 그대로다.
 - **(2026-09-25) Vercel 요금제 = Hobby** — 약관상 비상업·개인 전용(검증 2026-09-25, vercel.com/docs/plans/hobby). 회사 업무 도구로 회사 도메인에 붙이기 전
   Pro 전환 여부 결정(Okta가 요구하는 Supabase Pro와 함께). 도메인 구매는 필요 없다(사용자 질문 "왜 도메인을 사야 해" — 오해였음을 설명).
 - **(2026-09-25) 로그인 = Okta SSO(맨 마지막)** — Supabase Pro 전환(SAML SSO는 Pro 이상) · 회사 Okta 관리자의 SAML 앱 등록(ACS `https://<ref>.supabase.co/auth/v1/sso/saml/acs` ·
@@ -1319,10 +1325,11 @@ DoD-29뿐 아니라 **실물 검산 2건에서 바로** 잡힌다(위 표의 "2 
   (설계서 v1.4.1 §4-15·§8·§15 정본화 — 열린 질문 ①~⑤ 전부 종결)
 
 ## 4. 다음 스텝
-- **(2026-09-25) 작동 테스트 이후**: ① PR(Phase 4.3·4.4 + PROGRESS) 검수 → 머지 ② Vercel env(§3 목록) + Redeploy → `communicator-rho.vercel.app`에서
-  입구로 admin 입장 · admin 메뉴(행사 삭제·Drive 연결) 확인 ③ 회사 CloudFront(요청서) → 회사 주소 확인 ④ Supabase Auth URL·GCP 리디렉션을 회사 주소로
-  ⑤ **3턴**(README §3d·§3f) — Drive 연결 → `drive:smoke` → 실사용 1회 ⑥ 맨 끝 **Okta SSO**(Supabase Pro · Okta SAML 앱 · CLI 등록 · 로그인 화면 — 설계서 §12 개정) →
-  입구 폐기(§12.1 종료 조건) ⑦ 임시 PAT Revoke(사용자) ⑧ junior 1명 등록 ⑨ Vercel·Supabase 요금제 결정(Hobby·Free — §3)
+- **(2026-09-25) 작동 테스트 이후**: ① ~~PR #47 머지~~ → 완료(`982da8f`) ② Vercel env(§3 목록 — 도메인 2개 제외) + Redeploy → `www.rmb-mice.com`에서
+  입구로 admin 입장 · admin 메뉴(행사 삭제·Drive 연결) 확인 ③ Supabase Auth URL(Site `https://www.rmb-mice.com`) ④ **3턴**(README §3d) — GCP OAuth(리디렉션
+  `https://www.rmb-mice.com/api/drive`) → Drive 연결 → `drive:smoke` → 실사용 1회 ⑤ 맨 끝 **Okta SSO**(Supabase Pro · Okta SAML 앱 · CLI 등록 · 로그인 화면 —
+  설계서 §12 개정) → 입구 폐기(§12.1 종료 조건) ⑥ 임시 PAT Revoke(사용자) ⑦ junior 1명 등록 ⑧ Vercel·Supabase 요금제 결정(Hobby·Free — §3)
+  ⑨ (후순위) 회사 도메인 연결(README §3f · 요청서)
 - ~~(2026-09-24) Phase 3.22 이후: ① PR(Phase 3.22) 검수 → 머지 ② 새 세션: 담당자 7명 Slack 조회 → 작동 테스트 3턴~~ → ① 머지 완료(`771711b`, 운영 반영 확인)
   ② 새 세션(2026-09-25)에서 진행 중 — Slack은 직접 복사로 대체 ③ 회사 도메인 사본 처리 방향 결정(미결 — 그대로)
 - **(2026-09-24) Phase 5 이후**: ① ~~PR(Phase 5) 검수 → 머지~~ → **머지 완료**(`600874a` · 운영 `/api/drive` JSON 확인) ② Supabase 실서버 전환(4.1 3턴)
@@ -1415,6 +1422,8 @@ DoD-29뿐 아니라 **실물 검산 2건에서 바로** 잡힌다(위 표의 "2 
 - 이후 Phase 5(Drive) → Phase 6(알림·cron)
 
 ## 5. 결정 로그
+- **(2026-09-25) 회사 도메인 연결 = 후순위(사용자)** — "리멤버 도메인 연결은 후순위로 미루자. 지금 세팅해놓은 상태에서 굳이 필요 없을 것 같아"(PR #47 머지 직후).
+  Phase 4.4 코드는 머지 상태로 두고(env 없으면 무동작) CloudFront 요청은 보내지 않는다. 운영 주소 = `www.rmb-mice.com` 유지.
 - **(2026-09-25) 시험용 입구 재개 = 사용자가 권한 모드 변경('자동' → '편집 자동 수락')** — 차단 후 "설정은 어디서?"·"지금 이미 자동모드임"(모드 메뉴 캡처) →
   '자동'이 곧 차단한 판정이라는 사실과 메뉴의 다른 선택지를 설명(바꾸면 이 세션의 모든 파일 편집이 자동 수락된다는 점 포함) → 사용자 선택. 설정 변경은 사용자만 했다.
 - **(2026-09-25) 도메인 교체 = 회사 주소, 연결 = CloudFront → Vercel(사용자 버튼 2회)** — 브리프(하위 경로 코드 + 요청서 + 문서, [A]) 승인 → 사용자 "이미 도메인은
@@ -1947,6 +1956,9 @@ DoD-29뿐 아니라 **실물 검산 2건에서 바로** 잡힌다(위 표의 "2 
   하위 경로(`basePath.ts`·basename·자산·링크·Drive 복귀·`vercel.json`·`deploy:check`·DoD 65) → 루트·하위 경로 빌드 둘 다 `deploy:check`(Playwright 1.63 임시 설치 —
   사전 설치 브라우저 1194는 `PLAYWRIGHT_CHROMIUM_PATH`로 지정) → 전체 스위트 → demo 4단(첫 실패 = 전체판 Chrome의 favicon 자동 요청 · 헤드리스 셸로 통과) ·
   스모크 33 → 요청서·설계서 v2.9.2·CLAUDE.md v2.8.2·README §3e·§3f. 사용자 질문 2건 응답(Vercel 화면 = 지금 할 일 없음·원본 주소 확인 / 도메인 구매 불필요 — 요금제 설명).
+  **(계속 3)** 버튼 "머지 진행" → 미리보기(Vercel 로그인 보호 302 — 건너뜀) → 드래프트 해제 → merge `982da8f` → PR 구독 해제·예약 점검 삭제 → 사용자 "리멤버 도메인 연결은
+  후순위" → env 목록에서 도메인 2개 제외·요청서 보류 → 운영 실측(입구 닫힘 JSON · 접두어 rewrite 실증 · 루트 무변화) → 사용자 질문 "가장 자동권한이 높은 모드"(편집 자동 수락 — 판정 없이
+  편집 수락, 자동 = 넓지만 판정 있음) → 브랜치를 main으로 빨리 감기 → PROGRESS 후속 PR.
 - **2026-09-24 (계속 — PR #45 머지 → 작동 테스트 준비 → Phase 3.22 담당자 배정 카드)**. "머지하고 PR" → 드래프트 해제·merge `600874a` → 운영 `/api/drive` JSON 폴링 확인 →
   구독·점검 해제. "작동 테스트 해보고 싶다" → 준비 상태 점검(이 컨테이너 키 없음 · 4.1 3턴 미착수) → 버튼: [B] 3턴·회사 조직 GCP. 사용자가 회사 주소를 알려줘 조사 →
   S3+CloudFront 옛 정적 사본(9/21 업로드, `/api` 없음)으로 확인 → 처리 방향 질문은 사용자가 닫음. "슬랙에서 담당자 정보를 가져와서 업데이트" → 이 세션엔 Slack 도구 없음
