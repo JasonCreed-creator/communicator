@@ -147,7 +147,37 @@ check(
   `${docCountBefore} → ${docRequests.length}`,
 )
 
-// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — **Phase 3.23 PR-1 UX 개편 기반(2026-09-25)**.
+// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — **Phase 3.23 PR-2 홈 '오늘 할 일'(2026-09-25)**.
+//     일정(②에서 도착) → 사이드바 '홈' → 요약 5칸 · 목록 행 · '지연' 칩으로 거르면 남은 행이 전부 'n일 지남' → '전체'로 복귀 ·
+//     채운 버튼 0 · '담당에게 리마인드'(mock) = 사실 안내 → 다시 '일정'으로(아래 ③-이전 PR-1 블록이 일정 화면에서 시작한다).
+{
+  await tab.locator('aside nav a', { hasText: '홈' }).first().click()
+  await tab.waitForURL(/#\/home$/, { timeout: 10_000 })
+  const list = tab.getByTestId('today-list')
+  await list.getByTestId('today-row').first().waitFor({ timeout: 10_000 })
+  const tiles = await tab.locator('[data-testid^="home-tile-"]').count()
+  check(tiles === 5, '홈 요약 5칸', `${tiles}칸`)
+  const total = await list.getByTestId('today-row').count()
+  check(total > 0, "'오늘 할 일' 한 목록", `${total}행`)
+  const filled = await tab.locator('main .btn-accent, main .btn-primary').count()
+  check(filled === 0, '홈 채운 버튼 0개(훑는 화면)', `${filled}개`)
+  await list.getByRole('button', { name: /^지연/ }).click()
+  const lateRows = list.getByTestId('today-row')
+  const lateCount = await lateRows.count()
+  let allLate = lateCount > 0
+  for (let i = 0; i < lateCount; i++) allLate = allLate && /\d+일 지남/.test(await lateRows.nth(i).innerText())
+  check(allLate, "'지연' 칩 → 남은 행 전부 'n일 지남'", `${lateCount}/${total}행`)
+  await list.getByRole('button', { name: /^전체/ }).click()
+  check((await list.getByTestId('today-row').count()) === total, "'전체' 칩 → 목록 복귀", `${total}행`)
+  await list.getByRole('button', { name: '담당에게 리마인드' }).click()
+  const notice = await tab.getByRole('status').first().innerText()
+  check(/데모\(mock\)에서는 알림을 보내지 않습니다/.test(notice), '리마인드(mock) = 보내는 흉내 없이 사실 안내', notice.slice(0, 40))
+  await tab.screenshot({ path: resolve(SHOTS, '03-home-today.png'), fullPage: true })
+  await tab.locator('aside nav a', { hasText: '일정' }).first().click()
+  await tab.waitForURL(/#\/schedule/, { timeout: 10_000 })
+}
+
+// ── ③-이전(2026-09-25 Phase 3.23 PR-1) UX 개편 기반 — 직전 PR ③을 회귀 가드로 유지.
 //     일정 화면(②에서 도착): 머리 캡션 = 그룹 이름('운영' — 화면 코드 S5 없음) · 지난 기한은 'n일 지남'(D+n 0건) ·
 //     html word-break = keep-all → 행사 목록: '새 행사 만들기'(btn-accent) 바탕 = accent-deep(rgb 184,67,26)·흰 글자.
 {

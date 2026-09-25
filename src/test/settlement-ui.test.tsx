@@ -6,7 +6,7 @@
 //   · 견적 초과 버킷을 붉게 알리고, 홈(S1)에도 건수 카드를 띄운다
 //   · 부가세 포함 토글이 "받은 금액 → 저장 금액"을 미리 보여준다
 //   · 협력사 견적서 불러오기(Phase 4.7)는 게이트 뒤에 숨기지 않는다 — pm에게 열려 있다(상세 계약 = dod69-vendor-quote)
-import { cleanup, screen, within } from '@testing-library/react'
+import { cleanup, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it } from 'vitest'
 import { renderRoute } from './testUtils'
@@ -86,9 +86,18 @@ describe('S-10 정산보드 화면', () => {
   })
 })
 
-describe('S1 홈 — 정산 초과 경보', () => {
-  it('초과 버킷이 있으면 홈에 건수 카드가 뜬다', async () => {
+describe('S1 홈 — 정산 초과 (Phase 3.23 PR-2: 요약 칸 + 오늘 할 일 행)', () => {
+  it('초과 버킷이 있으면 정산 확인 칸에 건수가, 목록에 버킷 이름 행이 뜬다 — 금액은 싣지 않는다', async () => {
     renderRoute('/home')
-    expect(await screen.findByText(/정산 · 견적 초과 버킷 \d+건/)).toBeTruthy()
+    const tile = await screen.findByTestId('home-tile-settlement')
+    await waitFor(() => expect(Number(within(tile).getByText(/^\d+$/).textContent)).toBeGreaterThan(0))
+    let row: HTMLElement | undefined
+    await waitFor(() => {
+      row = screen.getAllByTestId('today-row').find((r) => r.getAttribute('data-kind') === 'settlement')
+      expect(row).toBeTruthy()
+    })
+    expect(row!.textContent).toMatch(/견적 초과/)
+    expect(row!.textContent).not.toMatch(/\d{1,3}(,\d{3})+/)
+    expect(within(row!).getByRole('link', { name: '정산보드에서 보기' }).getAttribute('href')).toBe('/settlement')
   })
 })

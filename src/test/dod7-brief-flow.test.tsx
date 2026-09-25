@@ -63,9 +63,14 @@ describe('DoD-7 가이드 발행 흐름', () => {
     mockProvider().switchUser('usr-design')
     renderRoute('/home')
 
-    const widget = (await screen.findByRole('heading', { name: '받은 가이드' })).closest('div')!.parentElement!
-    expect(within(widget).getByText('입구 사이니지')).toBeTruthy()
-    expect(within(widget).getByText('사이니지')).toBeTruthy()
+    // Phase 3.23 PR-2 — 받은 가이드는 '오늘 할 일' 목록의 '가이드됨' 행으로 들어온다(카드 따로 없음)
+    const list = await screen.findByTestId('today-list')
+    const rows = await within(list).findAllByTestId('today-row')
+    const row = rows.find((r) => r.getAttribute('data-kind') === 'guide' && r.textContent!.includes('입구 사이니지'))!
+    expect(row).toBeTruthy()
+    expect(within(row).getByText('가이드됨')).toBeTruthy()
+    expect(within(row).getByText('사이니지 · 받은 가이드')).toBeTruthy()
+    expect(within(row).getByRole('link', { name: '첫 시안 올리기' }).getAttribute('href')).toBe(`/items/${issuedItemId}`)
   })
 
   it('(c) S3 상세에 가이드 카드(브리프+스펙 칩)가 렌더된다', async () => {

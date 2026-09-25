@@ -242,6 +242,14 @@ export function formatDate(isoDate: string): string {
   return `${Number(m)}월 ${Number(d)}일`
 }
 
+const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'] as const
+
+/** ISO date → 'M월 D일 (요일)' — 목록·일정처럼 요일이 판단에 쓰이는 자리(§7-2.2) */
+export function formatDateWeekday(isoDate: string): string {
+  const d = new Date(`${isoDate.slice(0, 10)}T00:00:00`)
+  return `${formatDate(isoDate.slice(0, 10))} (${WEEKDAYS[d.getDay()]})`
+}
+
 /** ISO datetime → 'M월 D일 HH:mm' (로컬 시간) */
 export function formatDateTime(isoDateTime: string): string {
   const d = new Date(isoDateTime)

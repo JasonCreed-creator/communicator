@@ -4,7 +4,7 @@
 //   (b) ⑥ RE:BUILD 27은 진행 중 첫 카드이자 데모 기본 선택 — 홈 지연 집계 ≥1 · WBS 37건 전개
 //   (c) 실적 데이터(프로그램·존운영·제작물·큐시트·등록 통계)가 S9에 그대로 조립된다
 //   (d) 픽스처 전역 금지 문자열 0건 (개인 연락처·내부 링크·결제 링크)
-import { cleanup, screen, within } from '@testing-library/react'
+import { cleanup, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -126,11 +126,9 @@ describe('DoD-26 (b) RE:BUILD 27 — 진행 중·데모 기본', () => {
     localStorage.setItem('communicator.currentProjectId', RB27)
     renderRoute('/home')
     await screen.findByRole('heading', { name: '홈 대시보드' })
-    // 홈은 3분할 액션 큐 — 지연 건수는 KPI 타일이 아니라 '지연' 큐 헤더 배지가 말한다(시안).
-    const delayQueue = (await screen.findByRole('heading', { name: '지연' })).closest(
-      '.ui-card',
-    ) as HTMLElement
-    expect(within(delayQueue).getByText(`${delayed.length}건`)).toBeTruthy()
+    // 홈은 요약 칸 + 오늘 할 일(Phase 3.23 PR-2) — 지연 건수는 '지연' 요약 칸이 말한다.
+    const delayTile = await screen.findByTestId('home-tile-delayed')
+    await waitFor(() => expect(within(delayTile).getByText(String(delayed.length))).toBeTruthy())
     expect(await screen.findByText('기초 자료 수령 리마인더')).toBeTruthy()
     // 미결 컨펌(제작물 2건)이 RE:BUILD 27 것으로 렌더된다
     expect(await screen.findByText('외관 대형 현수막')).toBeTruthy()
