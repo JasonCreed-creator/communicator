@@ -24,6 +24,8 @@ const SERVICE_ONLY_TABLES = [
   'app_config',
   // v2.9 §7.6 — Drive 연결 메타(계정·시각·마지막 오류). 갱신 토큰 자체는 Vault. api/drive(secret 키)만 읽고 쓴다
   'drive_connection',
+  // v2.10.1 §9 — Slack 알림 선점 기록(한 번만 보내기). api/notify(secret 키)의 service 전용 함수만 읽고 쓴다
+  'notification_log',
 ]
 
 function createdTables(sql: string): string[] {

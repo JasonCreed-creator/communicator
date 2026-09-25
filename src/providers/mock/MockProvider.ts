@@ -170,6 +170,7 @@ import { buildGuideSeedSections } from '../../lib/guideAssembly'
 import { buildCuesFromScenario, scenarioCueCandidates } from '../../lib/scenario'
 import { SCENARIO_KIND_LABELS } from '../../lib/labels'
 import { UPLOADABLE_STATUSES, uploadBlockedMessage } from '../../lib/uploadGate'
+import { normalizeSlackWebhook, SLACK_WEBHOOK_INVALID_MESSAGE } from '../../lib/slackWebhook'
 
 /** 3.18.1 §2 — 발주처 담당자 블록의 스태프 정렬(PM을 맨 위로). 표시 순서일 뿐 권한과 무관하다. */
 const CLIENT_STAFF_ROLE_ORDER: readonly MemberRole[] = ['pm', 'design', 'ops', 'reg']
@@ -2086,6 +2087,12 @@ export class MockProvider implements DataProvider {
     // v2.4.1 §21.1 — 행사 설정 ③ 주최형 블록 (kind 무관하게 저장은 허용, 표시만 host에서 게이트)
     if (patch.partner_guide_url !== undefined) project.partner_guide_url = patch.partner_guide_url
     if (patch.partner_contact_email !== undefined) project.partner_contact_email = patch.partner_contact_email
+    // v14.1(Phase 6 §9) — 행사별 Slack 채널. Incoming Webhook 주소만(서버가 이 값으로 POST한다)
+    if (patch.slack_webhook_url !== undefined) {
+      const webhook = normalizeSlackWebhook(patch.slack_webhook_url)
+      if (webhook === 'invalid') throw new ProviderError('validation', SLACK_WEBHOOK_INVALID_MESSAGE)
+      project.slack_webhook_url = webhook
+    }
     // v2.0 — 행사 설정 ① 모객형 전용 그룹 (일반형이면 UI 숨김·데이터 보존)
     if (patch.guarantee_pax !== undefined) project.guarantee_pax = patch.guarantee_pax
     if (patch.kpi_show_rate !== undefined) project.kpi_show_rate = patch.kpi_show_rate

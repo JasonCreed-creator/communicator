@@ -7,6 +7,7 @@
 //  · 탭 라벨에 미입력 개수 배지(필수=accent · 선택=중립). 배지는 aria-hidden이고
 //    개수는 버튼 title로 전달한다 — 탭의 접근 가능한 이름을 흔들지 않기 위해서다.
 //  · Drive·Slack 미연결 자리를 빈 상태 정본(②)으로 — 무엇이 좋아지는지 + 언제 열리는지.
+//  · v2.10.1(Phase 6): Slack 자리는 SlackCard — 행사 채널 등록·해제·테스트(pm), 공용 채널·크론 상태.
 //    게이트 뒤에 숨기지 않는다(§10 진입점 원칙).
 //  · v2.9(Phase 5): Drive 자리는 DriveCard — 연결 상태·저장소·이 행사 폴더(만들기·기존 폴더 지정)·관리자 연결.
 //
@@ -24,6 +25,7 @@ import PartnerRosterEditor from '../components/partner/PartnerRosterEditor'
 import ClientContactsEditor from '../components/settings/ClientContactsEditor'
 import DeleteProjectDialog, { canDeleteProject } from '../components/settings/DeleteProjectDialog'
 import DriveCard from '../components/settings/DriveCard'
+import SlackCard from '../components/settings/SlackCard'
 import MembersEditor from '../components/settings/MembersEditor'
 import PartnerGuideEditor from '../components/settings/PartnerGuideEditor'
 import PartnerTierEditor from '../components/settings/PartnerTierEditor'
@@ -425,32 +427,12 @@ export default function SettingsPage() {
                   onChanged={handleSaved}
                 />
 
-                <Card
-                  title="Slack Webhook"
-                  action={
-                    <span className="inline-flex shrink-0 items-center rounded-full bg-track px-2 py-0.5 text-xs font-medium text-ink-sub">
-                      {project.data.slack_webhook_url ? '등록됨' : '미등록'}
-                    </span>
-                  }
-                >
-                  <div data-testid="slack-empty" className="flex flex-col items-start gap-2.5">
-                    <input
-                      value={project.data.slack_webhook_url ?? ''}
-                      placeholder="https://hooks.slack.com/services/…"
-                      readOnly
-                      disabled
-                      aria-label="Slack Webhook URL"
-                      className="ui-input w-full max-w-lg bg-canvas disabled:opacity-60"
-                    />
-                    <p className="text-xs leading-relaxed text-ink-cap">
-                      등록하면 컨펌 요청·수정요청·지연 알림이 이 채널로 갑니다. 미등록 상태에서도
-                      화면 동작은 그대로입니다.
-                    </p>
-                    <span className="inline-flex items-center rounded-full bg-steel-tint px-2 py-0.5 text-xs font-medium text-steel">
-                      Phase 6 예정
-                    </span>
-                  </div>
-                </Card>
+                <SlackCard
+                  projectId={projectId}
+                  webhook={project.data.slack_webhook_url}
+                  isPm={isPm}
+                  onChanged={handleSaved}
+                />
               </div>
 
               {/* 위험 구역 — 되돌릴 수 없는 조작은 탭 맨 아래에 따로 둔다(연동 카드와 섞지 않는다).

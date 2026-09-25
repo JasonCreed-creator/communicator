@@ -11,6 +11,7 @@ import { buildGuideSeedSections } from '../../../lib/guideAssembly'
 import { SCENARIO_KIND_LABELS } from '../../../lib/labels'
 import { FORMAT_PRESETS, presetCardOf } from '../../../fixtures/formatPresets'
 import { escapeHtml, fileUrlFor, rememberText } from '../files'
+import { notifyFor } from '../notify'
 import type {
   Approval,
   Cue,
@@ -494,11 +495,13 @@ export function programDomain(ctx: SupabaseCtx): Pick<DataProvider, ProgramMetho
         )
       }
       // approvals 행 생성 + internal_review→pending_approval 전이 + 'approval.requested' 로그를 한 트랜잭션으로
-      return ctx.rpc<Approval>('request_approval', {
+      const approval = await ctx.rpc<Approval>('request_approval', {
         p_deliverable: deliverableId,
         p_version: version.id,
         p_due_at: input.due_at ?? null,
       })
+      notifyFor(ctx).ping() // Phase 6 §9 — 컨펌 발송 알림(기다리지 않는다)
+      return approval
     },
 
     // ── v2.5 §23 시나리오 (pm·ops 쓰기 / 멤버 읽기 — category='시나리오' 항목만) ──

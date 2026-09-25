@@ -24,6 +24,8 @@ export default defineConfig({
       { find: /^\.\.\/\.\.\/modules\/quote\/export\/createQuoteSpreadsheet$/, replacement: fileURLToPath(new URL('./demo/stubs/quoteGsheetStub.ts', import.meta.url)) },
       // v2.9 Drive 연동(api/drive 호출)도 싣지 않는다 — 화면용 게이트웨이(lib/drive/driveGateway)가 mock이면 부르지 않는다.
       { find: /^\.\/driveClient$/, replacement: fileURLToPath(new URL('./demo/stubs/driveClientStub.ts', import.meta.url)) },
+      // Phase 6 Slack 알림(api/notify 호출)도 싣지 않는다 — 화면용 게이트웨이(lib/notify/notifyGateway)가 mock이면 부르지 않는다.
+      { find: /^\.\/notifyClient$/, replacement: fileURLToPath(new URL('./demo/stubs/notifyClientStub.ts', import.meta.url)) },
     ],
   },
   plugins: [inlineBrandAssets(), react(), tailwindcss(), singleFileArtifact()],

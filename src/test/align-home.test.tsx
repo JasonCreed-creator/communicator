@@ -90,10 +90,10 @@ describe('홈(S1) 정렬 — 숫자 나열 대신 3분할 액션 큐', () => {
     expect(accents[0].textContent).toBe('담당에게 리마인드')
     expect(delayed.contains(accents[0])).toBe(true)
 
-    // 알림 연동 전이라도 버튼을 게이트 뒤에 숨기지 않는다 — 누르면 준비 중임을 알린다
+    // 버튼을 게이트 뒤에 숨기지 않는다 — mock은 보내는 흉내 없이 사실을 알린다(실서버는 Slack — dod68)
     expect(screen.queryByRole('status')).toBeNull()
     await userEvent.click(accents[0] as HTMLElement)
-    expect((await screen.findByRole('status')).textContent).toMatch(/알림 발송은 준비 중/)
+    expect((await screen.findByRole('status')).textContent).toMatch(/데모\(mock\)에서는 알림을 보내지 않습니다/)
   })
 
   it('(6)(7) D-day 스트립이 전체 폭 카드로 가로 스크롤을 유지하고, 보조 3열은 큐 아래에 온다', async () => {

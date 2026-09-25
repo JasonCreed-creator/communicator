@@ -10,6 +10,21 @@ import type { ClientToken } from '../../types/entities'
 
 const provider = getDataProvider()
 
+/**
+ * Phase 6(§9 v2.3) — 컨펌 발송 폼의 이메일 안내. 발주처 이메일(Resend)은 Phase 6b라 아직 가지 않는다 — 게이트 뒤에 숨기지 않고
+ * 발송 폼에서 사실을 적는다(내부 Slack 알림은 자동으로 간다).
+ */
+export const EMAIL_PENDING_NOTICE =
+  '발주처에게 이메일은 아직 가지 않습니다(준비 중) — 발주처 링크를 복사해 직접 전달하세요. 내부 Slack 알림은 자동으로 갑니다.'
+
+export function EmailPendingNote({ className = '' }: { className?: string }) {
+  return (
+    <p data-testid="email-pending-note" className={`t-caption ${className}`}>
+      {EMAIL_PENDING_NOTICE}
+    </p>
+  )
+}
+
 /** 발주처가 지금 열 수 있는 링크가 하나라도 있는가 — 회수되지 않았고 기한이 없거나 남았다 */
 export function hasActiveClientLink(tokens: readonly ClientToken[], now: number = Date.now()): boolean {
   return tokens.some((t) => !t.revoked_at && (!t.expires_at || Date.parse(t.expires_at) > now))

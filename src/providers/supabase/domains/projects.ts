@@ -8,6 +8,7 @@ import { normalizeRow, nowIso, type SupabaseCtx } from '../ctx'
 import { driveFor } from '../drive'
 import { mapPgError, type PgErrorLike } from '../errors'
 import { ProviderError } from '../../../lib/errors'
+import { normalizeSlackWebhook, SLACK_WEBHOOK_INVALID_MESSAGE } from '../../../lib/slackWebhook'
 import { isDelayed, toIsoDate } from '../../../lib/wbs'
 import type { ClientContact, ClientToken, Project, UUID, WbsTask } from '../../../types/entities'
 import type { MemberRole } from '../../../types/enums'
@@ -401,6 +402,12 @@ export function projectsDomain(ctx: SupabaseCtx): ProjectsDomain {
       for (const key of PROJECT_PATCH_PASSTHROUGH) {
         const value = patch[key]
         if (value !== undefined) row[key] = value
+      }
+      // v14.1(Phase 6 §9) — 행사별 Slack 채널. Incoming Webhook 주소만(서버 알림 함수가 이 값으로 POST한다)
+      if (patch.slack_webhook_url !== undefined) {
+        const webhook = normalizeSlackWebhook(patch.slack_webhook_url)
+        if (webhook === 'invalid') throw new ProviderError('validation', SLACK_WEBHOOK_INVALID_MESSAGE)
+        row.slack_webhook_url = webhook
       }
       // v2.0 — "견적 연결" 액션: app_role admin·sales 전용 (§6.1·§10), 상호 링크 동기화
       if (patch.quote_id !== undefined) {

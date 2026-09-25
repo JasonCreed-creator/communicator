@@ -6,7 +6,7 @@ import ScenarioBuilder from '../components/scenario/ScenarioBuilder'
 import VersionUploadCard, { UPLOAD_FORM_ID, UPLOAD_INPUT_ID } from '../components/upload/VersionUploadCard'
 import BriefCard from '../components/internal/BriefCard'
 import ItemManageCard from '../components/item/ItemManageCard'
-import ClientLinkWarning from '../components/internal/ClientLinkWarning'
+import ClientLinkWarning, { EmailPendingNote } from '../components/internal/ClientLinkWarning'
 import Card from '../components/internal/Card'
 import DdayBadge from '../components/internal/DdayBadge'
 import ErrorAlert from '../components/internal/ErrorAlert'
@@ -938,6 +938,7 @@ function StatusActionBar({
                 <p className="t-caption">컨펌 발송</p>
                 {/* Phase 4.3.1 — 발주처 링크 0개면 보내도 열어볼 사람이 없다(발송은 막지 않는다) */}
                 <ClientLinkWarning />
+                <EmailPendingNote />
                 <div className="flex flex-wrap items-end gap-2">
                   {isCuesheet ? (
                     <p className="max-w-xs text-xs text-ink-sub">

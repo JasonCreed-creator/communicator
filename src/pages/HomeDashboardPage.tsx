@@ -23,14 +23,18 @@ import { useAsync, useMutation } from '../hooks/useAsync'
 import { getDriveGateway } from '../lib/drive/driveGateway'
 import { useDriveStatus } from '../lib/drive/useDriveStatus'
 import { AREA_LABELS, formatDate, formatDateTime, ddayLabel } from '../lib/labels'
+import { getNotifyGateway } from '../lib/notify/notifyGateway'
 import { getDataProvider } from '../providers'
 import type { Deliverable } from '../types/entities'
 import type { MemberRole } from '../types/enums'
 
 const provider = getDataProvider()
 
-/** 알림 발송(리마인드·독촉)은 Phase 6 범위 — 버튼을 숨기지 않고 무엇이 준비 중인지 알린다. */
-const REMIND_NOTICE = '알림 발송은 준비 중입니다(Slack·이메일 연동 예정) — 지금은 담당자에게 직접 전달해 주세요.'
+/**
+ * 리마인드·독촉(Phase 6 §9) — 실서버는 이 행사 Slack 채널로 목록을 보낸다(같은 대상은 한 시간에 한 번 — 서버가 막는다).
+ * mock은 보내는 흉내를 내지 않고 사실을 알린다(무음 실패·가짜 성공 금지). 이메일 리마인드는 Phase 6b.
+ */
+export const REMIND_MOCK_NOTICE = '데모(mock)에서는 알림을 보내지 않습니다 — 실서버에서는 이 행사의 Slack 채널로 리마인드가 갑니다.'
 
 export default function HomeDashboardPage() {
   const { projectId } = useProject()
@@ -96,13 +100,37 @@ export default function HomeDashboardPage() {
 
   // 어느 큐에서 눌렀는지 기억해 그 히어로 안에만 안내를 띄운다(같은 문구가 두 곳에 겹치지 않게).
   const [remindTarget, setRemindTarget] = useState<'delayed' | 'approval' | null>(null)
+  const [remindMessage, setRemindMessage] = useState<string | null>(null)
+  const [remindBusy, setRemindBusy] = useState(false)
+  const remind = async (target: 'delayed' | 'approval') => {
+    setRemindTarget(target)
+    const gateway = getNotifyGateway()
+    if (gateway.mode !== 'server') {
+      setRemindMessage(REMIND_MOCK_NOTICE)
+      return
+    }
+    setRemindBusy(true)
+    setRemindMessage(null)
+    try {
+      const r = await gateway.client.remind(projectId, target)
+      setRemindMessage(
+        r.sent
+          ? `Slack으로 보냈습니다 — ${target === 'delayed' ? '지연 태스크' : '컨펌 대기'} ${r.total}건.`
+          : `보낼 ${target === 'delayed' ? '지연 태스크' : '컨펌 대기'}가 없습니다.`,
+      )
+    } catch (e) {
+      setRemindMessage(e instanceof Error ? e.message : '리마인드를 보내지 못했습니다.')
+    } finally {
+      setRemindBusy(false)
+    }
+  }
   const noticeFor = (target: 'delayed' | 'approval') =>
-    remindTarget === target ? (
+    remindTarget === target && remindMessage ? (
       <p
         role="status"
         className="mt-2.5 rounded-md border border-border bg-steel-tint px-2.5 py-2 text-xs text-steel"
       >
-        {REMIND_NOTICE}
+        {remindMessage}
       </p>
     ) : null
 
@@ -174,7 +202,8 @@ export default function HomeDashboardPage() {
               {/* 화면 전체에서 유일한 accent CTA — 가장 오래된 지연 건 (패턴 §05) */}
               <button
                 type="button"
-                onClick={() => setRemindTarget('delayed')}
+                onClick={() => void remind('delayed')}
+                disabled={remindBusy}
                 className="btn btn-accent flex-1"
               >
                 담당에게 리마인드
@@ -244,7 +273,8 @@ export default function HomeDashboardPage() {
               <>
                 <button
                   type="button"
-                  onClick={() => setRemindTarget('approval')}
+                  onClick={() => void remind('approval')}
+                  disabled={remindBusy}
                   className="btn btn-ghost flex-1"
                 >
                   컨펌 독촉

@@ -9,6 +9,7 @@
 import type { DataProvider } from '../../DataProvider'
 import { normalizeRow, type SupabaseCtx } from '../ctx'
 import { driveFor } from '../drive'
+import { notifyFor } from '../notify'
 import { looksLikeDriveFileId } from '../../../lib/driveLink'
 import { fileUrlFor, rememberUpload, sessionFileUrl } from '../files'
 import { ProviderError } from '../../../lib/errors'
@@ -266,6 +267,7 @@ export function deliverablesDomain(ctx: SupabaseCtx): DeliverablesDomain {
         await ctx.log(deliverable.project_id, 'deliverable.requested', 'deliverable', deliverable.id, {
           assignee_id: deliverable.assignee_id,
         })
+        notifyFor(ctx).ping() // Phase 6 — 담당자 알림(§5 부수 효과)
       } else {
         await ctx.log(deliverable.project_id, 'deliverable.created', 'deliverable', deliverable.id)
       }
@@ -375,6 +377,7 @@ export function deliverablesDomain(ctx: SupabaseCtx): DeliverablesDomain {
         if (!input.drive_link.trim()) throw new ProviderError('validation', 'Drive 파일 링크를 붙여 주세요.')
         const linked = normalizeRow(await driveFor(ctx).client.link(deliverableId, input.drive_link.trim(), input.note))
         input.onProgress?.(1, 1)
+        notifyFor(ctx).ping() // Phase 6 §9 — 새 버전 알림(기다리지 않는다)
         return linked
       }
       // 파일명 규약(§7.2)은 호출자가 만들어 넘긴다 — version_no는 DB 트리거(max+1)와 같은 산식으로 미리 계산
@@ -409,6 +412,7 @@ export function deliverablesDomain(ctx: SupabaseCtx): DeliverablesDomain {
           }),
         )
         rememberUpload(uploaded.id, input.file) // 이 세션의 즉시 미리보기(원본은 Drive)
+        notifyFor(ctx).ping()
         return uploaded
       }
       const version = await ctx.rpc<Version>('upload_version', {
@@ -421,6 +425,7 @@ export function deliverablesDomain(ctx: SupabaseCtx): DeliverablesDomain {
       rememberUpload(version.id, input.file)
       const size = input.file?.size ?? 0
       input.onProgress?.(size, size)
+      notifyFor(ctx).ping()
       return version
     },
 

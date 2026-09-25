@@ -5,6 +5,7 @@
 // 금액 키는 구조적으로 이 모듈의 포털 출력에 들어올 수 없다(R-H2·R-H3).
 import type { DataProvider } from '../../DataProvider'
 import { SupabaseCtx, nowIso } from '../ctx'
+import { notifyFor } from '../notify'
 import { ProviderError } from '../../../lib/errors'
 import { toIsoDate } from '../../../lib/wbs'
 import type { Deliverable, Partner, PartnerTier, PartnerToken, UUID } from '../../../types/entities'
@@ -390,11 +391,13 @@ export function partnersDomain(ctx: SupabaseCtx): PartnersDomain {
       if (!UUID_RE.test(token)) throw new ProviderError('not_found', '유효하지 않은 링크입니다.')
       const payload: Record<string, unknown> =
         'text' in input ? { text: input.text } : { file_name: input.file_name, note: input.note ?? null }
-      return ctx.rpc<Deliverable>('partner_submit', {
+      const submitted = await ctx.rpc<Deliverable>('partner_submit', {
         p_token: token,
         p_deliverable: deliverableId,
         p_payload: payload,
       })
+      notifyFor(ctx).pingToken(token) // Phase 6 §9 — 파트너 제출 도착 알림
+      return submitted
     },
 
     /**

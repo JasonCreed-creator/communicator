@@ -388,6 +388,11 @@ export interface ProjectPatch {
   // v2.4.1 §21.1 — 행사 설정 ③ 주최형 블록 (kind='host'에서만 표시, 데이터는 항상 보존)
   partner_guide_url?: string | null
   partner_contact_email?: string | null
+  /**
+   * v14.1(Phase 6 §9) — 이 행사의 Slack 채널(Incoming Webhook 주소). null·빈 칸 = 해제(서버 공용 채널로 간다).
+   * `https://hooks.slack.com/services/…`만 받는다(그 밖은 422). pm 전용(updateProject 권한 그대로)
+   */
+  slack_webhook_url?: string | null
 }
 
 /** v1.5 — POST /projects 입력(§8): S0 ① 저장 시 개요 필드 일괄 수신, onboarded_at은 null.
