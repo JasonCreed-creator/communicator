@@ -63,21 +63,20 @@ describe('DoD-14 WBS 지연/임박 UI 반영', () => {
     expect(bar66.className).toContain('bg-accent')
   })
 
-  // 홈은 3분할 액션 큐로 재편됐다(시안: 홈 대시보드) — 집계는 합산 위젯이 아니라 각 큐 헤더의
-  // 건수 배지가 말하고, 해당 태스크는 큐 안(히어로·기한순 행)에 코드와 함께 남는다. 의미는 동일.
-  it('홈 대시보드의 지연·임박 큐에 건수 배지와 해당 태스크가 렌더된다', async () => {
+  // 홈은 '오늘 할 일' 한 목록(Phase 3.23 PR-2) — 건수는 요약 칸이 말하고, 해당 태스크는 목록 행에 코드와 함께 남는다.
+  it('홈 대시보드의 요약 칸이 지연·임박 건수를 말하고, 오늘 할 일 목록에 해당 태스크가 코드와 함께 렌더된다', async () => {
     renderRoute('/home')
 
-    const delayed = (await screen.findByRole('heading', { name: '지연' })).closest(
-      '.ui-card',
-    ) as HTMLElement
-    expect(within(delayed).getByText('1건')).toBeTruthy()
-    expect(within(delayed).getByText(/6\.5/)).toBeTruthy()
+    const list = await screen.findByTestId('today-list')
+    const rows = await within(list).findAllByTestId('today-row')
+    const delayed = rows.filter((r) => r.getAttribute('data-kind') === 'delayed')
+    expect(delayed.length).toBe(1)
+    expect(within(delayed[0]).getByText(/6\.5/)).toBeTruthy()
+    const imminent = rows.filter((r) => r.getAttribute('data-kind') === 'imminent')
+    expect(imminent.length).toBe(1)
+    expect(within(imminent[0]).getByText(/6\.6/)).toBeTruthy()
 
-    const imminent = (await screen.findByRole('heading', { name: '임박' })).closest(
-      '.ui-card',
-    ) as HTMLElement
-    expect(within(imminent).getByText('1건')).toBeTruthy()
-    expect(within(imminent).getByText(/6\.6/)).toBeTruthy()
+    expect(within(screen.getByTestId('home-tile-delayed')).getByText('1')).toBeTruthy()
+    expect(within(screen.getByTestId('home-tile-imminent')).getByText('1')).toBeTruthy()
   })
 })

@@ -213,7 +213,7 @@ describe('DoD 62 · ④ 행사 설정 ③ Drive 카드 (실서버 모드)', () =
   })
 })
 
-describe('DoD 62 · ⑤ 홈 미등록 인박스 — Drive 지금 확인', () => {
+describe('DoD 62 · ⑤ 홈 오늘 할 일 — Drive 지금 확인', () => {
   it('실서버 + 연결됨이면 버튼이 있고, 누르면 스캔 결과를 적는다', async () => {
     const fake = fakeClient({ connected: true, token_source: 'vault' })
     setDriveGateway({ mode: 'server', client: fake.client })
@@ -229,7 +229,7 @@ describe('DoD 62 · ⑤ 홈 미등록 인박스 — Drive 지금 확인', () => 
     setDriveGateway({ mode: 'mock' })
     resetDriveStatusCache()
     renderRoute('/home')
-    await screen.findByText('미등록 인박스')
+    await screen.findByTestId('today-list')
     expect(screen.queryByRole('button', { name: 'Drive 지금 확인' })).toBeNull()
   })
 })

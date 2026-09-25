@@ -1,31 +1,28 @@
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
-import ActionQueueCard from '../components/home/ActionQueueCard'
-import DeadlineStripCard from '../components/home/DeadlineStripCard'
-import {
-  approvalToQueueItem,
-  deadlineWindow,
-  partnerItemToQueueItem,
-  wbsTaskToQueueItem,
-  type QueueItem,
-} from '../components/home/queueItems'
 import Card from '../components/internal/Card'
-import DdayBadge from '../components/internal/DdayBadge'
 import EmptyState from '../components/internal/EmptyState'
 import ErrorAlert from '../components/internal/ErrorAlert'
 import PageHeader from '../components/internal/PageHeader'
 import ProgressBar from '../components/internal/ProgressBar'
-import TableSkeleton from '../components/internal/TableSkeleton'
 import { activityActionLabel, activityActorLabel } from '../components/internal/activityLabels'
+import HomeSummaryTiles, { type SummaryTile } from '../components/home/HomeSummaryTiles'
+import TodayListCard from '../components/home/TodayListCard'
+import UpcomingCard, { type UpcomingEntry } from '../components/home/UpcomingCard'
+import { buildTodayRows, waitingDays } from '../components/home/todayItems'
 import { groupHostTasks } from '../components/partner/partnerBoardUtils'
 import { useProject } from '../context/ProjectContext'
-import { useAsync, useMutation } from '../hooks/useAsync'
-import { getDriveGateway } from '../lib/drive/driveGateway'
-import { useDriveStatus } from '../lib/drive/useDriveStatus'
-import { AREA_LABELS, formatDate, formatDateTime, eventDayLabel } from '../lib/labels'
+import { useAsync } from '../hooks/useAsync'
+import { addDays, toIsoDate } from '../lib/wbs'
+import {
+  AREA_LABELS,
+  WBS_DIRECTION_LABELS,
+  daysUntil,
+  eventDayLabel,
+  formatDateTime,
+  formatDateWeekday,
+} from '../lib/labels'
 import { getNotifyGateway } from '../lib/notify/notifyGateway'
 import { getDataProvider } from '../providers'
-import type { Deliverable } from '../types/entities'
 import type { MemberRole } from '../types/enums'
 
 const provider = getDataProvider()
@@ -36,110 +33,187 @@ const provider = getDataProvider()
  */
 export const REMIND_MOCK_NOTICE = '데모(mock)에서는 알림을 보내지 않습니다 — 실서버에서는 이 행사의 Slack 채널로 리마인드가 갑니다.'
 
+/** '다가오는 2주' 창 — 오늘부터 14일 */
+const UPCOMING_DAYS = 14
+const UPCOMING_LIMIT = 8
+
+/**
+ * S1 홈 — 디자인지시서 v1.4 §7-2.5 (Phase 3.23 PR-2).
+ * 위에서 아래로: 행사 정체(D-day) → 요약 5칸 → '오늘 할 일' 한 목록(급한 순, 행마다 바로 하기) →
+ * 다가오는 2주 · 영역별 확정 · 최근 활동. 흩어져 있던 큐 3개·경보 띠·인박스·받은 가이드·마일스톤 카드를 목록 하나로 합쳤다.
+ */
 export default function HomeDashboardPage() {
   const { projectId } = useProject()
   const dashboard = useAsync(() => provider.getDashboard(projectId), [projectId])
   const inbox = useAsync(() => provider.listInbox(projectId), [projectId])
   const deliverables = useAsync(() => provider.listDeliverables(projectId), [projectId])
   const members = useAsync(() => provider.listMembers(projectId), [projectId])
-  // D-day 스트립 재료 — 마감 타임라인은 WBS 태스크를 code 단위로 묶어 그린다(S-11 컴포넌트 재사용).
+  const me = useAsync(() => provider.getCurrentUser(), [projectId])
   const wbsTasks = useAsync(() => provider.listWbsTasks(projectId), [projectId])
-  // v2.2 §19.1 — 견적 초과는 막지 않고 알린다. 홈에서 먼저 눈에 띄어야 대응이 빨라진다.
+  // v2.2 §19.1 — 견적 초과는 막지 않고 알린다. 금액은 싣지 않고 버킷 이름만(정산보드에서 확인).
   const settlement = useAsync(() => provider.getSettlementBoard(projectId), [projectId])
-  // v2.4 §10.1 — 주최형이면 미결 큐가 '파트너 검토 대기'로 대체된다(승인 큐와 무관한 경로라
-  // approvals 기반 dashboard.pending_approvals에는 잡히지 않는다).
+  // v2.4 §10.1 — 주최형이면 발주처 컨펌 대신 '파트너 검토 대기'가 목록에 들어온다.
   const isHost = dashboard.data?.project.kind === 'host'
   const partners = useAsync(
     () => (isHost ? provider.listPartners(projectId) : Promise.resolve([])),
     [projectId, isHost],
   )
-  const partnerNameById = useMemo(
-    () => new Map((partners.data ?? []).map((p) => [p.id, p.name])),
-    [partners.data],
-  )
-  const partnerPendingItems = useMemo<QueueItem[]>(() => {
+
+  const memberById = useMemo(() => new Map((members.data ?? []).map((m) => [m.user_id, m])), [members.data])
+
+  const partnerPending = useMemo(() => {
     if (!isHost) return []
+    const nameById = new Map((partners.data ?? []).map((p) => [p.id, p.name]))
     return (deliverables.data ?? [])
       .filter((d) => d.partner_id && d.status === 'pending_approval')
       .sort((a, b) => (a.due_date ?? '9999').localeCompare(b.due_date ?? '9999'))
-      .map((d) => partnerItemToQueueItem(d, partnerNameById.get(d.partner_id as string) ?? '알 수 없음'))
-  }, [isHost, deliverables.data, partnerNameById])
+      .map((d) => ({ deliverable: d, partnerName: nameById.get(d.partner_id as string) ?? '알 수 없음' }))
+  }, [isHost, deliverables.data, partners.data])
 
-  const memberById = useMemo(
-    () => new Map((members.data ?? []).map((m) => [m.user_id, m])),
-    [members.data],
-  )
-  const roleOf = (userId: string | null): MemberRole | null =>
-    (userId && memberById.get(userId)?.role) || null
-  const nameOf = (userId: string | null): string | null =>
-    (userId && memberById.get(userId)?.profile.name) || null
-
-  const delayedItems = useMemo<QueueItem[]>(
-    () => (dashboard.data?.wbs_delayed ?? []).map(wbsTaskToQueueItem),
-    [dashboard.data],
-  )
-  const imminentItems = useMemo<QueueItem[]>(
-    () => (dashboard.data?.wbs_imminent ?? []).map(wbsTaskToQueueItem),
-    [dashboard.data],
-  )
-  const approvalItems = useMemo<QueueItem[]>(
-    () => (dashboard.data?.pending_approvals ?? []).map((p) => approvalToQueueItem(p, roleOf, nameOf)),
-    // memberById가 늦게 도착해도 이름·역할만 채워질 뿐 목록 자체는 즉시 렌더된다
-    [dashboard.data, memberById],
+  const overBudget = useMemo(
+    () =>
+      (settlement.data?.buckets ?? [])
+        .filter((b) => b.over_budget)
+        .map((b) => ({ id: b.bucket.id, label: b.bucket.label })),
+    [settlement.data],
   )
 
-  const deadlineGroups = useMemo(
-    () => deadlineWindow(groupHostTasks(wbsTasks.data ?? [], deliverables.data ?? [])),
-    [wbsTasks.data, deliverables.data],
+  const today = toIsoDate(new Date())
+  const lateMilestones = useMemo(
+    () => (dashboard.data?.upcoming_milestones ?? []).filter((m) => !m.done && m.due_date < today),
+    [dashboard.data, today],
   )
+
+  const rows = useMemo(() => {
+    const roleOf = (userId: string | null): MemberRole | null => (userId && memberById.get(userId)?.role) || null
+    const nameOf = (userId: string | null): string | null => (userId && memberById.get(userId)?.profile.name) || null
+    return buildTodayRows({
+      delayed: dashboard.data?.wbs_delayed ?? [],
+      lateMilestones,
+      imminent: dashboard.data?.wbs_imminent ?? [],
+      approvals: isHost ? [] : (dashboard.data?.pending_approvals ?? []),
+      partnerPending,
+      overBudget,
+      inbox: inbox.data ?? [],
+      guides: dashboard.data?.my_requested ?? [],
+      myRole: me.data?.role ?? null,
+      roleOf,
+      nameOf,
+    })
+    // 멤버가 늦게 와도 이름·역할만 채워질 뿐 목록은 즉시 렌더된다
+  }, [dashboard.data, lateMilestones, isHost, partnerPending, overBudget, inbox.data, me.data, memberById])
+
+  const upcoming = useMemo<UpcomingEntry[]>(() => {
+    const until = addDays(today, UPCOMING_DAYS)
+    const inWindow = (d: string | null) => !!d && d >= today && d <= until
+    const tasks = groupHostTasks(wbsTasks.data ?? [], deliverables.data ?? [])
+      .filter((g) => !g.done && inWindow(g.end_date))
+      .map<UpcomingEntry>((g) => ({
+        key: `wbs:${g.code}`,
+        date: g.end_date as string,
+        title: `${g.code} ${g.title}`,
+        kind: isHost ? WBS_DIRECTION_LABELS[g.direction] : '일정',
+        mark: g.direction,
+      }))
+    const milestones = (dashboard.data?.upcoming_milestones ?? [])
+      .filter((m) => !m.done && inWindow(m.due_date))
+      .map<UpcomingEntry>((m) => ({
+        key: `ms:${m.id}`,
+        date: m.due_date,
+        title: m.title,
+        kind: `마일스톤 · ${m.area ? AREA_LABELS[m.area] : '전체'}`,
+        mark: 'milestone',
+      }))
+    return [...milestones, ...tasks]
+      .sort(
+        (a, b) =>
+          a.date.localeCompare(b.date) || (a.mark === 'milestone' ? -1 : 0) - (b.mark === 'milestone' ? -1 : 0),
+      )
+      .slice(0, UPCOMING_LIMIT)
+  }, [wbsTasks.data, deliverables.data, dashboard.data, isHost, today])
 
   const areaTotals = (dashboard.data?.area_progress ?? []).reduce(
     (acc, p) => ({ done: acc.done + p.done, total: acc.total + p.total }),
     { done: 0, total: 0 },
   )
 
-  // 어느 큐에서 눌렀는지 기억해 그 히어로 안에만 안내를 띄운다(같은 문구가 두 곳에 겹치지 않게).
-  const [remindTarget, setRemindTarget] = useState<'delayed' | 'approval' | null>(null)
-  const [remindMessage, setRemindMessage] = useState<string | null>(null)
+  const tiles = useMemo<SummaryTile[]>(() => {
+    const delayed = dashboard.data?.wbs_delayed ?? []
+    const imminent = dashboard.data?.wbs_imminent ?? []
+    const approvals = dashboard.data?.pending_approvals ?? []
+    const oldest = delayed[0]?.end_date
+    const waiting: SummaryTile = isHost
+      ? {
+          key: 'waiting',
+          label: '파트너 검토 대기',
+          value: partnerPending.length,
+          note:
+            partnerPending.length === 0
+              ? '없음'
+              : partnerPending.length === 1
+                ? partnerPending[0].partnerName
+                : `${partnerPending[0].partnerName} 외 ${partnerPending.length - 1}곳`,
+        }
+      : {
+          key: 'waiting',
+          label: '발주처 답 대기',
+          value: approvals.length,
+          note: approvals[0]
+            ? `${approvals[0].deliverable.title} · ${waitingDays(approvals[0].approval.requested_at)}일째`
+            : '없음',
+        }
+    return [
+      {
+        key: 'delayed',
+        label: '지연',
+        value: delayed.length,
+        note: oldest ? `가장 오래 ${-daysUntil(oldest)}일 지남` : '없음',
+        alertWhenPositive: true,
+      },
+      { key: 'imminent', label: '마감 임박', value: imminent.length, note: imminent.length ? '3일 안 마감' : '없음' },
+      waiting,
+      {
+        key: 'settlement',
+        label: '정산 확인',
+        value: overBudget.length,
+        note: !settlement.data ? '정산보드 없음' : overBudget.length ? '견적 초과 버킷' : '초과 없음',
+      },
+      { key: 'inbox', label: '미등록 파일', value: (inbox.data ?? []).length, note: 'Drive에 직접 올린 파일' },
+    ]
+  }, [dashboard.data, isHost, partnerPending, overBudget, settlement.data, inbox.data])
+
+  // 리마인드(지연 전부) · 독촉(컨펌 대기 전부) — 결과·안내는 목록 머리 아래 한 곳에
+  const [remindNotice, setRemindNotice] = useState<string | null>(null)
   const [remindBusy, setRemindBusy] = useState(false)
   const remind = async (target: 'delayed' | 'approval') => {
-    setRemindTarget(target)
     const gateway = getNotifyGateway()
     if (gateway.mode !== 'server') {
-      setRemindMessage(REMIND_MOCK_NOTICE)
+      setRemindNotice(REMIND_MOCK_NOTICE)
       return
     }
     setRemindBusy(true)
-    setRemindMessage(null)
+    setRemindNotice(null)
     try {
       const r = await gateway.client.remind(projectId, target)
-      setRemindMessage(
+      setRemindNotice(
         r.sent
           ? `Slack으로 보냈습니다 — ${target === 'delayed' ? '지연 태스크' : '컨펌 대기'} ${r.total}건.`
           : `보낼 ${target === 'delayed' ? '지연 태스크' : '컨펌 대기'}가 없습니다.`,
       )
     } catch (e) {
-      setRemindMessage(e instanceof Error ? e.message : '리마인드를 보내지 못했습니다.')
+      setRemindNotice(e instanceof Error ? e.message : '리마인드를 보내지 못했습니다.')
     } finally {
       setRemindBusy(false)
     }
   }
-  const noticeFor = (target: 'delayed' | 'approval') =>
-    remindTarget === target && remindMessage ? (
-      <p
-        role="status"
-        className="mt-2.5 rounded-md border border-border bg-steel-tint px-2.5 py-2 text-xs text-steel"
-      >
-        {remindMessage}
-      </p>
-    ) : null
 
-  const reloadAll = () => {
+  const reloadInbox = () => {
     dashboard.reload()
     inbox.reload()
   }
 
   const project = dashboard.data?.project
+  const listLoading = dashboard.loading && !dashboard.data
 
   return (
     <section className="space-y-6 p-6">
@@ -150,18 +224,18 @@ export default function HomeDashboardPage() {
           project && (
             <div className="flex items-center gap-4">
               <div className="text-right">
-                <p className="t-caption">
-                  {project.name}
-                  {project.event_date ? ` · ${formatDate(project.event_date)}` : ''}
-                </p>
-                <p className="mt-1 text-sm text-ink-sub">
-                  전체 진행{' '}
-                  <span className="font-semibold text-ink">
-                    {areaTotals.done}/{areaTotals.total}
-                  </span>
+                <p className="text-sm font-semibold text-ink">{project.name}</p>
+                <p className="t-caption mt-0.5">
+                  {[
+                    project.event_date ? formatDateWeekday(project.event_date) : null,
+                    project.venue,
+                    `확정 ${areaTotals.done}/${areaTotals.total}`,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
                 </p>
               </div>
-              {/* 행사 D-day — 매일 보는 유일한 상수. 헤더 우측 단일 pill로 승격(시안) */}
+              {/* 행사 D-day — 매일 보는 유일한 상수. 헤더 우측 단일 pill */}
               <span
                 data-testid="event-dday"
                 className="inline-flex h-11 shrink-0 items-center rounded-full bg-dark px-[18px] text-[20px] font-semibold tracking-[-0.01em] text-dark-ink"
@@ -174,335 +248,57 @@ export default function HomeDashboardPage() {
       />
 
       <ErrorAlert message={dashboard.error} />
+      <ErrorAlert message={inbox.error} />
 
-      {/* 정산 초과 경보 — 금액은 싣지 않고 건수만 알린다(S-10에서 확인) */}
-      {settlement.data && settlement.data.totals.overBudgetCount > 0 && (
-        <Link
-          to="/settlement"
-          className="flex items-center justify-between gap-3 rounded-[12px] border border-negative bg-negative-tint px-4 py-3"
-        >
-          <span className="text-sm font-medium text-negative">
-            정산 · 견적 초과 버킷 {settlement.data.totals.overBudgetCount}건
-          </span>
-          <span className="text-xs text-negative">정산보드에서 보기 →</span>
-        </Link>
-      )}
+      <HomeSummaryTiles tiles={tiles} />
 
-      {/* 3분할 액션 큐 — 숫자 나열(KPI 4타일) 대신 처리 가능한 큐. 건수는 각 헤더 배지가 말한다 */}
+      <TodayListCard
+        projectId={projectId}
+        rows={rows}
+        loading={listLoading}
+        isHost={isHost}
+        deliverables={deliverables.data ?? []}
+        onInboxChanged={reloadInbox}
+        onRemind={(t) => void remind(t)}
+        remindBusy={remindBusy}
+        remindNotice={remindNotice}
+      />
+
       <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-3">
-        <ActionQueueCard
-          title="지연"
-          tone="negative"
-          badgeLevel="blocked"
-          items={delayedItems}
-          loading={dashboard.loading}
-          emptyMessage="지연된 태스크가 없습니다."
-          heroActions={
-            <>
-              {/* 화면 전체에서 유일한 accent CTA — 가장 오래된 지연 건 (패턴 §05) */}
-              <button
-                type="button"
-                onClick={() => void remind('delayed')}
-                disabled={remindBusy}
-                className="btn btn-accent flex-1"
-              >
-                담당에게 리마인드
-              </button>
-              <Link to={delayedItems[0]?.to ?? '/schedule'} className="btn btn-ghost">
-                열기
-              </Link>
-            </>
-          }
-          heroNotice={noticeFor('delayed')}
-          moreTo="/schedule"
-          moreLabel="일정에서 전체 보기"
-        />
+        <div className="lg:col-span-2">
+          <UpcomingCard entries={upcoming} />
+        </div>
 
-        <ActionQueueCard
-          title="임박"
-          tone="accent"
-          badgeLevel="attention"
-          items={imminentItems}
-          loading={dashboard.loading}
-          emptyMessage="마감이 임박한 태스크가 없습니다."
-          heroActions={
-            <Link to={imminentItems[0]?.to ?? '/schedule'} className="btn btn-ghost flex-1">
-              열기
-            </Link>
-          }
-          moreTo="/schedule"
-          moreLabel="일정에서 전체 보기"
-        />
+        <div className="space-y-4">
+          <Card title="영역별 확정">
+            <div className="space-y-4">
+              {dashboard.data?.area_progress.map((p) => (
+                <div key={p.area}>
+                  <p className="t-caption mb-1.5">{AREA_LABELS[p.area]}</p>
+                  <ProgressBar done={p.done} total={p.total} />
+                </div>
+              ))}
+            </div>
+          </Card>
 
-        {/* 세 번째 큐는 행사 성격(kind)에 따라 갈린다 — 성격을 알기 전에 잘못된 제목을 잠깐
-            보여주지 않도록 대시보드 로드 전에는 스켈레톤을 세운다(패턴 §06 ①) */}
-        {!dashboard.data ? (
-          <div className="ui-card p-5">
-            <TableSkeleton rows={4} columns={2} />
-          </div>
-        ) : isHost ? (
-          <ActionQueueCard
-            title="파트너 검토 대기"
-            tone="neutral"
-            badgeLevel="attention"
-            badgeDot
-            items={partnerPendingItems}
-            loading={partners.loading || deliverables.loading}
-            emptyMessage="검토 대기 중인 파트너 제출이 없습니다."
-            heroActions={
-              <Link
-                to={partnerPendingItems[0]?.to ?? '/partners'}
-                className="btn btn-ghost flex-1"
-              >
-                검토 열기
-              </Link>
-            }
-            moreTo="/partners"
-            moreLabel="파트너 보드에서 전체 보기"
-          />
-        ) : (
-          <ActionQueueCard
-            title="미결 컨펌"
-            tone="neutral"
-            badgeLevel="attention"
-            badgeDot
-            items={approvalItems}
-            loading={dashboard.loading}
-            emptyMessage="대기 중인 컨펌이 없습니다."
-            heroActions={
-              <>
-                <button
-                  type="button"
-                  onClick={() => void remind('approval')}
-                  disabled={remindBusy}
-                  className="btn btn-ghost flex-1"
-                >
-                  컨펌 독촉
-                </button>
-                <Link to={approvalItems[0]?.to ?? '/board/design'} className="btn btn-ghost">
-                  열기
-                </Link>
-              </>
-            }
-            heroNotice={noticeFor('approval')}
-            moreTo="/board/design"
-            moreLabel="디자인 보드에서 전체 보기"
-          />
-        )}
-      </div>
-
-      {/* D-day 스트립 — 전체 폭. S-11 마감 타임라인 재사용(overflow-x:auto 유지) */}
-      <DeadlineStripCard groups={deadlineGroups} />
-
-      {/* 보조 3열 — 큐 아래로 내린다 */}
-      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-3">
-        <Card title="영역별 진행률">
-          <div className="space-y-4">
-            {dashboard.data?.area_progress.map((p) => (
-              <div key={p.area}>
-                <p className="t-caption mb-1.5">{AREA_LABELS[p.area]}</p>
-                <ProgressBar done={p.done} total={p.total} />
-              </div>
-            ))}
-          </div>
-        </Card>
-
-        <Card title="최근 활동">
-          {dashboard.data && dashboard.data.recent_activity.length === 0 && (
-            <EmptyState message="활동 내역이 없습니다." />
-          )}
-          <ul className="divide-y divide-border">
-            {dashboard.data?.recent_activity.map((entry) => (
-              <li
-                key={entry.id}
-                className="flex items-center justify-between gap-3 py-2 first:pt-0 last:pb-0"
-              >
-                <span className="min-w-0 truncate text-sm text-ink-sub">
-                  <span className="text-ink-cap">{activityActorLabel(entry.actor)} · </span>
-                  {activityActionLabel(entry.action)}
-                </span>
-                <span className="shrink-0 text-xs text-ink-cap">{formatDateTime(entry.created_at)}</span>
-              </li>
-            ))}
-          </ul>
-        </Card>
-
-        <InboxCard
-          projectId={projectId}
-          inbox={inbox.data ?? []}
-          loading={inbox.loading}
-          error={inbox.error}
-          deliverables={deliverables.data ?? []}
-          onChanged={reloadAll}
-        />
-
-        {dashboard.data && dashboard.data.my_requested.length > 0 && (
-          <Card title="받은 가이드">
-            <ul className="divide-y divide-border">
-              {dashboard.data.my_requested.map((d) => (
-                <li key={d.id} className="py-2.5 first:pt-0 last:pb-0">
-                  <Link to={`/items/${d.id}`} className="flex items-center justify-between gap-3 hover:opacity-70">
-                    <span className="min-w-0">
-                      <span className="block truncate text-sm font-medium text-ink">{d.title}</span>
-                      <span className="text-xs text-ink-cap">{d.category}</span>
-                    </span>
-                    {d.due_date ? (
-                      <DdayBadge isoDate={d.due_date} />
-                    ) : (
-                      <span className="text-xs text-ink-cap">마감 미정</span>
-                    )}
-                  </Link>
+          <Card title="최근 활동">
+            {dashboard.data && dashboard.data.recent_activity.length === 0 && (
+              <EmptyState message="활동 내역이 없습니다." />
+            )}
+            <ul className="space-y-2.5">
+              {dashboard.data?.recent_activity.slice(0, 5).map((entry) => (
+                <li key={entry.id} className="flex flex-col gap-0.5">
+                  <span className="text-[13px] leading-[18px] text-ink">
+                    <span className="font-semibold">{activityActorLabel(entry.actor)}</span>{' '}
+                    {activityActionLabel(entry.action)}
+                  </span>
+                  <span className="t-caption">{formatDateTime(entry.created_at)}</span>
                 </li>
               ))}
             </ul>
           </Card>
-        )}
-
-        <Card title="다가오는 마일스톤">
-          {dashboard.data && dashboard.data.upcoming_milestones.length === 0 && (
-            <EmptyState message="예정된 마일스톤이 없습니다." />
-          )}
-          <ul className="divide-y divide-border">
-            {dashboard.data?.upcoming_milestones.map((m) => (
-              <li key={m.id} className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
-                <span className="min-w-0">
-                  <span className="block truncate text-sm font-medium text-ink">{m.title}</span>
-                  <span className="text-xs text-ink-cap">{m.area ? AREA_LABELS[m.area] : '전체'}</span>
-                </span>
-                <DdayBadge isoDate={m.due_date} />
-              </li>
-            ))}
-          </ul>
-        </Card>
+        </div>
       </div>
     </section>
-  )
-}
-
-interface InboxCardProps {
-  projectId: string
-  inbox: import('../types/entities').UnregisteredFile[]
-  loading: boolean
-  error: string | null
-  deliverables: Deliverable[]
-  onChanged: () => void
-}
-
-/**
- * 미등록 인박스(§7.3) — 행사 폴더에 직접 올린 파일. v2.9: 실서버 + Drive 연결이면 '지금 확인'으로 바로 훑는다
- * (조회 때도 행사당 60초에 1회 자동으로 훑는다 — providers/supabase/drive.ts). mock은 픽스처 인박스라 버튼이 없다.
- */
-function InboxCard({ projectId, inbox, loading, error, deliverables, onChanged }: InboxCardProps) {
-  const [selected, setSelected] = useState<Record<string, string>>({})
-  const drive = useDriveStatus()
-  const gateway = getDriveGateway()
-  const [scanNote, setScanNote] = useState<string | null>(null)
-  const scan = useMutation(async () => {
-    if (gateway.mode !== 'server') throw new Error('실서버 모드에서만 Drive를 확인할 수 있습니다.')
-    return gateway.client.scan(projectId)
-  })
-  const canScan = gateway.mode === 'server' && !!drive.status?.configured && drive.status.connected
-
-  const handleScan = async () => {
-    setScanNote(null)
-    const r = await scan.run()
-    if (!r) return
-    if (r.skipped === 'no_tree') setScanNote('아직 이 행사의 Drive 폴더가 없습니다 — 행사 설정 ③에서 만들거나 첫 업로드 때 생깁니다.')
-    else if (r.skipped === 'tree_missing') setScanNote('행사 폴더를 Drive에서 찾을 수 없습니다(휴지통·이동) — 행사 설정 ③에서 폴더 구조를 확인하세요.')
-    else {
-      const parts = [`새 파일 ${r.added}건`]
-      if (r.removed) parts.push(`사라진 파일 ${r.removed}건 정리`)
-      if (r.finalized) parts.push(`확정 복사 ${r.finalized}건 완료`)
-      if (r.failed) parts.push(`확정 복사 ${r.failed}건 재시도 대기`)
-      setScanNote(`Drive 확인 — ${parts.join(' · ')}`)
-    }
-    onChanged()
-  }
-  const link = useMutation((inboxId: string, deliverableId: string) =>
-    provider.linkInboxFile(inboxId, deliverableId),
-  )
-  const dismiss = useMutation((inboxId: string) => provider.dismissInboxFile(inboxId))
-
-  const handleLink = async (inboxId: string) => {
-    const deliverableId = selected[inboxId]
-    if (!deliverableId) {
-      link.setError('연결할 항목을 선택하세요.')
-      return
-    }
-    const result = await link.run(inboxId, deliverableId)
-    if (result) onChanged()
-  }
-
-  const handleDismiss = async (inboxId: string) => {
-    const result = await dismiss.run(inboxId)
-    if (result !== undefined) onChanged()
-  }
-
-  return (
-    <Card
-      title="미등록 인박스"
-      action={
-        <span className="flex shrink-0 items-center gap-2">
-          {canScan && (
-            <button type="button" onClick={handleScan} disabled={scan.pending} className="btn btn-ghost btn-sm">
-              {scan.pending ? '확인 중…' : 'Drive 지금 확인'}
-            </button>
-          )}
-          <span className="inline-flex shrink-0 items-center rounded-full bg-track px-2 py-0.5 text-xs font-medium text-ink-sub">
-            {inbox.length}
-          </span>
-        </span>
-      }
-    >
-      {scanNote && (
-        <p className="mb-2 text-xs text-ink-sub" role="status">
-          {scanNote}
-        </p>
-      )}
-      <ErrorAlert message={scan.error} />
-      <ErrorAlert message={error} />
-      <ErrorAlert message={link.error} />
-      <ErrorAlert message={dismiss.error} />
-      {loading && <p className="text-sm text-ink-cap">불러오는 중…</p>}
-      {!loading && inbox.length === 0 && <EmptyState message="미등록 파일이 없습니다." />}
-      <ul className="space-y-3">
-        {inbox.map((f) => (
-          <li key={f.id} className="rounded-lg border border-border bg-canvas p-3">
-            <p className="truncate text-sm font-medium text-ink">{f.file_name ?? '(파일명 없음)'}</p>
-            <p className="text-xs text-ink-cap">{f.detected_folder ?? '위치 미상'}</p>
-            <div className="mt-2 flex items-center gap-2">
-              <select
-                className="ui-input ui-select min-w-0 flex-1 text-xs"
-                value={selected[f.id] ?? ''}
-                onChange={(e) => setSelected((s) => ({ ...s, [f.id]: e.target.value }))}
-              >
-                <option value="">항목 선택…</option>
-                {deliverables.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    [{AREA_LABELS[d.area]}] {d.title}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                onClick={() => handleLink(f.id)}
-                disabled={link.pending}
-                className="btn btn-primary btn-sm shrink-0"
-              >
-                연결
-              </button>
-              <button
-                type="button"
-                onClick={() => handleDismiss(f.id)}
-                disabled={dismiss.pending}
-                className="btn btn-ghost btn-sm shrink-0"
-              >
-                무시
-              </button>
-            </div>
-          </li>
-        ))}
-      </ul>
-    </Card>
   )
 }
