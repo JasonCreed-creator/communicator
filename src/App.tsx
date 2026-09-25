@@ -5,6 +5,7 @@ import OnboardingGuard from './components/onboarding/OnboardingGuard'
 import { ProjectProvider } from './context/ProjectContext'
 import { AuthProvider } from './context/AuthContext'
 import AuthGate from './components/layout/AuthGate'
+import { routerBasename } from './lib/basePath'
 import LoginPage from './pages/LoginPage'
 import AreaBoardPage from './pages/AreaBoardPage'
 import ClientConfirmQueuePage from './pages/ClientConfirmQueuePage'
@@ -139,8 +140,9 @@ export function AppRoutes() {
 }
 
 export default function App() {
+  // Phase 4.4 — 하위 경로 배포(VITE_BASE_PATH)면 라우터도 그 아래에서 돈다. 루트 배포면 undefined(기본값)
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={routerBasename()}>
       <AuthProvider>
         <AppRoutes />
       </AuthProvider>

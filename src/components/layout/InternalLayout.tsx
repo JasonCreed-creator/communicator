@@ -3,6 +3,7 @@ import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
 import BrandLogo from '../BrandLogo'
 import ErrorAlert from '../internal/ErrorAlert'
 import { canUseQuotes } from '../quote/QuoteGate'
+import { useAuth } from '../../context/AuthContext'
 import { useProject } from '../../context/ProjectContext'
 import { useAsync, useMutation } from '../../hooks/useAsync'
 import { EVENT_TYPE_LABELS, ddayLabel } from '../../lib/labels'
@@ -310,6 +311,30 @@ function ProjectSelector({ onNavigate, canQuotes }: { onNavigate?: () => void; c
   )
 }
 
+/**
+ * 실서버(supabase)에서만 — 지금 들어와 있는 사람과 로그아웃(Phase 4.3). 시험용 입구로 다른 사람의 권한을 시험할 때
+ * 바꿔 들어가는 자리이기도 하다. mock에는 로그인 개념이 없어 그리지 않는다(데모·기존 화면 무변경).
+ */
+export function SidebarAccount({ name, onNavigate }: { name: string | null; onNavigate?: () => void }) {
+  const { mode, signOut } = useAuth()
+  if (mode !== 'supabase') return null
+  return (
+    <div className="border-t border-dark-ink/15 px-5 py-3">
+      <p className="truncate text-xs text-dark-ink/70">{name ?? '로그인됨'}</p>
+      <button
+        type="button"
+        onClick={() => {
+          onNavigate?.()
+          void signOut()
+        }}
+        className="mt-1 text-xs font-medium text-dark-ink underline-offset-2 hover:underline"
+      >
+        로그아웃
+      </button>
+    </div>
+  )
+}
+
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   // v2.0 — 견적 메뉴는 app_role admin·sales만 (§10). staff는 메뉴 자체 미표시(DoD 25)
   const me = useAsync(() => provider.getCurrentUser(), [])
@@ -344,6 +369,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           <SidebarLink key={item.to} {...item} onNavigate={onNavigate} />
         ))}
       </nav>
+      <SidebarAccount name={me.data?.name ?? null} onNavigate={onNavigate} />
     </div>
   )
 }

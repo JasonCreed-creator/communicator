@@ -9,6 +9,30 @@ export interface AuthSessionUser {
   email: string | null
 }
 
+/**
+ * 시험용 입구(Phase 4.3 · 설계서 §12.1) — Okta SSO 전까지 로그인 없이 주소록의 한 사람으로 들어가는 임시 입구.
+ * 여닫기는 서버 env(AUTH_GATE·AUTH_GATE_UNTIL)만 한다 — 화면은 서버가 열어 둔 동안만 입구를 그린다.
+ * 목록에는 이메일·전화를 싣지 않는다(이름·직함·권한만).
+ */
+export type GateRole = 'admin' | 'sales' | 'staff'
+
+export interface GatePerson {
+  id: string
+  display_name: string
+  title: string | null
+  app_role: GateRole
+}
+
+export type GateStatus =
+  | { open: true; until: string; people: GatePerson[] }
+  | { open: false; reason: 'off' | 'expired' | 'misconfigured' | 'unavailable' }
+
+export interface AuthGateApi {
+  status(): Promise<GateStatus>
+  /** 성공 시 null(세션은 onChange로 들어온다), 실패 시 사용자에게 보일 한국어 메시지 */
+  enter(profileId: string): Promise<string | null>
+}
+
 export interface AuthAdapter {
   mode: 'mock' | 'supabase'
   allowedDomains: string[]
@@ -22,6 +46,8 @@ export interface AuthAdapter {
    * (예: 견적서 → 구글 스프레드시트 생성). mock은 세션이 없어 항상 null.
    */
   getAccessToken(): Promise<string | null>
+  /** 시험용 입구 — supabase 공급자만(서버가 닫아 두면 status가 open:false). mock은 로그인 개념이 없어 null */
+  gate: AuthGateApi | null
 }
 
 export const mockAuthAdapter: AuthAdapter = {
@@ -32,6 +58,7 @@ export const mockAuthAdapter: AuthAdapter = {
   signInWithEmail: async () => null,
   signOut: async () => undefined,
   getAccessToken: async () => null,
+  gate: null,
 }
 
 /** 허용 도메인 검사(프론트 선안내 — 서버 정본은 app_config + auth 트리거) */

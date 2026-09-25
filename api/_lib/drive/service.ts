@@ -207,18 +207,38 @@ function redirectTo(location: string): Response {
 }
 
 /**
+ * OAuth 복귀 뒤 행사 설정으로 돌아갈 앱 루트(Phase 4.4 — 하위 경로·회사 도메인 배포). 리디렉트 URI(`…/api/drive`)에서
+ * `/api/drive`를 뗀 자리가 앱 루트다. 회사 도메인(CloudFront 경유)이면 함수는 Vercel 주소로 요청을 받아 회사 주소를 모르므로
+ * 리디렉트 URI가 유일한 단서다. 요청과 같은 오리진이면 경로만(루트 배포 = 지금과 같은 `/settings…`), 다르면 절대 주소.
+ */
+export function settingsReturnBase(requestUrl: string, redirectUri: string | undefined): string {
+  if (!redirectUri) return ''
+  let r: URL
+  try {
+    r = new URL(redirectUri)
+  } catch {
+    return ''
+  }
+  const path = r.pathname.replace(/\/api\/drive\/?$/, '').replace(/\/$/, '')
+  return r.origin === new URL(requestUrl).origin ? path : `${r.origin}${path}`
+}
+
+/**
  * Google 동의 후 돌아오는 GET /api/drive?code&state — 결과는 행사 설정으로 되돌려 보내며 사유 코드만 싣는다
  * (토큰·이메일은 URL에 싣지 않는다). 저장 전에 **연결 계정이 저장소 루트에 쓸 수 있는지** 확인한다.
  */
 export async function oauthCallback(ctx: DriveCtx, requestUrl: string): Promise<Response> {
   const url = new URL(requestUrl)
-  const back = (q: string) => redirectTo(`/settings?drive=${q}`)
+  // state를 못 읽으면 env 리디렉트 URI로, 읽으면 연결을 시작한 그 리디렉트 URI로 앱 루트를 정한다
+  let appRoot = settingsReturnBase(requestUrl, ctx.env.DRIVE_OAUTH_REDIRECT_URI)
+  const back = (q: string) => redirectTo(`${appRoot}/settings?drive=${q}`)
   let st: { u: string; r: string }
   try {
     st = verifyToken<{ u: string; r: string }>(url.searchParams.get('state') ?? '', key(ctx), ctx.now(), 'oa')
   } catch {
     return back('error&reason=state')
   }
+  appRoot = settingsReturnBase(requestUrl, st.r)
   const err = url.searchParams.get('error')
   if (err) return back(`error&reason=${err === 'access_denied' ? 'denied' : 'google'}`)
   const code = url.searchParams.get('code')

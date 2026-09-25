@@ -55,7 +55,13 @@ describe('api/ Vercel Functions — ESM 상대 import는 .js 확장자 필수', 
       }
     }
     expect(offenders).toEqual([])
-    // 체인이 실제로 src/까지 내려간다(가드가 빈 그래프에 통과하는 것을 막는다)
-    expect([...graph.keys()].some((f) => f.includes('/src/'))).toBe(true)
+    // 진입점이 _lib까지 실제로 따라간다(가드가 빈 그래프에 통과하는 것을 막는다)
+    expect(graph.size).toBeGreaterThan(1)
+  })
+
+  it('체인이 src/까지 내려가는 진입점이 있다 — 워커가 src 연쇄 import를 실제로 따라간다', () => {
+    // 진입점마다 src를 쓰는 것은 아니다(api/gate — Phase 4.3는 _lib만). 대신 전체 중 하나 이상은 src에 닿아야
+    // 가드가 src 쪽 확장자 누락(2026-09-10 실측 원인)을 계속 본다
+    expect(entrypoints.some((e) => [...walk(e).keys()].some((f) => f.includes('/src/')))).toBe(true)
   })
 })

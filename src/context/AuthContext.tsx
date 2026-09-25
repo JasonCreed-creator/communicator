@@ -2,7 +2,7 @@
 // mock 공급자에서는 항상 '로그인됨'으로 통과한다(데모·기존 테스트 불파손). supabase 공급자에서만
 // 세션을 구독하고, 없으면 AuthGate가 로그인 화면을 그린다. `/c/*`·`/p/*`·`/`는 게이트 밖(무로그인 지면).
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { getAuthAdapter, type AuthAdapter, type AuthSessionUser } from '../providers/auth'
+import { getAuthAdapter, type AuthAdapter, type AuthGateApi, type AuthSessionUser } from '../providers/auth'
 
 interface AuthContextValue {
   /** 'mock'이면 로그인 개념이 없다 */
@@ -16,6 +16,8 @@ interface AuthContextValue {
   allowedDomains: string[]
   /** 서버 함수(api/) 호출용 Bearer 토큰 — mock은 null */
   getAccessToken: () => Promise<string | null>
+  /** 시험용 입구(Phase 4.3 · 설계서 §12.1) — supabase 공급자만. 열림 여부는 서버 env가 정한다 */
+  gate: AuthGateApi | null
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -58,6 +60,7 @@ export function AuthProvider({ children, adapter }: { children: ReactNode; adapt
       },
       allowedDomains: auth.allowedDomains,
       getAccessToken: () => auth.getAccessToken(),
+      gate: auth.gate,
     }),
     [auth, loading, user],
   )
@@ -77,6 +80,7 @@ export function useAuth(): AuthContextValue {
       signOut: async () => undefined,
       allowedDomains: [],
       getAccessToken: async () => null,
+      gate: null,
     }
   }
   return ctx
