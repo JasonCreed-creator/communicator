@@ -5,7 +5,7 @@
 //   · 원가 없는 버킷·마진 밖 버킷을 **숨기지 않고 회색 라벨로 남긴다**
 //   · 견적 초과 버킷을 붉게 알리고, 홈(S1)에도 건수 카드를 띄운다
 //   · 부가세 포함 토글이 "받은 금액 → 저장 금액"을 미리 보여준다
-//   · 업로드는 게이트 뒤에 숨기지 않고 "Phase 4.7에서 열립니다"로 시점을 밝힌다
+//   · 협력사 견적서 불러오기(Phase 4.7)는 게이트 뒤에 숨기지 않는다 — pm에게 열려 있다(상세 계약 = dod69-vendor-quote)
 import { cleanup, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -51,10 +51,12 @@ describe('S-10 정산보드 화면', () => {
     expect(screen.getByTestId('margin-seg-rc')).toBeTruthy()
   })
 
-  it('업로드는 숨기지 않고 열리는 시점을 밝힌다', async () => {
+  it('협력사 견적서 불러오기가 숨지 않고 pm에게 열려 있다(옛 "Phase 4.7에서 열립니다" 자리)', async () => {
     renderRoute('/settlement')
-    const btn = await screen.findByRole('button', { name: /Phase 4.7에서 열립니다/ })
-    expect((btn as HTMLButtonElement).disabled).toBe(true)
+    const section = await screen.findByTestId('vendor-quote-import')
+    const btn = within(section).getByRole('button', { name: '견적서 불러오기' })
+    expect((btn as HTMLButtonElement).disabled).toBe(false)
+    expect(screen.queryByText(/Phase 4.7에서 열립니다/)).toBeNull()
   })
 
   it('버킷 행을 펼치면 발주 항목 표가 뜨고, 원가 없는 버킷에는 입력 안내가 뜬다', async () => {

@@ -518,6 +518,90 @@ end $$;
 select notify_claim_manual('${PRJ}', 'x');`, { expect: 'error', match: '리마인드 대상' })
   scenario('알림 notify_mark: 알 수 없는 결과 422', `select notify_mark(array['k'], 'maybe');`, { expect: 'error', match: '알 수 없는 결과' })
 
+  // 5h. 협력사 견적서 불러오기 (Phase 4.7 · 설계서 v2.11 §19.5) — 확정 RPC(금액은 저장된 제안에서) · 원본 보관 판정 · 인박스 대조
+  const BOARD = seedUuid('brd-001')
+  const VQ = seedUuid('chk-vendor-import')
+  const bkt = (code) => seedUuid(`bkt-${code}`)
+  const vqSetup = `reset role;
+insert into settlement_imports (id, board_id, file_name, vendor_id, parsed, questions, status)
+values ('${VQ}', '${BOARD}', '가상음향_견적.xlsx', '${seedUuid('ven-002')}',
+  '{"kind":"vendor_quote","rows":[{"index":0,"title":"메인 스피커","spec":"L/R","amount":6000000},{"index":1,"title":"패키지 할인","spec":null,"amount":-1000000},{"index":2,"title":"오퍼레이터","spec":null,"amount":3000000}]}'::jsonb,
+  '[]'::jsonb, 'parsed');
+set local role authenticated;`
+  const vqRows = (rows) => `'${JSON.stringify(rows)}'::jsonb`
+  scenario('정산 가져오기 확정: pm → 고른 행마다 발주 항목(ordered · import_id · 제안 금액 · 근거) · 가져오기 확정 · 로그에 금액 없음', `${vqSetup}
+select count(*) from confirm_vendor_quote_import('${VQ}', false, null, false, ${vqRows([{ index: 0, bucket_id: bkt('s2'), title: '메인 스피커(L/R)' }, { index: 1, bucket_id: bkt('s2') }])});
+reset role;
+${assertSql(`(select count(*) from settlement_items where import_id='${VQ}') = 2`)}
+${assertSql(`exists (select 1 from settlement_items where import_id='${VQ}' and title='메인 스피커(L/R)' and ordered_amount=6000000 and status='ordered' and vendor_id='${seedUuid('ven-002')}' and not vat_included_input and input_amount_raw is null and spec='L/R' and starts_with(evidence, '협력사 견적서 '))`)}
+${assertSql(`exists (select 1 from settlement_items where import_id='${VQ}' and title='패키지 할인' and ordered_amount=-1000000)`)}
+${assertSql(`(select status from settlement_imports where id='${VQ}') = 'confirmed'`)}
+${assertSql(`exists (select 1 from activity_log where action='settlement.imported' and target_id='${VQ}' and meta = '{"count": 2, "file_name": "가상음향_견적.xlsx"}'::jsonb)`)}`,
+    { role: 'authenticated', sub: authId.pm })
+  scenario('정산 가져오기 확정: 부가세 포함 → round(v/1.1) + 원본 보존 · 협력사 지우기(p_vendor_set)', `${vqSetup}
+select count(*) from confirm_vendor_quote_import('${VQ}', true, null, true, ${vqRows([{ index: 0, bucket_id: bkt('s2') }])});
+reset role;
+${assertSql(`exists (select 1 from settlement_items where import_id='${VQ}' and ordered_amount=5454545 and input_amount_raw=6000000 and vat_included_input and vendor_id is null)`)}`,
+    { role: 'authenticated', sub: authId.pm })
+  scenario('정산 가져오기 확정: 두 번째 확정 409', `${vqSetup}
+select count(*) from confirm_vendor_quote_import('${VQ}', false, null, false, ${vqRows([{ index: 0, bucket_id: bkt('s2') }])});
+select count(*) from confirm_vendor_quote_import('${VQ}', false, null, false, ${vqRows([{ index: 2, bucket_id: bkt('s4') }])});`,
+    { role: 'authenticated', sub: authId.pm, expect: 'error', match: '이미 확정했거나 버린' })
+  scenario('정산 가져오기 확정: 원가 없는 버킷(s5) 422', `${vqSetup}
+select count(*) from confirm_vendor_quote_import('${VQ}', false, null, false, ${vqRows([{ index: 0, bucket_id: bkt('s5') }])});`,
+    { role: 'authenticated', sub: authId.pm, expect: 'error', match: '원가가 없는 항목' })
+  scenario('정산 가져오기 확정: 다른 보드의 버킷 422', `${vqSetup}
+reset role;
+insert into settlement_boards (id, project_id, baselined_at) values ('${seedUuid('chk-board-2')}', '${PRJ_DRAFT}', now());
+insert into settlement_buckets (id, board_id, code, label, quote_amount, has_cost, is_margin_base, source, sort_order)
+values ('${seedUuid('chk-bucket-2')}', '${seedUuid('chk-board-2')}', 's2', '시스템 구축', 0, true, true, 'quote', 1);
+set local role authenticated;
+select count(*) from confirm_vendor_quote_import('${VQ}', false, null, false, ${vqRows([{ index: 0, bucket_id: seedUuid('chk-bucket-2') }])});`,
+    { role: 'authenticated', sub: authId.pm, expect: 'error', match: '이 정산보드의 버킷이 아닙니다' })
+  scenario('정산 가져오기 확정: 같은 행 두 번 422', `${vqSetup}
+select count(*) from confirm_vendor_quote_import('${VQ}', false, null, false, ${vqRows([{ index: 0, bucket_id: bkt('s2') }, { index: 0, bucket_id: bkt('s2') }])});`,
+    { role: 'authenticated', sub: authId.pm, expect: 'error', match: '같은 행을 두 번' })
+  scenario('정산 가져오기 확정: 없는 행 422 · 빈 목록 422', `${vqSetup}
+select count(*) from confirm_vendor_quote_import('${VQ}', false, null, false, ${vqRows([{ index: 9, bucket_id: bkt('s2') }])});`,
+    { role: 'authenticated', sub: authId.pm, expect: 'error', match: '견적서에 없는 행입니다\\(10번\\)' })
+  scenario('정산 가져오기 확정: 빈 목록 422', `${vqSetup}
+select count(*) from confirm_vendor_quote_import('${VQ}', false, null, false, '[]'::jsonb);`,
+    { role: 'authenticated', sub: authId.pm, expect: 'error', match: '만들 항목이 없습니다' })
+  scenario('정산 가져오기 확정: design은 403(PM 전용)', `${vqSetup}
+select count(*) from confirm_vendor_quote_import('${VQ}', false, null, false, ${vqRows([{ index: 0, bucket_id: bkt('s2') }])});`,
+    { role: 'authenticated', sub: authId.design, expect: 'error', match: 'PM 전용' })
+  scenario('정산 가져오기 확정: anon 실행 불가', `select count(*) from confirm_vendor_quote_import('${VQ}', false, null, false, '[]'::jsonb);`,
+    { role: 'anon', expect: 'error', match: 'permission denied' })
+  scenario('정산 원본 보관 판정: pm → 행사 정보(금액 없음) · 확정 뒤 409', `${vqSetup}
+do $$ declare r jsonb; begin
+  r := drive_settlement_file_check('${VQ}');
+  if r->'project'->>'id' <> '${PRJ}' or r->>'file_name' <> '가상음향_견적.xlsx' then raise exception 'ASSERT_FAILED: %', r; end if;
+end $$;
+reset role;
+update settlement_imports set status='confirmed' where id='${VQ}';
+set local role authenticated;
+select drive_settlement_file_check('${VQ}');`,
+    { role: 'authenticated', sub: authId.pm, expect: 'error', match: '이미 확정했거나 버린' })
+  scenario('정산 원본 보관 판정: design은 403', `${vqSetup}
+select drive_settlement_file_check('${VQ}');`,
+    { role: 'authenticated', sub: authId.design, expect: 'error', match: 'PM 전용' })
+  scenario('정산 settlement_import_set_file: authenticated 실행 불가(service 전용)', `select settlement_import_set_file('${VQ}', 'x');`,
+    { role: 'authenticated', sub: authId.pm, expect: 'error', match: 'permission denied' })
+  scenario('정산 가져오기 등록·버리기(공급자 직접 경로): pm은 insert·update 가능(RLS settlement_imports_write)', `
+insert into settlement_imports (id, board_id, file_name, parsed, questions, status)
+values ('${seedUuid('chk-vendor-import-2')}', '${BOARD}', '가상.xlsx', '{"kind":"vendor_quote","rows":[]}'::jsonb, '["vat"]'::jsonb, 'parsed');
+update settlement_imports set status='discarded' where id='${seedUuid('chk-vendor-import-2')}' and status='parsed';
+reset role;
+${assertSql(`(select status from settlement_imports where id='${seedUuid('chk-vendor-import-2')}') = 'discarded'`)}`,
+    { role: 'authenticated', sub: authId.pm })
+  scenario('정산 가져오기 등록: design은 RLS 거부', `
+insert into settlement_imports (board_id, file_name, status) values ('${BOARD}', '가상.xlsx', 'parsed');`,
+    { role: 'authenticated', sub: authId.design, expect: 'error', match: 'row-level security' })
+  scenario('정산 원본은 인박스가 아는 파일(drive_known_file_ids 재정의)', `${vqSetup}
+reset role;
+select settlement_import_set_file('${VQ}', 'drv-vendor-original-1');
+${assertSql(`'drv-vendor-original-1' = any(drive_known_file_ids('${PRJ}'))`)}`)
+
   // 6. 시크릿 커밋 가드 (§8 DoD 9) — 실키 값 패턴이 레포 파일에 없는가
   const grep = spawnSync('grep', ['-rnE', 'sb_secret_[A-Za-z0-9_-]{10,}|sbp_[A-Za-z0-9]{20,}', 'src', 'supabase', 'scripts', '--include=*.ts', '--include=*.tsx', '--include=*.sql', '--include=*.mjs', '--include=*.md'], { encoding: 'utf8' })
   record('시크릿 커밋 가드: sb_secret_/sbp_ 실키 패턴 0건 (DoD 9)', grep.status === 1, grep.stdout)

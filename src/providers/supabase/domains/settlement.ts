@@ -10,11 +10,23 @@ import type {
   Quote,
   SettlementBoard,
   SettlementBucket,
+  SettlementImport,
   SettlementItem,
   UUID,
   Vendor,
 } from '../../../types/entities'
-import type { SettlementBoardView } from '../../../types/views'
+import type { SettlementBoardView, VendorQuoteImportView } from '../../../types/views'
+import { driveFor } from '../drive'
+import {
+  buildVendorQuote,
+  isVendorQuoteFile,
+  parseVendorQuoteWorkbook,
+  VENDOR_QUOTE_FILE_MESSAGE,
+  VENDOR_QUOTE_NO_BOARD_MESSAGE,
+  VENDOR_QUOTE_NOT_PARSED_MESSAGE,
+  type VendorQuoteParsed,
+  type VendorQuoteQuestion,
+} from '../../../lib/vendorQuote'
 import {
   bucketActual,
   bucketMarkup,
@@ -40,6 +52,10 @@ type SettlementDomain = Pick<
   | 'deleteSettlementItem'
   | 'listVendors'
   | 'upsertVendor'
+  | 'importVendorQuote'
+  | 'listVendorQuoteImports'
+  | 'confirmVendorQuoteImport'
+  | 'discardVendorQuoteImport'
 >
 
 /** 버킷 insert 행 — id·created_at은 DB 기본값 */
@@ -241,6 +257,43 @@ export async function createSettlementBoardCore(
   ctx.q(await ctx.sb.from('settlement_buckets').insert(snapshotBuckets(board.id, quote)).select('id'))
   await ctx.log(projectId, 'settlement.baselined', 'settlement', board.id, { quote_version: quote.version })
   return buildBoardView(ctx, board)
+}
+
+// ── v15 협력사 견적서 가져오기 도우미 (§19.5) ─────────────────────────
+
+/** 가져오기 행 → 화면 뷰(협력사 이름 · 확정 때 만든 항목 수) */
+async function importViews(ctx: SupabaseCtx, rows: SettlementImport[]): Promise<VendorQuoteImportView[]> {
+  if (rows.length === 0) return []
+  const vendorIds = [...new Set(rows.map((r) => r.vendor_id).filter((v): v is UUID => !!v))]
+  const vendors = vendorIds.length
+    ? (ctx.q(await ctx.sb.from('vendors').select('id, name').in('id', vendorIds)) as { id: UUID; name: string }[])
+    : []
+  const items = ctx.q(
+    await ctx.sb.from('settlement_items').select('import_id').in('import_id', rows.map((r) => r.id)),
+  ) as { import_id: UUID }[]
+  return rows.map((r) => ({
+    id: r.id,
+    board_id: r.board_id,
+    file_name: r.file_name,
+    drive_file_id: r.drive_file_id,
+    vendor_id: r.vendor_id,
+    vendor_name: vendors.find((v) => v.id === r.vendor_id)?.name ?? null,
+    status: r.status,
+    created_at: r.created_at,
+    parsed: r.parsed as VendorQuoteParsed,
+    questions: ((r.questions as VendorQuoteQuestion[] | null) ?? []) as VendorQuoteQuestion[],
+    item_count: items.filter((i) => i.import_id === r.id).length,
+  }))
+}
+
+/** 가져오기 한 건 + 그 보드의 행사(권한 판정은 항상 이 행사로 — R-S1) */
+async function mustFindImport(ctx: SupabaseCtx, importId: UUID): Promise<{ imp: SettlementImport; projectId: UUID }> {
+  const imp = ctx.q(
+    await ctx.sb.from('settlement_imports').select('*').eq('id', importId).maybeSingle(),
+    '견적서 가져오기를 찾을 수 없습니다.',
+  ) as SettlementImport
+  const board = await mustFindBoardById(ctx, imp.board_id)
+  return { imp, projectId: board.project_id }
 }
 
 export function settlementDomain(ctx: SupabaseCtx): SettlementDomain {
@@ -536,6 +589,97 @@ export function settlementDomain(ctx: SupabaseCtx): SettlementDomain {
           .select('*')
           .single(),
       ) as Vendor
+    },
+
+    // ── v15 협력사 견적서 불러오기 (§19.5 Phase 4.7) — mock과 같은 판정·문구. 확정은 RPC 한 번(금액은 저장된 제안에서) ──
+    async importVendorQuote(projectId, input) {
+      await ctx.assertWritable(projectId)
+      const me = await ctx.assertPm(projectId)
+      const board = await findBoardByProject(ctx, projectId)
+      if (!board) throw new ProviderError('conflict', VENDOR_QUOTE_NO_BOARD_MESSAGE)
+      if (!isVendorQuoteFile(input.file_name)) throw new ProviderError('validation', VENDOR_QUOTE_FILE_MESSAGE)
+      if (input.vendor_id) {
+        const v = await ctx.sb.from('vendors').select('id').eq('id', input.vendor_id).maybeSingle()
+        ctx.ok(v)
+        if (!v.data) throw new ProviderError('validation', '협력사를 찾을 수 없습니다.')
+      }
+      const doc = parseVendorQuoteWorkbook(input.data, input.file_name)
+      const buckets = ctx.q(
+        await ctx.sb.from('settlement_buckets').select('*').eq('board_id', board.id),
+      ) as SettlementBucket[]
+      const { parsed, questions } = buildVendorQuote(doc, buckets)
+      let imp = ctx.q(
+        await ctx.sb
+          .from('settlement_imports')
+          .insert({
+            board_id: board.id,
+            file_name: input.file_name,
+            vendor_id: input.vendor_id ?? null,
+            parsed,
+            questions,
+            status: 'parsed',
+            created_by: me.id,
+          })
+          .select('*')
+          .single(),
+      ) as SettlementImport
+      // 원본은 근거로 보존(§19.5) — Drive가 연결돼 있으면 행사 폴더 02_견적·정산/협력사 견적서에. 실패해도 가져오기는 그대로
+      const drive = driveFor(ctx)
+      if (await drive.ready()) {
+        try {
+          const r = await drive.client.settlementFile(imp.id, input.file_name, input.data)
+          imp = { ...imp, drive_file_id: r.file_id }
+        } catch (e) {
+          console.warn('[drive] 협력사 견적서 원본 보관 실패(가져오기는 그대로):', e instanceof Error ? e.message : e)
+        }
+      }
+      return (await importViews(ctx, [imp]))[0]
+    },
+
+    async listVendorQuoteImports(projectId) {
+      await ctx.assertMember(projectId)
+      const board = await findBoardByProject(ctx, projectId)
+      if (!board) return []
+      const rows = ctx.q(
+        await ctx.sb.from('settlement_imports').select('*').eq('board_id', board.id).order('created_at', { ascending: false }),
+      ) as SettlementImport[]
+      return importViews(ctx, rows)
+    },
+
+    async confirmVendorQuoteImport(importId, input) {
+      const { imp, projectId } = await mustFindImport(ctx, importId)
+      await ctx.assertWritable(projectId)
+      await ctx.assertPm(projectId)
+      if (imp.status !== 'parsed') throw new ProviderError('conflict', VENDOR_QUOTE_NOT_PARSED_MESSAGE)
+      if (input.rows.length === 0) throw new ProviderError('validation', '만들 항목이 없습니다 — 한 줄 이상 고르세요.')
+      if (new Set(input.rows.map((r) => r.index)).size !== input.rows.length) {
+        throw new ProviderError('validation', '같은 행을 두 번 보낼 수 없습니다.')
+      }
+      // 버킷(이 보드·원가 버킷)·행 존재·제목·금액 계산은 RPC가 한 트랜잭션으로 판정한다(mock과 같은 문구)
+      const created = await ctx.rpc<SettlementItem[]>('confirm_vendor_quote_import', {
+        p_import: importId,
+        p_vat_included: input.vat_included,
+        p_vendor: input.vendor_id ?? null,
+        p_vendor_set: input.vendor_id !== undefined,
+        p_rows: input.rows.map((r) => ({ index: r.index, bucket_id: r.bucket_id, title: r.title ?? null })),
+      })
+      return created ?? []
+    },
+
+    async discardVendorQuoteImport(importId) {
+      const { imp, projectId } = await mustFindImport(ctx, importId)
+      await ctx.assertWritable(projectId)
+      await ctx.assertPm(projectId)
+      if (imp.status !== 'parsed') throw new ProviderError('conflict', VENDOR_QUOTE_NOT_PARSED_MESSAGE)
+      const updated = ctx.q(
+        await ctx.sb
+          .from('settlement_imports')
+          .update({ status: 'discarded' })
+          .eq('id', importId)
+          .eq('status', 'parsed')
+          .select('id'),
+      ) as { id: UUID }[]
+      if (updated.length === 0) throw new ProviderError('conflict', VENDOR_QUOTE_NOT_PARSED_MESSAGE)
     },
   }
 }

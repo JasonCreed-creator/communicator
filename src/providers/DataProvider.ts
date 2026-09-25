@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────
-// DataProvider 인터페이스 v14.1 — 2026-09-25 재동결 (설계서 v2.10.1 §9) — 127메서드
+// DataProvider 인터페이스 v15 — 2026-09-25 재동결 (설계서 v2.11 §19.5) — 131메서드
 //   (아래 이력 전체를 유지한다. v7 표기는 2026-08-23 시점의 스냅숏이었다 — v8·v8.1·v9은
 //   그 뒤에 이어 붙은 것이므로 제목 줄만 최신으로 갱신한다.)
 //   v1: 2026-08-19 동결(35메서드). v2: v1.2 승인 근거로 41메서드 재동결.
@@ -79,6 +79,10 @@
 //   v14.1: 사용자 승인(2026-09-25 — 묶음 2 "Phase 6 Slack 알림" 범위 승인이 동결 해제 승인을 겸함, v13.1 전례) + 설계서 v2.10.1 §9 →
 //   **ProjectPatch.slack_webhook_url 선택 필드 1개 추가만**, 메서드 수 127 불변. 행사별 Slack 채널(§9 "설정 화면에서 등록").
 //   알림 발송·테스트·리마인드는 인터페이스 밖 연동 층(lib/notify — driveClient와 같은 자리)이 맡는다.
+//   v15: 사용자 승인(2026-09-25 — 묶음 3 "Phase 4.7 협력사 견적 불러오기" 범위 승인, 버튼 "묶음 1→2→3 순서") + 설계서 v2.11 §19.5 →
+//   **v8부터 예약해 둔 importVendorQuote를 소진** + 확인 큐 3메서드(listVendorQuoteImports·confirmVendorQuoteImport·
+//   discardVendorQuoteImport) = 4메서드 추가 = **131메서드**. **기존 127메서드 시그니처 불변** 후 재동결.
+//   §19.5 "읽은 결과는 항상 담당자 확인을 거쳐 저장" — 가져오기는 제안(settlement_imports)만 만들고 항목은 확정 때 생긴다.
 //
 // 프로젝트 스코프 규칙(설계서 v2.1 §4-21 R-L1): 프로젝트 단위 조회·생성 메서드는 projectId를
 // 인자로 받는다. currentUser()는 행위자 신원·권한 판정 전용이며 스코프 유도에 쓰지 않는다.
@@ -177,6 +181,9 @@ import type {
   ScenarioBlockInput,
   UpdateDeliverableInput,
   UploadVersionInput,
+  VendorQuoteConfirmInput,
+  VendorQuoteImportInput,
+  VendorQuoteImportView,
   WbsTaskFilter,
   WbsTaskPatch,
   SettlementBoardView,
@@ -509,6 +516,21 @@ export interface DataProvider {
   /** 협력사 마스터 — 프로젝트 비종속(§19.6) */
   listVendors(): Promise<Vendor[]>
   upsertVendor(input: VendorInput): Promise<Vendor>
+  /**
+   * v15(§19.5 Phase 4.7) — 협력사 견적서(.xlsx)를 읽어 **확인 큐**를 만든다(항목은 아직 만들지 않는다). pm 전용 · 종료 행사 409 ·
+   * 정산보드가 없으면 409 · 엑셀이 아니면 422 · 읽을 수 없는 서식이면 422. 버킷·부가세는 제안만(원가 버킷만 제안).
+   * 실서버는 원본 파일을 Drive 행사 폴더 `02_견적·정산/협력사 견적서`에 보관한다(연결돼 있을 때 — best-effort).
+   */
+  importVendorQuote(projectId: UUID, input: VendorQuoteImportInput): Promise<VendorQuoteImportView>
+  /** v15 — 이 행사 정산보드의 견적서 가져오기 이력(최신순). 보드가 없으면 빈 배열 */
+  listVendorQuoteImports(projectId: UUID): Promise<VendorQuoteImportView[]>
+  /**
+   * v15 — 확인 큐 확정 → 고른 행마다 발주 항목 1개(status='ordered', 발주액 = 견적서 금액(부가세 포함이면 분리), import_id 연결).
+   * pm 전용 · 확인 대기(parsed)만(아니면 409) · 행 0개 422 · 원가 없는 버킷 422 · 다른 보드 버킷 422. 금액은 저장된 제안에서 읽는다.
+   */
+  confirmVendorQuoteImport(importId: UUID, input: VendorQuoteConfirmInput): Promise<SettlementItem[]>
+  /** v15 — 버리기(항목 없이 discarded). pm 전용 · 확인 대기만 */
+  discardVendorQuoteImport(importId: UUID): Promise<void>
 
   // ── 운영보드 재구성 — 시나리오·운영가이드 (v2.5 §23·§8.2) ─────────
   // 쓰기(save·seed·export) = pm·ops / 읽기(list) = 멤버 전원. category 불일치는 409(conflict).

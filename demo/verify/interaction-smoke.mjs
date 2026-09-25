@@ -12,7 +12,8 @@
 //       3.22: 담당자 배정 카드 — 빼기 → 끌어놓기 배정 · 빼기 → 누르기 배정 ·
 //       4.3.1: 업로드 잠금 안내 — 컨펌대기 항목은 고르기·업로드 대신 이유, 헤더 버튼 비활성 ·
 //       4.5: 항목 고치기·지우기 — 제목 고쳐 저장 → 이름 입력 확인 후 지우기 → 보드 복귀 ·
-//       6: Slack 알림 — 행사 설정 ③ 채널 등록(형식 검증 → 등록 → 가림 표시) · 홈 리마인드는 mock 사실 안내)
+//       6: Slack 알림 — 행사 설정 ③ 채널 등록(형식 검증 → 등록 → 가림 표시) · 홈 리마인드는 mock 사실 안내 ·
+//       4.7: 협력사 견적서 불러오기 — 가상 엑셀 읽기 → 확인 큐(부가세·버킷·공급가 대조) → 확정 → 이력)
 // 캡처는 dist-demo/shots-interaction/ 에 남긴다. 실패 시 exit 1.
 import { createServer } from 'node:http'
 import { readFileSync, mkdirSync } from 'node:fs'
@@ -146,7 +147,94 @@ check(
   `${docCountBefore} → ${docRequests.length}`,
 )
 
-// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — **Phase 6 Slack 알림(2026-09-25)**.
+// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — **Phase 4.7 협력사 견적서 불러오기(2026-09-25)**.
+//     정산보드가 있는 샘플 행사로 옮겨(`?project=` — Phase 6 알림 링크 경로) → 불러오기 카드(옛 "Phase 4.7에서 열립니다" 자리) →
+//     가상 협력사 견적(A형 — 부가세 줄·할인 행. 이 자리에서 exceljs로 만든다: 실파일·바이너리 커밋 금지 R-Q4) 고르기 → 읽기 →
+//     확인 큐(부가세 별도 미리 선택 · 부가세 '확인 필요' 없음 · 공급가 대조 '=' · 원가 없는 버킷은 선택지에 없음) → 확정 →
+//     '발주 항목 6개' → 닫기 → 이력 '확정 · 항목 6개'. 끝나면 데모 기본 행사(RB27)로 되돌린다 — 아래 ③-이전 블록들은 RB27 기준이다.
+const noticeV = tab.getByRole('button', { name: '안내 닫기' })
+if (await noticeV.count()) await noticeV.click()
+const docBeforeVendor = docRequests.length
+await tab.evaluate(() => {
+  window.location.hash = '#/settlement?project=prj-stc26'
+})
+const vqSection = tab.getByTestId('vendor-quote-import')
+await vqSection.waitFor({ timeout: 10_000 })
+check((await tab.getByText('Phase 4.7에서 열립니다').count()) === 0, '정산보드: 옛 "Phase 4.7에서 열립니다" 안내 없음 → 불러오기 카드')
+await vqSection.getByRole('button', { name: '견적서 불러오기' }).click()
+const vqDialog = tab.getByTestId('vendor-quote-dialog')
+await vqDialog.waitFor({ timeout: 10_000 })
+const { default: ExcelJSv } = await import('exceljs')
+const vwb = new ExcelJSv.Workbook()
+const vws = vwb.addWorksheet('가상 협력사 견적 AV')
+// src/modules/quote/import/__tests__/fixtures/syntheticVendorQuotes.ts의 A형과 같은 표(가상 명칭)
+const vSheet = {
+  1: ['견 적 서'],
+  3: ['행 사 명', '가상 테크 포럼 2027', null, null, null, null, '상      호', null, '가상음향㈜'],
+  8: ['견적금액', '금 이천이백만원 정 (￦22,000,000/원) 부가세 포함'],
+  10: ['1. 항목 합계', null, null, null, null, null, null, null, 20_000_000],
+  11: ['2. 부가세', null, null, null, null, null, null, null, 2_000_000],
+  12: ['총 견적', null, null, null, null, null, null, null, 22_000_000],
+  15: ['구  분', '항  목', '규격 · 사양', '단  가', '수  량', '일  수', null, null, '금  액', '비  고'],
+  16: ['1. 음향'],
+  17: ['음향', '메인 스피커 시스템', '라인어레이 L/R', 6_000_000, 1, 1, null, null, 6_000_000],
+  18: ['음향', '무선 마이크', '핸드 4 · 핀 2', 500_000, 4, 1, null, null, 2_000_000],
+  19: ['소계', null, null, null, null, null, null, null, 8_000_000],
+  20: ['2. 조명'],
+  21: ['조명', '무빙 라이트', '스팟 6대', 1_000_000, 6, 1, null, null, 6_000_000],
+  22: ['소계', null, null, null, null, null, null, null, 6_000_000],
+  23: ['3. 현장 운영'],
+  24: ['인력', '오퍼레이터', '5명 × 2일', 300_000, 5, 2, null, null, 3_000_000],
+  25: ['운송', '장비 운송 · 설치', '5톤 2대 왕복', 2_000_000, 2, 1, null, null, 4_000_000],
+  26: ['할인', '패키지 할인', null, -1_000_000, 1, 1, null, null, -1_000_000],
+  27: ['소계', null, null, null, null, null, null, null, 6_000_000],
+}
+for (const [rowNo, cells] of Object.entries(vSheet)) {
+  cells.forEach((value, i) => {
+    if (value !== null) vws.getRow(Number(rowNo)).getCell(i + 1).value = value
+  })
+}
+const vBuf = Buffer.from(await vwb.xlsx.writeBuffer())
+await vqDialog.getByLabel('견적서 파일').setInputFiles({
+  name: '가상음향_견적.xlsx',
+  mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  buffer: vBuf,
+})
+await vqDialog.getByRole('button', { name: '읽기' }).click()
+const vqRows = vqDialog.getByTestId('vendor-quote-rows')
+await vqRows.waitFor({ timeout: 10_000 })
+check((await vqRows.locator('tbody tr').count()) === 6, '읽기 → 확인 큐 6행(할인 행 포함)', `${await vqRows.locator('tbody tr').count()}행`)
+check(await vqDialog.getByLabel('별도(항목 금액 그대로 저장)').isChecked(), '부가세 줄 있음 → 별도 미리 선택')
+check((await vqDialog.getByTestId('vendor-quote-vat-needs').count()) === 0, "부가세 확실 → '확인 필요' 없음")
+const vqCheckText = await vqDialog.getByTestId('vendor-quote-check').innerText()
+check(/ = /.test(vqCheckText), '공급가 대조 일치(=)', vqCheckText.trim())
+check((await vqRows.locator('option', { hasText: 'PCO 기획료' }).count()) === 0, '원가 없는 버킷(PCO 기획료)은 선택지에 없음')
+await tab.screenshot({ path: resolve(SHOTS, '03-vendor-quote-review.png'), fullPage: true })
+await vqDialog.getByRole('button', { name: '확정 — 발주 항목 6개 만들기' }).click()
+await vqDialog.getByRole('heading', { name: '발주 항목 6개를 만들었습니다' }).waitFor({ timeout: 10_000 })
+check(true, '확정 → 발주 항목 6개')
+await vqDialog.getByRole('button', { name: '닫기' }).click()
+const vqList = vqSection.getByRole('list', { name: '불러온 견적서' })
+await vqList.waitFor({ timeout: 10_000 })
+await tab.waitForFunction(
+  () => /확정 · 항목 6개/.test(document.querySelector('[aria-label="불러온 견적서"]')?.textContent ?? ''),
+  null,
+  { timeout: 10_000 },
+)
+check(true, "이력: '확정 · 항목 6개'")
+check(docRequests.length === docBeforeVendor, '불러오기·확정에 전체 리로드 0', `${docBeforeVendor} → ${docRequests.length}`)
+await tab.screenshot({ path: resolve(SHOTS, '03-vendor-quote-done.png'), fullPage: true })
+await tab.evaluate(() => {
+  window.location.hash = '#/home?project=prj-rebuild27'
+})
+await tab.waitForFunction(
+  () => localStorage.getItem('communicator.currentProjectId') === 'prj-rebuild27' && location.hash === '#/home',
+  null,
+  { timeout: 10_000 },
+)
+check(true, '데모 기본 행사(RB27)로 되돌림 — ?project= 적용 후 주소에서 지워짐')
+
+// ── ③-이전(2026-09-25 Phase 6) Slack 알림 — 직전 세션 ③을 회귀 가드로 유지.
 //     행사 설정 ③ Slack 카드: 틀린 주소 → 형식 문구 + 등록 비활성 → Incoming Webhook 주소 → 등록 → 끝 토큰이 가려진 표시 →
 //     해제(확인창 수락). 데모는 mock이라 '테스트 보내기'가 없고 발송하지 않는다는 사실만 적는다. 홈 '담당에게 리마인드'도 mock 안내.
 const noticeS = tab.getByRole('button', { name: '안내 닫기' })

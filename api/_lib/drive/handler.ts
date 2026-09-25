@@ -3,6 +3,7 @@
 //   GET  ?code&state | ?error&state → OAuth 콜백(구글 동의 후 복귀) → /settings?drive=… 로 302
 //   GET  ?action=stream&t=…       → 서명 URL 파일 스트림(§7.4)
 //   PUT  ?action=upload-chunk     → 조각 중계(헤더 x-upload-ticket · content-range, 본문 = 바이트 ≤ 4MB)
+//   PUT  ?action=settlement-file  → v15 협력사 견적서 원본 보관(Bearer · import_id · name, 본문 = 바이트 ≤ 4MB)
 //   POST {action, …}              → JSON 액션(로그인 필요한 것은 Authorization: Bearer <Supabase 액세스 토큰>)
 import { driveConfigured } from './auth.js'
 import { DriveError, errorResponse, json } from './errors.js'
@@ -21,6 +22,7 @@ import {
   oauthStart,
   requireUser,
   scanOp,
+  settlementFileOp,
   streamOp,
   uploadChunkOp,
   uploadCommitOp,
@@ -73,6 +75,23 @@ export async function handleDriveRequest(request: Request, env: DriveEnv, deps: 
     }
 
     if (request.method === 'PUT') {
+      if (action === 'settlement-file') {
+        // v15(§19.5) 협력사 견적서 원본 — 로그인 세션 + 쿼리(import_id·name), 본문 = 파일 바이트(4MB 이하)
+        const jwt = bearer(request)
+        await requireUser(ctx, jwt)
+        const bytes = new Uint8Array(await request.arrayBuffer())
+        return json(
+          200,
+          await settlementFileOp(
+            ctx,
+            jwt,
+            url.searchParams.get('import_id') ?? '',
+            url.searchParams.get('name') ?? '',
+            request.headers.get('content-type') ?? 'application/octet-stream',
+            bytes,
+          ),
+        )
+      }
       if (action !== 'upload-chunk') return json(405, { error: { code: 'validation', message: '허용되지 않는 요청입니다.' } })
       const bytes = new Uint8Array(await request.arrayBuffer())
       return json(200, await uploadChunkOp(ctx, request.headers.get('x-upload-ticket'), request.headers.get('content-range'), bytes))
