@@ -19,7 +19,7 @@ function mockProvider(): MockProvider {
 async function openIntegrationTab() {
   renderRoute('/settings')
   await screen.findByRole('heading', { name: '행사 설정' })
-  await userEvent.click(await screen.findByRole('button', { name: '③ 유형·연동' }))
+  await userEvent.click(await screen.findByRole('button', { name: '유형·연동' }))
   await screen.findByRole('heading', { name: '파트너 안내 창구' })
 }
 

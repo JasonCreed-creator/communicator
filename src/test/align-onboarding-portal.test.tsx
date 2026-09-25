@@ -2,8 +2,9 @@
 // Phase 3.17b — 시안 '온보딩 · 파트너 포털.dc.html' 정렬 계약.
 //
 // 이 파일이 지키는 것(정렬로 새로 생긴 계약만 — 기존 DoD-10·20·32·33은 각자 파일이 계속 지킨다):
-//  ① 온보딩 카드 상단 = 전체 진행 막대 + '필수 n개 남음'(행사 설정 헤더와 같은 필수 4 정의)
-//  ② 스텝 레일은 StepIndicator 규격 그대로 — 28px 원 · 완료 CheckIcon · 현재 2px 아웃라인 · 세로 레일
+//  ① 온보딩 카드 상단 = 단계 줄 + 'n단계 중 k단계 · 필수 4개 중 m개 입력' + 막대(행사 설정과 같은 필수 4 정의)
+//     — Phase 3.23 PR-8(§7-2.12): 막대는 필수 입력을 센다. 1단계에서는 저장 전 입력을 따라간다
+//  ② 단계 줄(PR-8 가로형) — 지난 단계 = 체크 · 지금 = aria-current="step" + accent 링 · 연결선은 단계 사이에만
 //  ③ '완료하면 이렇게 됩니다'는 steel 배너 — 되돌리기 비용이 큰 동작을 누르기 전에 밝힌다
 //  ④ 포털 각 제출에 수신 경로 — PM 접수 대장(RECEIPT_CHANNEL_LABELS)과 **같은 문자열**
 //  ⑤ 포털은 외부 지면 규격 — 터치 44(btn-sm 28 금지) · 밀집 표 금지 · 1열 스택
@@ -62,52 +63,62 @@ function makeItem(overrides: Partial<PartnerPortalItem> = {}): PartnerPortalItem
 /** ①행사개요 → ②담당자 → ③유형·확인까지 진행한 위저드 */
 async function gotoStep3(user: ReturnType<typeof userEvent.setup>) {
   renderRoute('/onboarding')
-  await screen.findByRole('heading', { name: '① 행사개요' })
+  await screen.findByRole('heading', { name: '행사 기본 정보' })
   await screen.findByLabelText('행사명')
-  await user.click(screen.getByRole('button', { name: '다음' }))
-  await screen.findByRole('heading', { name: '② 담당자' })
-  await user.click(await screen.findByRole('button', { name: '다음' }))
-  await screen.findByRole('heading', { name: '③ 유형·확인' })
+  await user.click(screen.getByRole('button', { name: '다음: 담당자' }))
+  await screen.findByRole('heading', { name: '담당자 배정' })
+  await user.click(await screen.findByRole('button', { name: '다음: 유형·확인' }))
+  await screen.findByRole('heading', { name: '유형 고르고 확인' })
 }
 
 describe('S0 온보딩 — 진행 막대·스텝 레일·완료 안내', () => {
-  it('① 카드 상단에 진행 막대와 "필수 n개 남음"이 있고, 단계가 넘어가면 채워진다', async () => {
+  it('① 진행 줄 = "n단계 중 k단계 · 필수 4개 중 m개 입력" + 막대 — 1단계에서는 칸을 채우는 대로 따라간다', async () => {
     mockProvider().resetOnboarding()
     const user = userEvent.setup()
 
     renderRoute('/onboarding')
-    await screen.findByRole('heading', { name: '① 행사개요' })
-
-    const strip = screen.getByTestId('onboarding-progress')
-    // 픽스처 샘플 행사는 필수 4가 모두 채워져 있다 → 0개 남음
-    expect(within(strip).getByText('3단계 중 0단계 완료 · 필수 0개 남음')).toBeTruthy()
-    const fill = strip.querySelector('.bg-accent, .bg-positive') as HTMLElement
-    expect(fill.style.width).toBe('0%')
-
+    await screen.findByRole('heading', { name: '행사 기본 정보' })
     await screen.findByLabelText('행사명')
-    await user.click(screen.getByRole('button', { name: '다음' }))
-    await screen.findByRole('heading', { name: '② 담당자' })
 
-    const strip2 = screen.getByTestId('onboarding-progress')
-    expect(within(strip2).getByText('3단계 중 1단계 완료 · 필수 0개 남음')).toBeTruthy()
-    expect((strip2.querySelector('.bg-accent, .bg-positive') as HTMLElement).style.width).toBe('33%')
+    const text = () => screen.getByTestId('onboarding-progress-text').textContent
+    const fill = () => screen.getByTestId('onboarding-progress').querySelector('.bg-accent, .bg-positive') as HTMLElement
+    // 픽스처 샘플 행사는 필수 4가 모두 채워져 있다 → 4개 중 4개 · 막대 100%는 positive
+    expect(text()).toBe('3단계 중 1단계 · 필수 4개 중 4개 입력')
+    expect(fill().style.width).toBe('100%')
+    expect(fill().className).toContain('bg-positive')
+
+    // 저장 전 입력을 센다 — 장소를 비우면 곧바로 3개 · 75% · accent
+    const venue = screen.getByLabelText('장소')
+    await user.clear(venue)
+    expect(text()).toBe('3단계 중 1단계 · 필수 4개 중 3개 입력')
+    expect(fill().style.width).toBe('75%')
+    expect(fill().className).toContain('bg-accent')
+    await user.type(venue, '가상 컨벤션홀')
+    expect(text()).toBe('3단계 중 1단계 · 필수 4개 중 4개 입력')
+
+    await user.click(screen.getByRole('button', { name: '다음: 담당자' }))
+    await screen.findByRole('heading', { name: '담당자 배정' })
+    expect(text()).toBe('3단계 중 2단계 · 필수 4개 중 4개 입력')
   })
 
-  it('② 스텝 레일 규격 — 28px 원 · 완료 체크 아이콘 · 현재 단계 2px 아웃라인 · 세로 레일', async () => {
+  it('② 단계 줄 — 지난 단계는 체크, 지금 단계만 aria-current="step" + accent 링, 연결선은 단계 사이 2개', async () => {
     const user = userEvent.setup()
     await gotoStep3(user)
 
     const rail = screen.getByRole('list', { name: '온보딩 단계' })
-    const circles = rail.querySelectorAll('span.h-7.w-7')
-    expect(circles).toHaveLength(3)
-    // 완료 2단계는 accent 면 + 체크 아이콘, 현재(③)는 2px accent 아웃라인
-    expect(circles[0].querySelector('svg')).not.toBeNull()
-    expect(circles[1].querySelector('svg')).not.toBeNull()
-    expect(circles[2].className).toContain('border-2')
-    expect(circles[2].className).toContain('border-accent')
-    expect(circles[2].getAttribute('aria-current')).toBe('step')
-    // 세로 레일(연결선)은 마지막을 제외한 원 아래에 붙는다
-    expect(rail.querySelectorAll('.sm\\:w-px').length).toBe(2)
+    // 연결선 li는 aria-hidden — 접근성 트리에는 단계 3개만
+    const steps = within(rail).getAllByRole('listitem')
+    // 원 안은 지난 단계면 체크, 아니면 번호 — 라벨은 원 옆 글자
+    expect(steps.map((li) => li.lastElementChild?.textContent)).toEqual(['행사 개요', '담당자', '유형·확인'])
+    expect(steps[2].firstElementChild?.textContent).toBe('3')
+    expect(steps[0].querySelector('svg')).not.toBeNull()
+    expect(steps[1].querySelector('svg')).not.toBeNull()
+    expect(steps[2].querySelector('svg')).toBeNull()
+    expect(steps.map((li) => li.getAttribute('aria-current'))).toEqual([null, null, 'step'])
+    const now = steps[2].querySelector('span') as HTMLElement
+    expect(now.className).toContain('bg-accent-tint')
+    expect(now.className).toContain('var(--accent)')
+    expect(rail.querySelectorAll('li[aria-hidden]').length).toBe(2)
   })
 
   it('③ "완료하면 이렇게 됩니다"가 steel 배너로 승격되고 전개 결과를 완료 버튼 앞에 밝힌다', async () => {

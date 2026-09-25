@@ -1,15 +1,21 @@
-// S6 행사 설정 — 3탭: ①행사개요 ②담당자 ③유형·연동 (설계서 v1.5 §10 S6).
-// ①탭은 S0 온보딩 ①단계와 동일한 ProjectOverviewForm을 재사용한다.
+// S6 행사 설정 — 3탭: 개요 · 담당자 · 유형·연동 (설계서 v1.5 §10 S6).
+// 개요 탭은 S0 온보딩 1단계와 동일한 ProjectOverviewForm을 재사용한다(배치만 layout으로 다르다).
 // pm이 아니면 각 편집 컴포넌트가 읽기 전용으로 전환된다(표시는 유지, 쓰기만 숨김/비활성).
 //
 // Phase 3.17 시안 정렬(행사 설정 · 행사 목록.dc.html §행사 설정):
-//  · 상단 필수 4항목 체크 스트립 — 탭을 열지 않고도 무엇이 비었는지 안다.
+//  · 상단 필수 4항목 체크 스트립 — 탭을 열지 않고도 무엇이 비었는지 안다(PR-8에서 탭 줄 요약으로 대체).
 //  · 탭 라벨에 미입력 개수 배지(필수=accent · 선택=중립). 배지는 aria-hidden이고
 //    개수는 버튼 title로 전달한다 — 탭의 접근 가능한 이름을 흔들지 않기 위해서다.
 //  · Drive·Slack 미연결 자리를 빈 상태 정본(②)으로 — 무엇이 좋아지는지 + 언제 열리는지.
 //  · v2.10.1(Phase 6): Slack 자리는 SlackCard — 행사 채널 등록·해제·테스트(pm), 공용 채널·크론 상태.
 //    게이트 뒤에 숨기지 않는다(§10 진입점 원칙).
 //  · v2.9(Phase 5): Drive 자리는 DriveCard — 연결 상태·저장소·이 행사 폴더(만들기·기존 폴더 지정)·관리자 연결.
+//
+// Phase 3.23 PR-8(디자인지시서 v1.4 §7-2.12 · 캔버스 '행사 설정 — 섹션과 고정 저장 바'):
+//  · 탭 이름 = 개요 · 담당자 · 유형·연동(번호 없음) · 탭 줄 오른쪽에 필수 요약(비었으면 무엇이 비었는지 이름으로)
+//  · 옛 필수 4항목 체크 스트립 카드 퇴역 — 요약은 탭 줄, 칸별 표시는 개요의 섹션 카드('필수 2')와 칸 오류가 맡는다
+//  · 개요 = 섹션 목록 + 섹션 카드 + 고정 저장 바(ProjectOverviewForm layout='settings')
+//  · 머리 상태 배지 = 세팅 완료(정상) / 세팅 미완료(주의 — 빨강은 지연 전용 §7-2)
 //
 // v2.8 §4-1c — ③탭 맨 아래 위험 구역(행사 삭제). 권한 축이 이 화면의 다른 조작과 다르다:
 //  다른 편집은 전부 이 행사의 pm이 하지만 삭제만 **전역 app_role='admin'**이다. admin이 아니어도
@@ -31,7 +37,8 @@ import PartnerGuideEditor from '../components/settings/PartnerGuideEditor'
 import PartnerTierEditor from '../components/settings/PartnerTierEditor'
 import ProjectKindCards from '../components/settings/ProjectKindCards'
 import ProjectOverviewForm from '../components/settings/ProjectOverviewForm'
-import { REQUIRED_FIELDS, filledRequired } from '../components/settings/requiredFields'
+import { REQUIRED_FIELDS, filledRequired, missingRequired } from '../components/settings/requiredFields'
+import { LevelBadge } from '../components/internal/StatusBadge'
 import { useProject } from '../context/ProjectContext'
 import { useAsync } from '../hooks/useAsync'
 import { externalViewUrl } from '../lib/externalLink'
@@ -44,9 +51,9 @@ const provider = getDataProvider()
 
 type Tab = 'overview' | 'members' | 'integration'
 const TABS: { id: Tab; label: string }[] = [
-  { id: 'overview', label: '① 행사개요' },
-  { id: 'members', label: '② 담당자' },
-  { id: 'integration', label: '③ 유형·연동' },
+  { id: 'overview', label: '개요' },
+  { id: 'members', label: '담당자' },
+  { id: 'integration', label: '유형·연동' },
 ]
 
 /** Phase 4.3.1 — `?tab=members|integration` 딥링크(업로드·발송 경고 상자의 '행사 설정 ②·③' 링크). 모르는 값은 무시 */
@@ -143,6 +150,7 @@ export default function SettingsPage() {
 
   const filled = project.data ? filledRequired(project.data) : new Set<string>()
   const missingCount = REQUIRED_FIELDS.length - filled.size
+  const missing = project.data ? missingRequired(project.data) : []
   const onboarded = !!project.data?.onboarded_at
 
   // 탭별 미입력 — ①은 필수 4 + 선택 개요 4, ②는 PM 지정(필수)·연락 창구(선택), ③은 연동 2종(선택)
@@ -194,16 +202,16 @@ export default function SettingsPage() {
         action={
           project.data ? (
             onboarded ? (
-              <span className="inline-flex items-center rounded-full bg-positive-tint px-3 py-1 text-xs font-medium text-positive">
-                세팅 완료 · {formatDate((project.data.onboarded_at as string).slice(0, 10))}
-              </span>
+              <LevelBadge
+                level="positive"
+                label={`세팅 완료 · ${formatDate((project.data.onboarded_at as string).slice(0, 10))}`}
+              />
             ) : (
-              <span className="inline-flex items-center rounded-full bg-negative-tint px-3 py-1 text-xs font-medium text-negative">
-                {/* 3.10.1 R5 — 필수 4가 모두 입력돼도 온보딩 미완료면 '필수 0개 남음' 대신 확인 유도 문구 */}
-                {missingCount === 0
-                  ? '세팅 미완료 · 온보딩 확인 필요'
-                  : `세팅 미완료 · 필수 ${missingCount}개 남음`}
-              </span>
+              // 3.10.1 R5 — 필수 4가 모두 입력돼도 온보딩 미완료면 '필수 0개 남음' 대신 확인 유도 문구
+              <LevelBadge
+                level="attention"
+                label={missingCount === 0 ? '세팅 미완료 · 온보딩 확인 필요' : `세팅 미완료 · 필수 ${missingCount}개 남음`}
+              />
             )
           ) : undefined
         }
@@ -212,49 +220,6 @@ export default function SettingsPage() {
       <ErrorAlert message={project.error} />
       <ErrorAlert message={currentUser.error} />
       {project.loading && <p className="text-sm text-ink-cap">불러오는 중…</p>}
-
-      {/* 필수 4항목 체크 스트립 — 탭 밖에서 무엇이 비었는지 읽힌다 */}
-      {project.data && (
-        <div
-          data-testid="required-strip"
-          className="ui-card flex flex-wrap items-center gap-x-6 gap-y-2 px-5 py-3.5"
-        >
-          <span className="t-caption">필수 항목</span>
-          {REQUIRED_FIELDS.map((f) => {
-            const done = filled.has(f.key)
-            return (
-              <span
-                key={f.key}
-                data-testid={`required-${f.key}`}
-                data-filled={done ? 'true' : 'false'}
-                className="inline-flex items-center gap-2 text-sm"
-              >
-                <span
-                  aria-hidden
-                  className={`inline-flex size-[18px] shrink-0 items-center justify-center rounded-full ${
-                    done ? 'bg-positive' : 'border border-border bg-track'
-                  }`}
-                >
-                  {done && (
-                    <svg viewBox="0 0 20 20" className="size-[11px] fill-white">
-                      <path d="M16.7 5.3a1 1 0 0 1 0 1.4l-7.5 7.5a1 1 0 0 1-1.4 0L3.3 9.7a1 1 0 1 1 1.4-1.4l3.8 3.8 6.8-6.8a1 1 0 0 1 1.4 0Z" />
-                    </svg>
-                  )}
-                </span>
-                <span className={done ? 'text-ink' : 'text-ink-sub'}>{f.label}</span>
-              </span>
-            )
-          })}
-          <span data-testid="required-summary" className="ml-auto text-xs text-ink-cap">
-            {filled.size}/{REQUIRED_FIELDS.length} 입력
-            {missingCount > 0
-              ? ' — 입력해야 행사를 활성화할 수 있습니다'
-              : onboarded
-                ? ' — 행사가 활성화되어 있습니다'
-                : ' — 온보딩 확인만 남았습니다'}
-          </span>
-        </div>
-      )}
 
       {project.data && !onboarded && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-accent/30 bg-accent-tint px-4 py-3 text-sm text-ink">
@@ -275,7 +240,8 @@ export default function SettingsPage() {
 
       {project.data && (
         <>
-          <div className="flex gap-1 border-b border-border">
+          <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-1 border-b border-border">
+            <div className="flex gap-1">
             {TABS.map((t) => {
               const gap = gaps[t.id]
               const count = gap.required > 0 ? gap.required : gap.optional
@@ -290,8 +256,9 @@ export default function SettingsPage() {
                       ? `${t.label} — ${tone === 'required' ? '필수' : '선택'} 미입력 ${count}건`
                       : undefined
                   }
-                  className={`flex items-center gap-1.5 border-b-2 px-4 py-2 text-sm font-medium ${
-                    tab === t.id ? 'border-accent text-ink' : 'border-transparent text-ink-sub hover:text-ink'
+                  aria-current={tab === t.id ? 'page' : undefined}
+                  className={`-mb-px flex items-center gap-1.5 border-b-2 px-4 pb-3 pt-2.5 text-sm ${
+                    tab === t.id ? 'border-accent font-semibold text-ink' : 'border-transparent font-medium text-ink-sub hover:text-ink'
                   }`}
                 >
                   {t.label}
@@ -310,12 +277,17 @@ export default function SettingsPage() {
                 </button>
               )
             })}
+            </div>
+            {/* 필수 요약 — 옛 체크 스트립을 대신한다. 비었으면 무엇이 비었는지 이름으로 */}
+            <span data-testid="required-summary" className="t-caption pb-2.5">
+              {missingCount === 0
+                ? `필수 ${REQUIRED_FIELDS.length}개 모두 입력됨`
+                : `필수 ${missingCount}개 남음 — ${missing.map((f) => f.label).join(' · ')}`}
+            </span>
           </div>
 
           {tab === 'overview' && (
-            <Card title="행사개요">
-              <ProjectOverviewForm projectId={projectId} onSaved={handleSaved} readOnly={!isPm} />
-            </Card>
+            <ProjectOverviewForm projectId={projectId} onSaved={handleSaved} readOnly={!isPm} layout="settings" />
           )}
 
           {tab === 'members' && (

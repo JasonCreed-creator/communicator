@@ -17,7 +17,7 @@ import { mockProvider, renderRoute } from './testUtils'
 const provider = mockProvider()
 const SAMPLE_NAME = '샘플 테크 컨퍼런스 2026'
 const STORAGE_KEY = 'communicator.currentProjectId'
-const TAB_INTEGRATION = '③ 유형·연동'
+const TAB_INTEGRATION = '유형·연동'
 
 afterEach(() => {
   cleanup()
@@ -158,6 +158,6 @@ describe('DoD 58 화면 — 행사 0건 새 출발 (파괴적 · 이 파일 마�
 
     // 새 행사가 만들어지고 S0 위저드로 들어간다 — 빈 상태에서 튕기지 않는다
     await waitFor(async () => expect((await provider.listProjects()).length).toBe(1))
-    expect(await screen.findByRole('heading', { name: '① 행사개요' })).toBeTruthy()
+    expect(await screen.findByRole('heading', { name: '행사 기본 정보' })).toBeTruthy()
   })
 })

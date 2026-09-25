@@ -82,7 +82,7 @@ describe('DoD-24 §16 핸드오프 (provider)', () => {
     const blank = await provider.createProject({})
     localStorage.setItem('communicator.currentProjectId', blank.id)
     renderRoute('/onboarding')
-    await screen.findByText('온보딩 위저드')
+    await screen.findByRole('heading', { name: '행사 기본 정보' })
     expect(screen.queryByTestId('quote-prefill-banner')).toBeNull()
     localStorage.removeItem('communicator.currentProjectId')
   })

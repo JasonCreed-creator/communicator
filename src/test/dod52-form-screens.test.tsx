@@ -26,11 +26,11 @@ async function openPlanner() {
 async function openFormatStep() {
   localStorage.setItem('communicator.currentProjectId', 'prj-forum-h2')
   renderRoute('/onboarding')
-  await screen.findByRole('heading', { name: '① 행사개요' })
-  fireEvent.click(await screen.findByRole('button', { name: '다음' }))
-  await screen.findByRole('heading', { name: '② 담당자' })
-  fireEvent.click(await screen.findByRole('button', { name: '다음' }))
-  await screen.findByRole('heading', { name: '③ 유형·확인' })
+  await screen.findByRole('heading', { name: '행사 기본 정보' })
+  fireEvent.click(await screen.findByRole('button', { name: '다음: 담당자' }))
+  await screen.findByRole('heading', { name: '담당자 배정' })
+  fireEvent.click(await screen.findByRole('button', { name: '다음: 유형·확인' }))
+  await screen.findByRole('heading', { name: '유형 고르고 확인' })
 }
 
 describe('DoD 52-A 판매 플래너 ① — 버튼 위계·금액·체크 (§10)', () => {

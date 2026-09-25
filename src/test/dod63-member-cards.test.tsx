@@ -54,8 +54,8 @@ describe('DoD-63 ① 미리 배치하지 않는다', () => {
   it('새 행사 온보딩 ②: PM 칸에 만든 사람만 있고, 나머지 칸은 비어 있으며, 주소록은 카드로 기다린다', async () => {
     localStorage.setItem('communicator.currentProjectId', projectId)
     renderRoute('/onboarding')
-    await userEvent.click(await screen.findByRole('button', { name: '다음' }))
-    expect(await screen.findByRole('heading', { name: '② 담당자' })).toBeTruthy()
+    await userEvent.click(await screen.findByRole('button', { name: '다음: 담당자' }))
+    expect(await screen.findByRole('heading', { name: '담당자 배정' })).toBeTruthy()
 
     expect(await within(lane('PM')).findByText('김기획')).toBeTruthy()
     for (const label of ['디자인', '운영', '등록'] as const) {
@@ -79,7 +79,7 @@ describe('DoD-63 ②·③ 카드를 누르거나 끌어놓아 배정한다', () 
   it('누르기: 카드 → 역할 버튼 → 운영 칸에 배정, 주소록 카드에서는 사라진다', async () => {
     localStorage.setItem('communicator.currentProjectId', projectId)
     renderRoute('/settings')
-    await userEvent.click(await screen.findByRole('button', { name: '② 담당자' }))
+    await userEvent.click(await screen.findByRole('button', { name: '담당자' }))
 
     const card = await within(pool()).findByRole('button', { name: '박운영 역할 고르기' })
     expect(card.getAttribute('aria-expanded')).toBe('false')
@@ -102,7 +102,7 @@ describe('DoD-63 ②·③ 카드를 누르거나 끌어놓아 배정한다', () 
   it('키보드: 카드에서 Enter로 역할 버튼을 연다(끌기를 못 쓰는 환경의 같은 경로)', async () => {
     localStorage.setItem('communicator.currentProjectId', projectId)
     renderRoute('/settings')
-    await userEvent.click(await screen.findByRole('button', { name: '② 담당자' }))
+    await userEvent.click(await screen.findByRole('button', { name: '담당자' }))
 
     const card = await within(pool()).findByRole('button', { name: '최등록 역할 고르기' })
     card.focus()
@@ -118,7 +118,7 @@ describe('DoD-63 ②·③ 카드를 누르거나 끌어놓아 배정한다', () 
   it('끌어놓기: 카드를 디자인 칸에 놓으면 배정된다 — 끄는 동안 칸이 받을 자리를 보여 준다', async () => {
     localStorage.setItem('communicator.currentProjectId', projectId)
     renderRoute('/settings')
-    await userEvent.click(await screen.findByRole('button', { name: '② 담당자' }))
+    await userEvent.click(await screen.findByRole('button', { name: '담당자' }))
 
     const cardItem = (await within(pool()).findByText('이디자')).closest('[data-person-card]') as HTMLElement
     expect(cardItem.getAttribute('draggable')).toBe('true')
@@ -143,7 +143,7 @@ describe('DoD-63 ②·③ 카드를 누르거나 끌어놓아 배정한다', () 
   it('파일처럼 사람 카드가 아닌 끌기에는 반응하지 않는다', async () => {
     localStorage.setItem('communicator.currentProjectId', projectId)
     renderRoute('/settings')
-    await userEvent.click(await screen.findByRole('button', { name: '② 담당자' }))
+    await userEvent.click(await screen.findByRole('button', { name: '담당자' }))
     await within(pool()).findByText('최등록')
 
     const files = dataTransfer({ Files: '' })
@@ -164,7 +164,7 @@ describe('DoD-63 ④ 빼기', () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     localStorage.setItem('communicator.currentProjectId', projectId)
     renderRoute('/settings')
-    await userEvent.click(await screen.findByRole('button', { name: '② 담당자' }))
+    await userEvent.click(await screen.findByRole('button', { name: '담당자' }))
 
     const opsCard = (await within(lane('운영')).findByText('박운영')).closest('[data-member-card]') as HTMLElement
     await userEvent.click(within(opsCard).getByRole('button', { name: '박운영 빼기' }))

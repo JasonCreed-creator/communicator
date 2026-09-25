@@ -61,7 +61,7 @@ describe('DoD-53 (a) 전자명함 임포트 — 직함·전화가 저장된다',
     localStorage.setItem('communicator.currentProjectId', 'prj-stc26')
     renderRoute('/settings')
     await screen.findByRole('heading', { name: '행사 설정' })
-    await userEvent.click(await screen.findByRole('button', { name: '② 담당자' }))
+    await userEvent.click(await screen.findByRole('button', { name: '담당자' }))
     await screen.findByText('김기획')
 
     // 대조군: 기존 담당자 카드도 직함·전화를 보여 준다(픽스처가 실제로 값을 싣고 있다)

@@ -19,7 +19,7 @@ describe('성격 카드 — 확인 다이얼로그 후 전환 (R-H1)', () => {
     vi.spyOn(window, 'confirm').mockReturnValue(false)
     renderRoute('/settings')
     await screen.findByRole('heading', { name: '행사 설정' })
-    await userEvent.click(await screen.findByRole('button', { name: '③ 유형·연동' }))
+    await userEvent.click(await screen.findByRole('button', { name: '유형·연동' }))
 
     await userEvent.click(await screen.findByRole('button', { name: /대행형/ }))
     expect(window.confirm).toHaveBeenCalledOnce()
@@ -39,7 +39,7 @@ describe('성격 카드 — 확인 다이얼로그 후 전환 (R-H1)', () => {
     // 대행형으로 전환
     renderRoute('/settings')
     await screen.findByRole('heading', { name: '행사 설정' })
-    await userEvent.click(await screen.findByRole('button', { name: '③ 유형·연동' }))
+    await userEvent.click(await screen.findByRole('button', { name: '유형·연동' }))
     await userEvent.click(await screen.findByRole('button', { name: /^대행형/ }))
     await waitFor(async () => expect((await mockProvider().getProject(PROJECT_ID_HOST)).kind).toBe('agency'))
     cleanup()
@@ -56,7 +56,7 @@ describe('성격 카드 — 확인 다이얼로그 후 전환 (R-H1)', () => {
     // 다시 주최형으로 복원
     renderRoute('/settings')
     await screen.findByRole('heading', { name: '행사 설정' })
-    await userEvent.click(await screen.findByRole('button', { name: '③ 유형·연동' }))
+    await userEvent.click(await screen.findByRole('button', { name: '유형·연동' }))
     await userEvent.click(await screen.findByRole('button', { name: /^주최형/ }))
     await waitFor(async () => expect((await mockProvider().getProject(PROJECT_ID_HOST)).kind).toBe('host'))
     cleanup()

@@ -24,7 +24,7 @@ describe('옛 라우트 리다이렉트 (§10)', () => {
 
   it('/setup → /onboarding', async () => {
     renderRoute('/setup')
-    await screen.findByText('온보딩 위저드')
+    await screen.findByRole('heading', { name: '행사 기본 정보' })
   })
 
   it('/events → /projects (행사 목록)', async () => {

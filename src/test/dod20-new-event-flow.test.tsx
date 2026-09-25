@@ -19,7 +19,7 @@ describe('DoD-20 새 행사 흐름·유도', () => {
     await userEvent.click(screen.getAllByRole('button', { name: '＋ 새 행사 만들기' })[0])
 
     // 새 행사가 생성되고 S0 위저드 ①로 진입 (자리표시 이름 '새 행사')
-    await screen.findByRole('heading', { name: '① 행사개요' })
+    await screen.findByRole('heading', { name: '행사 기본 정보' })
     const after = await p.listProjects()
     const created = after.find((s) => !before.some((b) => b.id === s.id))!
     expect(created).toBeTruthy()
@@ -32,14 +32,14 @@ describe('DoD-20 새 행사 흐름·유도', () => {
     await userEvent.type(nameInput, '신규 워크숍 2026')
     fireEvent.change(screen.getByLabelText('시작일'), { target: { value: '2026-12-01' } })
     await userEvent.type(screen.getByLabelText('장소'), '가상러닝센터 2F')
-    await userEvent.click(screen.getByRole('button', { name: '다음' }))
+    await userEvent.click(screen.getByRole('button', { name: '다음: 담당자' }))
 
     // ② 담당자(생성자=pm 자동) → 다음
-    await screen.findByRole('heading', { name: '② 담당자' })
-    await userEvent.click(await screen.findByRole('button', { name: '다음' }))
+    await screen.findByRole('heading', { name: '담당자 배정' })
+    await userEvent.click(await screen.findByRole('button', { name: '다음: 유형·확인' }))
 
     // ③ 유형·확인 — 기본 일반형 유지 → 완료
-    await screen.findByRole('heading', { name: '③ 유형·확인' })
+    await screen.findByRole('heading', { name: '유형 고르고 확인' })
     const generalRadio = (await screen.findByRole('radio', { name: /일반형/ })) as HTMLInputElement
     expect(generalRadio.checked).toBe(true)
     await userEvent.click(screen.getByRole('button', { name: '온보딩 완료' }))
@@ -65,6 +65,6 @@ describe('DoD-20 새 행사 흐름·유도', () => {
     // 유도 배너의 '온보딩 이어서 하기' → S0 위저드
     // 배너는 행사 설정 헤딩과 별개의 useAsync(온보딩 상태)에 달려 있다
     await userEvent.click(await screen.findByRole('button', { name: '온보딩 이어서 하기' }))
-    expect(await screen.findByRole('heading', { name: '온보딩 위저드' })).toBeTruthy()
+    expect(await screen.findByRole('heading', { name: '행사 기본 정보' })).toBeTruthy()
   })
 })

@@ -42,7 +42,7 @@ describe('DoD-19 행사 설정 3탭', () => {
     renderRoute('/settings')
     await screen.findByRole('heading', { name: '행사 설정' })
 
-    await userEvent.click(await screen.findByRole('button', { name: '② 담당자' }))
+    await userEvent.click(await screen.findByRole('button', { name: '담당자' }))
     expect(await screen.findByText('김기획')).toBeTruthy()
 
     // 마지막 PM(김기획) 빼기 시도 → 409 메시지 (Phase 3.22 — 배정 현황은 표가 아니라 역할 칸의 카드)

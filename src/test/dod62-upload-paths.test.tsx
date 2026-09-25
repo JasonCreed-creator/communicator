@@ -169,7 +169,7 @@ describe('DoD 62 · ④ 행사 설정 ③ Drive 카드 (실서버 모드)', () =
     setDriveNavigator((url) => went.push(url))
     renderRoute('/settings')
     await screen.findByRole('heading', { name: '행사 설정' })
-    await userEvent.click(screen.getByRole('button', { name: '③ 유형·연동' }))
+    await userEvent.click(screen.getByRole('button', { name: '유형·연동' }))
     const card = await screen.findByTestId('drive-card')
     await within(card).findByRole('button', { name: 'Drive 연결하기' })
     // 상태 칩은 카드 헤더(action 슬롯)에 있다
@@ -185,7 +185,7 @@ describe('DoD 62 · ④ 행사 설정 ③ Drive 카드 (실서버 모드)', () =
     // 픽스처 행사의 폴더 id는 자리표시('drv-root-…')라 실제 폴더로 치지 않는다 → "만들기"가 보여야 한다
     renderRoute('/settings')
     await screen.findByRole('heading', { name: '행사 설정' })
-    await userEvent.click(screen.getByRole('button', { name: '③ 유형·연동' }))
+    await userEvent.click(screen.getByRole('button', { name: '유형·연동' }))
     const card = await screen.findByTestId('drive-card')
     await within(card).findByText('owner@company.example')
     await userEvent.click(within(card).getByRole('button', { name: '행사 폴더 만들기' }))

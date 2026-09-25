@@ -59,13 +59,16 @@ describe('DoD-25 (b) 행사 설정 ① 모객형 그룹', () => {
     localStorage.setItem('communicator.currentProjectId', 'prj-stc26')
     renderRoute('/settings')
     const group = await screen.findByTestId('recruiting-group')
-    expect(group.textContent).toContain('모객형 전용')
+    // PR-8(§7-2.12) — 모객형 전용 그룹은 섹션 카드 '모객 설정'이 되고, 캡션이 모객형에만 보인다는 사실을 말한다
+    const section = screen.getByRole('region', { name: '모객 설정' })
+    expect(section.contains(group)).toBe(true)
+    expect(section.textContent).toContain('모객형 행사에만 보입니다')
     const guarantee = (await screen.findByLabelText('보장 인원(게런티)')) as HTMLInputElement
     expect(guarantee.value).toBe('80')
     const kpi = (await screen.findByLabelText('쇼업 KPI (%)')) as HTMLInputElement
     expect(kpi.value).toBe('90')
-    // 타겟팅 5축 칩 — 픽스처 선택값이 활성 칩으로
-    expect(group.textContent).toContain('타겟팅 5축')
+    // 타겟팅 5축 칩 — 픽스처 선택값이 고른 조건 칩으로(PR-8: 요약 칩 + '조건 편집')
+    expect(group.textContent).toContain('타겟팅 · 고른 조건')
     expect(group.textContent).toContain('IT/통신')
     // 연결 견적 링크 (quote_id = quo-003 v3 확정)
     await screen.findByText(/견적 v3 확정 기준/)
