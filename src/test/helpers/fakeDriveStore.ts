@@ -59,6 +59,9 @@ export function createFakeDriveStore() {
       const p = [...projects.values()].find((x) => x.drive_root_folder_id === folderId)
       return p ? { id: p.id } : null
     },
+    async deliverableExists(deliverableId) {
+      return deliverables.has(deliverableId)
+    },
     async uploadCheck(jwt, deliverableId) {
       const u = userByJwt(jwt)
       const d = deliverables.get(deliverableId)

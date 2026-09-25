@@ -10,7 +10,8 @@
 //      (3.18: 판매 플래너 3스텝 · S0 ③ 유형 4카드 · 3.21: 런처 · Phase 4c: 로그인 게이트 · 4.2: 견적 내보내기 ·
 //       Phase 5: 업로드 3경로 — 파일 선택 여러 개·끌어놓기·Drive 링크 등록 ·
 //       3.22: 담당자 배정 카드 — 빼기 → 끌어놓기 배정 · 빼기 → 누르기 배정 ·
-//       4.3.1: 업로드 잠금 안내 — 컨펌대기 항목은 고르기·업로드 대신 이유, 헤더 버튼 비활성)
+//       4.3.1: 업로드 잠금 안내 — 컨펌대기 항목은 고르기·업로드 대신 이유, 헤더 버튼 비활성 ·
+//       4.5: 항목 고치기·지우기 — 제목 고쳐 저장 → 이름 입력 확인 후 지우기 → 보드 복귀)
 // 캡처는 dist-demo/shots-interaction/ 에 남긴다. 실패 시 exit 1.
 import { createServer } from 'node:http'
 import { readFileSync, mkdirSync } from 'node:fs'
@@ -144,7 +145,49 @@ check(
   `${docCountBefore} → ${docRequests.length}`,
 )
 
-// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — **Phase 4.3.1 업로드 잠금 안내(2026-09-25)**.
+// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — **Phase 4.5 항목 고치기·지우기(2026-09-25)**.
+//     RB27 '유튜브 중계 템플릿'(dlv-rb27-prd-005): 보드에 있는지 먼저 보고 → 항목 관리 카드 → 고치기 → 제목 바꿔 저장(헤더 반영) →
+//     지우기 → 이름 입력 전 '영구 삭제' 비활성 → 정확히 치면 활성 → 지움 → 결과 창(데모는 Drive 문구 없음) → '디자인 보드로' →
+//     보드에 그 항목 없음. 다른 블록이 쓰는 항목(prd-001·prd-007)은 건드리지 않는다.
+const noticeE = tab.getByRole('button', { name: '안내 닫기' })
+if (await noticeE.count()) await noticeE.click()
+const docBeforeEdit = docRequests.length
+await tab.evaluate(() => {
+  window.location.hash = '#/board/design'
+})
+await tab.getByText('유튜브 중계 템플릿', { exact: true }).first().waitFor({ timeout: 10_000 })
+check(true, '지우기 전: 디자인 보드에 대상 항목 있음')
+await tab.evaluate(() => {
+  window.location.hash = '#/items/dlv-rb27-prd-005'
+})
+const manage = tab.locator('.ui-card', { has: tab.getByRole('heading', { name: '항목 관리' }) })
+await manage.waitFor({ timeout: 10_000 })
+await manage.getByRole('button', { name: '고치기' }).click()
+const editForm = tab.getByTestId('item-edit-form')
+await editForm.getByLabel('제목').fill('유튜브 중계 템플릿 (27 개정)')
+await editForm.getByRole('button', { name: '저장' }).click()
+await tab.getByRole('heading', { level: 1, name: '유튜브 중계 템플릿 (27 개정)' }).waitFor({ timeout: 10_000 })
+check((await tab.getByTestId('item-edit-form').count()) === 0, '고치기 → 저장 → 헤더 제목 반영 · 폼 닫힘')
+await tab.screenshot({ path: resolve(SHOTS, '03-item-edited.png'), fullPage: true })
+await manage.getByRole('button', { name: '지우기' }).click()
+const delDialog = tab.getByTestId('delete-item-dialog')
+await delDialog.waitFor({ timeout: 10_000 })
+const goDelete = delDialog.getByRole('button', { name: '영구 삭제' })
+check(await goDelete.isDisabled(), '지우기: 이름 입력 전 영구 삭제 비활성')
+await delDialog.getByLabel(/항목 이름/).fill('유튜브 중계 템플릿 (27 개정)')
+check(!(await goDelete.isDisabled()), '지우기: 이름을 정확히 치면 활성')
+await tab.screenshot({ path: resolve(SHOTS, '03-item-delete-confirm.png') })
+await goDelete.click()
+await delDialog.getByRole('heading', { name: '지웠습니다' }).waitFor({ timeout: 10_000 })
+check((await delDialog.getByTestId('delete-item-drive').count()) === 0, '데모(mock): 결과 창에 Drive 문구 없음')
+await delDialog.getByRole('button', { name: '디자인 보드로' }).click()
+await tab.waitForURL(/#\/board\/design/, { timeout: 10_000 })
+await tab.getByText('키비주얼', { exact: true }).first().waitFor({ timeout: 10_000 })
+check((await tab.getByText(/유튜브 중계 템플릿/).count()) === 0, '보드로 돌아오면 지운 항목 없음')
+check(docRequests.length === docBeforeEdit, '고치기·지우기·보드 복귀에 전체 리로드 0', `${docBeforeEdit} → ${docRequests.length}`)
+await tab.screenshot({ path: resolve(SHOTS, '03-item-deleted-board.png'), fullPage: true })
+
+// ── ③-이전(2026-09-25 Phase 4.3.1) 업로드 잠금 안내 — 직전 세션 ③을 회귀 가드로 유지.
 //     컨펌대기 항목(RB27 '외관 대형 현수막')의 버전 업로드 카드는 고르기·끌어놓기·업로드 대신 이유를 먼저 보이고,
 //     헤더 '새 버전 업로드'는 자리는 지키되 비활성이다(예전에는 파일을 고르고 누른 뒤에야 영문 상태 코드로 실패했다).
 //     업로드가 되는 항목의 폼은 아래 ③-이전(Phase 5) 블록이 그대로 잡는다. 발송 경고·저장 위치·Drive 경고 상자는

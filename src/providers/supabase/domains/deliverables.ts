@@ -9,6 +9,7 @@
 import type { DataProvider } from '../../DataProvider'
 import { normalizeRow, type SupabaseCtx } from '../ctx'
 import { driveFor } from '../drive'
+import { looksLikeDriveFileId } from '../../../lib/driveLink'
 import { fileUrlFor, rememberUpload, sessionFileUrl } from '../files'
 import { ProviderError } from '../../../lib/errors'
 import { assertTransition, buildVersionFileName } from '../../../lib/statusMachine'
@@ -35,6 +36,8 @@ type DeliverablesDomain = Pick<
   | 'listDeliverables'
   | 'getDeliverable'
   | 'createDeliverable'
+  | 'updateDeliverable'
+  | 'deleteDeliverable'
   | 'transitionStatus'
   | 'uploadVersion'
   | 'getFileUrl'
@@ -49,6 +52,9 @@ type DeliverablesDomain = Pick<
 >
 
 const AREAS: readonly DeliverableArea[] = ['design', 'ops', 'common']
+
+/** Phase 4.5 — 담당자·가이드(브리프·참고·규격 4종)는 PM만 고친다(SQL update_deliverable과 같은 목록) */
+const PM_ONLY_KEYS = ['assignee_id', 'brief', 'brief_refs', 'spec_size', 'spec_qty', 'spec_location', 'spec_type'] as const
 
 /** 정렬 키 — null 마감은 뒤로(mock의 `?? '9999'`) */
 const LAST = '9999'
@@ -267,6 +273,68 @@ export function deliverablesDomain(ctx: SupabaseCtx): DeliverablesDomain {
         await markGuideZoneStale(deliverable.project_id)
       }
       return deliverable
+    },
+
+    async updateDeliverable(deliverableId, patch) {
+      // mock과 같은 순서의 앱 계층 단언 → RPC(update_deliverable)가 같은 규칙을 재판정하고 보낸 키만 한 번에 고친다
+      const d = await ctx.deliverable(deliverableId)
+      await ctx.assertWritable(d.project_id)
+      const role = await ctx.roleIn(d.project_id)
+      if (!(role === 'pm' || ((role === 'design' || role === 'ops') && d.area === role))) {
+        throw new ProviderError('forbidden', '이 항목을 고칠 권한이 없습니다(PM 또는 해당 영역 담당).')
+      }
+      if (role !== 'pm' && PM_ONLY_KEYS.some((k) => patch[k] !== undefined)) {
+        throw new ProviderError('forbidden', '담당자·가이드는 PM만 고칠 수 있습니다.')
+      }
+      if (patch.title !== undefined && !patch.title.trim()) {
+        throw new ProviderError('validation', '제목은 비울 수 없습니다.')
+      }
+      if (patch.category !== undefined) {
+        const category = patch.category.trim()
+        if (!category) throw new ProviderError('validation', '카테고리는 비울 수 없습니다.')
+        if (category !== d.category && (isStructuredDocCategory(d.category) || isStructuredDocCategory(category))) {
+          throw new ProviderError(
+            'conflict',
+            '큐시트·시나리오·운영가이드 항목은 종류를 바꿀 수 없습니다 — 새 항목으로 만드세요.',
+          )
+        }
+      }
+      const updated = await ctx.rpc<Deliverable>('update_deliverable', { p_deliverable: deliverableId, p_patch: patch })
+      if (updated.updated_at !== d.updated_at && updated.area === 'ops' && !isStructuredDocCategory(updated.category)) {
+        await markGuideZoneStale(updated.project_id)
+      }
+      return updated
+    },
+
+    async deleteDeliverable(deliverableId) {
+      const d = await ctx.deliverable(deliverableId)
+      await ctx.assertPm(d.project_id)
+      await ctx.assertWritable(d.project_id)
+      const removed = await ctx.rpc<{
+        id: UUID
+        project_id: UUID
+        area: DeliverableArea
+        title: string
+        drive_folder_id: string | null
+      }>('delete_deliverable', { p_deliverable: deliverableId })
+      // v2.9 §7 — Drive 항목 폴더는 지우지 않고 행사 폴더의 99_archive로 옮긴다(서버가 표식·위치를 다시 확인한다).
+      // 실패해도 삭제는 이미 끝났다 — 폴더가 제자리에 남을 뿐이고 화면이 그 사실을 알린다(drive_archived=false).
+      let drive_archived = false
+      if (removed.drive_folder_id && looksLikeDriveFileId(removed.drive_folder_id) && (await driveFor(ctx).ready())) {
+        try {
+          const r = await driveFor(ctx).client.archiveItem({
+            project_id: removed.project_id,
+            deliverable_id: removed.id,
+            folder_id: removed.drive_folder_id,
+            title: removed.title,
+          })
+          drive_archived = r.archived
+        } catch (e) {
+          console.warn('[drive] 항목 폴더 보관 실패(Drive에 그대로 남음):', e instanceof Error ? e.message : e)
+        }
+      }
+      if (removed.area === 'ops' && !isStructuredDocCategory(d.category)) await markGuideZoneStale(removed.project_id)
+      return { id: removed.id, project_id: removed.project_id, area: removed.area, drive_archived }
     },
 
     async transitionStatus(deliverableId, to, opts) {

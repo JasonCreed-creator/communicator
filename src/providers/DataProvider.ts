@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────
-// DataProvider 인터페이스 v13.1 — 2026-09-24 재동결 (설계서 v2.9 §7.2b) — 125메서드
+// DataProvider 인터페이스 v14 — 2026-09-25 재동결 (설계서 v2.10 §8) — 127메서드
 //   (아래 이력 전체를 유지한다. v7 표기는 2026-08-23 시점의 스냅숏이었다 — v8·v8.1·v9은
 //   그 뒤에 이어 붙은 것이므로 제목 줄만 최신으로 갱신한다.)
 //   v1: 2026-08-19 동결(35메서드). v2: v1.2 승인 근거로 41메서드 재동결.
@@ -72,6 +72,10 @@
 //   메서드 수 125 불변(v3.1·v8.1 전례). 링크 등록·조각 업로드·진행률은 기존 uploadVersion 한 경로로 들어온다.
 //   Drive 연결·폴더·스캔 같은 운영 작업은 인터페이스 밖 연동 층(lib/drive/driveClient — 4.2 견적 시트 선례)이 맡는다.
 //   `importVendorQuote`는 계속 **v14 예약**.
+//   v14: 사용자 승인(2026-09-25 — "이미 등록한 항목을 수정/삭제하는 기능도 만들어야 함", 지우기 범위 = 모든 상태 +
+//   이름 입력 확인 버튼 선택) + 설계서 v2.10 §8을 근거로 동결 해제 → **updateDeliverable·deleteDeliverable 2메서드 추가
+//   = 127메서드**. **기존 125메서드 시그니처 불변** 후 재동결. 고치기 = PM·해당 영역 담당(담당·가이드는 PM), 지우기 = PM.
+//   `importVendorQuote`는 이제 **v15 예약**(§19.5 — Phase 4.7이 소진한다).
 //
 // 프로젝트 스코프 규칙(설계서 v2.1 §4-21 R-L1): 프로젝트 단위 조회·생성 메서드는 projectId를
 // 인자로 받는다. currentUser()는 행위자 신원·권한 판정 전용이며 스코프 유도에 쓰지 않는다.
@@ -131,6 +135,7 @@ import type {
   QuoteExportResult,
   CreateDeliverableInput,
   CsvImportResult,
+  DeleteDeliverableResult,
   CsvImportRow,
   CueInput,
   CurrentUser,
@@ -167,6 +172,7 @@ import type {
   RequestApprovalInput,
   RsvpContactPatch,
   ScenarioBlockInput,
+  UpdateDeliverableInput,
   UploadVersionInput,
   WbsTaskFilter,
   WbsTaskPatch,
@@ -244,6 +250,18 @@ export interface DataProvider {
    * pm 전용, status='requested', 담당자(assignee_id) 필수. 그 외에는 draft로 시작.
    */
   createDeliverable(input: CreateDeliverableInput): Promise<Deliverable>
+  /**
+   * v14(§8 PATCH /deliverables/{id}, Phase 4.5 — 사용자 지시 2026-09-25 "등록한 항목을 수정/삭제하는 기능").
+   * PM·해당 영역 담당(업로드 권한과 같다)이 고친다. 담당자·가이드 필드는 PM 전용(403). 제목·카테고리는 비울 수 없고(422),
+   * 큐시트·시나리오·운영가이드로/에서 카테고리를 바꾸면 409(빌더 데이터 보호). 상태는 바꾸지 않는다. 종료 행사 409.
+   */
+  updateDeliverable(deliverableId: UUID, patch: UpdateDeliverableInput): Promise<Deliverable>
+  /**
+   * v14(§8 DELETE /deliverables/{id}, Phase 4.5). PM 전용 · **모든 상태**(사용자 결정 2026-09-25 — 화면은 항목 이름 입력으로 확인) ·
+   * 종료 행사 409. 버전·코멘트·컨펌 이력·큐·시나리오·가이드가 함께 지워지고, WBS 연결은 풀리며, 이 항목으로 등록된
+   * 인박스 파일은 닫힌다. Drive 항목 폴더는 지우지 않고 행사 폴더의 99_archive로 옮긴다(파일 보존·인박스 재검출 방지).
+   */
+  deleteDeliverable(deliverableId: UUID): Promise<DeleteDeliverableResult>
   /**
    * 내부 멤버의 상태 전이 (§5 전이표 status_patch 경로만).
    * PM 반려(internal_review→draft)는 opts.comment 필수 — internal 코멘트로 기록된다.
