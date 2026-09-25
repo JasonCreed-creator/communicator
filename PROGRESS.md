@@ -6,6 +6,9 @@
 - **다음: Phase 6.1 Slack 봇 전환 + 의뢰 확인 버튼 — 새 챗에서 착수(사용자 결정 2026-09-25 밤, 범위 [C])**. 결정 3건은 §5 첫 항목, 착수 계획은 §4 첫 항목.
   이 챗의 마지막 결정: 웹훅(채널 글)은 담당자 폰에 푸시가 안 가고(Slack 기본 알림 = DM·멘션만) 사람 지정이 불가 → **봇(같은 Slack 앱에 권한 추가) + 담당자 DM**,
   의뢰(제작요청·확인요청)는 **DM 링크 + '확인했어요' 1버튼**(②) — PM이 "봤는지"를 알되 작업은 앱에서. 코드는 토큰 없이 완성 가능(봇 → 웹훅 → no-op 폴백 유지).
+  **Slack 앱은 이미 설치·토큰 주입 완료**(2026-09-25 밤, 이 챗 말미): 회사 워크스페이스에 매니페스트로 생성(봇 권한 5개 + Interactivity `…/api/slack-interact`), 관리자 승인 없이 설치됨 ·
+  `auth.test` 통과(봇 사용자 `micecommunicator`) · `SLACK_BOT_TOKEN`·`SLACK_SIGNING_SECRET` = `.env.local` + Vercel production env(sensitive). **서명 비밀은 캡처에서 옮겨 적은 값** —
+  첫 버튼 응답이 401이면 Slack 앱 설정에서 텍스트로 다시 복사. 앱 레벨 토큰(`xapp-`)은 Socket Mode용이라 저장하지 않음. 재배포는 코드가 쓸 때 함께.
 - **완료: Phase 3.23 UX 개편 적용 — PR 8개 연속(범위 [A]) 전부 머지**(기반·홈·디자인 보드·항목 상세·큐시트·행사 목록·견적·정산보드·행사 설정·온보딩 — 마지막 = PR #61 `a90d984`, 운영 반영 확인)(2026-09-25, 사용자 지시 "페이지 UI UX를 클로드디자인을 통해서 업그레이드
   해보고 싶은데 가능?" → 버튼 "① Code 초안, 3턴 분할" · 화면 3묶음(운영 핵심·돈·세팅 — 외부 `/c`·`/p` 제외) · "웜 페이퍼 유지 + UX 개선" · 시험 입구 "1주 연장").
   ① **시험용 입구 연장**: `AUTH_GATE_UNTIL` → **2026-10-05 18:00 KST**(사용자 버튼 "1주 연장, 10/5(월) 18:00") — 운영 env 덮어쓰기 + Redeploy, 입구 열림 확인.
@@ -1458,7 +1461,7 @@ DoD-29뿐 아니라 **실물 검산 2건에서 바로** 잡힌다(위 표의 "2 
 
 ## 4. 다음 스텝
 - **(2026-09-25 밤 → 새 챗) Phase 6.1 Slack 봇 전환 + 의뢰 확인 버튼** — 체크인 후 **1턴 = 메시지 시안 3장**(제작요청 DM · 확인요청 DM · 채널 기록 줄, Block Kit 미리보기 HTML) → 승인 →
-  **2턴 = 구현 PR 1개**(범위 [A]) → 검증 → 머지 → **3턴 = 토큰 주입 + 실발송 1회**(기획자님이 Slack 앱을 만든 뒤).
+  **2턴 = 구현 PR 1개**(범위 [A]) → 검증 → 머지 → **3턴 = 실발송 1회**(~~토큰 주입~~ — 이미 완료, §1 참조 · 남은 준비 = 행사 채널에 `/invite @micecommunicator` + 채널 ID를 행사 설정 ③에 입력).
   구현 범위(§5 결정 반영): ① 서버 `api/_lib/notify/slack.ts` — Slack Web API(`chat.postMessage`·`conversations.open`·`users.lookupByEmail`·`auth.test`), fetch 주입형(가짜 Slack 계약 테스트),
   env `SLACK_BOT_TOKEN`·`SLACK_SIGNING_SECRET` 서버 전용 · 전달 경로 **봇(채널 ID 있으면 채널 글 + 수신자 DM) → 웹훅(기존) → no-op** · 선점은 사건 1건 = `notification_log` 1행 그대로(안에서 fan-out)
   ② 버튼 응답 함수 `api/slack-interact.ts` — Slack 서명 검증(HMAC, 5분 창) · `확인했어요` → `deliverables.acknowledged_at/by`(service 경로, 상태 머신 §5 무변경 — 표식) · 원본 DM을 "확인함 HH:mm"으로 갱신(`chat.update`) · 3초 안 응답
@@ -1468,7 +1471,8 @@ DoD-29뿐 아니라 **실물 검산 2건에서 바로** 잡힌다(위 표의 "2 
   ⑤ 문서 — 설계서 §9 v2.12(봇·DM 규칙·확인 버튼) · CLAUDE.md Phase 6 라인 + 금지문 개정("Incoming Webhook 밖 주소로 POST 금지" → "Slack API(`slack.com/api`)·웹훅 주소 외 POST 금지") · `.env.production.example`에 `SLACK_BOT_TOKEN`·`SLACK_SIGNING_SECRET` 자리
   ⑥ 테스트 DoD 79 — 라우팅 3단 · 사건별 수신자 · 이메일 매칭·캐시·실패 폴백(채널 글만, 오류 없음) · 선점 1회 · 서명 검증(위조 401·시간 초과 401) · 확인 기록·DM 갱신 · 본문 금액·연락처 0 · 토큰·서명 비밀 `VITE_` 노출 0 가드 + 로컬 Postgres `supabase:check`.
   **DataProvider 131 불변** — `ProjectPatch.slack_channel_id`·`Person`/`PersonPatch.slack_user_id`·`Deliverable.acknowledged_at` 필드 추가만(v14.1 전례 → v15.1). 발주처·파트너는 Slack 밖(변경 없음).
-  **기획자님이 가져올 것**: Slack 앱(매니페스트는 이 챗 마지막 답 — 봇 권한 5개 + Interactivity Request URL `https://www.rmb-mice.com/api/slack-interact`) 설치 후 **Bot User OAuth Token(`xoxb-`)** + **Signing Secret** → `.env.local`·Vercel 서버 env에만. 관리자 승인이 뜨면 그 사실.
+  ~~기획자님이 가져올 것: Slack 앱 설치 + 토큰~~ → **완료**(§1). 새 챗 체크인 때 `.env.local`에 `SLACK_BOT_TOKEN`·`SLACK_SIGNING_SECRET`이 있는지만 확인하고 코드 쓰기로 바로 들어간다.
+  버튼 응답 함수 이름은 매니페스트의 Request URL과 맞춘다: **`api/slack-interact.ts`** (Slack 앱에 이미 `https://www.rmb-mice.com/api/slack-interact`로 등록됨 — 바꾸면 Slack 앱 설정도 같이).
 - **(2026-09-25 밤) Phase 3.23 UX 개편 — PR 8개 연속(범위 [A], 순서 = 제안대로)**: ① ~~PR-1 기반~~ → 머지 ② ~~홈 '오늘 할 일'~~ → 머지 ③ ~~디자인 보드~~ → 머지 ④ ~~항목 상세~~ → 머지 ④b ~~큐시트~~ → 머지 ⑤ ~~행사 목록~~ → 머지 ⑥ ~~견적 목록·옵션~~ → 머지 ⑦ ~~정산보드~~ → 머지 ⑧ ~~행사 설정·온보딩~~ → 머지(`a90d984`) — **8개 PR 전부 완료**. 다음 = 운영에서 바뀐 화면 실사용 점검(기획자님 — 특히 행사 설정 저장 바 ·
   온보딩 '나중에 하기' · Slack 알림 링크로 다른 행사 열기) + 결정 대기 1건(행사 설정에서 포맷 바꾸기 — §5 PR-8 ①) + 아래 입력 대기 항목
   ④ 항목 상세·큐시트(항목 관리 → ⋯ 메뉴 — 설계서 Phase 4.5 개정 동반) ⑤ 행사 목록 ⑥ 견적 목록·옵션 ⑦ 정산보드(불러오기 → 헤더 — Phase 4.7 개정 동반)
