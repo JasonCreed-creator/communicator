@@ -96,7 +96,7 @@ export default function LandingBoardPage() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        caption="준비 · S-3"
+        caption="준비"
         title="랜딩보드"
         action={
           <button type="button" className="btn btn-accent" onClick={createLanding} disabled={busy}>
@@ -212,7 +212,7 @@ export default function LandingBoardPage() {
               <dl className="grid grid-cols-2 gap-2 text-xs">
                 <dt className="text-ink-cap">폼 제출</dt>
                 <dd className="text-ink-sub">
-                  {selected.submit_target === 'registration' ? '등록(S4)으로 유입' : '외부 URL'}
+                  {selected.submit_target === 'registration' ? '등록 보드로 유입' : '외부 URL'}
                 </dd>
                 <dt className="text-ink-cap">GA</dt>
                 <dd className="text-ink-sub">{selected.analytics.ga_measurement_id ?? '미설정'}</dd>

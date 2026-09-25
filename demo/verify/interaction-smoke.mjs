@@ -147,7 +147,33 @@ check(
   `${docCountBefore} → ${docRequests.length}`,
 )
 
-// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — **Phase 4.7 협력사 견적서 불러오기(2026-09-25)**.
+// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — **Phase 3.23 PR-1 UX 개편 기반(2026-09-25)**.
+//     일정 화면(②에서 도착): 머리 캡션 = 그룹 이름('운영' — 화면 코드 S5 없음) · 지난 기한은 'n일 지남'(D+n 0건) ·
+//     html word-break = keep-all → 행사 목록: '새 행사 만들기'(btn-accent) 바탕 = accent-deep(rgb 184,67,26)·흰 글자.
+{
+  const main = tab.locator('main')
+  await main.getByRole('heading', { level: 1 }).first().waitFor({ timeout: 10_000 })
+  const mainText = await main.innerText()
+  check(!/\bS-?\d{1,2}\b/.test(mainText.split('\n').slice(0, 3).join(' ')), '일정 머리에 화면 코드 없음', mainText.split('\n').slice(0, 2).join(' / '))
+  // 기한 배지만 본다 — WBS 템플릿 오프셋(D-42~D+30, 행사일 기준)은 기한이 아니라 그대로 D+n이다
+  const pills = (await main.locator('span.rounded-full').allInnerTexts()).map((t) => t.trim())
+  const overduePills = pills.filter((t) => /^\d+일 지남$/.test(t))
+  const plusPills = pills.filter((t) => /^D\+\d+$/.test(t))
+  check(overduePills.length > 0 && plusPills.length === 0, "지난 기한 배지 = 'n일 지남' (D+n 배지 0건)", `'n일 지남' ${overduePills.length}건 · D+n ${plusPills.length}건`)
+  const wb = await tab.evaluate(() => getComputedStyle(document.documentElement).wordBreak)
+  check(wb === 'keep-all', '한글 단어 단위 줄바꿈(html word-break)', wb)
+  await tab.screenshot({ path: resolve(SHOTS, '03-foundation-schedule.png') })
+
+  await tab.locator('aside nav a', { hasText: '행사 목록' }).first().click()
+  await tab.waitForURL(/#\/projects/, { timeout: 10_000 })
+  const cta = tab.getByRole('button', { name: /새 행사 만들기/ }).first()
+  await cta.waitFor({ timeout: 10_000 })
+  const [bg, fg] = await cta.evaluate((el) => [getComputedStyle(el).backgroundColor, getComputedStyle(el).color])
+  check(bg === 'rgb(184, 67, 26)' && fg === 'rgb(255, 255, 255)', '주황 채운 버튼 = accent-deep 바탕 · 흰 글자', `${bg} / ${fg}`)
+  await tab.screenshot({ path: resolve(SHOTS, '03-foundation-projects.png') })
+}
+
+// ── ③-이전(2026-09-25 Phase 4.7) 협력사 견적서 불러오기 — 직전 세션 ③을 회귀 가드로 유지.
 //     정산보드가 있는 샘플 행사로 옮겨(`?project=` — Phase 6 알림 링크 경로) → 불러오기 카드(옛 "Phase 4.7에서 열립니다" 자리) →
 //     가상 협력사 견적(A형 — 부가세 줄·할인 행. 이 자리에서 exceljs로 만든다: 실파일·바이너리 커밋 금지 R-Q4) 고르기 → 읽기 →
 //     확인 큐(부가세 별도 미리 선택 · 부가세 '확인 필요' 없음 · 공급가 대조 '=' · 원가 없는 버킷은 선택지에 없음) → 확정 →

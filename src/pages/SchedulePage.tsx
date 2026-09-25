@@ -13,7 +13,7 @@ import TableSkeleton from '../components/internal/TableSkeleton'
 import WbsBoard from '../components/wbs/WbsBoard'
 import { useProject } from '../context/ProjectContext'
 import { useAsync, useMutation } from '../hooks/useAsync'
-import { AREA_LABELS, ddayLabel, formatDate, formatDateTime } from '../lib/labels'
+import { AREA_LABELS, formatDate, formatDateTime } from '../lib/labels'
 import { offsetToDate } from '../lib/wbs'
 import { getDataProvider } from '../providers'
 import type { Milestone } from '../types/entities'
@@ -118,7 +118,7 @@ export default function SchedulePage() {
 
   return (
     <section className="space-y-6 p-6">
-      <PageHeader caption="S5" title="일정·WBS·R&R" />
+      <PageHeader caption="운영" title="일정·WBS·R&R" />
 
       {needsReexpand && (
         <div className="rounded-md border border-accent/30 bg-accent-tint px-3 py-2 text-xs text-accent-deep">
@@ -266,7 +266,7 @@ function MilestoneRow({ milestone, onChanged }: { milestone: Milestone; onChange
       <td className="text-xs text-ink-cap">{milestoneAreaLabel(milestone.area)}</td>
       <td className="ui-num">
         {milestone.done ? (
-          <span className="text-xs text-ink-cap">{ddayLabel(milestone.due_date)}</span>
+          <span className="text-xs text-ink-cap">—</span>
         ) : (
           <DdayBadge isoDate={milestone.due_date} />
         )}

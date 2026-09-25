@@ -132,7 +132,7 @@ export default function PeoplePage() {
   return (
     <section className="space-y-6 p-6">
       <PageHeader
-        caption="전역 · S-13"
+        caption="전체"
         title="담당자"
         action={
           people.data ? (

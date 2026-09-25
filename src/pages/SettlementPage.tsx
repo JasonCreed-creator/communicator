@@ -159,7 +159,7 @@ export default function SettlementPage() {
   if (!board.loading && !view) {
     return (
       <div className="flex flex-col gap-6 p-6">
-        <PageHeader caption="운영 · S-10" title="정산보드" />
+        <PageHeader caption="운영" title="정산보드" />
         <div className="ui-card p-6">
           <EmptyState
             message="확정 견적을 불러와 정산을 시작합니다."
@@ -212,7 +212,7 @@ export default function SettlementPage() {
   if (board.loading || !view || !totals) {
     return (
       <div className="p-6">
-        <PageHeader caption="운영 · S-10" title="정산보드" />
+        <PageHeader caption="운영" title="정산보드" />
         <p className="mt-6 text-sm text-ink-sub">{board.error ?? '불러오는 중…'}</p>
       </div>
     )
@@ -229,7 +229,7 @@ export default function SettlementPage() {
   return (
     <div className="flex flex-col gap-6 p-6">
       <PageHeader
-        caption="운영 · S-10"
+        caption="운영"
         title="정산보드"
         action={
           <>

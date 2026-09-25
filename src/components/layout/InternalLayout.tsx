@@ -6,7 +6,7 @@ import { canUseQuotes } from '../quote/QuoteGate'
 import { useAuth } from '../../context/AuthContext'
 import { useProject } from '../../context/ProjectContext'
 import { useAsync, useMutation } from '../../hooks/useAsync'
-import { EVENT_TYPE_LABELS, ddayLabel } from '../../lib/labels'
+import { EVENT_TYPE_LABELS, eventDayLabel } from '../../lib/labels'
 import { getDataProvider } from '../../providers'
 import type { Quote } from '../../types/entities'
 import type { ProjectSummary } from '../../types/views'
@@ -162,7 +162,7 @@ function ProjectRow({
           isCurrent ? 'bg-accent-tint text-accent-deep' : 'bg-track text-ink-sub'
         }`}
       >
-        {summary.event_date ? ddayLabel(summary.event_date) : '일정 미정'}
+        {summary.event_date ? eventDayLabel(summary.event_date) : '일정 미정'}
       </span>
     </button>
   )
@@ -281,7 +281,7 @@ function ProjectSelector({ onNavigate, canQuotes }: { onNavigate?: () => void; c
                       <span className="block truncate text-sm font-semibold text-ink">{q.title}</span>
                       <span className="block truncate text-xs text-ink-sub">견적 v{q.version} · 행사 미생성</span>
                     </span>
-                    <span className="shrink-0 rounded-full bg-track px-2 py-0.5 text-xs font-medium text-ink-sub">S-2</span>
+                    <span className="shrink-0 rounded-full bg-track px-2 py-0.5 text-xs font-medium text-ink-sub">견적</span>
                   </button>
                 ))}
               </div>

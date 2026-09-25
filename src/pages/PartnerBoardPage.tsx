@@ -34,7 +34,7 @@ import { useProject } from '../context/ProjectContext'
 import { useAsync } from '../hooks/useAsync'
 import { externalViewUrl } from '../lib/externalLink'
 import { BOARD_HELP, PARTNER_KPI_HELP } from '../lib/helpTexts'
-import { PARTNER_STATUS_LABELS, ddayLabel, formatDate } from '../lib/labels'
+import { PARTNER_STATUS_LABELS, dueLabel, formatDate } from '../lib/labels'
 import { usesRevenueModel } from '../fixtures/formatPresets'
 import { getDataProvider } from '../providers'
 import type { PartnerStatus } from '../types/enums'
@@ -200,7 +200,7 @@ export default function PartnerBoardPage() {
 
   return (
     <section className="space-y-6 p-6">
-      <PageHeader caption="운영 · S-11" title="파트너 보드" action={<InfoTip text={BOARD_HELP.partner} />} />
+      <PageHeader caption="운영" title="파트너 보드" action={<InfoTip text={BOARD_HELP.partner} />} />
       <ErrorAlert message={wbsTasks.error} />
       <ErrorAlert message={deliverables.error} />
 
@@ -255,7 +255,7 @@ export default function PartnerBoardPage() {
               current ? (
                 <span className="block truncate">
                   {current.code} {current.title}
-                  {current.end_date ? ` · ${ddayLabel(current.end_date)}` : ''}
+                  {current.end_date ? ` · ${dueLabel(current.end_date)}` : ''}
                 </span>
               ) : (
                 '전개된 제출 마감이 없습니다'

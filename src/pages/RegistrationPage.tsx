@@ -90,7 +90,7 @@ export default function RegistrationPage() {
 
   return (
     <section className="space-y-6 p-6">
-      <PageHeader caption="S4 · 등록" title="등록" />
+      <PageHeader caption="운영" title="등록" />
 
       {isGeneral && (
         <div className="rounded-md border border-steel/20 bg-steel-tint px-3 py-2 text-xs text-steel">

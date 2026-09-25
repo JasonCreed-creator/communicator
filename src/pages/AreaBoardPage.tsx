@@ -264,7 +264,7 @@ function AreaBoard({ area }: { area: DeliverableArea }) {
   return (
     <section className="space-y-6 p-6">
       <PageHeader
-        caption={`S2 · ${AREA_LABELS[area]} 보드`}
+        caption="운영"
         title={`${AREA_LABELS[area]} 보드`}
         // 페이지 타이틀(h1) 자체의 접근성 이름에 "도움말"이 섞이지 않도록, InfoTip은
         // h1 안이 아니라 PageHeader의 action 슬롯(형제 엘리먼트)에 둔다.

@@ -60,7 +60,6 @@ export default function OnboardingPage() {
       <div className="ui-card mx-auto max-w-[720px] p-6 sm:p-8">
         <div className="mb-6 flex items-center justify-between">
           <BrandLogo variant="black" className="h-5 w-auto" />
-          <p className="t-caption">S0</p>
         </div>
 
         <h1 className="t-page-title">온보딩 위저드</h1>

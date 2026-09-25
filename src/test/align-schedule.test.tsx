@@ -61,10 +61,10 @@ describe('S5 간트 — 단계 헤더와 바 라벨', () => {
 
     // 기간 표기가 바 라벨로 실제 렌더된다
     expect(screen.getAllByText(/^\d{1,2}\/\d{1,2}~\d{1,2}\/\d{1,2}$/).length).toBeGreaterThan(0)
-    // 지연(1.3 = 어제 마감) 바는 '기간 · D+1'
-    expect(screen.getByText(/^\d{1,2}\/\d{1,2}~\d{1,2}\/\d{1,2} · D\+1$/)).toBeTruthy()
-    // 임박(1.4 = 오늘 마감) 바는 '기간 · D-day'
-    expect(screen.getByText(/· D-day$/)).toBeTruthy()
+    // 지연(1.3 = 어제 마감) 바는 '기간 · 1일 지남' (v1.4 §7-2.2 — 지난 기한은 D+n 대신 'n일 지남')
+    expect(screen.getByText(/^\d{1,2}\/\d{1,2}~\d{1,2}\/\d{1,2} · 1일 지남$/)).toBeTruthy()
+    // 임박(1.4 = 오늘 마감) 바는 '기간 · 오늘' (v1.4 §7-2.2 — 기한 당일은 D-day 대신 '오늘')
+    expect(screen.getByText(/· 오늘$/)).toBeTruthy()
   })
 })
 

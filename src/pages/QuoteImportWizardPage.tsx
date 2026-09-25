@@ -51,7 +51,7 @@ function StepTabs({ step }: { step: number }) {
             aria-current={state === 'current' ? 'step' : undefined}
             className={`rounded-full px-3 py-1 text-xs font-semibold ${
               state === 'current'
-                ? 'bg-accent text-white'
+                ? 'bg-accent-deep text-white'
                 : state === 'done'
                   ? 'bg-positive-tint text-positive'
                   : 'bg-track text-ink-cap'

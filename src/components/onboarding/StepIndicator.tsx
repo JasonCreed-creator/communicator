@@ -30,7 +30,7 @@ export default function StepIndicator({ steps, current }: { steps: readonly Wiza
                 aria-current={isCurrent ? 'step' : undefined}
                 className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
                   isDone
-                    ? 'bg-accent text-white'
+                    ? 'bg-accent-deep text-white'
                     : isCurrent
                       ? 'border-2 border-accent text-ink'
                       : 'border border-border text-ink-cap'

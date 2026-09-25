@@ -250,11 +250,33 @@ export function formatDateTime(isoDateTime: string): string {
   return `${d.getMonth() + 1}월 ${d.getDate()}일 ${hh}:${mm}`
 }
 
-/** 기준일 대비 D-day 라벨: 'D-7' | 'D-day' | 'D+3' */
-export function ddayLabel(isoDate: string, today: Date = new Date()): string {
+/** 기준일(오늘 0시)부터 날짜까지 남은 날 수 — 지났으면 음수 */
+export function daysUntil(isoDate: string, today: Date = new Date()): number {
   const target = new Date(`${isoDate.slice(0, 10)}T00:00:00`)
   const base = new Date(today.getFullYear(), today.getMonth(), today.getDate())
-  const diff = Math.round((target.getTime() - base.getTime()) / 86_400_000)
+  return Math.round((target.getTime() - base.getTime()) / 86_400_000)
+}
+
+/** 기준일 대비 D-day 라벨: 'D-7' | 'D-day' | 'D+3' — 발주처 화면·운영계획서 문서용(관행 표기 유지) */
+export function ddayLabel(isoDate: string, today: Date = new Date()): string {
+  const diff = daysUntil(isoDate, today)
   if (diff === 0) return 'D-day'
   return diff > 0 ? `D-${diff}` : `D+${-diff}`
+}
+
+/**
+ * 내부 화면 기한 라벨: 'D-7' | '오늘' | '3일 지남' — 디자인지시서 §7-2.2(v1.4).
+ * 지난 기한을 'D+3'으로 쓰면 남은 날(D-3)과 한 글자 차이라 헷갈린다는 진단에 따른 표기.
+ */
+export function dueLabel(isoDate: string, today: Date = new Date()): string {
+  const diff = daysUntil(isoDate, today)
+  if (diff === 0) return '오늘'
+  return diff > 0 ? `D-${diff}` : `${-diff}일 지남`
+}
+
+/** 내부 화면 행사일 라벨: 'D-27' | 'D-day' | '15일 지남' — 행사 당일은 업계 관행대로 D-day */
+export function eventDayLabel(isoDate: string, today: Date = new Date()): string {
+  const diff = daysUntil(isoDate, today)
+  if (diff === 0) return 'D-day'
+  return diff > 0 ? `D-${diff}` : `${-diff}일 지남`
 }

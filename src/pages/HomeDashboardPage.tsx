@@ -22,7 +22,7 @@ import { useProject } from '../context/ProjectContext'
 import { useAsync, useMutation } from '../hooks/useAsync'
 import { getDriveGateway } from '../lib/drive/driveGateway'
 import { useDriveStatus } from '../lib/drive/useDriveStatus'
-import { AREA_LABELS, formatDate, formatDateTime, ddayLabel } from '../lib/labels'
+import { AREA_LABELS, formatDate, formatDateTime, eventDayLabel } from '../lib/labels'
 import { getNotifyGateway } from '../lib/notify/notifyGateway'
 import { getDataProvider } from '../providers'
 import type { Deliverable } from '../types/entities'
@@ -144,7 +144,7 @@ export default function HomeDashboardPage() {
   return (
     <section className="space-y-6 p-6">
       <PageHeader
-        caption="S1 · 홈"
+        caption="운영"
         title="홈 대시보드"
         action={
           project && (
@@ -166,7 +166,7 @@ export default function HomeDashboardPage() {
                 data-testid="event-dday"
                 className="inline-flex h-11 shrink-0 items-center rounded-full bg-dark px-[18px] text-[20px] font-semibold tracking-[-0.01em] text-dark-ink"
               >
-                {project.event_date ? ddayLabel(project.event_date) : '일정 미정'}
+                {project.event_date ? eventDayLabel(project.event_date) : '일정 미정'}
               </span>
             </div>
           )

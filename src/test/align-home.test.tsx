@@ -46,7 +46,7 @@ describe('홈(S1) 정렬 — 숫자 나열 대신 3분할 액션 큐', () => {
     expect(pills[0].className).toContain('h-11')
     expect(pills[0].className).toContain('bg-dark')
     expect(pills[0].className).toContain('text-[20px]')
-    expect(pills[0].textContent).toMatch(/^(D-\d+|D\+\d+|D-day|일정 미정)$/)
+    expect(pills[0].textContent).toMatch(/^(D-\d+|\d+일 지남|D-day|일정 미정)$/)
   })
 
   it('(3) 지연·임박·미결 컨펌 큐가 건수 배지와 "가장 급한 1건" 히어로를 갖는다', async () => {

@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import WbsPhaseHeader from './WbsPhaseHeader'
-import { ROLE_BAR_CLASSES, ddayLabel } from '../../lib/labels'
+import { ROLE_BAR_CLASSES, dueLabel } from '../../lib/labels'
 import { isDelayed, isImminent, toIsoDate } from '../../lib/wbs'
 import type { IsoDate, WbsTask } from '../../types/entities'
 import {
@@ -178,8 +178,8 @@ export default function WbsGantt({ tasks, eventDate }: WbsGanttProps) {
                   task.offset_start,
                   task.offset_end,
                 )
-                // 지연·임박 바는 색 없이도 읽히도록 D-day를 기간 뒤에 함께 붙인다 ('8/19~8/26 · D+3')
-                const dday = urgency && task.end_date ? ddayLabel(task.end_date) : null
+                // 지연·임박 바는 색 없이도 읽히도록 기한 라벨을 기간 뒤에 함께 붙인다 ('8/19~8/26 · 3일 지남' — §7-2.2)
+                const dday = urgency && task.end_date ? dueLabel(task.end_date) : null
                 const period = dday ? `${range} · ${dday}` : range
                 const periodInside =
                   !labelOutside && days >= (dday ? LABEL_INSIDE_MIN_DAYS_WITH_DDAY : LABEL_INSIDE_MIN_DAYS)
