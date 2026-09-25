@@ -15,7 +15,7 @@
 //       6: Slack 알림 — 행사 설정 ③ 채널 등록(형식 검증 → 등록 → 가림 표시) · 홈 리마인드는 mock 사실 안내 ·
 //       4.7: 협력사 견적서 불러오기 — 가상 엑셀 읽기 → 확인 큐(부가세·버킷·공급가 대조) → 확정 → 이력 ·
 //       3.23: UX 개편 — PR-1 기반(날짜 표기·대비) · PR-2 홈 '오늘 할 일' · PR-3 디자인 보드(다음 행동 표·차례 칩·갤러리) ·
-//             PR-4 항목 상세(다음 단계 카드·큰 미리보기·⋯ 메뉴·코멘트 공개 범위))
+//             PR-4 항목 상세(다음 단계 카드·큰 미리보기·⋯ 메뉴·코멘트 공개 범위) · PR-4b 큐시트(행 메뉴·끌어 옮기기·큐 추가·대본 칸))
 // 캡처는 dist-demo/shots-interaction/ 에 남긴다. 실패 시 exit 1.
 import { createServer } from 'node:http'
 import { readFileSync, mkdirSync } from 'node:fs'
@@ -149,7 +149,59 @@ check(
   `${docCountBefore} → ${docRequests.length}`,
 )
 
-// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — **Phase 3.23 PR-4 항목 상세(2026-09-25)**.
+// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — **Phase 3.23 PR-4b 큐시트(2026-09-25)**.
+//     샘플 행사의 '개막식 큐시트'(dlv-004 — 큐 4개, ?project=로 행사 전환) → 표 머리 7칸 · 행 끝 ⋯ · **실제 브라우저 끌어 옮기기**(C01 → C03 뒤) →
+//     맨 위 행 '위로 옮기기'는 막히고 이유 · '큐 추가' → C05 편집 줄 → 시간 넣고 저장 → '대본 모아 보기' → 데모 기본 행사(RB27)로 되돌리고 '일정'으로.
+{
+  const docBefore = docRequests.length
+  await tab.evaluate(() => {
+    window.location.hash = '#/items/dlv-004?project=prj-stc26'
+  })
+  const table = tab.getByTestId('cue-table')
+  await table.getByTestId('cue-row').first().waitFor({ timeout: 10_000 })
+  const cueNos = async () =>
+    tab.evaluate(() =>
+      [...document.querySelectorAll('[data-testid="cue-table"] tbody > tr[data-testid="cue-row"]')].map((tr) => tr.querySelectorAll('td')[1]?.textContent ?? ''),
+    )
+  const head = (await table.locator('thead tr').innerText()).replace(/\s+/g, '')
+  check(head === '큐시간구분내용음향조명스크린', '큐시트 표 머리(손잡이·메뉴 칸은 이름 없음)', head)
+  const before = await cueNos()
+  check(before.join(',') === 'C01,C02,C03,C04', '큐 4행', before.join(','))
+  const rowOf = (no) => table.locator('tr[data-testid="cue-row"]', { has: tab.locator('td', { hasText: new RegExp(`^${no}$`) }) })
+  // 놓는 자리는 행의 아래 절반 — 그 행 '뒤'로 간다(위 절반이면 '앞')
+  await rowOf('C01').dragTo(rowOf('C03'), { targetPosition: { x: 240, y: 44 } })
+  await tab.waitForFunction(
+    () => [...document.querySelectorAll('[data-testid="cue-table"] tbody > tr[data-testid="cue-row"]')].map((tr) => tr.querySelectorAll('td')[1]?.textContent).join(',') === 'C02,C03,C01,C04',
+    null,
+    { timeout: 10_000 },
+  ).catch(() => undefined)
+  const dragged = await cueNos()
+  check(dragged.join(',') === 'C02,C03,C01,C04', '실제 브라우저 끌어 옮기기(C01 → C03 뒤)', dragged.join(','))
+  await rowOf('C02').getByRole('button', { name: '큐 메뉴 C02' }).click()
+  const up = tab.getByRole('menu', { name: '큐 메뉴 C02' }).getByRole('menuitem', { name: /위로 옮기기/ })
+  check((await up.isDisabled()) && /맨 위라 안 됨/.test(await up.innerText()), "맨 위 행: '위로 옮기기' 막힘 + 이유")
+  await tab.keyboard.press('Escape')
+  await tab.getByRole('button', { name: '큐 추가' }).click()
+  const editRow = tab.getByTestId('cue-edit-row')
+  await editRow.waitFor({ timeout: 10_000 })
+  check((await editRow.getByLabel('큐번호').inputValue()) === 'C05', "'큐 추가' → C05 편집 줄이 바로 열림")
+  await editRow.getByLabel('시간').fill('10:05')
+  await editRow.getByRole('button', { name: '저장' }).click()
+  await tab.waitForFunction(() => document.querySelectorAll('[data-testid="cue-table"] tbody > tr[data-testid="cue-row"]').length === 5, null, { timeout: 10_000 })
+  check((await cueNos()).at(-1) === 'C05', '저장 → 표 끝에 C05')
+  await tab.getByRole('button', { name: '대본 모아 보기' }).click()
+  check((await tab.getByTestId('cue-script-panel').getByRole('heading', { name: '대본 전체' }).count()) === 1, "'대본 모아 보기' → 대본 전체")
+  await tab.screenshot({ path: resolve(SHOTS, '03-cuesheet.png'), fullPage: true })
+  check(docRequests.length === docBefore, '큐시트 끌기·추가·저장에 전체 리로드 0', `${docBefore} → ${docRequests.length}`)
+  await tab.evaluate(() => {
+    window.location.hash = '#/home?project=prj-rebuild27'
+  })
+  await tab.getByTestId('today-list').waitFor({ timeout: 10_000 })
+  await tab.locator('aside nav a', { hasText: '일정' }).first().click()
+  await tab.waitForURL(/#\/schedule/, { timeout: 10_000 })
+}
+
+// ── ③-이전(2026-09-25 Phase 3.23 PR-4) 항목 상세 — 직전 PR ③을 회귀 가드로 유지.
 //     일정(②에서 도착) → 컨펌대기 항목(RB27 '외관 대형 현수막') → 다음 단계 카드(5단계 레일 · 4단계 · 발주처 답 기다림) · 머리 = 최신본 내려받기 + ⋯ ·
 //     채운 버튼 0 · 큰 미리보기 16:9 · ⋯ 메뉴 열고 Esc · 코멘트 공개 범위 토글 → 공유 안내 → 내부검토 항목(prd-001)에서 채운 버튼 = 컨펌 발송 하나 →
 //     다시 '일정'으로(아래 ③-이전 블록이 일정 화면에서 시작한다).

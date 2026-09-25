@@ -10,11 +10,20 @@ import { mockProvider, renderRoute } from './testUtils'
 
 afterEach(cleanup)
 
-/** 큐시트 표(tbody)의 '큐번호' 열(1번째 셀) 값을 sort_order 순으로 읽는다 */
+/** 큐시트 표의 큐 번호를 순서대로 — Phase 3.23 PR-4b부터 행마다 data-testid="cue-row"(편집 가능하면 첫 칸은 손잡이) */
 function cueNoOrder(scope: ParentNode = document): string[] {
-  return Array.from(scope.querySelectorAll('table tbody > tr')).map(
-    (tr) => tr.querySelector('td')?.textContent ?? '',
-  )
+  return Array.from(scope.querySelectorAll('[data-testid="cue-table"] tbody > tr[data-testid="cue-row"]')).map((tr) => {
+    const cells = tr.querySelectorAll('td')
+    return (cells[0].getAttribute('aria-hidden') === 'true' ? cells[1] : cells[0]).textContent ?? ''
+  })
+}
+
+const rowOf = (cueNo: string) => screen.getByText(cueNo, { selector: 'td' }).closest('tr')!
+
+/** 행 끝 ⋯ 메뉴에서 고른다 */
+async function pickFromMenu(cueNo: string, item: RegExp | string) {
+  await userEvent.click(within(rowOf(cueNo)).getByRole('button', { name: `큐 메뉴 ${cueNo}` }))
+  await userEvent.click(within(screen.getByRole('menu', { name: `큐 메뉴 ${cueNo}` })).getByRole('menuitem', { name: item }))
 }
 
 /** S9 큐시트 섹션(열 순서: 시간·큐·구분…)의 '큐' 열(2번째 셀) 값을 순서대로 읽는다 */
@@ -29,51 +38,55 @@ describe('DoD-12 큐시트 정형 에디터', () => {
     mockProvider().switchUser('usr-ops')
     renderRoute('/items/dlv-004')
 
-    expect(await screen.findByRole('heading', { name: '큐시트' })).toBeTruthy()
+    const sheet = await screen.findByRole('region', { name: '큐시트' })
     // 큐 목록은 비동기 조회(useAsync) — 첫 큐가 뜰 때까지 기다린 뒤 표를 검사한다
-    await screen.findByText('C01')
+    await within(sheet).findByText('C01')
+    expect(within(sheet).getByRole('heading', { name: '큐 4개' })).toBeTruthy()
 
     // 파일 업로드 폼 대신 정형 표 — 버전 업로드 UI가 전혀 없다
     expect(document.querySelector('input[type="file"]')).toBeNull()
     expect(screen.queryByRole('button', { name: '업로드' })).toBeNull()
 
-    // 표 헤더 — 행 추가 폼의 동명 필드 라벨(큐번호·시간·구분·음향·조명·스크린)과 겹치므로
-    // thead 안에서만 검사한다.
-    const cuesheetCard = screen.getByRole('heading', { name: '큐시트' }).closest('div')!.parentElement!
-    const headerRow = within(cuesheetCard).getByRole('table').querySelector('thead tr')!
-    expect(headerRow.textContent).toBe('큐번호시간구분내용음향조명스크린액션')
+    // 표 머리 — 손잡이·메뉴 칸은 이름 없이 비어 있다(§7-2.8)
+    const headerRow = within(sheet).getByTestId('cue-table').querySelector('thead tr')!
+    expect(headerRow.textContent).toBe('큐시간구분내용음향조명스크린')
 
     // 큐 4행 (cue-001~004)
     expect(cueNoOrder()).toEqual(['C01', 'C02', 'C03', 'C04'])
     expect(screen.getByText('09:20')).toBeTruthy()
-    expect(screen.getByText('사전')).toBeTruthy()
+    expect(within(sheet).getByText('사전')).toBeTruthy()
 
-    // ops는 편집 UI(행 추가 포함) 사용 가능
-    expect(screen.getByText('행 추가')).toBeTruthy()
+    // ops는 편집 UI 사용 가능 — 표 맨 아래 '큐 추가' 한 줄 + 행마다 ⋯ 메뉴 + 끌어 옮기기
+    expect(within(sheet).getByRole('button', { name: '큐 추가' })).toBeTruthy()
+    expect(within(sheet).getByText(/C05 줄이 바로 생기고/)).toBeTruthy()
+    expect(within(rowOf('C01')).getByRole('button', { name: '큐 메뉴 C01' })).toBeTruthy()
+    expect(rowOf('C01').getAttribute('draggable')).toBe('true')
 
-    // 대본 전문 패널 — '대본' 토글 시 body 마크다운 전문이 펼쳐진다
-    const c03Row = screen.getByText('C03').closest('tr')!
-    await userEvent.click(within(c03Row).getByRole('button', { name: '대본' }))
-    expect(await screen.findByText(/오늘 이 자리를 찾아주신 여러분을 진심으로 환영합니다/)).toBeTruthy()
+    // 대본 칸 — 처음엔 첫 큐, '대본'을 누르면 그 큐의 전문이 표 아래 칸에 뜬다
+    const panel = screen.getByTestId('cue-script-panel')
+    await userEvent.click(within(rowOf('C03')).getByRole('button', { name: '대본' }))
+    expect(await within(panel).findByText(/오늘 이 자리를 찾아주신 여러분을 진심으로 환영합니다/)).toBeTruthy()
+    expect(rowOf('C03').getAttribute('aria-selected')).toBe('true')
   })
 
-  it('(b) 행 추가 시 표에 반영된다', async () => {
+  it('(b) 큐 추가 — 다음 번호(C05) 줄이 바로 생기고 편집 칸이 열린다 → 채워 저장하면 표에 반영된다', async () => {
     renderRoute('/items/dlv-004')
-    await screen.findByText('C01')
+    const sheet = await screen.findByRole('region', { name: '큐시트' })
+    await within(sheet).findByText('C01')
 
-    const form = screen.getByText('행 추가').parentElement!
-    await userEvent.type(within(form).getByLabelText('큐번호'), 'C05')
+    await userEvent.click(within(sheet).getByRole('button', { name: '큐 추가' }))
+    const form = await screen.findByTestId('cue-edit-row')
+    expect((within(form).getByLabelText('큐번호') as HTMLInputElement).value).toBe('C05')
     await userEvent.type(within(form).getByLabelText('시간'), '10:05')
     await userEvent.type(within(form).getByLabelText('구분'), 'VIP 소개')
     await userEvent.type(within(form).getByLabelText('내용(대본)'), 'VIP 등장 안내 멘트')
     await userEvent.type(within(form).getByLabelText('음향'), 'SFX')
     await userEvent.type(within(form).getByLabelText('조명'), '스팟')
     await userEvent.type(within(form).getByLabelText('스크린'), 'VIP 프로필')
-    await userEvent.click(within(form).getByRole('button', { name: '추가' }))
+    await userEvent.click(within(form).getByRole('button', { name: '저장' }))
 
-    expect(await screen.findByText('C05')).toBeTruthy()
-    expect(cueNoOrder()).toEqual(['C01', 'C02', 'C03', 'C04', 'C05'])
-    const c05Row = screen.getByText('C05').closest('tr')!
+    await waitFor(() => expect(cueNoOrder()).toEqual(['C01', 'C02', 'C03', 'C04', 'C05']))
+    const c05Row = rowOf('C05')
     expect(within(c05Row).getByText('10:05')).toBeTruthy()
     expect(within(c05Row).getByText('VIP 소개')).toBeTruthy()
 
@@ -81,36 +94,37 @@ describe('DoD-12 큐시트 정형 에디터', () => {
     expect(cues).toHaveLength(5)
   })
 
-  it('(c) 행 편집(시간 변경)이 반영된다', async () => {
+  it('(c) ⋯ → 이 큐 고치기 — 시간 변경이 반영된다', async () => {
     renderRoute('/items/dlv-004')
-    await screen.findByText('C01')
+    await screen.findByText('C01', { selector: 'td' })
 
-    const row = screen.getByText('C01').closest('tr')!
-    await userEvent.click(within(row).getByRole('button', { name: '편집' }))
-
-    const timeInput = within(row).getByLabelText('시간') as HTMLInputElement
+    await pickFromMenu('C01', '이 큐 고치기')
+    const form = await screen.findByTestId('cue-edit-row')
+    const timeInput = within(form).getByLabelText('시간') as HTMLInputElement
     expect(timeInput.value).toBe('09:20')
     await userEvent.clear(timeInput)
     await userEvent.type(timeInput, '09:15')
-    await userEvent.click(within(row).getByRole('button', { name: '저장' }))
+    await userEvent.click(within(form).getByRole('button', { name: '저장' }))
 
-    await waitFor(() => {
-      expect(within(row).getByText('09:15')).toBeTruthy()
-    })
-    expect(within(row).queryByText('09:20')).toBeNull()
+    await waitFor(() => expect(within(rowOf('C01')).getByText('09:15')).toBeTruthy())
+    expect(within(rowOf('C01')).queryByText('09:20')).toBeNull()
 
     const cue = (await mockProvider().listCues('dlv-004')).find((c) => c.cue_no === 'C01')
     expect(cue?.time_at).toBe('09:15')
   })
 
-  it('(d) ↑/↓ 버튼으로 순서가 변경된다', async () => {
+  it('(d) 순서 — ⋯ 아래로 옮기기, 맨 위는 위로 옮기기가 막히고 이유가 붙는다', async () => {
     renderRoute('/items/dlv-004')
-    await screen.findByText('C01')
+    await screen.findByText('C01', { selector: 'td' })
     expect(cueNoOrder()).toEqual(['C01', 'C02', 'C03', 'C04', 'C05'])
 
-    const c02Row = screen.getByText('C02').closest('tr')!
-    await userEvent.click(within(c02Row).getByRole('button', { name: '아래로' }))
+    await userEvent.click(within(rowOf('C01')).getByRole('button', { name: '큐 메뉴 C01' }))
+    const up = within(screen.getByRole('menu', { name: '큐 메뉴 C01' })).getByRole('menuitem', { name: /위로 옮기기/ })
+    expect((up as HTMLButtonElement).disabled).toBe(true)
+    expect(up.textContent).toBe('위로 옮기기 — 맨 위라 안 됨')
+    await userEvent.keyboard('{Escape}')
 
+    await pickFromMenu('C02', '아래로 옮기기')
     await waitFor(() => {
       expect(cueNoOrder()).toEqual(['C01', 'C03', 'C02', 'C04', 'C05'])
     })
@@ -129,20 +143,22 @@ describe('DoD-12 큐시트 정형 에디터', () => {
   it('(f) pm으로 컨펌 발송 시 큐시트 스냅숏 버전(.pdf)이 자동 등록되고 컨펌대기로 전이된다', async () => {
     mockProvider().switchUser('usr-pm')
     renderRoute('/items/dlv-004')
-    await screen.findByText('내부검토')
+    const card = await screen.findByTestId('next-step-card')
 
-    // 버전 선택 셀렉트 대신 스냅숏 자동 등록 안내가 노출된다
-    expect(screen.getByText(/발송 시 표의 스냅숏\(\.pdf\)이 자동 버전으로 등록됩니다/)).toBeTruthy()
+    // 다음 단계 한 줄 — 버전 선택 없이 표 스냅숏이 새 버전이 된다는 안내 + 답 기한 · 반려… · 컨펌 발송
+    expect(within(card).getByText(/보내면 지금 표가 PDF로 저장돼 v\d+[이가] 됩니다/)).toBeTruthy()
+    expect(within(card).getByLabelText('답 기한')).toBeTruthy()
+    expect(within(card).getByRole('button', { name: '반려…' })).toBeTruthy()
     expect(screen.queryByText('버전 선택…')).toBeNull()
 
     const beforeVersionCount = (await mockProvider().getDeliverable('dlv-004')).versions.length
 
-    await userEvent.click(screen.getByRole('button', { name: '컨펌 발송' }))
+    await userEvent.click(within(card).getByRole('button', { name: '컨펌 발송' }))
 
-    expect(await screen.findByText('컨펌대기')).toBeTruthy()
+    await waitFor(async () => expect((await mockProvider().getDeliverable('dlv-004')).status).toBe('pending_approval'))
+    expect((await screen.findAllByText('컨펌대기')).some((el) => el.classList.contains('ui-badge'))).toBe(true)
 
     const detail = await mockProvider().getDeliverable('dlv-004')
-    expect(detail.status).toBe('pending_approval')
     expect(detail.versions).toHaveLength(beforeVersionCount + 1)
     const latest = detail.versions[0]
     expect(latest.file_name.endsWith('.pdf')).toBe(true)
@@ -153,16 +169,15 @@ describe('DoD-12 큐시트 정형 에디터', () => {
     mockProvider().switchUser('usr-design')
     renderRoute('/items/dlv-004')
 
-    expect(await screen.findByRole('heading', { name: '큐시트' })).toBeTruthy()
+    const sheet = await screen.findByRole('region', { name: '큐시트' })
     // 표 자체(큐 내용)는 그대로 보인다
-    expect(screen.getByText('C01')).toBeTruthy()
-    // 편집 관련 액션은 전부 미노출
-    expect(screen.queryByRole('button', { name: '편집' })).toBeNull()
-    expect(screen.queryByRole('button', { name: '삭제' })).toBeNull()
-    expect(screen.queryByRole('button', { name: '위로' })).toBeNull()
-    expect(screen.queryByRole('button', { name: '아래로' })).toBeNull()
-    expect(screen.queryByText('행 추가')).toBeNull()
+    expect(await within(sheet).findByText('C01')).toBeTruthy()
+    // 편집 관련 동작은 전부 미노출 — 메뉴·큐 추가·끌어 옮기기
+    expect(within(sheet).queryAllByRole('button', { name: /^큐 메뉴/ })).toHaveLength(0)
+    expect(within(sheet).queryByRole('button', { name: '큐 추가' })).toBeNull()
+    expect(rowOf('C01').getAttribute('draggable')).toBe('false')
+    expect(screen.getByTestId('cue-script-panel').querySelector('button')).toBeNull()
     // 대본 열람은 읽기 전용 사용자에게도 허용된다
-    expect(screen.getAllByRole('button', { name: '대본' }).length).toBeGreaterThan(0)
+    expect(within(sheet).getAllByRole('button', { name: '대본' }).length).toBeGreaterThan(0)
   })
 })

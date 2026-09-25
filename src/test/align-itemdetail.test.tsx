@@ -223,17 +223,25 @@ describe('(f) 컨펌 기록 + 정형 문서 단일 표시', () => {
     expect(within(preview).getAllByTitle(/_v2\.png$/).length).toBeGreaterThan(0)
   })
 
-  it('정형 문서(큐시트)는 상단 스트립 단일 표시를 유지한다 — 헤더 메타·레일 없음', async () => {
+  it('큐시트(§7-2.8)는 메타를 머리 한 줄에만(스트립 없음) · 레일 없음 · 대본 칸 옆에 코멘트·컨펌 기록', async () => {
     renderRoute('/items/dlv-004')
-    await screen.findByRole('heading', { name: '개막식 큐시트' })
-
-    // 3.16.3/3.16.4 계약 — 메타는 상단 스트립 1곳뿐
-    expect(screen.getAllByText('상태')).toHaveLength(1)
-    expect(screen.getAllByText('담당')).toHaveLength(1)
-    expect(screen.getAllByText('마감')).toHaveLength(1)
-    expect(screen.queryByRole('list', { name: '진행 단계' })).toBeNull()
-    // 복귀 경로는 정형 문서에도 남는다
+    const heading = await screen.findByRole('heading', { name: '개막식 큐시트' })
     const crumb = screen.getByRole('navigation', { name: '위치' })
+    const header = crumb.parentElement!
+    expect(heading.textContent).toBe('개막식 큐시트')
+    // 머리 메타 — 상태 배지 · 담당 도트 · 마감 · 최신 버전
+    expect(within(header).getAllByText('내부검토').some((el) => el.classList.contains('ui-badge'))).toBe(true)
+    expect(within(header).getByText(/^최신 v\d+ · \d+월 \d+일$/)).toBeTruthy()
+    // 옛 메타 스트립(상태·담당·마감 칸 이름)과 레일은 없다
+    expect(screen.queryByText('상태')).toBeNull()
+    expect(screen.queryByText('버전 이력')).toBeNull()
+    expect(screen.queryByRole('list', { name: '진행 단계' })).toBeNull()
+    // 복귀 경로
     expect(within(crumb).getByRole('link', { name: '운영 보드' }).getAttribute('href')).toBe('/board/ops')
+    // 대본 칸 오른쪽에 코멘트·컨펌 기록
+    const panel = await screen.findByTestId('cue-script-panel')
+    const row = panel.parentElement!
+    expect(within(row).getByRole('region', { name: '코멘트' })).toBeTruthy()
+    expect(within(row).getByTestId('approval-timeline')).toBeTruthy()
   })
 })

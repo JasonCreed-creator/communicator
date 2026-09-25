@@ -65,8 +65,9 @@ describe('P7 통합 "항목 추가" 카드 — 접힘·토글 끔 경로·큐시
     // "항목 추가" 카드는 접혀 돌아가고, 새 인라인 패널이 바로 뜬다 — 파일 업로드 폼이 아니라 정형 표
     const panel = await screen.findByRole('heading', { name: /큐시트 바로 편집 — 폐막식 큐시트/ })
     const panelRoot = panel.closest('div')!.parentElement!
-    expect(within(panelRoot).getByText('작성된 큐가 없습니다.')).toBeTruthy()
-    expect(within(panelRoot).getByText('행 추가')).toBeTruthy() // pm이라 편집 가능
+    // Phase 3.23 PR-4b — 빈 표 안내 + 표 맨 아래 '큐 추가' 한 줄(pm이라 편집 가능)
+    expect(within(panelRoot).getByText('아직 큐가 없습니다.')).toBeTruthy()
+    expect(within(panelRoot).getByRole('button', { name: '큐 추가' })).toBeTruthy()
 
     // 보드 목록에도 정상적으로 반영된다(중복 렌더가 아니라 두 곳 다 최신 상태)
     expect(await screen.findByText('폐막식 큐시트')).toBeTruthy()

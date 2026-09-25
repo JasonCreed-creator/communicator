@@ -196,6 +196,7 @@ function ItemDetail({ itemId }: { itemId: string }) {
       sendViaHeader={isBuilderDoc}
       showRail={!isStructuredPanel}
       clientLink={clientLink}
+      inlineSend={isCuesheet}
       onUpload={focusVersionUpload}
       onChanged={detail.reload}
     />
@@ -221,7 +222,12 @@ function ItemDetail({ itemId }: { itemId: string }) {
         title={d.title}
         area={d.area}
         category={d.category}
-        showMeta={!isStructuredPanel}
+        showMeta={!isStructuredPanel || isCuesheet}
+        extraMeta={
+          isCuesheet && latestVersion
+            ? `최신 v${latestVersion.version_no} · ${formatDate(latestVersion.created_at.slice(0, 10))}`
+            : undefined
+        }
         statusBadge={statusBadge}
         assigneeName={memberName(d.assignee_id)}
         assigneeRole={assigneeRole}
@@ -229,7 +235,7 @@ function ItemDetail({ itemId }: { itemId: string }) {
         done={d.status === 'final' || d.status === 'approved'}
         actions={
           <>
-            {!isStructuredPanel && latestVersion && <LatestDownloadLink version={latestVersion} />}
+            {(!isStructuredPanel || isCuesheet) && latestVersion && <LatestDownloadLink version={latestVersion} />}
             {menu}
           </>
         }
@@ -262,7 +268,23 @@ function ItemDetail({ itemId }: { itemId: string }) {
         />
       )}
 
-      {isStructuredPanel ? (
+      {isCuesheet ? (
+        // §7-2.8 큐시트 — 메타는 머리 한 줄(스트립 없음) · 다음 단계 한 줄(PM 발송 포함) · 표 · 대본 | 코멘트·컨펌 기록
+        <div className="min-w-0 space-y-5">
+          {nextStep}
+          <BriefCard deliverable={d} />
+          <CuesheetEditor
+            deliverableId={d.id}
+            canEdit={canEditCue}
+            side={
+              <>
+                {comments}
+                {timeline}
+              </>
+            }
+          />
+        </div>
+      ) : isStructuredPanel ? (
         // 3.9.1 P1: 정형 문서 = 1단 전폭 — 표·빌더가 깨지지 않도록 메타를 에디터 위 가로 스트립으로
         <div className="min-w-0 space-y-6">
           <CuesheetMetaStrip
@@ -275,9 +297,7 @@ function ItemDetail({ itemId }: { itemId: string }) {
           />
           <BriefCard deliverable={d} />
           {nextStep}
-          {isCuesheet ? (
-            <CuesheetEditor deliverableId={d.id} canEdit={canEditCue} />
-          ) : isScenarioDoc ? (
+          {isScenarioDoc ? (
             <ScenarioBuilder deliverableId={d.id} canEdit={canEditCue} onStatusChanged={detail.reload} />
           ) : (
             <GuideBuilder deliverableId={d.id} canEdit={canEditCue} onStatusChanged={detail.reload} />
@@ -349,6 +369,7 @@ function ItemHeader({
   assigneeRole,
   dueDate,
   done,
+  extraMeta,
   actions,
 }: {
   title: string
@@ -362,6 +383,8 @@ function ItemHeader({
   dueDate: string | null
   /** 승인·확정 — 기한 칸에 '완료' */
   done: boolean
+  /** 메타 줄 끝에 덧붙일 것 — 큐시트의 '최신 vN · 날짜' */
+  extraMeta?: string
   actions: ReactNode
 }) {
   const hasBoard = BOARD_AREAS.includes(area)
@@ -411,6 +434,12 @@ function ItemHeader({
                       <DdayBadge isoDate={dueDate} />
                     )}
                   </span>
+                </>
+              )}
+              {extraMeta && (
+                <>
+                  <span aria-hidden>·</span>
+                  <span>{extraMeta}</span>
                 </>
               )}
             </p>
