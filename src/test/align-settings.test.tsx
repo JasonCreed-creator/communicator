@@ -2,7 +2,8 @@
 // Phase 3.17 시안 정렬 → Phase 3.23 PR-5(디자인지시서 v1.4 §7-2.9) — 행사 목록(S-1) · 행사 설정(S6) 핵심 계약.
 // (1) 진행 중 카드 = 정체 / D-day pill + 진행률 / 확인할 것 + PM  (2) 확인할 것이 없으면 중립 '확인할 것 없음' 한 칩
 // (3) 지금 보는 행사 = accent 테두리 + '지금 보는 행사' 배지  (4) 세팅 미완료 = '먼저 확인할 행사' 줄(세팅 n/3단계 · 남은 필수 ·
-// 이어서 세팅하기)  (5) 설정 상단 필수 4 체크 스트립  (6) 탭 미입력 개수 배지  (7) Drive·Slack 미연결 = 빈 상태 정본.
+// 이어서 세팅하기)  (5) 필수 요약 = 탭 줄 오른쪽 한 줄(PR-8 — 옛 체크 스트립 퇴역)  (6) 탭 미입력 개수 배지
+// (7) Drive·Slack 미연결 = 빈 상태 정본.
 import { cleanup, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
@@ -101,25 +102,27 @@ describe('S-1 행사 목록 — 진행 중 카드', () => {
     // 남은 필수 항목이 이름으로(행사명·코드는 입력됨 → 행사일·장소만 남음)
     expect(row.textContent).toContain('필수 2개 남음 — 행사일 · 장소')
     await userEvent.click(within(row).getByRole('button', { name: '이어서 세팅하기' }))
-    expect(await screen.findByRole('heading', { name: '① 행사개요' })).toBeTruthy()
+    expect(await screen.findByRole('heading', { name: '행사 기본 정보' })).toBeTruthy()
   })
 })
 
 describe('S6 행사 설정 — 필수 스트립 · 탭 배지 · 연동 빈 상태', () => {
-  it('(5) 상단 필수 4항목 체크 스트립이 입력 여부를 항목별로 표시한다', async () => {
+  it('(5) 필수 요약은 탭 줄 오른쪽 한 줄 — 다 찼으면 "모두 입력됨", 비었으면 비은 칸 이름을 댄다', async () => {
     localStorage.setItem('communicator.currentProjectId', PROJECT_ID)
     renderRoute('/settings')
     await screen.findByRole('heading', { name: '행사 설정' })
 
-    const strip = await screen.findByTestId('required-strip')
-    for (const key of ['name', 'code', 'event_date', 'venue']) {
-      expect(within(strip).getByTestId(`required-${key}`).dataset.filled).toBe('true')
-    }
-    expect(within(strip).getByTestId('required-summary').textContent).toContain('4/4 입력')
-    expect(strip.textContent).toContain('행사명')
-    expect(strip.textContent).toContain('행사 코드')
-    expect(strip.textContent).toContain('행사일')
-    expect(strip.textContent).toContain('장소')
+    // 옛 체크 스트립 카드는 퇴역 — 요약은 탭과 같은 줄에 있다
+    expect(screen.queryByTestId('required-strip')).toBeNull()
+    const summary = await screen.findByTestId('required-summary')
+    expect(summary.textContent).toBe('필수 4개 모두 입력됨')
+    expect(summary.parentElement?.contains(screen.getByRole('button', { name: '개요' }))).toBe(true)
+    cleanup()
+
+    localStorage.setItem('communicator.currentProjectId', draftId)
+    renderRoute('/settings')
+    await screen.findByRole('heading', { name: '행사 설정' })
+    expect((await screen.findByTestId('required-summary')).textContent).toBe('필수 2개 남음 — 행사일 · 장소')
   })
 
   it('(6) 탭 라벨의 미입력 개수 배지는 선택 항목이면 중립이고, 탭 이름은 흔들지 않는다', async () => {
@@ -137,7 +140,7 @@ describe('S6 행사 설정 — 필수 스트립 · 탭 배지 · 연동 빈 상�
     expect(badge.className).toContain('bg-track')
 
     // 배지가 붙어도 탭의 접근 가능한 이름은 그대로다(기존 동선 보존)
-    expect(screen.getByRole('button', { name: '③ 유형·연동' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '유형·연동' })).toBeTruthy()
     cleanup()
 
     // 필수 미입력(PM 미지정)이 있는 세팅 미완료 행사는 같은 자리에 accent 배지를 단다
@@ -154,7 +157,7 @@ describe('S6 행사 설정 — 필수 스트립 · 탭 배지 · 연동 빈 상�
     localStorage.setItem('communicator.currentProjectId', PROJECT_ID)
     renderRoute('/settings')
     await screen.findByRole('heading', { name: '행사 설정' })
-    await userEvent.click(screen.getByRole('button', { name: '③ 유형·연동' }))
+    await userEvent.click(screen.getByRole('button', { name: '유형·연동' }))
 
     // v2.9(Phase 5): 'Phase 5 예정' 자리표시 → Drive 카드. mock은 연결을 흉내 내지 않고 효용·표준 트리·개시 시점을 적는다
     const drive = await screen.findByTestId('drive-card')

@@ -2,7 +2,7 @@
 // DoD-11: 행사 유형 토글 — general(일반형)이면 등록 화면의 RSVP 파이프라인은 표시 계층에서만
 // 숨겨지고 데이터는 보존된다. recruiting(모객형) 복귀 시 UI가 그대로 복원된다.
 // 픽스처 초기화 단위 = 이 파일 (src/test/testUtils.tsx 참조). 픽스처 기본값은 event_type='recruiting'.
-import { cleanup, screen } from '@testing-library/react'
+import { cleanup, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it } from 'vitest'
 import { mockProvider, renderRoute } from './testUtils'
@@ -14,8 +14,10 @@ describe('DoD-11 행사 유형 토글', () => {
     renderRoute('/settings')
     const typeSelect = await screen.findByLabelText('행사 유형')
     await userEvent.selectOptions(typeSelect, 'general')
-    await userEvent.click(screen.getByRole('button', { name: '저장' }))
-    expect(await screen.findByText(/WBS 재전개는 일정 화면에서 실행하세요/)).toBeTruthy()
+    // PR-8 — 유형 칸 힌트가 데이터 보존·WBS 다시 펼치기 자리를 밝히고, 저장하면 저장 바 대신 '저장됨 HH:mm'
+    expect(screen.getByText(/일정\(WBS\) 다시 펼치기는 일정 화면에서 합니다/)).toBeTruthy()
+    await userEvent.click(within(screen.getByRole('region', { name: '저장하지 않은 변경' })).getByRole('button', { name: '저장' }))
+    expect((await screen.findByTestId('saved-note')).textContent).toMatch(/^저장됨 \d{2}:\d{2}$/)
 
     renderRoute('/registration')
     // 일반형 안내 배너가 뜨는 시점까지 기다려 event_type 로딩 완료를 보장한다

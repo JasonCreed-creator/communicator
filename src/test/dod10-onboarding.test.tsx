@@ -28,25 +28,25 @@ describe('DoD-10 온보딩 위저드·라우트 가드', () => {
   it('(c) 발주처 화면(/c/demo)은 가드가 적용되지 않고 정상 렌더된다', async () => {
     renderRoute('/c/demo')
     expect(await screen.findByRole('heading', { name: /확인 부탁드립니다/ })).toBeTruthy()
-    expect(screen.queryByRole('heading', { name: '온보딩 위저드' })).toBeNull()
+    expect(screen.queryByRole('heading', { name: '행사 기본 정보' })).toBeNull()
   })
 
   it('(d) v1.5 위저드 3단계(개요→담당자→유형·확인)를 완료하면 본체(홈)로 진입하고 WBS가 자동 전개된다', async () => {
     renderRoute('/onboarding')
 
     // ① 행사개요 — 행사 설정과 동일 폼, 픽스처 값이 이미 채워져 있으므로 저장(다음)만
-    await screen.findByRole('heading', { name: '① 행사개요' })
+    await screen.findByRole('heading', { name: '행사 기본 정보' })
     // 헤딩과 폼은 서로 다른 useAsync에 달려 있다 — 폼 요소는 findBy로 기다린다
     const nameInput = (await screen.findByLabelText('행사명')) as HTMLInputElement
     expect(nameInput.value).toBe('샘플 테크 컨퍼런스 2026')
-    await userEvent.click(screen.getByRole('button', { name: '다음' }))
+    await userEvent.click(screen.getByRole('button', { name: '다음: 담당자' }))
 
     // ② 담당자 — 행사 설정 ②와 동일 컴포넌트(선택 입력) → 다음
-    await screen.findByRole('heading', { name: '② 담당자' })
-    await userEvent.click(await screen.findByRole('button', { name: '다음' }))
+    await screen.findByRole('heading', { name: '담당자 배정' })
+    await userEvent.click(await screen.findByRole('button', { name: '다음: 유형·확인' }))
 
     // ③ 유형·확인 — 픽스처 기본값(모객형) 유지, pm이므로 완료 버튼 활성
-    await screen.findByRole('heading', { name: '③ 유형·확인' })
+    await screen.findByRole('heading', { name: '유형 고르고 확인' })
     const recruitingRadio = (await screen.findByRole('radio', { name: /모객형/ })) as HTMLInputElement
     expect(recruitingRadio.checked).toBe(true)
     const completeButton = screen.getByRole('button', { name: '온보딩 완료' }) as HTMLButtonElement

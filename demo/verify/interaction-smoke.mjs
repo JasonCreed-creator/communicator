@@ -18,7 +18,8 @@
 //             PR-4 항목 상세(다음 단계 카드·큰 미리보기·⋯ 메뉴·코멘트 공개 범위) · PR-4b 큐시트(행 메뉴·끌어 옮기기·큐 추가·대본 칸) ·
 //             PR-5 행사 목록(먼저 확인할 행사·진행 중·종료 묶음·카드 ⋯ 메뉴) ·
 //             PR-6 견적 목록(고른 견적 옆 동작·구버전 고치기 막힘)·옵션(체크 카드·막힌 이유·고른 옵션 요약) ·
-//             PR-7 정산보드(머리 불러오기·할 일 알림·KPI 검산 배지·원가 없는 그룹행·발주 항목 ⋯ 메뉴))
+//             PR-7 정산보드(머리 불러오기·할 일 알림·KPI 검산 배지·원가 없는 그룹행·발주 항목 ⋯ 메뉴) ·
+//             PR-8 행사 설정(번호 없는 탭·섹션 목록·고정 저장 바·변경 취소)·온보딩(진행 줄·2열·나중에 하기 확인))
 // 캡처는 dist-demo/shots-interaction/ 에 남긴다. 실패 시 exit 1.
 import { createServer } from 'node:http'
 import { readFileSync, mkdirSync } from 'node:fs'
@@ -152,7 +153,91 @@ check(
   `${docCountBefore} → ${docRequests.length}`,
 )
 
-// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — **Phase 3.23 PR-7 정산보드(2026-09-25)**.
+// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — **Phase 3.23 PR-8 행사 설정·온보딩(2026-09-25)**.
+//     일정(②에서 도착) → 행사 설정(RB27): 탭 이름에 번호 없음 · 탭 줄 필수 요약 · 쉴 때 채운 버튼 0 →
+//     예상 인원 고치기 → 고정 저장 바 '저장하지 않은 변경 1개 · 예상 인원' + 채운 버튼 = 저장 하나 → 변경 취소로 원래 값 ·
+//     세팅 미완료 행사 온보딩(?project=prj-forum-h2): 진행 줄 '3단계 중 1단계 · 필수 4개 중 m개' · 2열 · 채운 버튼 = 다음: 담당자 →
+//     장소를 비우면 저장 전에도 개수가 줄고 → '나중에 하기'가 먼저 묻는다(수락) → 행사 목록 → RB27로 되돌리고 '일정'으로.
+{
+  // 데모 안내 칩은 우하단 고정이라 고정 저장 바의 버튼(변경 취소·저장)과 겹친다 — 사용자와 똑같이 닫고 시작한다
+  const notice8 = tab.getByRole('button', { name: '안내 닫기' })
+  if (await notice8.count()) await notice8.click()
+  const docBefore = docRequests.length
+  await tab.evaluate(() => {
+    window.location.hash = '#/settings'
+  })
+  await tab.getByRole('navigation', { name: '개요 섹션' }).waitFor({ timeout: 10_000 })
+  let tabsOk = (await tab.getByRole('button', { name: /^[①②③]/ }).count()) === 0
+  for (const name of ['개요', '담당자', '유형·연동']) tabsOk &&= (await tab.getByRole('button', { name, exact: true }).count()) === 1
+  check(tabsOk, '행사 설정 탭 이름 = 개요 · 담당자 · 유형·연동(번호 없음)')
+  const summary = (await tab.getByTestId('required-summary').innerText()).trim()
+  check(/^필수 4개 모두 입력됨$|^필수 \d개 남음 — /.test(summary), '탭 줄 오른쪽 필수 요약', summary)
+  const restFilled = (await tab.locator('main .btn-accent, main .btn-primary').allInnerTexts()).map((t) => t.trim())
+  check(restFilled.length === 0, '행사 설정 쉴 때 채운 버튼 0(저장 바는 바꾼 칸이 있을 때만)', restFilled.join(' · '))
+  const headcount = tab.getByLabel('예상 인원', { exact: true })
+  const headcountBefore = await headcount.inputValue()
+  await headcount.fill(String(Number(headcountBefore || '0') + 20))
+  const bar = tab.getByRole('region', { name: '저장하지 않은 변경' })
+  await bar.waitFor({ timeout: 10_000 })
+  const barText = (await bar.innerText()).replace(/\s+/g, ' ')
+  check(/저장하지 않은 변경 1개/.test(barText) && /예상 인원/.test(barText), '예상 인원 고치기 → 고정 저장 바(1개 · 칸 이름)', barText.slice(0, 40))
+  const dirtyFilled = (await tab.locator('main .btn-accent, main .btn-primary').allInnerTexts()).map((t) => t.trim())
+  check(dirtyFilled.join('|') === '저장', '바꾼 칸이 있으면 채운 버튼 = 저장 하나', dirtyFilled.join(' · '))
+  await tab.screenshot({ path: resolve(SHOTS, '03-settings-savebar.png'), fullPage: true })
+  await bar.getByRole('button', { name: '변경 취소' }).click()
+  check(
+    (await tab.getByRole('region', { name: '저장하지 않은 변경' }).count()) === 0 && (await headcount.inputValue()) === headcountBefore,
+    '변경 취소 → 원래 값 · 저장 바 사라짐',
+  )
+
+  await tab.evaluate(() => {
+    window.location.hash = '#/onboarding?project=prj-forum-h2'
+  })
+  await tab.getByRole('heading', { name: '행사 기본 정보' }).waitFor({ timeout: 10_000 })
+  const venue = tab.getByLabel('장소', { exact: true })
+  await venue.waitFor({ timeout: 10_000 })
+  const progressText = async () => (await tab.getByTestId('onboarding-progress-text').innerText()).replace(/\s+/g, ' ').trim()
+  const progress = await progressText()
+  check(/^3단계 중 1단계 · 필수 4개 중 \d개 입력$/.test(progress), '온보딩 진행 줄 = n단계 중 k단계 · 필수 4개 중 m개 입력', progress)
+  const stepNow = await tab.getByRole('list', { name: '온보딩 단계' }).locator('li[aria-current="step"]').innerText()
+  check(/행사 개요/.test(stepNow), '단계 줄 지금 단계 = 행사 개요', stepNow.replace(/\s+/g, ' '))
+  check(
+    (await tab.getByText('무엇을', { exact: true }).count()) === 1 && (await tab.getByText('언제 · 어디서', { exact: true }).count()) === 1,
+    '온보딩 1단계 = 넓은 2열(무엇을 / 언제 · 어디서)',
+  )
+  const obFilled = (await tab.locator('.btn-accent, .btn-primary').allInnerTexts()).map((t) => t.trim())
+  check(obFilled.join('|') === '다음: 담당자', '온보딩 1단계 채운 버튼 = 다음: 담당자 하나', obFilled.join(' · '))
+  const filledBefore = Number(/필수 4개 중 (\d)개/.exec(progress)?.[1] ?? '0')
+  await venue.fill('')
+  // 진행 줄은 폼이 알려 준 개수로 다시 그려진다(한 프레임 뒤) — 바로 읽지 않고 그 글자가 뜨기를 기다린다
+  const liveOk = await tab
+    .getByTestId('onboarding-progress-text')
+    .filter({ hasText: `필수 4개 중 ${filledBefore - 1}개 입력` })
+    .waitFor({ timeout: 5_000 })
+    .then(
+      () => true,
+      () => false,
+    )
+  check(liveOk, '장소를 비우면 저장 전에도 필수 개수가 바로 줄어든다', await progressText())
+  await tab.screenshot({ path: resolve(SHOTS, '03-onboarding-step1.png'), fullPage: true })
+  let asked = ''
+  tab.once('dialog', (d) => {
+    asked = d.message()
+    d.accept()
+  })
+  await tab.getByRole('button', { name: '나중에 하기' }).click()
+  await tab.getByRole('heading', { name: '행사 목록', exact: true }).waitFor({ timeout: 10_000 })
+  check(/저장하지 않은 입력이 있습니다/.test(asked), "저장 안 한 입력이 있으면 '나중에 하기'가 먼저 묻고 → 행사 목록", asked.slice(0, 24))
+  check(docRequests.length === docBefore, '행사 설정·온보딩 이동·고치기에 전체 리로드 0', `${docBefore} → ${docRequests.length}`)
+  await tab.evaluate(() => {
+    window.location.hash = '#/home?project=prj-rebuild27'
+  })
+  await tab.getByTestId('today-list').waitFor({ timeout: 10_000 })
+  await tab.locator('aside nav a', { hasText: '일정' }).first().click()
+  await tab.waitForURL(/#\/schedule/, { timeout: 10_000 })
+}
+
+// ── ③-이전(2026-09-25 Phase 3.23 PR-7) 정산보드 — 직전 PR ③을 회귀 가드로 유지.
 //     샘플 행사의 정산보드(?project=) → 머리 채운 버튼 1개(협력사 견적서 불러오기) · 최종 마진 칸 '검산 일치' ·
 //     견적 초과 알림 '항목 보기' → 시스템 구축이 펼쳐지고 메모 안내 · 발주 항목 ⋯ 메뉴(PM) 열고 Esc · 원가 없는 그룹행 →
 //     데모 기본 행사(RB27)로 되돌리고 '일정'으로.
@@ -659,7 +744,7 @@ const docBeforeMembers = docRequests.length
 await tab.evaluate(() => {
   window.location.hash = '#/settings'
 })
-await tab.getByRole('button', { name: '② 담당자' }).click()
+await tab.getByRole('button', { name: '담당자', exact: true }).click()
 const laneOf = (label) => tab.getByRole('region', { name: `${label} 담당` })
 await laneOf('운영').getByText('박운영').waitFor({ timeout: 10_000 })
 check((await tab.getByRole('option', { name: '담당자 선택' }).count()) === 0, '담당자: 셀렉트 피커 대신 역할 칸 4개', 'PM·디자인·운영·등록')

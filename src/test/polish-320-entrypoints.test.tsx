@@ -83,7 +83,7 @@ describe('④ 행사 설정에서 발주처 화면을 연다', () => {
     localStorage.setItem('communicator.currentProjectId', PROJECT_ID)
     renderRoute('/settings')
     await screen.findByRole('heading', { name: '행사 설정' })
-    await userEvent.click(await screen.findByRole('button', { name: '② 담당자' }))
+    await userEvent.click(await screen.findByRole('button', { name: '담당자' }))
 
     const links = await screen.findByTestId('client-view-links')
     expect(links.textContent).toContain('로그인 없이')
