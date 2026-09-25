@@ -338,6 +338,8 @@
 
   .ui-table > thead > tr > th:first-child {
     z-index: 2;
+    /* 스티키 첫 열의 background:inherit가 thead(면 없음)에서 투명이 되어 머리 첫 칸만 흰 면으로 보였다 — 머리 재질(canvas)로 */
+    background: var(--canvas);
   }
 
   /* 03 숫자·금액 우측정렬 + tabular */

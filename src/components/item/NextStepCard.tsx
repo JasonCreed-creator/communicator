@@ -118,6 +118,7 @@ export default function NextStepCard({
   sendViaHeader = false,
   showRail,
   clientLink,
+  inlineSend = false,
   onUpload,
   onChanged,
 }: {
@@ -134,6 +135,8 @@ export default function NextStepCard({
   showRail: boolean
   /** 컨펌대기일 때 발주처 링크 재전달(대행형 PM) — 없으면 버튼 없음 */
   clientLink: ClientLinkTarget | null
+  /** 큐시트(§7-2.8) — PM 컨펌 발송을 카드 한 줄 안에(답 기한 · 반려… · 컨펌 발송). 버전은 표 스냅숏이 자동으로 된다 */
+  inlineSend?: boolean
   /** 업로드 카드로 시선 옮기기(전이 없음) */
   onUpload: () => void
   onChanged: () => void
@@ -218,6 +221,10 @@ export default function NextStepCard({
       } else if (!d.requires_approval) {
         title = '내부 확인으로 마무리'
         description = '컨펌 루프를 쓰지 않는 공통 문서입니다 — 내부 확인으로 마무리합니다.'
+      } else if (inlineSend) {
+        title = '검토하고 발주처로 보낼 차례'
+        description = `보내면 지금 표가 PDF로 저장돼 v${(latest?.version_no ?? 0) + 1}${objectParticle((latest?.version_no ?? 0) + 1) === '을' ? '이' : '가'} 됩니다.`
+        actions = <InlineSendForm deliverableId={d.id} onChanged={onChanged} />
       } else {
         title = '검토하고 발주처로 보낼 차례'
         description = '반려하거나, 보낼 버전과 답 기한을 정해 컨펌을 발송하세요.'
@@ -287,7 +294,14 @@ export default function NextStepCard({
         </div>
         {status === 'draft' && canWriteArea && <ErrorAlert message={toReview.error} />}
 
-        {status === 'internal_review' && isPm && (
+        {status === 'internal_review' && isPm && inlineSend && !isHost && !hasPartner && d.requires_approval && (
+          // Phase 6 계약 — 이메일이 아직 가지 않는다는 사실은 발송 칸 곁에(게이트 뒤에 숨기지 않는다) + 링크 0개 경고
+          <div className="space-y-2">
+            <EmailPendingNote />
+            <ClientLinkWarning />
+          </div>
+        )}
+        {status === 'internal_review' && isPm && !(inlineSend && !isHost && !hasPartner && d.requires_approval) && (
           <PmReviewForms
             deliverable={d}
             isHost={isHost}
@@ -315,6 +329,64 @@ function sentLine(open: DeliverableDetail['approvals'][number] | null, versions:
     due = left < 0 ? ` (기한 ${formatDate(open.due_at.slice(0, 10))} — ${-left}일 지남)` : ` (기한 ${formatDate(open.due_at.slice(0, 10))})`
   }
   return `${sent}${due}.`
+}
+
+// ── 큐시트 한 줄 발송 — 답 기한 · 반려… · 컨펌 발송 (§7-2.8 · 캔버스 큐시트) ──────────────
+function InlineSendForm({ deliverableId, onChanged }: { deliverableId: string; onChanged: () => void }) {
+  const [dueAt, setDueAt] = useState('')
+  const [rejecting, setRejecting] = useState(false)
+  const [rejectComment, setRejectComment] = useState('')
+  // 정형 문서는 provider가 version_id를 무시하고 표 스냅숏(.pdf)을 자동 버전으로 등록한다 — 관례상 'auto'
+  const send = useMutation(() =>
+    provider.requestApproval(deliverableId, { version_id: 'auto', due_at: dueAt ? new Date(dueAt).toISOString() : undefined }),
+  )
+  const reject = useMutation((comment: string) => provider.transitionStatus(deliverableId, 'draft', { comment }))
+
+  const handleSend = async (e: FormEvent) => {
+    e.preventDefault()
+    if (await send.run()) onChanged()
+  }
+  const handleReject = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!rejectComment.trim()) return
+    if (await reject.run(rejectComment)) {
+      setRejectComment('')
+      setRejecting(false)
+      onChanged()
+    }
+  }
+
+  return (
+    <div className="flex flex-col items-end gap-2">
+      <form onSubmit={handleSend} className="flex flex-wrap items-end justify-end gap-2">
+        <label className="flex flex-col gap-1 t-caption">
+          답 기한
+          <input type="datetime-local" value={dueAt} onChange={(e) => setDueAt(e.target.value)} className="ui-input w-[200px]" />
+        </label>
+        <button type="button" onClick={() => setRejecting((v) => !v)} aria-expanded={rejecting} className="btn btn-ghost">
+          반려…
+        </button>
+        <button type="submit" disabled={send.pending} className="btn btn-accent">
+          컨펌 발송
+        </button>
+      </form>
+      {rejecting && (
+        <form onSubmit={handleReject} className="flex w-full flex-wrap justify-end gap-2">
+          <input
+            value={rejectComment}
+            onChange={(e) => setRejectComment(e.target.value)}
+            placeholder="반려 사유 (초안으로 돌려보냅니다)"
+            aria-label="반려 사유"
+            className="ui-input min-w-64 flex-1"
+          />
+          <button type="submit" disabled={reject.pending} className="btn btn-ghost">
+            반려
+          </button>
+        </form>
+      )}
+      <ErrorAlert message={send.error ?? reject.error} />
+    </div>
+  )
 }
 
 // ── PM 폼 — 반려 · 컨펌 발송 (3.17b 상태 액션 카드에서 그대로 옮겼다) ─────────────
