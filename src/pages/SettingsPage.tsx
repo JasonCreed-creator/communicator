@@ -189,7 +189,7 @@ export default function SettingsPage() {
   return (
     <section className="space-y-6 p-6">
       <PageHeader
-        caption="S6 · 행사 설정"
+        caption="준비"
         title="행사 설정"
         action={
           project.data ? (

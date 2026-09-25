@@ -19,7 +19,7 @@ import DeleteProjectDialog, { canDeleteProject } from '../components/settings/De
 import { missingRequired } from '../components/settings/requiredFields'
 import { useProject } from '../context/ProjectContext'
 import { useAsync, useMutation } from '../hooks/useAsync'
-import { EVENT_TYPE_LABELS, ddayLabel, formatDate } from '../lib/labels'
+import { EVENT_TYPE_LABELS, daysUntil, eventDayLabel, formatDate } from '../lib/labels'
 import { getDataProvider } from '../providers'
 import type { ProjectSummary } from '../types/views'
 
@@ -66,7 +66,7 @@ export default function ProjectListPage() {
   return (
     <section className="space-y-6 p-6">
       <PageHeader
-        caption="S-1 · 행사 목록"
+        caption="전체"
         title="내 행사"
         action={
           <button
@@ -193,10 +193,11 @@ function ProjectCard({
 
   const needsSetup = !summary.onboarded && !closedSection
   const missing = missingRequired(summary)
-  const dday = summary.event_date ? ddayLabel(summary.event_date) : null
-  // D-day pill: 지난 기한은 negative, 30일 이내는 dark(눈에 걸리게), 그 밖은 중립 track면
-  const overdue = !!dday && dday.startsWith('D+')
-  const near = !!dday && !overdue && (dday === 'D-day' || Number(dday.slice(2)) <= 30)
+  const dday = summary.event_date ? eventDayLabel(summary.event_date) : null
+  const daysLeft = summary.event_date ? daysUntil(summary.event_date) : null
+  // D-day pill: 지난 행사일은 negative('n일 지남'), 30일 이내는 dark(눈에 걸리게), 그 밖은 중립 track면
+  const overdue = daysLeft !== null && daysLeft < 0
+  const near = daysLeft !== null && daysLeft >= 0 && daysLeft <= 30
   const ddayTone = closedSection
     ? 'bg-track text-ink-sub'
     : overdue
@@ -225,7 +226,7 @@ function ProjectCard({
         {isCurrent && (
           <span
             data-testid="current-badge"
-            className="inline-flex shrink-0 items-center rounded-full bg-accent px-2 py-0.5 text-[11px] font-semibold text-white"
+            className="inline-flex shrink-0 items-center rounded-full bg-accent-deep px-2 py-0.5 text-[11px] font-semibold text-white"
           >
             현재
           </span>

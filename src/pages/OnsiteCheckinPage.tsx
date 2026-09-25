@@ -49,7 +49,7 @@ export default function OnsiteCheckinPage() {
   return (
     <section className="space-y-4 p-6">
       <PageHeader
-        caption="S-12 · 현장 체크인"
+        caption="운영"
         title="현장 체크인"
         action={<SnapshotBadge snapshotAt={connection.data?.snapshot_at ?? null} />}
       />

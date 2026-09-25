@@ -146,7 +146,7 @@ const strings = {
     s5LinkedTitle: "연결된 행사",
     s5GoProject: "연결된 행사로 이동 →",
     // 목록 (S-2 /quotes)
-    listCaption: "준비 · S-2",
+    listCaption: "준비",
     listTitle: "견적",
     listNewQuote: "＋ 새 견적",
     listNewVersion: "＋ 새 버전",
@@ -307,7 +307,7 @@ const strings = {
     s5Creating: "Creating event…",
     s5LinkedTitle: "Linked event",
     s5GoProject: "Go to the linked event →",
-    listCaption: "PREP · S-2",
+    listCaption: "PREP",
     listTitle: "Quotes",
     listNewQuote: "＋ New Quote",
     listNewVersion: "＋ New Version",

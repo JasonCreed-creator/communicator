@@ -152,7 +152,7 @@ export default function LandingEditorPage() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        caption="준비 · S-3"
+        caption="준비"
         title={page.title}
         action={
           <>
@@ -404,7 +404,7 @@ export default function LandingEditorPage() {
                   patch((p) => ({ ...p, submit_target: e.target.value as LandingPage['submit_target'] }))
                 }
               >
-                <option value="registration">등록(S4)으로 유입</option>
+                <option value="registration">등록 보드로 유입</option>
                 <option value="external">외부 URL로 제출</option>
               </select>
             </label>

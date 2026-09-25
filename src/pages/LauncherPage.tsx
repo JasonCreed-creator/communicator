@@ -25,7 +25,7 @@ interface ProductCard {
 export const LAUNCHER_PRODUCTS: ProductCard[] = [
   {
     to: '/quotes',
-    code: 'S-2 · 견적',
+    code: '견적 단계',
     name: '견적 컨피규레이터',
     summary: '행사 규모·베뉴·옵션을 고르면 견적과 Excel 견적서가 바로 나옵니다. 확정 견적으로 행사를 만들 수 있습니다.',
     features: ['5스텝 견적 에디터', '베뉴 DB · 옵션 12종', 'Excel 내려받기 · 견적서 가져오기'],
@@ -34,7 +34,7 @@ export const LAUNCHER_PRODUCTS: ProductCard[] = [
   },
   {
     to: '/home',
-    code: 'S1 · 홈',
+    code: '행사 준비 · 운영 · 정산',
     name: 'MICE 커뮤니케이터',
     summary: '행사 준비부터 현장·정산까지 — 산출물 컨펌, 일정·WBS, 등록, 운영계획서를 한 곳에서 관리합니다.',
     features: ['디자인·운영 보드 · 발주처 컨펌', '일정·WBS · 등록·현장 체크인', '운영계획서 · 정산보드'],
@@ -71,7 +71,7 @@ function ProductLink({ product }: { product: ProductCard }) {
     >
       <div className="flex items-start justify-between gap-3">
         <ProductIcon d={product.icon} />
-        <span className="t-caption rounded-full bg-track px-2.5 py-1 font-mono">{product.code}</span>
+        <span className="t-caption rounded-full bg-track px-2.5 py-1">{product.code}</span>
       </div>
       <div>
         <h2 className="t-section-title">{product.name}</h2>

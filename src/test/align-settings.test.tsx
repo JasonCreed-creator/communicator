@@ -46,7 +46,7 @@ describe('S-1 행사 목록 — 카드 3층', () => {
 
     // ② D-day pill + 확정 진행률(바 아래 줄 우측 수치)
     const dday = within(el).getByTestId('card-dday')
-    expect(dday.textContent).toMatch(/^(D-\d+|D\+\d+|D-day|일정 미정)$/)
+    expect(dday.textContent).toMatch(/^(D-\d+|\d+일 지남|D-day|일정 미정)$/)
     expect(within(el).getByText(`확정 ${summary.finals}/${summary.deliverable_total}`)).toBeTruthy()
 
     // ③ 주의 신호 층이 분리선 아래 별도 블록으로 존재

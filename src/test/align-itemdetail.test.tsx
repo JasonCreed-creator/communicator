@@ -2,7 +2,7 @@
 // Phase 3.17b — 항목 상세(S3) 시안 정렬 계약.
 // 시안 정본 = `항목 상세.dc.html` + 패턴 기준 시트(§03 배지 · §04 역할=형태 · §05 표 정본).
 // 여기서 고정하는 "시각 구조 계약"은 6가지다:
-//   (a) 헤더 집약 — 복귀 경로(보드 › 카테고리 › S3) · 상태 배지 · 담당 역할 도트 · 마감 D-day · 주 액션 2개
+//   (a) 헤더 집약 — 복귀 경로(보드 › 카테고리) · 상태 배지 · 담당 역할 도트 · 마감 기한 라벨 · 주 액션 2개
 //   (b) 6단계 진행 레일 — 완료(accent 원+체크) / 현재(2px 아웃라인) / 되돌아온 지점(negative)
 //   (c) 레일 아래 '다음 단계' 블록 — 할 일 하나 + 버튼 하나
 //   (d) 발주처 수정요청이 상태 카드 밖(본문 최상단) 경고 카드로 승격 — 원문 인용 + 결정일시
@@ -28,12 +28,12 @@ describe('3.17b (a) 헤더 집약', () => {
     const crumb = screen.getByRole('navigation', { name: '위치' })
     const header = crumb.parentElement!
 
-    // 복귀 경로 — 보드 › 카테고리 › S3
+    // 복귀 경로 — 보드 › 카테고리 (화면 코드 S3는 v1.4 §7-2.3에서 제거)
     expect(within(crumb).getByRole('link', { name: '디자인 보드' }).getAttribute('href')).toBe(
       '/board/design',
     )
     expect(within(crumb).getByText('키비주얼')).toBeTruthy()
-    expect(within(crumb).getByText('S3')).toBeTruthy()
+    expect(within(crumb).queryByText('S3')).toBeNull()
 
     // 상태 배지가 제목 옆에(=헤더 안에) 온다. 제목의 접근성 이름은 오염되지 않는다
     expect(within(header).getAllByText('컨펌대기').some((el) => el.classList.contains('ui-badge'))).toBe(
@@ -46,7 +46,7 @@ describe('3.17b (a) 헤더 집약', () => {
 
     // 마감 + D-day 배지
     expect(within(header).getByText(/마감 .+/)).toBeTruthy()
-    expect(within(header).getByText(/^D[-+]\d+$|^D-day$/)).toBeTruthy()
+    expect(within(header).getByText(/^D-\d+$|^오늘$|^\d+일 지남$/)).toBeTruthy()
 
     // 주 액션 2개 — 최신본 다운로드(링크) + 새 버전 업로드(주 버튼)
     expect(await within(header).findByRole('link', { name: '최신본 다운로드' })).toBeTruthy()

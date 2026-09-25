@@ -13,7 +13,7 @@ import {
 import DdayBadge from '../internal/DdayBadge'
 import SortableTh, { type SortDirection } from '../internal/SortableTh'
 import { LevelBadge } from '../internal/StatusBadge'
-import { ROLE_BAR_CLASSES, ROLE_LABELS, WBS_DIRECTION_LABELS, ddayLabel, formatDate } from '../../lib/labels'
+import { ROLE_BAR_CLASSES, ROLE_LABELS, WBS_DIRECTION_LABELS, formatDate } from '../../lib/labels'
 import { toIsoDate } from '../../lib/wbs'
 import type { Deliverable, WbsTask } from '../../types/entities'
 
@@ -177,10 +177,10 @@ function RoleDot({ role }: { role: WbsTask['role'] }) {
   return <span aria-hidden className={`size-2 shrink-0 rounded-full ${ROLE_BAR_CLASSES[role]}`} />
 }
 
-/** D-day 열 — 미완료 태스크만 배지(지난 기한은 negative). 완료 태스크는 경보가 아니므로 중립 텍스트. */
+/** D-day 열 — 미완료 태스크만 배지(지난 기한은 negative). 완료 태스크는 상태 배지가 이미 '완료'라 이 칸은 비운다(§7-2.2 — 끝난 일에 'n일 지남'을 붙이지 않는다). */
 function TaskDday({ task }: { task: WbsTask }) {
   if (!task.end_date) return <span className="text-xs text-ink-cap">—</span>
-  if (task.status === 'done') return <span className="text-xs text-ink-cap">{ddayLabel(task.end_date)}</span>
+  if (task.status === 'done') return <span className="text-xs text-ink-cap">—</span>
   return <DdayBadge isoDate={task.end_date} />
 }
 

@@ -144,7 +144,7 @@ export default function GuideBuilder({
           docTypeLabel="운영가이드"
           title={d.title}
           status={d.status}
-          desc="섹션 정형 편집 · 인쇄(A4)·PDF 스냅숏 → 스태프 배포 · S9 ④존별 운영·⑦비상 대응으로 자동 조립"
+          desc="섹션 정형 편집 · 인쇄(A4)·PDF 스냅숏 → 스태프 배포 · 운영계획서 ④존별 운영·⑦비상 대응으로 자동 조립"
           deliverableId={deliverableId}
           isHost={project.data?.kind === 'host'}
           isPm={currentUser.data?.role === 'pm'}
@@ -227,7 +227,7 @@ export default function GuideBuilder({
         <div className="plan-print-hidden mt-4 rounded-lg border border-dashed border-border-strong bg-canvas px-4 py-3 text-xs leading-relaxed text-ink-sub">
           연동 필드는 원본(존운영·R&R)이 바뀌면 &quot;갱신 있음&quot;으로 표시된 뒤 확인을 거쳐
           반영됩니다 — 자동 덮어쓰기 없음(기준 견적 갱신과 같은 차이 확인 패턴). 개인정보는
-          화면·S9 조립에 넣지 않고 인쇄 스냅숏에만 포함 옵션입니다.
+          화면·운영계획서 조립에 넣지 않고 인쇄 스냅숏에만 포함 옵션입니다.
         </div>
       </div>
     </div>

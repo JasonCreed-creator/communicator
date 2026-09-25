@@ -56,7 +56,7 @@ export default function ProjectKindCards({
               <div className="flex items-center justify-between gap-2">
                 <span className="t-card-title">{PROJECT_KIND_LABELS[k]}</span>
                 {active && (
-                  <span className="rounded-full bg-accent px-2 py-0.5 text-[11px] font-semibold text-white">
+                  <span className="rounded-full bg-accent-deep px-2 py-0.5 text-[11px] font-semibold text-white">
                     현재
                   </span>
                 )}

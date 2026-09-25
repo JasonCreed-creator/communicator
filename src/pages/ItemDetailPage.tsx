@@ -410,9 +410,7 @@ function ItemHeader({
           <span>{AREA_LABELS[area]}</span>
         )}
         <span aria-hidden>›</span>
-        <span>{category}</span>
-        <span aria-hidden>›</span>
-        <span className="text-ink-sub">S3</span>
+        <span className="text-ink-sub">{category}</span>
       </nav>
       <div className="mt-2 flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0">

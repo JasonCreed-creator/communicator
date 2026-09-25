@@ -245,7 +245,7 @@ function EditorBody({ quoteId, initialStep }: { quoteId: string | null; initialS
                 key={lc}
                 type="button"
                 onClick={() => setLang(lc)}
-                className={`px-3 py-1.5 text-xs font-bold ${lang === lc ? 'bg-accent text-white' : 'bg-card text-ink-sub'}`}
+                className={`px-3 py-1.5 text-xs font-bold ${lang === lc ? 'bg-accent-deep text-white' : 'bg-card text-ink-sub'}`}
               >
                 {lc.toUpperCase()}
               </button>

@@ -620,7 +620,7 @@ function ReviewPanel({
       </div>
 
       <Link to={`/items/${deliverableId}`} className="text-xs text-steel hover:underline">
-        항목 상세(S3)에서 전체 이력 보기 →
+        항목 상세에서 전체 이력 보기 →
       </Link>
     </div>
   )

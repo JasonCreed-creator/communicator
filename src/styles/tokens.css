@@ -9,7 +9,7 @@
   --track: #efebe0; /* 진행바 트랙·비활성 면 */
   --ink: #1a1a1a; /* 본문 (퓨어 블랙 #000 금지) */
   --ink-sub: #6e6e6e; /* 보조 텍스트 */
-  --ink-cap: #8c867a; /* 캡션·라벨 */
+  --ink-cap: #756f64; /* 캡션·라벨 — v1.4(Phase 3.23): #8c867a(흰 바탕 3.6:1) → 4.98:1 · canvas 4.77:1 (본문 크기 4.5:1 충족) */
   --brown: #4a463f; /* 서브 잉크·섹션 번호 — 역할 컬러 pm 겸용 */
   --accent: #eb6f2a; /* 리멤버 오렌지 — CTA·활성·강조 — 역할 컬러 design 겸용 */
   --accent-deep: #b8431a; /* 액센트 텍스트·호버 */
@@ -20,7 +20,7 @@
   --dark-ink: #f4f0e9; /* 다크 위 텍스트 */
   --positive: #196b24; /* 승인·완료 */
   --positive-tint: #e8f2e9;
-  --negative: #d93636; /* 수정요청·지연 */
+  --negative: #c42f2f; /* 수정요청·지연 — v1.4(Phase 3.23): #d93636(틴트 위 배지 3.99:1) → negative-tint 위 4.76:1 */
   --negative-tint: #fbeaea;
   --role-reg: #f3b48a; /* §3 역할 컬러 reg */
   --shadow-1: 0 1px 3px rgba(74, 70, 63, 0.08); /* 그림자 한 단계만 */

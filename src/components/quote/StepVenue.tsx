@@ -180,7 +180,7 @@ export default function StepVenue({
                       🏨 {t.venueCardTitle(vi + 1)}
                     </span>
                     {isSel ? (
-                      <span className="rounded-full bg-accent px-2.5 py-0.5 text-xs font-bold text-white">{t.venueSelectedTag}</span>
+                      <span className="rounded-full bg-accent-deep px-2.5 py-0.5 text-xs font-bold text-white">{t.venueSelectedTag}</span>
                     ) : (
                       <span className="rounded-full border border-border px-2.5 py-0.5 text-xs text-ink-sub">{t.venueSelectBtn}</span>
                     )}

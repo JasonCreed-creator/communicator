@@ -45,7 +45,7 @@ export default function PartnerDeadlineTimeline({ groups }: { groups: HostTaskGr
                   {WBS_DIRECTION_LABELS[g.direction]}
                 </span>
                 {timing === 'current' && (
-                  <span className="rounded-full bg-accent px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                  <span className="rounded-full bg-accent-deep px-1.5 py-0.5 text-[10px] font-semibold text-white">
                     이번 마감
                   </span>
                 )}
