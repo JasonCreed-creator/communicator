@@ -87,7 +87,8 @@ describe('P6-⑥ 보드 그룹 헤딩 라벨 — "발주 제작물" → "컨펌 
     localStorage.setItem('communicator.currentProjectId', 'prj-rebuild27')
     renderRoute('/board/design')
 
-    expect(await screen.findByText('컨펌 대상 제작물')).toBeTruthy()
+    // Phase 3.23 PR-3 — 카테고리 묶음 대신 행마다 제목 아래 카테고리가 온다(표시 이름은 그대로)
+    expect((await screen.findAllByText('컨펌 대상 제작물')).length).toBeGreaterThan(0)
     expect(screen.queryByText('발주 제작물')).toBeNull()
 
     // 데이터(Deliverable.category)는 원문 그대로 저장돼 있다 — 화면 표시만 바뀐 것

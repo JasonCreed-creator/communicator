@@ -1,5 +1,5 @@
-import { Fragment, useState, type FormEvent, type ReactNode } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Fragment, useEffect, useState, type FormEvent, type ReactNode } from 'react'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 import CuesheetEditor from '../components/cue/CuesheetEditor'
 import GuideBuilder from '../components/guide/GuideBuilder'
 import ScenarioBuilder from '../components/scenario/ScenarioBuilder'
@@ -78,6 +78,26 @@ function ItemDetail({ itemId }: { itemId: string }) {
   const members = useAsync(() => provider.listMembers(projectId), [projectId])
   const project = useAsync(() => provider.getProject(projectId), [projectId])
   const detail = useAsync(() => provider.getDeliverable(itemId), [itemId])
+  // Phase 3.23 PR-3(§7-2.6) — 디자인 보드의 '올리기'는 `?upload=1`로 들어온다. 화면이 그려지면 업로드 카드로
+  // 시선을 옮기고(잠금 안내·Drive 경고·진행률이 있는 한 곳) 주소에서 표시를 지운다 — 새로고침해도 다시 튀지 않게.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const wantsUpload = searchParams.get('upload') === '1'
+  const readyForUpload = !!detail.data && !!currentUser.data
+  useEffect(() => {
+    if (!wantsUpload || !readyForUpload) return
+    const t = setTimeout(() => {
+      focusVersionUpload()
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev)
+          next.delete('upload')
+          return next
+        },
+        { replace: true },
+      )
+    }, 0)
+    return () => clearTimeout(t)
+  }, [wantsUpload, readyForUpload, setSearchParams])
   // v2.4 §10.1 — 주최형에서는 발주처 컨펌 발송 UI를 숨긴다(파트너 항목이든 아니든, DoD 31)
   const isHost = project.data?.kind === 'host'
   // v2.5 §23 — 시나리오·운영가이드 빌더 문서 판정 재료. 카테고리 문자열만으로는 부족하다:

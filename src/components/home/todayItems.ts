@@ -2,7 +2,7 @@
 // 한 목록으로 모으는 순수 파생 로직 (디자인지시서 v1.4 §7-2.5 · 캔버스 "커뮤니케이터 UX 개편" 홈).
 // provider·상태 머신은 건드리지 않는다 — 이미 받아온 데이터를 표시용 행으로 옮길 뿐이다.
 // 금액 키는 이 파일이 다루는 어떤 값에도 없다(정산 행은 버킷 이름만 싣는다 — 금액은 정산보드에서).
-import { AREA_LABELS, daysUntil, formatDate, type StatusLevel } from '../../lib/labels'
+import { AREA_LABELS, daysUntil, formatDate, waitingDays, type StatusLevel } from '../../lib/labels'
 import type { Deliverable, Milestone, UnregisteredFile, WbsTask } from '../../types/entities'
 import type { MemberRole } from '../../types/enums'
 import type { PendingApprovalItem } from '../../types/views'
@@ -67,12 +67,6 @@ export interface TodayInput {
   roleOf: (userId: string | null) => MemberRole | null
   nameOf: (userId: string | null) => string | null
   now?: Date
-}
-
-/** 컨펌 대기 일수 — 요청 시각 기준(음수 방지). */
-export function waitingDays(requestedAt: string, now: Date = new Date()): number {
-  const diff = Math.floor((now.getTime() - new Date(requestedAt).getTime()) / 86_400_000)
-  return diff < 0 ? 0 : diff
 }
 
 /** 태스크에 연결된 산출물이 있으면 그 상세로, 없으면 일정으로 보낸다. */

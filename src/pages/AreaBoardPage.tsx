@@ -10,8 +10,8 @@ import PageHeader from '../components/internal/PageHeader'
 import StatusBadge from '../components/internal/StatusBadge'
 import BoardFilterBar from '../components/board/BoardFilterBar'
 import BoardGroupHeading from '../components/board/BoardGroupHeading'
-import BoardStatusLegend from '../components/board/BoardStatusLegend'
 import DeliverableAddForm from '../components/board/DeliverableAddForm'
+import DesignBoard from '../components/board/DesignBoard'
 import OpsDocCardGrid, { type OpsDocCardSummary } from '../components/board/OpsDocCardGrid'
 import {
   CARD_PRESET_CATEGORY,
@@ -70,6 +70,8 @@ function isLegacyFileDoc(row: BoardRow): boolean {
 export default function AreaBoardPage() {
   const { area } = useParams<{ area: string }>()
   if (!area || !BOARD_AREAS.includes(area as DeliverableArea)) return <NotFoundPage />
+  // Phase 3.23 PR-3(§7-2.6) — 디자인 보드는 '다음 행동' 표·갤러리로 따로 그린다. 아래 AreaBoard는 운영 보드(유형 우선 v2.5)다.
+  if (area === 'design') return <DesignBoard />
   return <AreaBoard area={area as DeliverableArea} />
 }
 
@@ -303,15 +305,9 @@ function AreaBoard({ area }: { area: DeliverableArea }) {
       ) : (
         <>
           <div className="print-hidden">{filterBar(false)}</div>
-          {/* design 보드는 상태 범례를 그대로 둔다(3.16 범위 = 운영보드) */}
-          {area === 'design' && <BoardStatusLegend />}
           {loadingMessage}
           {emptyMessage}
-          <BoardGroupList
-            area={area}
-            rows={cardFilteredRows}
-            renderRow={renderRow}
-          />
+          <BoardGroupList rows={cardFilteredRows} renderRow={renderRow} />
           {addForm}
         </>
       )}
@@ -322,40 +318,15 @@ function AreaBoard({ area }: { area: DeliverableArea }) {
 /**
  * 전체 보기(유형 미선택) 목록. P11 — 운영보드의 그룹 헤더는 **카드 명칭과 일치**시키고
  * (큐시트·시나리오·운영가이드·기타 제작물), 원시 카테고리(존운영 등)는 '기타 제작물' 그룹
- * 안의 소제목으로 내린다. 디자인 보드는 종전대로 카테고리 단위 그룹을 그대로 쓴다.
+ * 안의 소제목으로 내린다. 디자인 보드는 Phase 3.23 PR-3부터 `components/board/DesignBoard`가 그린다.
  */
 function BoardGroupList({
-  area,
   rows,
   renderRow,
 }: {
-  area: DeliverableArea
   rows: BoardRow[]
   renderRow: (row: BoardRow) => ReactNode
 }) {
-  if (area !== 'ops') {
-    const grouped = new Map<string, BoardRow[]>()
-    for (const row of rows) {
-      const list = grouped.get(row.deliverable.category) ?? []
-      list.push(row)
-      grouped.set(row.deliverable.category, list)
-    }
-    return (
-      <div className="space-y-6">
-        {[...grouped.entries()].map(([category, groupRows]) => (
-          <div key={category} className="space-y-3">
-            <BoardGroupHeading
-              label={categoryGroupLabel(category)}
-              count={groupRows.length}
-              doneCount={doneCountOf(groupRows)}
-            />
-            <ul className="space-y-2">{groupRows.map(renderRow)}</ul>
-          </div>
-        ))}
-      </div>
-    )
-  }
-
   const byCard = new Map<OpsDocCardKey, BoardRow[]>()
   for (const row of rows) {
     const key = classifyOpsCard(row.deliverable.category)

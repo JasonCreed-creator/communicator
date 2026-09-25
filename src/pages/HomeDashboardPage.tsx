@@ -8,7 +8,7 @@ import { activityActionLabel, activityActorLabel } from '../components/internal/
 import HomeSummaryTiles, { type SummaryTile } from '../components/home/HomeSummaryTiles'
 import TodayListCard from '../components/home/TodayListCard'
 import UpcomingCard, { type UpcomingEntry } from '../components/home/UpcomingCard'
-import { buildTodayRows, waitingDays } from '../components/home/todayItems'
+import { buildTodayRows } from '../components/home/todayItems'
 import { groupHostTasks } from '../components/partner/partnerBoardUtils'
 import { useProject } from '../context/ProjectContext'
 import { useAsync } from '../hooks/useAsync'
@@ -20,6 +20,7 @@ import {
   eventDayLabel,
   formatDateTime,
   formatDateWeekday,
+  waitingDays,
 } from '../lib/labels'
 import { getNotifyGateway } from '../lib/notify/notifyGateway'
 import { getDataProvider } from '../providers'

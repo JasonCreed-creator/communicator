@@ -25,9 +25,14 @@ export function EmailPendingNote({ className = '' }: { className?: string }) {
   )
 }
 
-/** 발주처가 지금 열 수 있는 링크가 하나라도 있는가 — 회수되지 않았고 기한이 없거나 남았다 */
+/** 발주처가 지금 열 수 있는 링크 — 회수되지 않았고 기한이 없거나 남았다 */
+export function activeClientLinks(tokens: readonly ClientToken[], now: number = Date.now()): ClientToken[] {
+  return tokens.filter((t) => !t.revoked_at && (!t.expires_at || Date.parse(t.expires_at) > now))
+}
+
+/** 발주처가 지금 열 수 있는 링크가 하나라도 있는가 */
 export function hasActiveClientLink(tokens: readonly ClientToken[], now: number = Date.now()): boolean {
-  return tokens.some((t) => !t.revoked_at && (!t.expires_at || Date.parse(t.expires_at) > now))
+  return activeClientLinks(tokens, now).length > 0
 }
 
 export default function ClientLinkWarning({ className = '' }: { className?: string }) {
