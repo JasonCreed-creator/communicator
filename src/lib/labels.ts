@@ -265,6 +265,12 @@ export function daysUntil(isoDate: string, today: Date = new Date()): number {
   return Math.round((target.getTime() - base.getTime()) / 86_400_000)
 }
 
+/** 요청·발송 뒤 지난 날수 — 시각 기준(음수 방지). 컨펌·파트너 제출처럼 '보낸 지 n일'에 쓴다 */
+export function waitingDays(requestedAt: string, now: Date = new Date()): number {
+  const diff = Math.floor((now.getTime() - new Date(requestedAt).getTime()) / 86_400_000)
+  return diff < 0 ? 0 : diff
+}
+
 /** 기준일 대비 D-day 라벨: 'D-7' | 'D-day' | 'D+3' — 발주처 화면·운영계획서 문서용(관행 표기 유지) */
 export function ddayLabel(isoDate: string, today: Date = new Date()): string {
   const diff = daysUntil(isoDate, today)

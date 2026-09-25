@@ -2,10 +2,11 @@
 // Phase 3.17b — 디자인 보드 · 운영 보드(S2) 시안 정렬 계약.
 // 시안 정본 = `디자인 · 운영 보드.dc.html` + 패턴 기준 시트(§03 배지 4단계 · §05 표 · §06 빈 상태 · §07 진행 막대).
 // 여기서 고정하는 것은 "시각 구조 계약" 6가지다:
-//   (a) 항목 행이 고정 열 그리드(상태 92 · 제목 flex · 버전 48 · 담당 84 · 마감 132 · 액션 96)
+//   (a) 디자인 보드 항목은 고정 폭 표 6열(상태 112 · 항목 · 버전 56 · 담당 100 · 마감 220 · 다음 행동 300) —
+//       Phase 3.23 PR-3(§7-2.6)이 3.17b의 행 그리드(92·flex·48·84·132·96)를 표 정본으로 바꿨다
 //   (b) 담당은 이름 앞 역할 도트(형태) — 역할에 pill 배지를 쓰지 않는다 / 좌측 3px 상태 스트립 유지
-//   (c) 상태 범례가 의미 4단계 + 중립으로 묶이고 각 묶음에 단계 이름이 붙는다
-//   (d) 그룹 헤딩에 진행 막대 + '확정 n/m'
+//   (c) 상태 범례가 의미 4단계 + 중립으로 묶이고 각 묶음에 단계 이름이 붙는다(디자인 보드는 표 아래)
+//   (d) 진행 막대 + '확정 n/m' — 디자인 보드는 표 머리 한 곳(카테고리 묶음 대신 급한 순 한 표)
 //   (e) 유형 카드에 진행 막대 — '3건'이 '3건 중 확정 n'으로 읽힌다
 //   (f) 빈 상태 ②(문서 없음)와 ③(필터 결과 없음)이 갈린다
 import { cleanup, screen, within } from '@testing-library/react'
@@ -21,18 +22,24 @@ describe('3.17b (a)(b) 항목 행 — 고정 열 그리드 + 역할 도트', () 
     localStorage.setItem('communicator.currentProjectId', 'prj-stc26')
   })
 
-  it('행이 flex-wrap이 아니라 시안의 고정 열 폭 그리드로 선다', async () => {
+  it('항목이 고정 폭 표 6열로 서고 행 높이는 64다(두 줄 제목)', async () => {
     renderRoute('/board/design')
-    const row = (await screen.findByText('메인 키비주얼')).closest('li')!
-    const grid = row.querySelector('a')!
+    const row = (await screen.findByText('메인 키비주얼')).closest('tr')!
+    const table = row.closest('table')!
 
-    expect(grid.className).toContain('grid-cols-[92px_minmax(0,1fr)_48px_84px_132px_96px]')
-    expect(grid.className).not.toContain('flex-wrap')
+    expect(table.className).toContain('ui-table')
+    expect(table.className).toContain('table-fixed')
+    const heads = [...table.querySelectorAll('thead th')].map((th) => th.textContent)
+    expect(heads).toEqual(['상태', '항목', '버전', '담당', '마감', '다음 행동'])
+    const widths = [...table.querySelectorAll('col')].map((c) => c.className)
+    expect(widths).toEqual(['w-[112px]', '', 'w-[56px]', 'w-[100px]', 'w-[220px]', 'w-[300px]'])
+    expect(row.className).toContain('h-16')
+    expect(row.querySelectorAll('td')).toHaveLength(6)
   })
 
   it('담당은 이름 앞 역할 도트(8px)로 표시되고, 좌측 3px 상태 스트립은 유지된다', async () => {
     renderRoute('/board/design')
-    const row = (await screen.findByText('메인 키비주얼')).closest('li')!
+    const row = (await screen.findByText('메인 키비주얼')).closest('tr')!
 
     // 역할 = 형태(도트). design 담당이면 역할 컬러가 그대로 온다
     const dot = row.querySelector(`span.size-2.rounded-full.${ROLE_BAR_CLASSES.design}`)
@@ -61,10 +68,21 @@ describe('3.17b (c) 상태 범례 — 의미 4단계 + 중립', () => {
 })
 
 describe('3.17b (d)(e) 진행 막대 — 그룹 헤딩 · 유형 카드', () => {
-  it('그룹 헤딩에 진행 막대와 "확정 n/m"이 붙는다', async () => {
+  it('디자인 보드 표 머리에 진행 막대와 "확정 n/m"이 한 번 붙는다(카테고리 묶음 헤딩 없음)', async () => {
     localStorage.setItem('communicator.currentProjectId', 'prj-stc26')
     renderRoute('/board/design')
     await screen.findByText('메인 키비주얼')
+
+    const progress = screen.getByTestId('design-board-progress')
+    expect(progress.querySelector('.w-\\[120px\\]')).not.toBeNull()
+    expect(within(progress).getByText(/^확정 \d+\/\d+$/)).toBeTruthy()
+    expect(screen.queryAllByTestId('board-group-progress')).toHaveLength(0)
+  })
+
+  it('운영 보드 그룹 헤딩에는 진행 막대와 "확정 n/m"이 그대로 붙는다', async () => {
+    localStorage.setItem('communicator.currentProjectId', 'prj-stc26')
+    renderRoute('/board/ops')
+    await screen.findByText('개막식 큐시트')
 
     const bars = screen.getAllByTestId('board-group-progress')
     expect(bars.length).toBeGreaterThan(0)

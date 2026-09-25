@@ -5,10 +5,12 @@
 const store = new Map<string, string>()
 
 export function placeholderPreviewUrl(fileName: string): string {
+  // 16:9 · 웜 페이퍼 면(track)과 캡션 잉크(§7-2.1) — 파일 이름의 <·& 는 SVG를 깨지 않게 바꾼다
+  const safe = fileName.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   const svg =
-    `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="400">` +
-    `<rect width="100%" height="100%" fill="#e5e7eb"/>` +
-    `<text x="50%" y="50%" text-anchor="middle" font-size="16" fill="#6b7280">${fileName}</text>` +
+    `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360">` +
+    `<rect width="100%" height="100%" fill="#efebe0"/>` +
+    `<text x="50%" y="50%" text-anchor="middle" font-family="Pretendard, sans-serif" font-size="16" fill="#756f64">${safe}</text>` +
     `</svg>`
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`
 }

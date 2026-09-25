@@ -46,8 +46,10 @@ describe('DoD-7 가이드 발행 흐름', () => {
 
     await userEvent.click(within(form).getByRole('button', { name: '가이드 발행' }))
 
-    const row = (await screen.findByText('입구 사이니지')).closest('li')!
+    // Phase 3.23 PR-3 — 디자인 보드는 표(행 = tr)다. 가이드됨 행의 다음 행동은 '첫 시안 올리기'
+    const row = (await screen.findByText('입구 사이니지')).closest('tr')!
     expect(within(row).getByText('가이드됨')).toBeTruthy()
+    expect(within(row).getByText('첫 시안 올리기')).toBeTruthy()
 
     const created = (await mockProvider().listDeliverables('prj-stc26', { area: 'design' })).find(
       (d) => d.title === '입구 사이니지',

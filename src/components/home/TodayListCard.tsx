@@ -1,9 +1,10 @@
 // 홈 '오늘 할 일' 카드 (디자인지시서 v1.4 §7-2.5) — 흩어진 큐를 급한 순 한 목록으로.
 // 행마다 '바로 하기' 1개: 대부분은 그 자리로 가는 링크, 미등록 파일은 행 아래에서 바로 연결·무시.
 // 리마인드·독촉은 행 단위가 아니라 목록 전체(서버가 지연 전부 / 컨펌 전부를 한 메시지로 보낸다) — 머리의 일괄 버튼.
-import { useMemo, useState, type ReactNode } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import EmptyState from '../internal/EmptyState'
+import FilterChip from '../internal/FilterChip'
 import ErrorAlert from '../internal/ErrorAlert'
 import FilterEmptyState from '../internal/FilterEmptyState'
 import { LevelBadge } from '../internal/StatusBadge'
@@ -35,21 +36,6 @@ const FILTER_ORDER: TodayFilter[] = ['all', 'mine', 'late', 'review']
 export const TODAY_TASK_LIMIT = 8
 
 const isScheduleRow = (r: TodayRow) => r.kind === 'delayed' || r.kind === 'milestone' || r.kind === 'imminent'
-
-function Chip({ pressed, onClick, children }: { pressed: boolean; onClick: () => void; children: ReactNode }) {
-  return (
-    <button
-      type="button"
-      aria-pressed={pressed}
-      onClick={onClick}
-      className={`inline-flex h-[30px] items-center gap-1.5 whitespace-nowrap rounded-full border px-3 text-[13px] transition-colors ${
-        pressed ? 'border-ink bg-ink text-white' : 'border-border bg-card text-ink hover:bg-track'
-      }`}
-    >
-      {children}
-    </button>
-  )
-}
 
 function DueCell({ row }: { row: TodayRow }) {
   if (row.dueText) return <span className="text-sm text-ink-sub">{row.dueText}</span>
@@ -194,9 +180,9 @@ export default function TodayListCard({
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
           {FILTER_ORDER.map((f) => (
-            <Chip key={f} pressed={filter === f} onClick={() => setFilter(f)}>
+            <FilterChip key={f} pressed={filter === f} onClick={() => setFilter(f)}>
               {labels[f]} <b className="font-semibold">{counts[f]}</b>
-            </Chip>
+            </FilterChip>
           ))}
         </div>
       </div>

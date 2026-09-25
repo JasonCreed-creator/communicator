@@ -13,7 +13,8 @@
 //       4.3.1: 업로드 잠금 안내 — 컨펌대기 항목은 고르기·업로드 대신 이유, 헤더 버튼 비활성 ·
 //       4.5: 항목 고치기·지우기 — 제목 고쳐 저장 → 이름 입력 확인 후 지우기 → 보드 복귀 ·
 //       6: Slack 알림 — 행사 설정 ③ 채널 등록(형식 검증 → 등록 → 가림 표시) · 홈 리마인드는 mock 사실 안내 ·
-//       4.7: 협력사 견적서 불러오기 — 가상 엑셀 읽기 → 확인 큐(부가세·버킷·공급가 대조) → 확정 → 이력)
+//       4.7: 협력사 견적서 불러오기 — 가상 엑셀 읽기 → 확인 큐(부가세·버킷·공급가 대조) → 확정 → 이력 ·
+//       3.23: UX 개편 — PR-1 기반(날짜 표기·대비) · PR-2 홈 '오늘 할 일' · PR-3 디자인 보드(다음 행동 표·차례 칩·갤러리))
 // 캡처는 dist-demo/shots-interaction/ 에 남긴다. 실패 시 exit 1.
 import { createServer } from 'node:http'
 import { readFileSync, mkdirSync } from 'node:fs'
@@ -147,7 +148,51 @@ check(
   `${docCountBefore} → ${docRequests.length}`,
 )
 
-// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — **Phase 3.23 PR-2 홈 '오늘 할 일'(2026-09-25)**.
+// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — **Phase 3.23 PR-3 디자인 보드(2026-09-25)**.
+//     일정(②에서 도착) → 사이드바 '디자인 보드' → 표 6열(다음 행동 칸) · 행마다 다음 행동 1줄 · 채운 버튼 1개(＋ 항목 추가) ·
+//     '지연만' 칩 → 남은 행 전부 'n일 지남' → 해제 · '갤러리' → 카드 = 행 수 · 썸네일(이미지 또는 빈 자리) → '목록'으로 되돌리고
+//     다시 '일정'으로(아래 ③-이전 블록이 일정 화면에서 시작한다).
+{
+  await tab.locator('aside nav a', { hasText: '디자인 보드' }).first().click()
+  await tab.waitForURL(/#\/board\/design$/, { timeout: 10_000 })
+  const table = tab.getByTestId('design-board-table')
+  await table.getByTestId('design-row').first().waitFor({ timeout: 10_000 })
+  const heads = (await table.locator('thead th').allInnerTexts()).map((t) => t.trim())
+  check(heads.join('|') === '상태|항목|버전|담당|마감|다음 행동', '디자인 보드 표 6열(다음 행동 칸)', heads.join(' · '))
+  const rows = table.getByTestId('design-row')
+  const rowCount = await rows.count()
+  let oneAction = rowCount > 0
+  for (let i = 0; i < rowCount; i++) {
+    const n = await rows.nth(i).getByTestId('design-next-action').locator('a, button').count()
+    oneAction = oneAction && n <= 1
+  }
+  check(oneAction, '행마다 다음 행동 1줄 + 버튼 최대 1개', `${rowCount}행`)
+  await tab.getByRole('button', { name: '＋ 항목 추가' }).waitFor({ timeout: 10_000 })
+  const filled = await tab.locator('main .btn-accent, main .btn-primary').count()
+  check(filled === 1, '디자인 보드 채운 버튼 1개(＋ 항목 추가)', `${filled}개`)
+  await tab.screenshot({ path: resolve(SHOTS, '03-design-board-list.png'), fullPage: true })
+  await tab.getByRole('button', { name: /지연만/ }).click()
+  const lateCount = await rows.count()
+  let allLate = true
+  for (let i = 0; i < lateCount; i++) allLate = allLate && /\d+일 지남/.test(await rows.nth(i).innerText())
+  check(allLate, "'지연만' → 남은 행 전부 'n일 지남'", `${lateCount}/${rowCount}행`)
+  await tab.getByRole('button', { name: /지연만/ }).click()
+  await tab.getByRole('button', { name: '갤러리' }).click()
+  const cards = tab.getByTestId('design-card')
+  await cards.first().waitFor({ timeout: 10_000 })
+  const cardCount = await cards.count()
+  check(cardCount === rowCount, '갤러리 카드 = 목록 행 수', `${cardCount}장`)
+  const thumbs = await tab.locator('[data-testid="design-thumb-image"], [data-testid="design-thumb-file"], [data-testid="design-thumb-empty"]').count()
+  check(thumbs === cardCount, '카드마다 16:9 썸네일 자리(이미지·파일 표지·빈 자리)', `${thumbs}/${cardCount}`)
+  await tab.waitForTimeout(300)
+  await tab.screenshot({ path: resolve(SHOTS, '03-design-board-gallery.png'), fullPage: true })
+  await tab.getByRole('button', { name: '목록' }).click()
+  await table.waitFor({ timeout: 10_000 })
+  await tab.locator('aside nav a', { hasText: '일정' }).first().click()
+  await tab.waitForURL(/#\/schedule/, { timeout: 10_000 })
+}
+
+// ── ③-이전(2026-09-25 Phase 3.23 PR-2) 홈 '오늘 할 일' — 직전 PR ③을 회귀 가드로 유지.
 //     일정(②에서 도착) → 사이드바 '홈' → 요약 5칸 · 목록 행 · '지연' 칩으로 거르면 남은 행이 전부 'n일 지남' → '전체'로 복귀 ·
 //     채운 버튼 0 · '담당에게 리마인드'(mock) = 사실 안내 → 다시 '일정'으로(아래 ③-이전 PR-1 블록이 일정 화면에서 시작한다).
 {

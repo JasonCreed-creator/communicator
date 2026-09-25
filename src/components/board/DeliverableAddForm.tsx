@@ -50,7 +50,7 @@ export default function DeliverableAddForm({
   }
 
   return (
-    <AddFormBody
+    <DeliverableAddFormBody
       area={area}
       projectId={projectId}
       isPm={isPm}
@@ -64,7 +64,10 @@ export default function DeliverableAddForm({
   )
 }
 
-function AddFormBody({
+/**
+ * 펼친 폼 본문 — 트리거를 다른 자리에 두는 화면이 직접 쓴다(디자인 보드는 머리의 채운 버튼이 연다 — §7-2.6).
+ */
+export function DeliverableAddFormBody({
   area,
   projectId,
   isPm,

@@ -244,12 +244,13 @@ function renderGuideSnapshotHtml(deliverable: Deliverable, sections: GuideSectio
   return `<!doctype html><meta charset="utf-8"><title>${escapeHtml(deliverable.title)}</title>${body}`
 }
 
-/** 미리보기 자리표시 이미지 — 픽스처 버전 파일용 (실파일은 Phase 5 Drive 이식에서) */
+/** 미리보기 자리표시 이미지 — 픽스처 버전 파일용 (실파일은 Phase 5 Drive 이식에서).
+ *  16:9 · 웜 페이퍼 면(track)과 캡션 잉크 — 갤러리 썸네일(§7-2.6)이 이 그림을 그대로 보인다. */
 function placeholderPreviewUrl(fileName: string): string {
   const svg =
-    `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="400">` +
-    `<rect width="100%" height="100%" fill="#e5e7eb"/>` +
-    `<text x="50%" y="50%" text-anchor="middle" font-size="16" fill="#6b7280">${fileName}</text>` +
+    `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360">` +
+    `<rect width="100%" height="100%" fill="#efebe0"/>` +
+    `<text x="50%" y="50%" text-anchor="middle" font-family="Pretendard, sans-serif" font-size="16" fill="#756f64">${escapeHtml(fileName)}</text>` +
     `</svg>`
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`
 }
