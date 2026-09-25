@@ -5,6 +5,7 @@ import GuideBuilder from '../components/guide/GuideBuilder'
 import ScenarioBuilder from '../components/scenario/ScenarioBuilder'
 import VersionUploadCard, { UPLOAD_FORM_ID, UPLOAD_INPUT_ID } from '../components/upload/VersionUploadCard'
 import BriefCard from '../components/internal/BriefCard'
+import ClientLinkWarning from '../components/internal/ClientLinkWarning'
 import Card from '../components/internal/Card'
 import DdayBadge from '../components/internal/DdayBadge'
 import ErrorAlert from '../components/internal/ErrorAlert'
@@ -21,6 +22,8 @@ import {
   formatDateTime,
 } from '../lib/labels'
 import { getDataProvider } from '../providers'
+import { providerKind } from '../providers/kind'
+import { uploadLock, versionStorage } from '../lib/uploadGate'
 import type { Version } from '../types/entities'
 import type {
   ApprovalDecision,
@@ -140,6 +143,8 @@ function ItemDetail({ itemId }: { itemId: string }) {
   // 정형 문서(큐시트·빌더)는 3.16.3/3.16.4에서 확정한 "상단 스트립 단일 표시"를 유지한다 —
   // 상태·담당·마감은 스트립이, 주 액션은 문서 헤더가 이미 담당하므로 헤더는 복귀 경로만 쓴다.
   const latestVersion = d.versions[0]
+  // Phase 4.3.1 — 업로드가 막힌 상태면 헤더의 '새 버전 업로드'를 비활성 + 이유(업로드 카드가 같은 이유를 적는다)
+  const lock = uploadLock(d.status, { hasPartner: d.partner_id != null })
   const lastChangesRequested = d.approvals
     .slice()
     .reverse()
@@ -161,7 +166,13 @@ function ItemDetail({ itemId }: { itemId: string }) {
             <>
               {latestVersion && <LatestDownloadLink version={latestVersion} />}
               {canWriteArea && (
-                <button type="button" onClick={focusVersionUpload} className="btn btn-accent">
+                <button
+                  type="button"
+                  onClick={focusVersionUpload}
+                  disabled={!!lock}
+                  title={lock ? `${lock.label} — ${lock.reason}` : undefined}
+                  className="btn btn-accent"
+                >
                   새 버전 업로드
                 </button>
               )}
@@ -232,6 +243,8 @@ function ItemDetail({ itemId }: { itemId: string }) {
           ) : (
             <VersionUploadCard
               deliverableId={d.id}
+              status={d.status}
+              hasPartner={d.partner_id != null}
               driveFolderId={d.drive_folder_id}
               canWrite={canWriteArea}
               onUploaded={detail.reload}
@@ -765,7 +778,7 @@ function StatusActionBar({
   }
 
   const uploadButton =
-    canWriteArea && !autoSnapshotDoc ? (
+    canWriteArea && !autoSnapshotDoc && !uploadLock(status, { hasPartner }) ? (
       <button type="button" onClick={focusVersionUpload} className="btn btn-primary shrink-0">
         새 버전 업로드
       </button>
@@ -908,6 +921,8 @@ function StatusActionBar({
             ) : requiresApproval ? (
               <form onSubmit={handleRequestApproval} className="space-y-2 border-t border-border pt-4">
                 <p className="t-caption">컨펌 발송</p>
+                {/* Phase 4.3.1 — 발주처 링크 0개면 보내도 열어볼 사람이 없다(발송은 막지 않는다) */}
+                <ClientLinkWarning />
                 <div className="flex flex-wrap items-end gap-2">
                   {isCuesheet ? (
                     <p className="max-w-xs text-xs text-ink-sub">
@@ -979,6 +994,8 @@ function VersionItem({
   const preview = useAsync(() => provider.getFileUrl(version.id), [version.id])
   const [previewFailed, setPreviewFailed] = useState(false)
   const dotClass = isLatest ? (isFinal ? 'bg-positive' : 'bg-accent') : 'bg-border-strong'
+  // Phase 4.3.1 ④ — 이 버전의 파일이 실제로 어디 있는가(실서버만 — mock은 전부 데모라 표시하지 않는다)
+  const storage = versionStorage(version.drive_file_id, providerKind())
 
   return (
     <li className="relative">
@@ -1008,6 +1025,11 @@ function VersionItem({
                 }`}
               >
                 최신
+              </span>
+            )}
+            {storage && (
+              <span title={storage.title} data-testid="version-storage">
+                <LevelBadge level={storage.level} label={storage.label} />
               </span>
             )}
           </div>

@@ -12,8 +12,9 @@ import { driveFor } from '../drive'
 import { fileUrlFor, rememberUpload, sessionFileUrl } from '../files'
 import { ProviderError } from '../../../lib/errors'
 import { assertTransition, buildVersionFileName } from '../../../lib/statusMachine'
+import { UPLOADABLE_STATUSES, uploadBlockedMessage } from '../../../lib/uploadGate'
 import { isDelayed, isImminent, toIsoDate } from '../../../lib/wbs'
-import { isStructuredDocCategory, type DeliverableArea, type DeliverableStatus } from '../../../types/enums'
+import { isStructuredDocCategory, type DeliverableArea } from '../../../types/enums'
 import type {
   ActivityLogEntry,
   Approval,
@@ -46,13 +47,6 @@ type DeliverablesDomain = Pick<
   | 'linkInboxFile'
   | 'dismissInboxFile'
 >
-
-const UPLOADABLE_STATUSES: readonly DeliverableStatus[] = [
-  'requested', // v1.2: 첫 버전 업로드 시 draft 자동 전이
-  'draft',
-  'internal_review',
-  'changes_requested',
-]
 
 const AREAS: readonly DeliverableArea[] = ['design', 'ops', 'common']
 
@@ -302,7 +296,7 @@ export function deliverablesDomain(ctx: SupabaseCtx): DeliverablesDomain {
       const project = await ctx.assertWritable(d.project_id)
       await ctx.assertAreaRole(d.project_id, d.area)
       if (!UPLOADABLE_STATUSES.includes(d.status)) {
-        throw new ProviderError('conflict', `현재 상태(${d.status})에서는 업로드할 수 없습니다.`)
+        throw new ProviderError('conflict', uploadBlockedMessage(d.status, { hasPartner: d.partner_id !== null }))
       }
       // v2.4 §5.1: 주최형 inbound(partner_id 보유) 항목은 아직 제출 전(requested)이면 파트너 제출 경로만 있다
       if (d.partner_id !== null && d.status === 'requested') {

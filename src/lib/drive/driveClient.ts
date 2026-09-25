@@ -6,6 +6,7 @@
 // 데모 아티팩트에는 싣지 않는다(외부 요청 0건 가드) — vite.demo.config.ts가 스텁으로 갈음한다.
 import { defaultApiBase as apiBaseFor } from '../basePath'
 import { ProviderError, type ErrorCode } from '../errors'
+import { humanizeStatusCodes } from '../labels'
 import type { Version } from '../../types/entities'
 
 export interface DriveStatus {
@@ -78,7 +79,8 @@ export function createDriveClient(opts: DriveClientOptions) {
     if (!res.ok) {
       const err = body && typeof body === 'object' && 'error' in body ? body.error : undefined
       const code = CODES.includes(err?.code as ErrorCode) ? (err!.code as ErrorCode) : res.status === 404 ? 'not_found' : 'validation'
-      throw new ProviderError(code, err?.message ?? `Drive 요청에 실패했습니다 (${res.status}).`)
+      // Phase 4.3.1 — 서버 SQL 가드 문구의 영문 상태 코드는 화면 이름으로
+      throw new ProviderError(code, err?.message ? humanizeStatusCodes(err.message) : `Drive 요청에 실패했습니다 (${res.status}).`)
     }
     return body as T
   }

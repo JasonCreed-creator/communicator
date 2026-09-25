@@ -9,7 +9,8 @@
 //   ③ 해당 세션이 바꾼 화면의 핵심 클릭 경로 1개 — 세션마다 아래 "③" 블록을 교체한다
 //      (3.18: 판매 플래너 3스텝 · S0 ③ 유형 4카드 · 3.21: 런처 · Phase 4c: 로그인 게이트 · 4.2: 견적 내보내기 ·
 //       Phase 5: 업로드 3경로 — 파일 선택 여러 개·끌어놓기·Drive 링크 등록 ·
-//       3.22: 담당자 배정 카드 — 빼기 → 끌어놓기 배정 · 빼기 → 누르기 배정)
+//       3.22: 담당자 배정 카드 — 빼기 → 끌어놓기 배정 · 빼기 → 누르기 배정 ·
+//       4.3.1: 업로드 잠금 안내 — 컨펌대기 항목은 고르기·업로드 대신 이유, 헤더 버튼 비활성)
 // 캡처는 dist-demo/shots-interaction/ 에 남긴다. 실패 시 exit 1.
 import { createServer } from 'node:http'
 import { readFileSync, mkdirSync } from 'node:fs'
@@ -143,7 +144,29 @@ check(
   `${docCountBefore} → ${docRequests.length}`,
 )
 
-// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — **Phase 3.22 담당자 배정 카드(2026-09-24)**.
+// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — **Phase 4.3.1 업로드 잠금 안내(2026-09-25)**.
+//     컨펌대기 항목(RB27 '외관 대형 현수막')의 버전 업로드 카드는 고르기·끌어놓기·업로드 대신 이유를 먼저 보이고,
+//     헤더 '새 버전 업로드'는 자리는 지키되 비활성이다(예전에는 파일을 고르고 누른 뒤에야 영문 상태 코드로 실패했다).
+//     업로드가 되는 항목의 폼은 아래 ③-이전(Phase 5) 블록이 그대로 잡는다. 발송 경고·저장 위치·Drive 경고 상자는
+//     실서버 전용이라 vitest(dod66)가 잡는다.
+const noticeL = tab.getByRole('button', { name: '안내 닫기' })
+if (await noticeL.count()) await noticeL.click()
+const docBeforeLock = docRequests.length
+await tab.evaluate(() => {
+  window.location.hash = '#/items/dlv-rb27-prd-007'
+})
+const locked = tab.getByTestId('upload-locked')
+await locked.waitFor({ timeout: 10_000 })
+const lockText = (await locked.innerText()).replace(/\s+/g, ' ')
+check(/지금은 새 버전을 올릴 수 없습니다 — 컨펌대기/.test(lockText), '컨펌대기 항목: 업로드 폼 대신 이유 안내', lockText.slice(0, 48))
+check((await tab.locator('input[type="file"]').count()) === 0, '컨펌대기 항목: 파일 입력 0(고르기·끌어놓기 없음)')
+check(await tab.getByRole('button', { name: '새 버전 업로드' }).isDisabled(), "헤더 '새 버전 업로드' = 비활성(자리 유지)")
+const bodyText = await tab.evaluate(() => document.body.innerText)
+check(!/pending_approval/.test(bodyText), '화면 글자에 영문 상태 코드 0')
+check(docRequests.length === docBeforeLock, '항목 이동에 전체 리로드 0', `${docBeforeLock} → ${docRequests.length}`)
+await tab.screenshot({ path: resolve(SHOTS, '03-upload-locked.png'), fullPage: true })
+
+// ── ③-이전(2026-09-24 Phase 3.22) 담당자 배정 카드 — 직전 세션 ③을 회귀 가드로 유지.
 //     행사 설정 ② = 역할 칸 4개 + 주소록 인물 카드. 데모 행사는 4명이 이미 다 배정돼 있으므로
 //     박운영을 빼고 → 카드를 운영 칸으로 **실제 브라우저 끌어놓기**(Playwright dragTo = HTML5 DnD) →
 //     최등록을 빼고 → 카드를 **눌러** 등록으로 배정한다. 빼기 확인창은 사용자처럼 수락한다.

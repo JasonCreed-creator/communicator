@@ -167,16 +167,10 @@ import {
 import { buildGuideSeedSections } from '../../lib/guideAssembly'
 import { buildCuesFromScenario, scenarioCueCandidates } from '../../lib/scenario'
 import { SCENARIO_KIND_LABELS } from '../../lib/labels'
+import { UPLOADABLE_STATUSES, uploadBlockedMessage } from '../../lib/uploadGate'
 
 /** 3.18.1 §2 — 발주처 담당자 블록의 스태프 정렬(PM을 맨 위로). 표시 순서일 뿐 권한과 무관하다. */
 const CLIENT_STAFF_ROLE_ORDER: readonly MemberRole[] = ['pm', 'design', 'ops', 'reg']
-
-const UPLOADABLE_STATUSES: readonly DeliverableStatus[] = [
-  'requested', // v1.2: 첫 버전 업로드 시 draft 자동 전이
-  'draft',
-  'internal_review',
-  'changes_requested',
-]
 
 function nowIso(): string {
   return new Date().toISOString()
@@ -978,7 +972,7 @@ export class MockProvider implements DataProvider {
     this.assertWritable(d.project_id)
     this.assertAreaRole(d.area, user.role)
     if (!UPLOADABLE_STATUSES.includes(d.status)) {
-      throw new ProviderError('conflict', `현재 상태(${d.status})에서는 업로드할 수 없습니다.`)
+      throw new ProviderError('conflict', uploadBlockedMessage(d.status, { hasPartner: d.partner_id !== null }))
     }
     // v2.4 §5.1: 주최형 inbound(partner_id 보유) 항목은 아직 제출 전(requested)이면 파트너 제출(partner_submit)
     // 경로만 있으므로 내부 업로드를 409로 막는다(전이표에 requested→draft(inbound) 갈래를 쓰지 않는다).
@@ -1806,7 +1800,7 @@ export class MockProvider implements DataProvider {
     this.assertWritable(d.project_id)
     this.assertAreaRole(d.area, user.role)
     if (!UPLOADABLE_STATUSES.includes(d.status)) {
-      throw new ProviderError('conflict', `현재 상태(${d.status})에서는 버전을 추가할 수 없습니다.`)
+      throw new ProviderError('conflict', uploadBlockedMessage(d.status, { hasPartner: d.partner_id !== null }))
     }
     const versionNo = (this.versionsOf(deliverableId)[0]?.version_no ?? 0) + 1
     // §7.3: 직접 업로드 파일의 rename은 기본 off — 파일명을 그대로 보존

@@ -5,6 +5,7 @@
 // 불가 상태는 disabled + 사유 InfoTip. 발송은 requestApproval(version_id 'auto') — provider가
 // 인쇄 스냅숏(.pdf)을 자동 버전 등록한다(§8 doc-snapshot).
 import { useState, type FormEvent, type ReactNode } from 'react'
+import ClientLinkWarning from './ClientLinkWarning'
 import ErrorAlert from './ErrorAlert'
 import InfoTip from './InfoTip'
 import StatusBadge from './StatusBadge'
@@ -112,6 +113,8 @@ export default function StructuredDocHeader({
           <p className="w-full text-xs text-ink-sub">
             발송 시 인쇄 스냅숏(.pdf)이 자동 버전으로 등록됩니다.
           </p>
+          {/* Phase 4.3.1 — 발주처 링크 0개면 보내도 열어볼 사람이 없다(발송은 막지 않는다) */}
+          <ClientLinkWarning className="w-full" />
           <label className="flex flex-col gap-1 t-caption">
             컨펌 기한
             <input

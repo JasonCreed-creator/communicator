@@ -5,13 +5,19 @@
 // 저장 위치: 실서버 + Drive 연결 → 행사 폴더(05_산출물/디자인/{항목} · 04_운영/{항목} …)에 4MB 조각 업로드,
 //            Drive 미연결·mock → 이 브라우저 세션에만(새로고침 시 사라짐 — 카드가 그 사실을 적는다).
 // 접근 규약(기존 테스트): 파일 입력의 라벨에 "파일"이 들어가는 요소는 하나뿐 · 제출 버튼 이름 "업로드".
+// Phase 4.3.1(2026-09-25 실사용 결함): 업로드가 막힌 상태(컨펌대기·승인·확정·파트너 첫 제출 전)면 고르기·끌어놓기·
+// 업로드 대신 이유와 다음 할 일을 먼저 보인다 — 예전에는 파일을 고르고 누른 뒤에야 영문 상태 코드로 실패했다.
+// 실서버인데 Drive가 연결되지 않았으면 회색 한 줄 대신 경고 상자로 "저장되지 않는다"를 알린다.
 import { useState, type DragEvent, type FormEvent } from 'react'
+import { Link } from 'react-router-dom'
 import Card from '../internal/Card'
 import ErrorAlert from '../internal/ErrorAlert'
 import { getDataProvider } from '../../providers'
 import { driveFolderUrl, looksLikeDriveFileId, parseDriveLink } from '../../lib/driveLink'
 import { formatBytes, pickedFromDrop, pickedFromList, type PickedFile } from '../../lib/drive/collectFiles'
 import { useDriveStatus } from '../../lib/drive/useDriveStatus'
+import { uploadLock } from '../../lib/uploadGate'
+import type { DeliverableStatus } from '../../types/enums'
 
 const provider = getDataProvider()
 
@@ -29,11 +35,17 @@ interface Progress {
 
 export default function VersionUploadCard({
   deliverableId,
+  status,
+  hasPartner = false,
   driveFolderId,
   canWrite,
   onUploaded,
 }: {
   deliverableId: string
+  /** 항목 상태 — 업로드가 막힌 상태면 폼 대신 안내만 그린다(provider 가드와 같은 판정) */
+  status: DeliverableStatus
+  /** 주최형 파트너 inbound 항목 — 첫 버전은 파트너가 /p로 올린다(§5.1) */
+  hasPartner?: boolean
   driveFolderId: string | null
   canWrite: boolean
   onUploaded: () => void
@@ -54,7 +66,29 @@ export default function VersionUploadCard({
 
   const busy = progress !== null || linking
   const serverDrive = drive.mode === 'server' && !!drive.status?.configured && drive.status.connected
+  // ⑤ 실서버 + 상태 확인 끝 + 연결 안 됨 → 올려도 어디에도 저장되지 않는다(버전 기록만 남는다)
+  const driveOff = drive.mode === 'server' && !drive.loading && !serverDrive
   const folderLink = driveFolderId && looksLikeDriveFileId(driveFolderId) ? driveFolderUrl(driveFolderId) : null
+  const folderAction = folderLink ? (
+    <a href={folderLink} target="_blank" rel="noreferrer" className="btn btn-ghost btn-sm shrink-0" title="이 항목의 Drive 폴더(새 탭)">
+      Drive에서 열기
+    </a>
+  ) : undefined
+  const lock = uploadLock(status, { hasPartner })
+
+  // ① 업로드가 막힌 상태 — 고르기·끌어놓기·업로드 버튼을 그리지 않는다(누른 뒤 실패하는 길을 없앤다)
+  if (lock) {
+    return (
+      <div id={UPLOAD_FORM_ID}>
+        <Card title="버전 업로드" action={folderAction}>
+          <div data-testid="upload-locked" role="note" className="rounded-lg border border-border bg-canvas p-4">
+            <p className="text-sm font-semibold text-ink">지금은 새 버전을 올릴 수 없습니다 — {lock.label}</p>
+            <p className="mt-1.5 text-sm leading-relaxed text-ink-sub">{lock.reason}</p>
+          </div>
+        </Card>
+      </div>
+    )
+  }
 
   const addFiles = (picked: PickedFile[]) => {
     if (picked.length === 0) return
@@ -149,6 +183,7 @@ export default function VersionUploadCard({
     }
   }
 
+  // Drive 미연결(실서버)은 아래 경고 상자가 대신 말한다 — 같은 말을 끌어놓기 영역에서 반복하지 않는다
   const storageNote =
     drive.mode === 'mock'
       ? '데모(mock) 모드 — 올린 파일은 이 브라우저에만 임시로 보관되고 새로고침하면 사라집니다. 실서버 전환 후에는 Drive 행사 폴더에 저장됩니다.'
@@ -156,22 +191,25 @@ export default function VersionUploadCard({
         ? 'Drive 연결 상태를 확인하는 중…'
         : serverDrive
           ? 'Drive 행사 폴더에 저장됩니다(파일명은 규약 YYMMDD_코드_카테고리_제목_vN으로 바뀝니다).'
-          : 'Drive가 아직 연결되지 않아 올린 파일은 이 세션에서만 보입니다 — 관리자가 행사 설정 ③에서 Drive를 연결하면 행사 폴더에 저장됩니다.'
+          : null
 
   const pct = progress && progress.size > 0 ? Math.round((progress.sent / progress.size) * 100) : progress ? 100 : 0
 
   return (
     <div id={UPLOAD_FORM_ID}>
-      <Card
-        title="버전 업로드"
-        action={
-          folderLink ? (
-            <a href={folderLink} target="_blank" rel="noreferrer" className="btn btn-ghost btn-sm shrink-0" title="이 항목의 Drive 폴더(새 탭)">
-              Drive에서 열기
-            </a>
-          ) : undefined
-        }
-      >
+      <Card title="버전 업로드" action={folderAction}>
+        {driveOff && (
+          <div data-testid="drive-off-warning" role="note" className="mb-4 rounded-lg border border-accent/30 bg-accent-tint p-3">
+            <p className="text-sm font-semibold text-accent-deep">Drive 미연결 — 지금 올리는 파일은 저장되지 않습니다</p>
+            <p className="mt-1 text-sm leading-relaxed text-ink-sub">
+              기록(버전 번호·이름)만 남고 파일은 이 브라우저 탭에만 있어 새로고침하면 사라집니다. 관리자가{' '}
+              <Link to="/settings?tab=integration" className="font-medium text-accent-deep underline underline-offset-2">
+                행사 설정 ③ 유형·연동
+              </Link>
+              에서 Drive를 연결한 뒤 올려 주세요.
+            </p>
+          </div>
+        )}
         <div className="mb-4 flex gap-1.5" role="group" aria-label="업로드 방식">
           <button
             type="button"
@@ -254,7 +292,7 @@ export default function VersionUploadCard({
                   />
                 </label>
               </div>
-              <p className="t-caption max-w-md">{storageNote}</p>
+              {storageNote && <p className="t-caption max-w-md">{storageNote}</p>}
             </div>
 
             {queue.length > 0 && (

@@ -186,3 +186,8 @@ export function useProject(): ProjectContextValue {
   if (!ctx) throw new Error('useProject는 ProjectProvider 안에서만 사용할 수 있습니다.')
   return ctx
 }
+
+/** 행사 범위 밖에서도 그려질 수 있는 보조 부품용(Phase 4.3.1 발송 경고) — 밖이면 null(던지지 않는다) */
+export function useOptionalProject(): ProjectContextValue | null {
+  return useContext(ProjectContext)
+}
