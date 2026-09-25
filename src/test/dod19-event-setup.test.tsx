@@ -45,9 +45,9 @@ describe('DoD-19 행사 설정 3탭', () => {
     await userEvent.click(await screen.findByRole('button', { name: '② 담당자' }))
     expect(await screen.findByText('김기획')).toBeTruthy()
 
-    // 마지막 PM(김기획) 삭제 시도 → 409 메시지
-    const pmRow = screen.getByText('김기획').closest('tr')!
-    await userEvent.click(within(pmRow).getByRole('button', { name: '삭제' }))
+    // 마지막 PM(김기획) 빼기 시도 → 409 메시지 (Phase 3.22 — 배정 현황은 표가 아니라 역할 칸의 카드)
+    const pmCard = screen.getByText('김기획').closest('[data-member-card]') as HTMLElement
+    await userEvent.click(within(pmCard).getByRole('button', { name: '김기획 빼기' }))
     expect(
       await screen.findByText(/마지막 PM은 삭제할 수 없습니다/),
     ).toBeTruthy()
@@ -60,11 +60,15 @@ describe('DoD-19 행사 설정 3탭', () => {
     await userEvent.type(membersCard.getByLabelText('이메일'), 'new-member@example.com')
     await userEvent.selectOptions(membersCard.getByLabelText('역할'), 'reg')
     await userEvent.click(membersCard.getByRole('button', { name: '추가' }))
-    expect(await screen.findByText('오신규')).toBeTruthy()
+    const regLane = screen.getByRole('region', { name: '등록 담당' })
+    expect(await within(regLane).findByText('오신규')).toBeTruthy()
 
-    // 새 담당자 삭제는 성공(제거됨) — 재조회 반영까지 대기
-    const newRow = screen.getByText('오신규').closest('tr')!
-    await userEvent.click(within(newRow).getByRole('button', { name: '삭제' }))
-    await waitFor(() => expect(screen.queryByText('오신규')).toBeNull())
+    // 새 담당자 빼기는 성공 — 역할 칸에서 사라지고, 주소록에 남아 다시 배정 후보 카드가 된다
+    const newCard = within(regLane).getByText('오신규').closest('[data-member-card]') as HTMLElement
+    await userEvent.click(within(newCard).getByRole('button', { name: '오신규 빼기' }))
+    await waitFor(() => expect(within(regLane).queryByText('오신규')).toBeNull())
+    expect(
+      within(screen.getByRole('list', { name: '배정할 수 있는 담당자' })).getByText('오신규'),
+    ).toBeTruthy()
   })
 })

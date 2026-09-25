@@ -8,7 +8,8 @@
 //   ② 사이드바 링크 클릭 → aria-current 갱신 + 전체 리로드 0 (SPA 내비 증명)
 //   ③ 해당 세션이 바꾼 화면의 핵심 클릭 경로 1개 — 세션마다 아래 "③" 블록을 교체한다
 //      (3.18: 판매 플래너 3스텝 · S0 ③ 유형 4카드 · 3.21: 런처 · Phase 4c: 로그인 게이트 · 4.2: 견적 내보내기 ·
-//       Phase 5: 업로드 3경로 — 파일 선택 여러 개·끌어놓기·Drive 링크 등록)
+//       Phase 5: 업로드 3경로 — 파일 선택 여러 개·끌어놓기·Drive 링크 등록 ·
+//       3.22: 담당자 배정 카드 — 빼기 → 끌어놓기 배정 · 빼기 → 누르기 배정)
 // 캡처는 dist-demo/shots-interaction/ 에 남긴다. 실패 시 exit 1.
 import { createServer } from 'node:http'
 import { readFileSync, mkdirSync } from 'node:fs'
@@ -142,7 +143,48 @@ check(
   `${docCountBefore} → ${docRequests.length}`,
 )
 
-// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — **Phase 5 업로드 3경로(2026-09-24)**.
+// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — **Phase 3.22 담당자 배정 카드(2026-09-24)**.
+//     행사 설정 ② = 역할 칸 4개 + 주소록 인물 카드. 데모 행사는 4명이 이미 다 배정돼 있으므로
+//     박운영을 빼고 → 카드를 운영 칸으로 **실제 브라우저 끌어놓기**(Playwright dragTo = HTML5 DnD) →
+//     최등록을 빼고 → 카드를 **눌러** 등록으로 배정한다. 빼기 확인창은 사용자처럼 수락한다.
+
+const noticeM = tab.getByRole('button', { name: '안내 닫기' })
+if (await noticeM.count()) await noticeM.click()
+
+const docBeforeMembers = docRequests.length
+await tab.evaluate(() => {
+  window.location.hash = '#/settings'
+})
+await tab.getByRole('button', { name: '② 담당자' }).click()
+const laneOf = (label) => tab.getByRole('region', { name: `${label} 담당` })
+await laneOf('운영').getByText('박운영').waitFor({ timeout: 10_000 })
+check((await tab.getByRole('option', { name: '담당자 선택' }).count()) === 0, '담당자: 셀렉트 피커 대신 역할 칸 4개', 'PM·디자인·운영·등록')
+
+tab.once('dialog', (d) => d.accept())
+await laneOf('운영').getByRole('button', { name: '박운영 빼기' }).click()
+const poolList = tab.getByRole('list', { name: '배정할 수 있는 담당자' })
+const opsCard = poolList.locator('[data-person-card]', { hasText: '박운영' })
+await opsCard.waitFor({ timeout: 10_000 })
+check((await laneOf('운영').getByText('카드를 여기로 끌어놓기').count()) === 1, '빼기 → 운영 칸이 비고 주소록 카드로 돌아감')
+await tab.screenshot({ path: resolve(SHOTS, '03a-member-board.png'), fullPage: true })
+
+await opsCard.dragTo(laneOf('운영'))
+await laneOf('운영').getByText('박운영').waitFor({ timeout: 10_000 })
+check((await poolList.count()) === 0 || (await poolList.locator('[data-person-card]', { hasText: '박운영' }).count()) === 0, '끌어놓기(실제 브라우저 DnD) → 운영 칸에 배정')
+
+tab.once('dialog', (d) => d.accept())
+await laneOf('등록').getByRole('button', { name: '최등록 빼기' }).click()
+const regCard = tab.getByRole('button', { name: '최등록 역할 고르기' })
+await regCard.waitFor({ timeout: 10_000 })
+await regCard.click()
+check((await regCard.getAttribute('aria-expanded')) === 'true', '누르기 → 역할 버튼 4개 열림')
+await tab.getByRole('button', { name: '최등록 등록으로 배정' }).click()
+await laneOf('등록').getByText('최등록').waitFor({ timeout: 10_000 })
+check(true, '누르기 → 등록 칸에 배정')
+check(docRequests.length === docBeforeMembers, '빼기·끌어놓기·누르기 배정에 전체 리로드 0', `${docBeforeMembers} → ${docRequests.length}`)
+await tab.screenshot({ path: resolve(SHOTS, '03b-member-assigned.png'), fullPage: true })
+
+// ── ③-이전(2026-09-24 Phase 5) 업로드 3경로 — 직전 세션 ③을 회귀 가드로 유지.
 //     항목 상세(RB27 'LED 키비주얼', requested)의 버전 업로드 카드: 폴더 선택 입력(webkitdirectory) · 파일 2개 선택 →
 //     이름순 목록(시안2 → 시안10) → 업로드 = 새 버전 2개 · 끌어놓기(브라우저 DataTransfer drop) → 목록 · Drive 링크 등록 → 새 버전.
 //     mock이라 서버 호출은 없다(fetch 1건 가드 유지) — 저장 위치 안내 문구가 그 사실을 적는다.
@@ -167,7 +209,7 @@ const queue = tab.getByTestId('upload-queue')
 await queue.waitFor({ timeout: 10_000 })
 const rows = await queue.getByRole('listitem').allInnerTexts()
 check(rows.length === 2 && rows[0].includes('시안2.pdf') && rows[1].includes('시안10.pdf'), '파일 2개 → 이름순 목록(시안2 → 시안10)', rows.join(' | '))
-await tab.screenshot({ path: resolve(SHOTS, '03a-upload-queue.png'), fullPage: true })
+await tab.screenshot({ path: resolve(SHOTS, '03c-upload-queue.png'), fullPage: true })
 await tab.getByRole('button', { name: '업로드', exact: true }).click()
 await tab.getByText('새 버전 2개를 올렸습니다.').waitFor({ timeout: 10_000 })
 check(true, '업로드 → 새 버전 2개(파일마다 1개)')
@@ -185,7 +227,7 @@ await tab.getByRole('button', { name: '링크 등록' }).click()
 await tab.getByText('Drive 파일을 새 버전으로 등록했습니다.').waitFor({ timeout: 10_000 })
 check((await tab.getByText('링크등록_시안.pdf').count()) >= 1, 'Drive 링크 등록 → 새 버전(표시 이름)')
 check(docRequests.length === docBeforeUpload, '업로드·끌어놓기·링크 등록에 전체 리로드 0', `${docBeforeUpload} → ${docRequests.length}`)
-await tab.screenshot({ path: resolve(SHOTS, '03b-upload-link.png'), fullPage: true })
+await tab.screenshot({ path: resolve(SHOTS, '03d-upload-link.png'), fullPage: true })
 
 // ── ③-이전(2026-09-10 · 09-24) 견적서 내보내기 2종 + 파일 속 이미지(직인) — 직전 세션 ③을 회귀 가드로 유지.
 //    **견적서 내보내기 2종(2026-09-10) + 파일 속 이미지(2026-09-24 직인)**.
@@ -213,7 +255,7 @@ const alertText = (await alert.innerText()).trim()
 check(/실서버\(로그인\) 모드에서만/.test(alertText) && /Excel로 내려받으세요/.test(alertText), 'mock: 시트 버튼 → 안내 문구(무음 실패 없음)', alertText)
 check((await tab.getByTestId('gsheet-result').count()) === 0, 'mock: 결과 카드(링크) 없음')
 check(docRequests.length === docBeforeQuotes, '견적 목록·안내 표시에 전체 리로드 0', `${docBeforeQuotes} → ${docRequests.length}`)
-await tab.screenshot({ path: resolve(SHOTS, '03c-quotes-export-buttons.png') })
+await tab.screenshot({ path: resolve(SHOTS, '03e-quotes-export-buttons.png') })
 
 // ③-2 (2026-09-24 직인) — 내려받은 Excel 안의 이미지를 직접 연다. 데모는 직인을 싣지 않으므로(demo/plugins.ts)
 //      로고 1장(PNG)만 있어야 하고, PNG가 아닌 미디어는 0건이어야 한다 — 없는 자산 경로에 SPA 폴백 HTML이
@@ -254,7 +296,7 @@ check(!(await editorSheet.isDisabled()), '에디터 ④: 저장된 견적이라 
 await editorSheet.click()
 await tab.getByRole('alert').waitFor({ timeout: 10_000 })
 check(/실서버\(로그인\) 모드에서만/.test((await tab.getByRole('alert').innerText()).trim()), '에디터 ④ mock: 안내 문구')
-await tab.screenshot({ path: resolve(SHOTS, '03d-editor-step4-export.png'), fullPage: true })
+await tab.screenshot({ path: resolve(SHOTS, '03f-editor-step4-export.png'), fullPage: true })
 
 await browser.close()
 server.close()

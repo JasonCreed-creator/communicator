@@ -57,17 +57,18 @@ function keysIn(value: unknown): Set<string> {
 }
 
 describe('DoD-53 (a) 전자명함 임포트 — 직함·전화가 저장된다', () => {
-  it('붙여넣기 → 인식 → 확인 표 수정 → 추가하면 담당자 표에 직함·전화가 뜬다', async () => {
+  it('붙여넣기 → 인식 → 확인 표 수정 → 추가하면 담당자 카드에 직함·전화가 뜬다', async () => {
     localStorage.setItem('communicator.currentProjectId', 'prj-stc26')
     renderRoute('/settings')
     await screen.findByRole('heading', { name: '행사 설정' })
     await userEvent.click(await screen.findByRole('button', { name: '② 담당자' }))
     await screen.findByText('김기획')
 
-    // 대조군: 기존 담당자도 직함·전화 열을 갖는다(픽스처가 실제로 값을 싣고 있다)
-    const pmRow = screen.getByText('김기획').closest('tr')!
-    expect(within(pmRow).getByText('기획팀 팀장')).toBeTruthy()
-    expect(within(pmRow).getByText('010-0000-1001')).toBeTruthy()
+    // 대조군: 기존 담당자 카드도 직함·전화를 보여 준다(픽스처가 실제로 값을 싣고 있다)
+    // Phase 3.22 — 배정 현황은 표가 아니라 역할 칸의 카드다
+    const pmCard = screen.getByText('김기획').closest('[data-member-card]') as HTMLElement
+    expect(within(pmCard).getByText('기획팀 팀장')).toBeTruthy()
+    expect(within(pmCard).getByText('010-0000-1001')).toBeTruthy()
 
     await userEvent.click(screen.getByRole('button', { name: '전자명함 붙여넣기' }))
     await userEvent.type(screen.getByLabelText('명함·서명 텍스트'), CARD_TEXT)
@@ -90,10 +91,12 @@ describe('DoD-53 (a) 전자명함 임포트 — 직함·전화가 저장된다',
     await userEvent.selectOptions(screen.getByLabelText('1번째 역할'), 'ops')
     await userEvent.click(screen.getByRole('button', { name: '1번째 담당자 추가' }))
 
-    const newRow = (await screen.findByText('남신입')).closest('tr')!
-    expect(within(newRow).getByText('기획팀 수석')).toBeTruthy()
-    expect(within(newRow).getByText('010-0000-2001')).toBeTruthy()
-    expect(within(newRow).getByText('newcard@example.com')).toBeTruthy()
+    // 운영 역할로 넣었으니 운영 칸의 카드에 뜬다
+    const opsLane = screen.getByRole('region', { name: '운영 담당' })
+    const newCard = (await within(opsLane).findByText('남신입')).closest('[data-member-card]') as HTMLElement
+    expect(within(newCard).getByText('기획팀 수석')).toBeTruthy()
+    expect(within(newCard).getByText('010-0000-2001')).toBeTruthy()
+    expect(within(newCard).getByText('newcard@example.com')).toBeTruthy()
 
     // 화면뿐 아니라 저장소에도 남는다(다시 읽어도 값이 있다)
     const members = await mockProvider().listMembers('prj-stc26')
