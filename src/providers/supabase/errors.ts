@@ -1,6 +1,7 @@
 // PostgREST·RPC·Auth 오류 → ProviderError(설계서 §8 {error:{code,message}}) 매핑.
 // 프론트는 provider가 던지는 ProviderError만 보므로, mock과 같은 code·한국어 메시지로 맞춘다.
 import { ProviderError, type ErrorCode } from '../../lib/errors'
+import { humanizeStatusCodes } from '../../lib/labels'
 
 export interface PgErrorLike {
   code?: string | null
@@ -58,7 +59,8 @@ export function mapPgError(err: PgErrorLike | null | undefined, fallback = 'vali
     code === 'forbidden' && /row-level security|permission denied/i.test(raw)
       ? '이 작업을 수행할 권한이 없습니다.'
       : message
-  return new ProviderError(code, friendly || raw || '요청을 처리하지 못했습니다.')
+  // Phase 4.3.1 — SQL 문구의 `상태(pending_approval)`는 화면 이름으로(경합 때만 여기까지 온다)
+  return new ProviderError(code, humanizeStatusCodes(friendly || raw || '요청을 처리하지 못했습니다.'))
 }
 
 /** PostgREST 응답 {data, error} → data (error면 ProviderError) */

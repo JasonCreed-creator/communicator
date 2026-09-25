@@ -86,6 +86,15 @@ export const STATUS_LABELS: Record<DeliverableStatus, string> = {
   final: '확정',
 }
 
+/** 서버(SQL RPC·Drive 함수) 오류 문구의 `상태(pending_approval)` 같은 영문 상태 코드를 화면 이름으로 바꾼다 —
+ *  Phase 4.3.1(2026-09-25 실사용 결함: 오류에 내부 코드가 그대로 보였다). 괄호 안 코드만 바꾸고 나머지는 그대로 둔다. */
+export function humanizeStatusCodes(message: string): string {
+  return message.replace(
+    /상태\((requested|draft|internal_review|pending_approval|changes_requested|approved|final)\)/g,
+    (_, code: DeliverableStatus) => `상태(${STATUS_LABELS[code]})`,
+  )
+}
+
 /** 뱃지용 Tailwind 클래스 — 디자인지시서 v1 §3 (틴트 bg / 텍스트). pending_approval의 좌측
  *  도트는 StatusBadge·StatusPill 컴포넌트가 렌더한다(클래스만으로 표현 불가). */
 export const STATUS_BADGE_CLASSES: Record<DeliverableStatus, string> = Object.fromEntries(

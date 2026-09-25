@@ -13,8 +13,8 @@
 // v2.8 §4-1c — ③탭 맨 아래 위험 구역(행사 삭제). 권한 축이 이 화면의 다른 조작과 다르다:
 //  다른 편집은 전부 이 행사의 pm이 하지만 삭제만 **전역 app_role='admin'**이다. admin이 아니어도
 //  카드는 그대로 보이고 버튼만 잠긴다 — 무엇이 없어서 막혔는지 그 자리에서 읽혀야 한다(§10 진입점 원칙).
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import Card from '../components/internal/Card'
 import EmptyState from '../components/internal/EmptyState'
 import ErrorAlert from '../components/internal/ErrorAlert'
@@ -46,6 +46,12 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'members', label: '② 담당자' },
   { id: 'integration', label: '③ 유형·연동' },
 ]
+
+/** Phase 4.3.1 — `?tab=members|integration` 딥링크(업로드·발송 경고 상자의 '행사 설정 ②·③' 링크). 모르는 값은 무시 */
+function tabParam(search: string): Tab | null {
+  const t = new URLSearchParams(search).get('tab')
+  return TABS.some((x) => x.id === t) ? (t as Tab) : null
+}
 
 /** 탭 배지 — 필수 미입력은 accent(내 행동을 기다림), 선택 미입력은 중립 */
 interface TabGap {
@@ -106,10 +112,18 @@ const ROLE_PREVIEW: { role: MemberRole; blurb: string }[] = [
 export default function SettingsPage() {
   const { projectId, reloadSummaries } = useProject()
   const navigate = useNavigate()
+  const location = useLocation()
   // v2.9 — Drive 연결(OAuth) 후 /settings?drive=… 로 돌아오면 ③ 유형·연동 탭(Drive 카드)을 바로 연다
   const [tab, setTab] = useState<Tab>(() =>
-    typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('drive') ? 'integration' : 'overview',
+    typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('drive')
+      ? 'integration'
+      : (tabParam(location.search) ?? 'overview'),
   )
+  // 이미 행사 설정에 있을 때 경고 상자 링크로 다시 들어와도 그 탭으로 옮긴다
+  const linkedTab = tabParam(location.search)
+  useEffect(() => {
+    if (linkedTab) setTab(linkedTab)
+  }, [linkedTab])
   const [confirmingDelete, setConfirmingDelete] = useState(false)
 
   const project = useAsync(() => provider.getProject(projectId), [projectId])
