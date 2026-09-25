@@ -1,6 +1,7 @@
 // Supabase 클라이언트 — 이 파일과 providers/supabase/ 내부에서만 @supabase/supabase-js를 import한다(CLAUDE.md §6).
 // 키는 env(VITE_SUPABASE_URL·VITE_SUPABASE_PUBLISHABLE_KEY)만 — 번들 하드코딩 금지(설계서 §12). secret은 여기 없다.
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import { defaultApiBase } from '../../lib/basePath'
 
 export interface SupabaseEnv {
   url: string
@@ -29,7 +30,8 @@ export function readSupabaseEnv(env: Record<string, string | undefined> = import
       .split(',')
       .map((s) => s.trim().toLowerCase())
       .filter(Boolean),
-    apiBase: (env.VITE_API_BASE ?? '/api').replace(/\/$/, ''),
+    // 비우면 `{기본 경로}api` — 루트 배포면 '/api', 하위 경로 배포(Phase 4.4)면 그 아래
+    apiBase: defaultApiBase(env.VITE_API_BASE),
   }
 }
 

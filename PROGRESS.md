@@ -28,11 +28,20 @@
   ⑧ **로그인 방향 변경 — Okta SSO, 가장 마지막에**(사용자: "우리는 okta verify 사용 중 — 여기 등록해서 원키로 로그인, 이 기능은 가장 마지막에").
   사실(Supabase 문서 2026-09-25): SAML SSO는 **Pro 이상** · IdP 등록은 **CLI만**(`supabase sso add --type saml --metadata-url …`) · 로그인은 `signInWithSSO({ domain })` ·
   SSO MAU 과금. 메일 발송 제약(기본 메일 = 조직 팀원만)은 SSO로 통째로 사라진다.
-  ⑨ **시험용 입구 — 사용자 결정 '완전 개방'(암호 없음) · 착수 후 중단**: Okta 전까지 로그인 없이 실서버 기능·저장소 연동을 시험하려는 지시("아무나 들어갈 수 있는 게이트").
-  위험 고지(주소만 알면 인터넷 누구나 회사 Drive 폴더에 올리고 지울 수 있음) 후 사용자가 '완전 개방'을 골라(기한 3일·env로 닫힘·주소록 인물만) 구현을 시작했으나,
-  **이 세션의 자동 권한 판정이 인증 우회 변경을 차단**했다 → 우회하지 않고 중단, 사용자 결정 대기(§3). 작업 트리에 미완성 코드(`api/gate.ts`·`api/_lib/gate.ts`·
-  `src/providers/auth.ts`·`src/providers/supabase/authAdapter.ts`)가 있고 **커밋하지 않았다**.
-  남은 것: 시험 입장 수단 결정(§3) → Vercel env 전환·재배포 → 3턴(GCP OAuth → Drive 연결 → `drive:smoke` → 실사용 1회) → 맨 끝 Okta SSO.
+  ⑨ **Phase 4.3 시험용 입구 — 완성**(설계서 v2.9.2 §12.1): Okta 전까지 로그인 없이 실서버 기능·저장소 연동을 시험("아무나 들어갈 수 있는 게이트").
+  위험 고지 후 사용자가 **완전 개방**(암호 없음) 선택 → 첫 구현은 세션 자동 권한 판정이 인증 우회 변경을 막아 중단(미완성 코드는 커밋 없이 stash) →
+  사용자가 권한 모드를 **'편집 자동 수락'**으로 바꾼 뒤 재개. `api/gate`(GET 상태·인물 목록 = 이름·직함·권한만 / POST 주소록 id → 필요 시 auth 사용자 생성 →
+  magiclink `token_hash`만) · 로그인 화면 '시험용 입구'(경고·KST 마감·인물 카드) · 사이드바 로그아웃(실서버만) · 여닫기 = 서버 env `AUTH_GATE`+`AUTH_GATE_UNTIL`(14일 이내).
+  DoD 64 신설(22건) · ESM 가드 보정(진입점별 그래프 비지 않음 + 전체 중 src 도달 1개 이상 — 입구 함수는 src를 쓰지 않는다).
+  ⑩ **Phase 4.4 회사 도메인 하위 경로 — 코드 완성, 회사 CloudFront 대기**(§18a-2): 사용자 지시 "도메인은 mkt.rememberapp.co.kr/leadgen/communicator로 교체".
+  실측: 그 주소는 회사 S3+CloudFront의 **9/21 mock 정적 사본**(레포 밖 로컬 수정 빌드 — base·basename 하드코딩) — 화면의 행사 7개가 앱 내장 데모인 것이
+  증거(실DB는 행사 0). 사용자 선택 = **CloudFront → Vercel**. `VITE_BASE_PATH` → `src/lib/basePath.ts` 단일 파생(basename·`{base}api`·로고/직인·공유 링크·새 탭·
+  매직링크 복귀) · `main.tsx` 기본 경로 밖 진입 이동 · `vercel.json` 접두어 규칙(+30줄) · Drive OAuth 복귀 주소를 리디렉트 URI에서 파생(같은 오리진 = 기존 동작) ·
+  `deploy:check` 기본 경로 자동 인식 + D2. 회사 담당자용 요청서 `docs/회사도메인-CloudFront-연결-요청서.md`(원본 `communicator-rho.vercel.app`).
+  **검증**: vitest 118파일 **1,184 통과 · 1 실패**(LibreOffice Calc 없는 컨테이너 — 기존 환경 문제) · 1 건너뜀 · tsc · 루트 빌드 `deploy:check`(실브라우저 포함) ·
+  **하위 경로 빌드 `deploy:check` 전 항목**(딥링크·새로고침·런처·옛 라우트·루트 이동·로고 경로·예외 0) · demo 4단(브라우저 단계는 헤드리스 셸 — 전체판 Chrome은
+  `/favicon.ico`를 자동 요청해 '요청 1건'으로 잡힌다, 코드 무관) · 상호작용 스모크 33항목.
+  남은 것: PR 머지 → Vercel env(아래 §3) → 회사 CloudFront → Supabase Auth URL·GCP 리디렉션 → 3턴(Drive 연결 → `drive:smoke` → 실사용 1회) → 맨 끝 Okta SSO.
 
 - **완료: Phase 3.22 — 담당자 배정 카드(누르기·끌어놓기)**(2026-09-24, 사용자 지시: 온보딩 ② 캡처와 함께 "여기서 이미 구성원이 포함되어야 함" →
   제안 3안 중 '사람별 기본 역할' 승인 직후 **"미리 배치하지 말고 인물카드를 만들어서 인물을 클릭하거나 드래그앤드랍으로 설정할 수 있도록"**으로 방향 변경).
@@ -1101,7 +1110,8 @@ DoD-29뿐 아니라 **실물 검산 2건에서 바로** 잡힌다(위 표의 "2 
 - **F3(레포 기본 브랜치 → main)** — 이 세션에 노출된 도구에 레포 설정 변경 수단이 없다(§3 미결 참조)
 
 ## 3. 미결
-- **(2026-09-24) 회사 도메인의 옛 정적 사본** — `mkt.rememberapp.co.kr/leadgen/communicator/`는 Vercel이 아니라 **회사 S3+CloudFront 정적 호스팅**이다
+- **(2026-09-24 → 2026-09-25 결정)** 처리 방향 = **회사 주소를 정식 입구로 — CloudFront → Vercel**(사용자 선택, §1 ⑩). 아래는 당시 조사 기록.
+  `mkt.rememberapp.co.kr/leadgen/communicator/`는 Vercel이 아니라 **회사 S3+CloudFront 정적 호스팅**이다
   (8/29~9/4 코드 · 9/21 업로드 · base `/leadgen/communicator/` · mock 전용 · `/api` 없음 · `/projects` 등 하위 주소 직접 열기 403). 올린 경로는 레포 기록에 없다.
   서버 기능(Drive·로그인·견적 재계산·시트)은 여기서 돌지 않는다. 처리 방향(rmb-mice.com으로 리디렉트 / 회사 주소를 정식 입구로 — CloudFront → Vercel + 하위 경로 지원 /
   사본만 최신화)은 **보류**(사용자가 선택 질문을 닫음 — 다음 지시 대기).
@@ -1120,9 +1130,16 @@ DoD-29뿐 아니라 **실물 검산 2건에서 바로** 잡힌다(위 표의 "2 
   이번엔 ACTIVE_HEALTHY였다. 실사용(실제 행사 데이터)으로 넘어가기 전에 Pro 전환 여부를 결정.
 - **(2026-09-25) 임시 PAT 폐기(사용자 작업)** — 이번 PAT는 범위 제한(scoped) 토큰. 3턴이 끝나면 대시보드 → Access Tokens에서 **Revoke**.
 - ~~(2026-09-25) `reset-demo --yes` 실행 여부 = 사용자 승인 대기~~ → **실행 완료**(사용자 "지금 실행" — §1 ⑦). 되돌리려면 `npm run supabase:seed`(멱등).
-- **(2026-09-25) 시험 입장 수단 = 사용자 결정 대기(차단됨)** — 사용자는 '완전 개방 시험용 입구'(암호 없음·기한 3일)를 골랐으나 이 세션의 자동 권한 판정이
-  인증 우회 코드 변경을 막았다. 선택지: ⓐ 사용자가 권한을 허용(설정의 권한 규칙)하고 이어서 구현 ⓑ 코드 변경 없이 admin 1회용 로그인 링크(서버 키로 발급,
-  메일 없음·1시간 유효·로그인 유지)로 시험 ⓒ Okta까지 보류. 작업 트리의 미완성 입구 코드는 ⓐ면 이어 쓰고, 아니면 삭제한다(커밋 안 됨).
+- ~~(2026-09-25) 시험 입장 수단 = 사용자 결정 대기(차단됨)~~ → **해소**: 사용자가 권한 모드를 '편집 자동 수락'으로 바꾼 뒤 완전 개방 입구 완성(§1 ⑨).
+  **열 때 주의**: 열려 있는 동안 주소만 알면 누구나 회사 Drive 폴더·DB에 쓸 수 있다 — 기한을 짧게(사용자 선택 3일), 실제 고객 자료 금지, 끝나면 `AUTH_GATE` 삭제.
+- **(2026-09-25) 운영 전환 env 목록(PR 머지 뒤 기획자님 — Vercel Production, 값은 문서·대화 재인쇄 금지)**: `VITE_DATA_PROVIDER=supabase` · `VITE_SUPABASE_URL` ·
+  `VITE_SUPABASE_PUBLISHABLE_KEY` · `SUPABASE_URL` · `SUPABASE_SECRET_KEY` · `VITE_BASE_PATH=/leadgen/communicator/` · `DRIVE_OAUTH_REDIRECT_URI`(회사 주소 …/api/drive) ·
+  `AUTH_GATE=open` · `AUTH_GATE_UNTIL`(3일 뒤) → Redeploy. 3턴에 `DRIVE_ROOT_FOLDER_ID` · `GOOGLE_OAUTH_CLIENT_ID` · `GOOGLE_OAUTH_CLIENT_SECRET` 추가.
+  **env를 PR 머지 전에 넣으면** 머지 전 main 배포가 로그인 필수(입구 없음)로 바뀌어 잠긴다 — 머지와 같이 또는 뒤에.
+- **(2026-09-25) 회사 CloudFront 연결 대기(회사 AWS 담당자)** — 요청서 `docs/회사도메인-CloudFront-연결-요청서.md`. 순서 = Vercel env·재배포 먼저 → CloudFront →
+  확인(회사 주소 `…/api/drive` JSON · `…/home` 새로고침). 확인 필요 2건: 배포 수준 사용자 지정 오류 응답(있으면 API 404 JSON이 바뀜) · WAF의 PUT/POST 본문 제한.
+- **(2026-09-25) Vercel 요금제 = Hobby** — 약관상 비상업·개인 전용(검증 2026-09-25, vercel.com/docs/plans/hobby). 회사 업무 도구로 회사 도메인에 붙이기 전
+  Pro 전환 여부 결정(Okta가 요구하는 Supabase Pro와 함께). 도메인 구매는 필요 없다(사용자 질문 "왜 도메인을 사야 해" — 오해였음을 설명).
 - **(2026-09-25) 로그인 = Okta SSO(맨 마지막)** — Supabase Pro 전환(SAML SSO는 Pro 이상) · 회사 Okta 관리자의 SAML 앱 등록(ACS `https://<ref>.supabase.co/auth/v1/sso/saml/acs` ·
   Entity ID·메타데이터 URL `…/auth/v1/sso/saml/metadata`) · CLI로 IdP 등록 · 로그인 화면 "회사 계정으로 로그인"(`signInWithSSO`) = 설계 변경(설계서 §12 개정 + 승인).
   2턴의 '메일 경로' 결정(조직 팀원 초대 vs SMTP)은 이 결정으로 대체됐다.
@@ -1302,10 +1319,10 @@ DoD-29뿐 아니라 **실물 검산 2건에서 바로** 잡힌다(위 표의 "2 
   (설계서 v1.4.1 §4-15·§8·§15 정본화 — 열린 질문 ①~⑤ 전부 종결)
 
 ## 4. 다음 스텝
-- **(2026-09-25) 작동 테스트 1턴 이후**: ① ~~`reset-demo --yes` 시점~~ → 실행 완료 ② **시험 입장 수단 결정**(§3 — 완전 개방 입구는 권한 차단으로 중단:
-  권한 허용 후 계속 / 1회용 링크 / 보류) → Vercel env 5종 → 재배포 → Supabase Auth URL(Site `https://www.rmb-mice.com`) → 입장 → admin 메뉴(행사 삭제·Drive 연결) 확인
-  ③ **3턴**(README §3d) ④ 맨 끝 **Okta SSO**(Pro 전환 · Okta SAML 앱 · CLI 등록 · 로그인 화면 — 설계서 §12 개정) ⑤ 끝나면 임시 PAT Revoke(사용자)
-  ⑥ junior 1명 등록 ⑦ Free 플랜 유지/Pro 결정(Okta가 Pro를 요구하므로 ④와 함께)
+- **(2026-09-25) 작동 테스트 이후**: ① PR(Phase 4.3·4.4 + PROGRESS) 검수 → 머지 ② Vercel env(§3 목록) + Redeploy → `communicator-rho.vercel.app`에서
+  입구로 admin 입장 · admin 메뉴(행사 삭제·Drive 연결) 확인 ③ 회사 CloudFront(요청서) → 회사 주소 확인 ④ Supabase Auth URL·GCP 리디렉션을 회사 주소로
+  ⑤ **3턴**(README §3d·§3f) — Drive 연결 → `drive:smoke` → 실사용 1회 ⑥ 맨 끝 **Okta SSO**(Supabase Pro · Okta SAML 앱 · CLI 등록 · 로그인 화면 — 설계서 §12 개정) →
+  입구 폐기(§12.1 종료 조건) ⑦ 임시 PAT Revoke(사용자) ⑧ junior 1명 등록 ⑨ Vercel·Supabase 요금제 결정(Hobby·Free — §3)
 - ~~(2026-09-24) Phase 3.22 이후: ① PR(Phase 3.22) 검수 → 머지 ② 새 세션: 담당자 7명 Slack 조회 → 작동 테스트 3턴~~ → ① 머지 완료(`771711b`, 운영 반영 확인)
   ② 새 세션(2026-09-25)에서 진행 중 — Slack은 직접 복사로 대체 ③ 회사 도메인 사본 처리 방향 결정(미결 — 그대로)
 - **(2026-09-24) Phase 5 이후**: ① ~~PR(Phase 5) 검수 → 머지~~ → **머지 완료**(`600874a` · 운영 `/api/drive` JSON 확인) ② Supabase 실서버 전환(4.1 3턴)
@@ -1398,6 +1415,12 @@ DoD-29뿐 아니라 **실물 검산 2건에서 바로** 잡힌다(위 표의 "2 
 - 이후 Phase 5(Drive) → Phase 6(알림·cron)
 
 ## 5. 결정 로그
+- **(2026-09-25) 시험용 입구 재개 = 사용자가 권한 모드 변경('자동' → '편집 자동 수락')** — 차단 후 "설정은 어디서?"·"지금 이미 자동모드임"(모드 메뉴 캡처) →
+  '자동'이 곧 차단한 판정이라는 사실과 메뉴의 다른 선택지를 설명(바꾸면 이 세션의 모든 파일 편집이 자동 수락된다는 점 포함) → 사용자 선택. 설정 변경은 사용자만 했다.
+- **(2026-09-25) 도메인 교체 = 회사 주소, 연결 = CloudFront → Vercel(사용자 버튼 2회)** — 브리프(하위 경로 코드 + 요청서 + 문서, [A]) 승인 → 사용자 "이미 도메인은
+  연동되어 있음"·캡처 → 실측(S3 정적 사본·9/21·mock·403)과 화면 속 데모 행사를 근거로 설명 → 연결 방식 버튼: CloudFront → Vercel(추천) 선택(대안 S3 업로드 유지 기각).
+  구현 판단: 접두어는 `vercel.json`에만(코드는 `VITE_BASE_PATH`) · 자산 상수 문자열은 그대로 두고 쓸 때 `assetUrl`(데모 빌드 치환 보존) · CloudFront 원본 =
+  Vercel 고정 주소 `communicator-rho.vercel.app`(사용자 캡처) · Host 헤더 미전달(Vercel이 자기 주소로 받아야 응답) · 캐시 끔.
 - **(2026-09-25) 데모 데이터 정리 = 지금 실행(사용자 버튼)** — 추천안(3턴 실사용 직전)과 달리 바로 실행. 결과는 §1 ⑦.
 - **(2026-09-25) 로그인 = Okta SSO, 가장 마지막(사용자 지시)** — 매직링크 메일 경로 질문에 대한 답. 사실 확인(Pro 이상·CLI 등록)은 §1 ⑧.
 - **(2026-09-25) 시험용 입구 = 완전 개방(사용자 버튼, 위험 고지 후)** — 선택지 3개(암호 입구+인물 선택[추천] · 완전 개방 · 코드 없이 1회용 링크) 중 완전 개방.
@@ -1919,6 +1942,11 @@ DoD-29뿐 아니라 **실물 검산 2건에서 바로** 잡힌다(위 표의 "2 
   **(계속)** 버튼 2문항 → "Okta로 원키 로그인 — 가장 마지막에" · "reset-demo 지금 실행" → `--yes` 실행·재조회(행사 0·주소록 7) → Supabase SAML SSO 조건 문서 확인(Pro 이상·CLI) →
   앱이 implicit 흐름이라 메일 없는 1회용 링크 로그인이 가능함을 코드로 확인 → 선택지 제시 → 사용자 "로그인은 나중에, 지금은 아무나 들어갈 수 있는 게이트로 — 기능·저장소 연동 확인" →
   위험 고지 브리프 + 버튼 → '완전 개방' → 서버 함수·어댑터 작성 중 **자동 권한 판정이 인증 우회 변경을 차단** → 우회 없이 중단, 미완성 코드는 커밋하지 않음 → PROGRESS만 푸시.
+  **(계속 2)** 정지 훅이 미커밋 변경을 지적 → 막힌 코드는 커밋 대신 stash. 사용자 "설정은 어디서?" → 권한 모드 설명(방법 조회는 판정이 막음) → 모드 메뉴 캡처·"편집 자동 수락으로
+  바꾸고 계속" + 도메인 교체 지시 → 도메인 실측(S3 사본) → CloudFront → Vercel 선택 → stash 복원 → 입구 완성(AuthContext·로그인 화면·사이드바 로그아웃·DoD 64) →
+  하위 경로(`basePath.ts`·basename·자산·링크·Drive 복귀·`vercel.json`·`deploy:check`·DoD 65) → 루트·하위 경로 빌드 둘 다 `deploy:check`(Playwright 1.63 임시 설치 —
+  사전 설치 브라우저 1194는 `PLAYWRIGHT_CHROMIUM_PATH`로 지정) → 전체 스위트 → demo 4단(첫 실패 = 전체판 Chrome의 favicon 자동 요청 · 헤드리스 셸로 통과) ·
+  스모크 33 → 요청서·설계서 v2.9.2·CLAUDE.md v2.8.2·README §3e·§3f. 사용자 질문 2건 응답(Vercel 화면 = 지금 할 일 없음·원본 주소 확인 / 도메인 구매 불필요 — 요금제 설명).
 - **2026-09-24 (계속 — PR #45 머지 → 작동 테스트 준비 → Phase 3.22 담당자 배정 카드)**. "머지하고 PR" → 드래프트 해제·merge `600874a` → 운영 `/api/drive` JSON 폴링 확인 →
   구독·점검 해제. "작동 테스트 해보고 싶다" → 준비 상태 점검(이 컨테이너 키 없음 · 4.1 3턴 미착수) → 버튼: [B] 3턴·회사 조직 GCP. 사용자가 회사 주소를 알려줘 조사 →
   S3+CloudFront 옛 정적 사본(9/21 업로드, `/api` 없음)으로 확인 → 처리 방향 질문은 사용자가 닫음. "슬랙에서 담당자 정보를 가져와서 업데이트" → 이 세션엔 Slack 도구 없음

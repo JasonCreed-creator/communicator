@@ -105,6 +105,34 @@ DB 쪽은 `setup.sql`을 한 번 더 실행하면 된다(18개 마이그레이�
 되돌리기: Drive 카드 "Drive 연결 해제"(admin — Vault 토큰 삭제·Google 토큰 revoke). 파일은 Drive에 그대로 남는다.
 서비스 계정 경로(`DRIVE_AUTH=service_account`)는 저장소를 **공유 드라이브**로 옮긴 경우에만 — 서비스 계정은 저장 용량이 없다.
 
+## 3e. 시험용 입구 — 로그인 없이 시험(Phase 4.3 · 설계서 v2.9.2 §12.1, 임시)
+
+Okta SSO(맨 마지막)가 붙기 전까지 실서버에서 기능을 시험하는 입구다. **열려 있는 동안은 주소만 알면 누구나 들어온다**(2026-09-25 사용자 결정).
+
+1. **열기** — Vercel → Settings → Environment Variables(Production), 값은 문서·대화에 붙이지 않는다:
+   - `AUTH_GATE` = `open`
+   - `AUTH_GATE_UNTIL` = 닫히는 시각(지금부터 **14일 이내**) — 예) `2026-09-28T18:00:00+09:00`
+   - 저장 후 **Redeploy**
+2. **쓰기** — 로그인 화면(`…/login`)에 '시험용 입구'와 주소록 인물 카드가 뜬다 → 사람을 누르면 그 사람의 권한으로 들어간다.
+   다른 사람으로 바꾸려면 사이드바 맨 아래 **로그아웃** → 다시 고른다.
+3. **닫기** — `AUTH_GATE`를 지우고 Redeploy. 기한이 지나면 스스로 닫힌다(로그인 화면에 "기한이 지나 닫혔습니다").
+
+## 3f. 회사 도메인 전환 — `mkt.rememberapp.co.kr/leadgen/communicator` (Phase 4.4 · 설계서 v2.9.2 §18a-2)
+
+도메인은 회사 소유 그대로(구매·DNS 변경 없음). 회사 CloudFront가 이 경로를 Vercel로 넘긴다. **순서가 중요하다 — 앱 먼저, CloudFront 나중.**
+
+1. **Vercel env(Production)** → Redeploy:
+   - `VITE_BASE_PATH` = `/leadgen/communicator/`
+   - `DRIVE_OAUTH_REDIRECT_URI` = `https://mkt.rememberapp.co.kr/leadgen/communicator/api/drive`
+   - (실서버로 돌릴 때) `VITE_DATA_PROVIDER`=`supabase` · `VITE_SUPABASE_URL` · `VITE_SUPABASE_PUBLISHABLE_KEY` · `SUPABASE_URL` · `SUPABASE_SECRET_KEY`
+   - 확인: `https://communicator-rho.vercel.app/` → `…/leadgen/communicator/`로 옮겨 가며 런처가 뜬다
+2. **회사 CloudFront**(회사 AWS 담당자) — 요청서 `docs/회사도메인-CloudFront-연결-요청서.md` 전달
+3. **Supabase → Authentication → URL Configuration**: Site URL = `https://mkt.rememberapp.co.kr/leadgen/communicator/` · Redirect URLs에 같은 주소 + `…/login`
+4. **GCP OAuth 클라이언트**(3d-1): 승인된 리디렉션 URI = 위 `DRIVE_OAUTH_REDIRECT_URI`와 글자까지 같게
+5. 확인: 회사 주소 `…/api/drive`가 JSON · `…/home` 새로고침이 화면(403 아님)
+
+로컬 사전 검증: `VITE_BASE_PATH=/leadgen/communicator/ npm run build && npm run deploy:check`(Vercel 규칙 재현 + 실브라우저).
+
 ## 4. 키 취급 규약 (CLAUDE.md §9 · 설계서 §12)
 
 - `.env.local`(gitignore)에만: `VITE_SUPABASE_URL` · `VITE_SUPABASE_PUBLISHABLE_KEY` · `SUPABASE_SECRET_KEY` · (임시) `SUPABASE_ACCESS_TOKEN`

@@ -5,6 +5,7 @@
 import { useState, type FormEvent } from 'react'
 import ErrorAlert from '../internal/ErrorAlert'
 import { useAsync, useMutation } from '../../hooks/useAsync'
+import { appUrl } from '../../lib/basePath'
 import { PARTNER_STATUS_LABELS } from '../../lib/labels'
 import { getDataProvider } from '../../providers'
 import type { UUID } from '../../types/entities'
@@ -38,7 +39,8 @@ export default function PartnerRosterEditor({
   }
 
   const handleCopy = async (token: string) => {
-    const url = `${window.location.origin}/p/${token}`
+    // 기본 경로(Phase 4.4 — 회사 도메인 하위 경로)까지 붙인 주소 — 루트 배포면 이전과 같다
+    const url = appUrl(`p/${token}`)
     try {
       await navigator.clipboard.writeText(url)
       setCopiedToken(token)

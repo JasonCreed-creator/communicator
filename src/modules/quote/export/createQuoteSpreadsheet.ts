@@ -3,6 +3,7 @@
 // Drive에 스프레드시트로 변환 업로드한 뒤 링크를 돌려준다. DataProvider 인터페이스(125메서드)는 손대지 않는다 —
 // 시트 생성은 "내보내기의 저장 방식" 하나가 늘어난 것이라 saveQuoteFile과 같은 층(modules/quote/export)에 둔다.
 // mock 공급자에는 세션 토큰이 없어(accessToken=null) 실서버 모드에서만 동작한다 — 화면은 그 사실을 문구로 알린다.
+import { defaultApiBase as apiBaseFor } from '../../../lib/basePath'
 
 export interface QuoteSpreadsheetResult {
   url: string
@@ -37,9 +38,9 @@ export async function blobToBase64(blob: Blob): Promise<string> {
   return btoa(bin)
 }
 
+/** VITE_API_BASE가 없으면 `{기본 경로}api` — 루트 배포면 '/api'(Phase 4.4) */
 function defaultApiBase(): string {
-  const base = (import.meta.env?.VITE_API_BASE as string | undefined) ?? '/api'
-  return base.replace(/\/$/, '')
+  return apiBaseFor(import.meta.env?.VITE_API_BASE as string | undefined)
 }
 
 export interface CreateQuoteSpreadsheetOptions {

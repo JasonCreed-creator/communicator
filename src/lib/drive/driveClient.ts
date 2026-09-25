@@ -4,6 +4,7 @@
 // 행사 설정 ③ Drive 카드(연결 상태·연결하기·행사 폴더). DataProvider 인터페이스 밖의 연동 층이다 —
 // 4.2 견적 시트(modules/quote/export/createQuoteSpreadsheet)와 같은 자리매김.
 // 데모 아티팩트에는 싣지 않는다(외부 요청 0건 가드) — vite.demo.config.ts가 스텁으로 갈음한다.
+import { defaultApiBase as apiBaseFor } from '../basePath'
 import { ProviderError, type ErrorCode } from '../errors'
 import type { Version } from '../../types/entities'
 
@@ -59,9 +60,9 @@ export interface DriveClientOptions {
 
 const CODES: readonly ErrorCode[] = ['validation', 'forbidden', 'not_found', 'conflict', 'gone']
 
+/** VITE_API_BASE가 없으면 `{기본 경로}api` — 루트 배포면 '/api'(Phase 4.4) */
 function defaultApiBase(): string {
-  const base = (import.meta.env?.VITE_API_BASE as string | undefined) ?? '/api'
-  return base.replace(/\/$/, '')
+  return apiBaseFor(import.meta.env?.VITE_API_BASE as string | undefined)
 }
 
 type Progress = { done: false; received: number } | { done: true; file_id: string }

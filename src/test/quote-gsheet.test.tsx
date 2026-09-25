@@ -67,6 +67,7 @@ describe('(b) 실서버 모드 훅 계약', () => {
     signInWithEmail: async () => null,
     signOut: async () => undefined,
     getAccessToken: async () => 'tok-123',
+    gate: null,
   }
   const wrapper = ({ children }: { children: ReactNode }) => <AuthProvider adapter={supabaseLike}>{children}</AuthProvider>
 

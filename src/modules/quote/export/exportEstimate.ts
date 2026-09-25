@@ -24,6 +24,7 @@ import {
   type EstimateResult,
 } from "../engine/calcEstimate";
 import { amountInWordsFormula, amountInWordsKo } from "./koreanAmountFormula";
+import { assetUrl } from "../../../lib/basePath";
 
 // 리멤버 워드마크(크림/화이트 — 블랙 헤더 밴드용). PROGRESS 결정 로그: 로고 상시 노출은
 // 사용자 명시 지시(#RULE-NO-COMPANY 예외) — 자산은 public/brand 주입, 로드 실패 시 로고 없이 출력.
@@ -557,7 +558,8 @@ export async function exportEstimate(
     ws.mergeCells(4, 1, 4, 8);
     ws.getCell(4, 1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: OG } };
     ws.getRow(4).height = 4;
-    const logoB64 = await loadAssetBase64(REMEMBER_LOGO_URL);
+    // 기본 경로(Phase 4.4 하위 경로 배포)는 받을 때 붙인다 — 상수는 데모 빌드 치환 대상이라 그대로 둔다
+    const logoB64 = await loadAssetBase64(assetUrl(REMEMBER_LOGO_URL));
     if (logoB64) {
       try {
         const logoId = wb.addImage({ base64: logoB64, extension: "png" });
@@ -709,7 +711,7 @@ export async function exportEstimate(
     const sealB64 = injected
       ? injected.replace(/^data:image\/\w+;base64,/, "")
       : B === REMEMBER_BRAND
-        ? await loadAssetBase64(REMEMBER_SEAL_URL)
+        ? await loadAssetBase64(assetUrl(REMEMBER_SEAL_URL))
         : "";
     if (sealB64) {
       try {
