@@ -2,16 +2,14 @@
 // 지금은 항목추가로 쌓이기만 해".
 //   · 고치기 = PM·해당 영역 담당(업로드 권한과 같다). 제목·카테고리·마감은 둘 다, 담당·제작 가이드는 PM만.
 //     큐시트·시나리오·운영가이드는 종류를 바꿀 수 없다(빌더 데이터가 카테고리에 매여 있다 — 서버도 409).
-//     상태는 이 카드에서 바꾸지 않는다(§5 전이표 경로 = 상태 카드).
+//     상태는 여기서 바꾸지 않는다(§5 전이표 경로 = 다음 단계 카드).
 //   · 지우기 = PM만 · 모든 상태 · 항목 이름 입력 확인(DeleteItemDialog).
-// 헤더의 주 액션 2개(3.17b 계약)를 늘리지 않으려고 카드로 둔다 — 일반 항목은 오른쪽 메타 열 맨 아래,
-// 정형 문서(1단 전폭)는 본문 맨 아래.
+// Phase 3.23 PR-4(디자인지시서 v1.4 §7-2.7) — 여는 자리는 본문 카드('항목 관리')에서 머리의 ⋯ 메뉴(ItemMenu)로 옮겼다.
+// 이 파일은 권한 판정 · 편집 폼(고치기를 고르면 본문 맨 위에 카드로 열린다) · 지운 뒤 돌아갈 자리만 가진다.
 import { useState, type FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
 import Card from '../internal/Card'
 import ErrorAlert from '../internal/ErrorAlert'
 import { CategoryPicker } from '../board/DeliverableAddForm'
-import DeleteItemDialog from './DeleteItemDialog'
 import { useMutation } from '../../hooks/useAsync'
 import { areaPreset } from '../../lib/boardPresets'
 import { AREA_LABELS } from '../../lib/labels'
@@ -27,81 +25,28 @@ export function boardPathFor(area: DeliverableDetail['area']): { path: string; l
   return { path: '/home', label: '홈으로' }
 }
 
-export default function ItemManageCard({
-  deliverable: d,
-  role,
-  members,
-  closed,
-  onUpdated,
-}: {
-  deliverable: DeliverableDetail
-  role: MemberRole | undefined
-  members: MemberWithProfile[] | undefined
-  /** 종료 행사 — 고치기·지우기 모두 409이므로 버튼을 비활성하고 이유를 적는다 */
-  closed: boolean
-  onUpdated: () => void
-}) {
-  const navigate = useNavigate()
-  const [editing, setEditing] = useState(false)
-  const [deleting, setDeleting] = useState(false)
+/** 고치기 = PM·해당 영역 담당 / 지우기 = PM만 (권한이 없으면 메뉴 자체를 그리지 않는다) */
+export function itemManageRights(
+  d: Pick<DeliverableDetail, 'area'>,
+  role: MemberRole | undefined,
+): { canEdit: boolean; canDelete: boolean; isPm: boolean } {
   const isPm = role === 'pm'
   const canEdit = isPm || ((role === 'design' || role === 'ops') && d.area === role)
-  if (!canEdit) return null
+  return { canEdit, canDelete: isPm, isPm }
+}
 
-  const leave = boardPathFor(d.area)
+/** 고치기 카드 — ⋯ 메뉴에서 '고치기'를 고르면 본문 맨 위에 열린다 */
+export function ItemEditCard(props: {
+  deliverable: DeliverableDetail
+  isPm: boolean
+  members: MemberWithProfile[] | undefined
+  onSaved: () => void
+  onCancel: () => void
+}) {
   return (
-    <>
-      <Card title="항목 관리">
-        {editing ? (
-          <ItemEditForm
-            deliverable={d}
-            isPm={isPm}
-            members={members}
-            onSaved={() => {
-              setEditing(false)
-              onUpdated()
-            }}
-            onCancel={() => setEditing(false)}
-          />
-        ) : (
-          <div className="space-y-3">
-            <p className="text-sm leading-relaxed text-ink-sub">
-              {isPm
-                ? '제목·카테고리·마감·담당·제작 가이드를 고치거나 항목을 지울 수 있습니다.'
-                : '제목·카테고리·마감을 고칠 수 있습니다. 담당·가이드 변경과 지우기는 PM이 합니다.'}
-            </p>
-            {closed && (
-              <p data-testid="item-manage-closed" className="t-caption">
-                종료된 행사입니다 — 재개(pm) 후 고치거나 지울 수 있습니다.
-              </p>
-            )}
-            <div className="flex flex-wrap gap-2">
-              <button type="button" className="btn btn-ghost btn-sm" disabled={closed} onClick={() => setEditing(true)}>
-                고치기
-              </button>
-              {isPm && (
-                <button
-                  type="button"
-                  className="btn btn-ghost-negative btn-sm"
-                  disabled={closed}
-                  onClick={() => setDeleting(true)}
-                >
-                  지우기
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-      </Card>
-      {deleting && (
-        <DeleteItemDialog
-          deliverable={d}
-          leaveLabel={leave.label}
-          onCancel={() => setDeleting(false)}
-          onLeave={() => navigate(leave.path)}
-        />
-      )}
-    </>
+    <Card title="항목 고치기">
+      <ItemEditForm {...props} />
+    </Card>
   )
 }
 
@@ -170,7 +115,7 @@ export function buildPatch(d: DeliverableDetail, v: Draft, isPm: boolean): Updat
   return patch
 }
 
-function ItemEditForm({
+export function ItemEditForm({
   deliverable: d,
   isPm,
   members,

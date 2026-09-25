@@ -1,39 +1,40 @@
-import { Fragment, useEffect, useState, type FormEvent, type ReactNode } from 'react'
-import { Link, useParams, useSearchParams } from 'react-router-dom'
+import { useEffect, useState, type ReactNode } from 'react'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import CuesheetEditor from '../components/cue/CuesheetEditor'
 import GuideBuilder from '../components/guide/GuideBuilder'
 import ScenarioBuilder from '../components/scenario/ScenarioBuilder'
 import VersionUploadCard, { UPLOAD_FORM_ID, UPLOAD_INPUT_ID } from '../components/upload/VersionUploadCard'
 import BriefCard from '../components/internal/BriefCard'
-import ItemManageCard from '../components/item/ItemManageCard'
-import ClientLinkWarning, { EmailPendingNote } from '../components/internal/ClientLinkWarning'
-import Card from '../components/internal/Card'
+import { useClientLinkTarget } from '../components/board/DesignNextAction'
+import CommentThread from '../components/item/CommentThread'
+import DeleteItemDialog from '../components/item/DeleteItemDialog'
+import ItemMenu from '../components/item/ItemMenu'
+import { ItemEditCard, boardPathFor, itemManageRights } from '../components/item/ItemManageCard'
+import NextStepCard from '../components/item/NextStepCard'
+import { ApprovalTimeline, VersionListCard, VersionPreviewCard } from '../components/item/VersionPanels'
 import DdayBadge from '../components/internal/DdayBadge'
 import ErrorAlert from '../components/internal/ErrorAlert'
 import StatusBadge, { LevelBadge } from '../components/internal/StatusBadge'
 import { useProject } from '../context/ProjectContext'
-import { useAsync, useMutation } from '../hooks/useAsync'
+import { useAsync } from '../hooks/useAsync'
+import { categoryGroupLabel } from '../lib/boardPresets'
 import {
   AREA_LABELS,
   HOST_STATUS_LABELS,
   ROLE_BAR_CLASSES,
   STATUS_BADGE_CLASSES,
-  STATUS_LABELS,
   formatDate,
   formatDateTime,
+  formatDateWeekday,
 } from '../lib/labels'
 import { getDataProvider } from '../providers'
 import { providerKind } from '../providers/kind'
 import { uploadLock, versionStorage } from '../lib/uploadGate'
 import type { Version } from '../types/entities'
-import type {
-  ApprovalDecision,
-  CommentVisibility,
-  DeliverableArea,
-  DeliverableStatus,
-  MemberRole,
-} from '../types/enums'
+import type { DeliverableArea, DeliverableStatus, MemberRole } from '../types/enums'
 import NotFoundPage from './NotFoundPage'
+
+export { railIndexOf, railStepState } from '../components/item/NextStepCard'
 
 // v2.4 §21 — 주최형(파트너) 제출 항목은 발주처 컨펌 어휘 대신 HOST_STATUS_LABELS로 표기한다
 // (§5.1). StatusBadge(내부 공용)를 건드리지 않고 이 화면 전용으로 배지를 다시 그린다.
@@ -49,11 +50,6 @@ function HostStatusBadge({ status }: { status: DeliverableStatus }) {
 }
 
 const provider = getDataProvider()
-
-const DECISION_LABELS: Record<ApprovalDecision, string> = {
-  approved: '승인',
-  changes_requested: '수정요청',
-}
 
 /** 헤더 복귀 경로 — S2 보드 라우트가 있는 영역만 링크로(공통 문서는 보드가 없다) */
 const BOARD_AREAS: DeliverableArea[] = ['design', 'ops']
@@ -98,6 +94,16 @@ function ItemDetail({ itemId }: { itemId: string }) {
     }, 0)
     return () => clearTimeout(t)
   }, [wantsUpload, readyForUpload, setSearchParams])
+  const navigate = useNavigate()
+  // Phase 3.23 PR-4 — ⋯ 메뉴(고치기·지우기)와 미리볼 버전
+  const [editing, setEditing] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null)
+  // 컨펌대기 항목의 발주처 링크 재전달(대행형 PM) — 이메일은 아직 가지 않는다(Phase 6b)
+  const clientLink = useClientLinkTarget(
+    projectId,
+    currentUser.data?.role === 'pm' && project.data?.kind !== 'host' && detail.data?.status === 'pending_approval',
+  )
   // v2.4 §10.1 — 주최형에서는 발주처 컨펌 발송 UI를 숨긴다(파트너 항목이든 아니든, DoD 31)
   const isHost = project.data?.kind === 'host'
   // v2.5 §23 — 시나리오·운영가이드 빌더 문서 판정 재료. 카테고리 문자열만으로는 부족하다:
@@ -160,25 +166,53 @@ function ItemDetail({ itemId }: { itemId: string }) {
   const statusBadge =
     d.partner_id != null ? <HostStatusBadge status={d.status} /> : <StatusBadge status={d.status} />
 
-  // 3.17b 시안 — 헤더에 복귀 경로·상태·담당·마감·주 액션 2개를 집약한다.
-  // 정형 문서(큐시트·빌더)는 3.16.3/3.16.4에서 확정한 "상단 스트립 단일 표시"를 유지한다 —
-  // 상태·담당·마감은 스트립이, 주 액션은 문서 헤더가 이미 담당하므로 헤더는 복귀 경로만 쓴다.
+  // Phase 3.23 PR-4(§7-2.7) — 머리 = 복귀 경로·제목·상태·담당·마감 + [최신본 내려받기][⋯]. 올리기·내부검토 요청·컨펌 발송은
+  // 전부 '다음 단계' 카드 한 곳에(채운 버튼 1개). 정형 문서(큐시트·빌더)는 3.16.3/3.16.4의 "상단 스트립 단일 표시"를 유지한다.
   const latestVersion = d.versions[0]
-  // Phase 4.3.1 — 업로드가 막힌 상태면 헤더의 '새 버전 업로드'를 비활성 + 이유(업로드 카드가 같은 이유를 적는다)
-  const lock = uploadLock(d.status, { hasPartner: d.partner_id != null })
+  const hasPartner = d.partner_id != null
+  const lock = uploadLock(d.status, { hasPartner })
   const lastChangesRequested = d.approvals
     .slice()
     .reverse()
     .find((a) => a.decision === 'changes_requested')
-  // Phase 4.5 — 항목 고치기·지우기(권한 없는 역할에는 카드 자체가 없다). 일반 항목은 메타 열 맨 아래, 정형 문서는 본문 맨 아래
-  const manageCard = (
-    <ItemManageCard
+  let openApproval: (typeof d.approvals)[number] | null = null
+  for (const a of d.approvals) if (a.decided_at === null) openApproval = a
+  const rights = itemManageRights(d, role)
+  const closed = project.data?.status === 'closed'
+  const leave = boardPathFor(d.area)
+  const shownVersionId = selectedVersionId && d.versions.some((v) => v.id === selectedVersionId) ? selectedVersionId : latestVersion?.id ?? null
+
+  const menu = rights.canEdit ? (
+    <ItemMenu canDelete={rights.canDelete} closed={closed} onEdit={() => setEditing(true)} onDelete={() => setDeleting(true)} />
+  ) : null
+
+  const nextStep = (
+    <NextStepCard
       deliverable={d}
-      role={role}
-      members={members.data ?? undefined}
-      closed={project.data?.status === 'closed'}
-      onUpdated={detail.reload}
+      isPm={isPm}
+      canWriteArea={canWriteArea}
+      isHost={isHost}
+      autoSnapshotDoc={isStructuredPanel}
+      sendViaHeader={isBuilderDoc}
+      showRail={!isStructuredPanel}
+      clientLink={clientLink}
+      onUpload={focusVersionUpload}
+      onChanged={detail.reload}
     />
+  )
+
+  const comments = (
+    <CommentThread
+      deliverableId={d.id}
+      comments={d.comments}
+      memberName={memberName}
+      hasPartner={hasPartner}
+      onAdded={detail.reload}
+    />
+  )
+
+  const timeline = (
+    <ApprovalTimeline approvals={d.approvals} versions={d.versions} requesterName={memberName} hasPartner={hasPartner} />
   )
 
   return (
@@ -192,28 +226,30 @@ function ItemDetail({ itemId }: { itemId: string }) {
         assigneeName={memberName(d.assignee_id)}
         assigneeRole={assigneeRole}
         dueDate={d.due_date}
+        done={d.status === 'final' || d.status === 'approved'}
         actions={
-          isStructuredPanel ? null : (
-            <>
-              {latestVersion && <LatestDownloadLink version={latestVersion} />}
-              {canWriteArea && (
-                <button
-                  type="button"
-                  onClick={focusVersionUpload}
-                  disabled={!!lock}
-                  title={lock ? `${lock.label} — ${lock.reason}` : undefined}
-                  className="btn btn-accent"
-                >
-                  새 버전 업로드
-                </button>
-              )}
-            </>
-          )
+          <>
+            {!isStructuredPanel && latestVersion && <LatestDownloadLink version={latestVersion} />}
+            {menu}
+          </>
         }
       />
 
-      {/* 3.17b 시안 — 발주처 수정요청은 상태 카드 안 한 줄이 아니라 본문 최상단 경고 카드로
-          올린다(원문 인용 + 결정일시). 같은 문장을 상태 카드가 반복하지 않는다. */}
+      {/* ⋯ → 고치기: 본문 맨 위에서 연다(저장하면 머리에 바로 반영) */}
+      {editing && rights.canEdit && (
+        <ItemEditCard
+          deliverable={d}
+          isPm={rights.isPm}
+          members={members.data ?? undefined}
+          onSaved={() => {
+            setEditing(false)
+            detail.reload()
+          }}
+          onCancel={() => setEditing(false)}
+        />
+      )}
+
+      {/* 3.17b 시안 — 발주처 수정요청은 본문 최상단 경고 카드(원문 인용 + 결정일시) */}
       {d.status === 'changes_requested' && (
         <ChangeRequestAlert
           decidedAt={lastChangesRequested?.decided_at ?? null}
@@ -222,173 +258,80 @@ function ItemDetail({ itemId }: { itemId: string }) {
             d.comments.filter((c) => c.visibility === 'shared').slice(-1)[0]?.body ??
             null
           }
-          hasPartner={d.partner_id != null}
+          hasPartner={hasPartner}
         />
       )}
 
-      {/* §6 S3: 일반 항목 = 2단 분할 — 좌(주 콘텐츠) 가이드 카드·상태 액션·미리보기·코멘트 / 우(300 고정)
-          메타 사이드(상태·담당·마감·버전 타임라인).
-          3.9.1 P1: 큐시트 항목 = 1단 전폭 — 7열 정형 표가 깨지지 않도록 메타를 에디터 위
-          가로 스트립 카드로 재배치(버전 이력은 최신 1건 + 전체 보기 토글). */}
-      <div
-        className={`grid grid-cols-1 gap-6 ${
-          isStructuredPanel ? '' : 'lg:grid-cols-[minmax(0,1fr)_300px]'
-        }`}
-      >
+      {isStructuredPanel ? (
+        // 3.9.1 P1: 정형 문서 = 1단 전폭 — 표·빌더가 깨지지 않도록 메타를 에디터 위 가로 스트립으로
         <div className="min-w-0 space-y-6">
-          {isStructuredPanel && (
-            <CuesheetMetaStrip
-              status={d.status}
-              assigneeName={memberName(d.assignee_id)}
-              dueDate={d.due_date}
-              versions={d.versions}
-              isFinal={d.status === 'final'}
-              uploaderNameFor={(userId) => memberName(userId)}
-            />
-          )}
-
-          <BriefCard deliverable={d} />
-
-          <StatusActionBar
-            deliverableId={d.id}
+          <CuesheetMetaStrip
             status={d.status}
-            category={d.category}
-            autoSnapshotDoc={isStructuredPanel}
-            sendViaHeader={isBuilderDoc}
-            showRail={!isStructuredPanel}
-            requiresApproval={d.requires_approval}
+            assigneeName={memberName(d.assignee_id)}
+            dueDate={d.due_date}
             versions={d.versions}
-            isPm={isPm}
-            canWriteArea={canWriteArea}
-            isHost={isHost}
-            hasPartner={d.partner_id != null}
-            onChanged={detail.reload}
+            isFinal={d.status === 'final'}
+            uploaderNameFor={(userId) => memberName(userId)}
           />
-
+          <BriefCard deliverable={d} />
+          {nextStep}
           {isCuesheet ? (
             <CuesheetEditor deliverableId={d.id} canEdit={canEditCue} />
-          ) : isBuilderDoc && isScenarioDoc ? (
+          ) : isScenarioDoc ? (
             <ScenarioBuilder deliverableId={d.id} canEdit={canEditCue} onStatusChanged={detail.reload} />
-          ) : isBuilderDoc ? (
-            <GuideBuilder deliverableId={d.id} canEdit={canEditCue} onStatusChanged={detail.reload} />
           ) : (
-            <VersionUploadCard
-              deliverableId={d.id}
-              status={d.status}
-              hasPartner={d.partner_id != null}
-              driveFolderId={d.drive_folder_id}
-              canWrite={canWriteArea}
-              onUploaded={detail.reload}
-            />
+            <GuideBuilder deliverableId={d.id} canEdit={canEditCue} onStatusChanged={detail.reload} />
           )}
-
-          <CommentThread deliverableId={d.id} comments={d.comments} memberName={memberName} onAdded={detail.reload} />
-
-          <Card title="컨펌 이력">
-            {d.approvals.length === 0 && <p className="text-sm text-ink-cap">컨펌 이력이 없습니다.</p>}
-            {d.approvals.length > 0 && (
-              // 패턴 기준 시트 §05 표 정본 — 44행·zebra·hover·…처리는 .ui-table이 한 벌로 준다.
-              // 정렬 화살표는 시간순이 의미인 이력표라 붙이지 않는다(조건 3).
-              <div className="overflow-x-auto">
-                <table className="ui-table min-w-[640px] text-sm">
-                  <thead>
-                    <tr>
-                      <th className="ui-th w-[136px]">요청일</th>
-                      <th className="ui-th w-[128px]">기한</th>
-                      <th className="ui-th w-[96px]">결정</th>
-                      <th className="ui-th w-[128px]">결정일</th>
-                      <th className="ui-th">발주처 코멘트</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {d.approvals.map((a) => (
-                      <tr key={a.id}>
-                        <td className="text-ink-sub">{formatDateTime(a.requested_at)}</td>
-                        <td className="text-ink-sub">{a.due_at ? formatDateTime(a.due_at) : '—'}</td>
-                        <td>
-                          {a.decision ? (
-                            <LevelBadge
-                              level={a.decision === 'approved' ? 'positive' : 'blocked'}
-                              label={DECISION_LABELS[a.decision]}
-                            />
-                          ) : (
-                            <LevelBadge level="neutral" label="대기중" />
-                          )}
-                        </td>
-                        <td className="text-ink-sub">{a.decided_at ? formatDateTime(a.decided_at) : '—'}</td>
-                        {/* 조건 2 — …처리된 값은 title로 전체를 확인할 수 있어야 한다 */}
-                        <td className="text-ink-sub" title={a.client_comment ?? undefined}>
-                          {a.client_comment ?? '—'}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </Card>
-
-          {isStructuredPanel && manageCard}
+          {comments}
+          {timeline}
         </div>
-
-        {/* 3.16.3 T3② — 정형 문서(큐시트·빌더)는 메타가 상단 스트립에 이미 있으므로
-            하단(1단 폴드 아래) 메타·버전 카드를 그리지 않는다(중복 제거). 레거시 파일 문서는 유지 */}
-        {!isStructuredPanel && (
-        <aside className="space-y-6">
-          <div className="ui-card space-y-4 p-5">
-            <div>
-              <p className="t-caption">상태</p>
-              <div className="mt-1.5">{statusBadge}</div>
-            </div>
-            <div>
-              <p className="t-caption">담당</p>
-              <p className="mt-1 flex items-center gap-2 text-sm text-ink">
-                <span
-                  aria-hidden
-                  className={`size-2 shrink-0 rounded-full ${
-                    assigneeRole ? ROLE_BAR_CLASSES[assigneeRole] : 'bg-border-strong'
-                  }`}
-                />
-                {memberName(d.assignee_id)}
-              </p>
-            </div>
-            <div>
-              <p className="t-caption">마감</p>
-              <div className="mt-1 flex items-center gap-2 text-sm text-ink">
-                {d.due_date ? (
-                  <>
-                    {formatDate(d.due_date)}
-                    <DdayBadge isoDate={d.due_date} />
-                  </>
-                ) : (
-                  '미정'
-                )}
-              </div>
-            </div>
-          </div>
-
-          <Card title="버전 이력">
-            {d.versions.length === 0 && <p className="text-sm text-ink-cap">업로드된 버전이 없습니다.</p>}
-            {d.versions.length > 0 && (
-              // §6 S3: 버전 타임라인 — 세로선 + 항목별 도트로 이력 표현
-              <ul className="space-y-5 border-l border-border pl-5">
-                {d.versions.map((v, idx) => (
-                  <VersionItem
-                    key={v.id}
-                    version={v}
-                    isLatest={idx === 0}
-                    isFinal={d.status === 'final'}
-                    uploaderName={memberName(v.uploaded_by)}
-                  />
-                ))}
-              </ul>
+      ) : (
+        // §7-2.7: 일반 항목 = 본문(다음 단계 · 큰 미리보기 · 업로드 · 코멘트) + 오른쪽 320(버전 이력 · 컨펌 기록 · 제작 가이드)
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="min-w-0 space-y-5">
+            {nextStep}
+            {latestVersion && shownVersionId && (
+              <VersionPreviewCard versions={d.versions} selectedId={shownVersionId} onSelect={setSelectedVersionId} />
             )}
-          </Card>
+            {/* 업로드가 막힌 상태면 카드를 그리지 않는다 — 이유는 다음 단계 카드가 말한다(Phase 4.3.1 계약 유지) */}
+            {!lock && (
+              <VersionUploadCard
+                deliverableId={d.id}
+                status={d.status}
+                hasPartner={hasPartner}
+                driveFolderId={d.drive_folder_id}
+                canWrite={canWriteArea}
+                onUploaded={detail.reload}
+              />
+            )}
+            {comments}
+          </div>
+          <aside className="space-y-4">
+            <VersionListCard
+              versions={d.versions}
+              selectedId={shownVersionId}
+              onSelect={setSelectedVersionId}
+              sentVersionId={d.status === 'pending_approval' ? openApproval?.version_id ?? null : null}
+              uploaderName={memberName}
+            />
+            {timeline}
+            <BriefCard
+              deliverable={d}
+              showEmpty
+              onFill={rights.isPm && !closed ? () => setEditing(true) : undefined}
+            />
+          </aside>
+        </div>
+      )}
 
-          {manageCard}
-        </aside>
-        )}
-      </div>
+      {deleting && (
+        <DeleteItemDialog
+          deliverable={d}
+          leaveLabel={leave.label}
+          onCancel={() => setDeleting(false)}
+          onLeave={() => navigate(leave.path)}
+        />
+      )}
     </section>
   )
 }
@@ -405,6 +348,7 @@ function ItemHeader({
   assigneeName,
   assigneeRole,
   dueDate,
+  done,
   actions,
 }: {
   title: string
@@ -416,6 +360,8 @@ function ItemHeader({
   assigneeName: string
   assigneeRole: MemberRole | null
   dueDate: string | null
+  /** 승인·확정 — 기한 칸에 '완료' */
+  done: boolean
   actions: ReactNode
 }) {
   const hasBoard = BOARD_AREAS.includes(area)
@@ -430,7 +376,7 @@ function ItemHeader({
           <span>{AREA_LABELS[area]}</span>
         )}
         <span aria-hidden>›</span>
-        <span className="text-ink-sub">{category}</span>
+        <span className="text-ink-sub">{categoryGroupLabel(category)}</span>
       </nav>
       <div className="mt-2 flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0">
@@ -440,9 +386,7 @@ function ItemHeader({
           </div>
           {showMeta && (
             <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-ink-sub">
-              <span>
-                {AREA_LABELS[area]} · {category}
-              </span>
+              <span>{categoryGroupLabel(category)}</span>
               <span aria-hidden>·</span>
               <span className="inline-flex items-center gap-1.5">
                 <span
@@ -457,8 +401,15 @@ function ItemHeader({
                 <>
                   <span aria-hidden>·</span>
                   <span className="inline-flex items-center gap-2">
-                    마감 {formatDate(dueDate)}
-                    <DdayBadge isoDate={dueDate} />
+                    마감 {formatDateWeekday(dueDate)}
+                    {/* 끝난 항목에는 '지남'을 붙이지 않는다(§7-2.2) */}
+                    {done ? (
+                      <span className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-track px-2 py-0.5 text-xs font-medium text-ink-sub">
+                        완료
+                      </span>
+                    ) : (
+                      <DdayBadge isoDate={dueDate} />
+                    )}
                   </span>
                 </>
               )}
@@ -477,7 +428,7 @@ function LatestDownloadLink({ version }: { version: Version }) {
   if (!url.data) return null
   return (
     <a href={url.data} download={version.file_name} target="_blank" rel="noreferrer" className="btn btn-ghost">
-      최신본 다운로드
+      최신본 내려받기
     </a>
   )
 }
@@ -523,119 +474,6 @@ function ChangeRequestAlert({
             : '새 버전을 업로드하면 자동으로 초안(draft) 상태로 돌아갑니다.'}
         </p>
       </div>
-    </div>
-  )
-}
-
-// ── 6단계 진행 레일 (3.17b 시안) ─────────────────────────────────────
-// 가이드됨 → 초안 → 내부검토 → 컨펌대기 → 수정요청 → 확정.
-// 완료 = accent 원 + 체크 / 현재 = 2px 아웃라인 / 되돌아온 지점(수정요청) = negative.
-const RAIL_STATUSES: DeliverableStatus[] = [
-  'requested',
-  'draft',
-  'internal_review',
-  'pending_approval',
-  'changes_requested',
-  'final',
-]
-
-/** 레일에서 현재 위치(0-based). approved는 확정 직전 단계이므로 '확정' 칸을 현재로 본다. */
-export function railIndexOf(status: DeliverableStatus): number {
-  if (status === 'approved' || status === 'final') return 5
-  return RAIL_STATUSES.indexOf(status)
-}
-
-export function railStepState(
-  status: DeliverableStatus,
-  index: number,
-): 'done' | 'current' | 'future' {
-  // '수정요청'은 지나온 단계로 치지 않는다 — 되돌아온 지금 그 자리에 있을 때만 표시한다.
-  if (status === 'changes_requested') {
-    return index < 4 ? 'done' : index === 4 ? 'current' : 'future'
-  }
-  if (index === 4) return 'future'
-  const current = railIndexOf(status)
-  if (status === 'final') return 'done'
-  if (index === current) return 'current'
-  return index < current ? 'done' : 'future'
-}
-
-function CheckGlyph() {
-  return (
-    <svg aria-hidden viewBox="0 0 20 20" className="size-3.5" fill="currentColor">
-      <path d="M16.7 5.3a1 1 0 0 1 0 1.4l-7.5 7.5a1 1 0 0 1-1.4 0L3.3 9.7a1 1 0 1 1 1.4-1.4l3.8 3.8 6.8-6.8a1 1 0 0 1 1.4 0Z" />
-    </svg>
-  )
-}
-
-function ProgressRail({ status }: { status: DeliverableStatus }) {
-  return (
-    <div className="overflow-x-auto">
-      <ol aria-label="진행 단계" className="flex min-w-[560px] items-start">
-        {RAIL_STATUSES.map((s, i) => {
-          const state = railStepState(status, i)
-          const reverted = status === 'changes_requested' && i === 4
-          const circle =
-            state === 'done'
-              ? 'bg-accent text-card'
-              : state === 'current'
-                ? `border-2 bg-card text-xs font-semibold ${
-                    reverted ? 'border-negative text-negative' : 'border-accent text-accent-deep'
-                  }`
-                : 'border border-border bg-card text-[11px] font-semibold text-ink-cap'
-          return (
-            <Fragment key={s}>
-              {i > 0 && (
-                <li
-                  aria-hidden
-                  className={`mt-[13px] h-px flex-1 ${reverted ? 'bg-negative' : 'bg-border'}`}
-                />
-              )}
-              <li
-                data-step-state={state}
-                aria-current={state === 'current' ? 'step' : undefined}
-                className="flex w-[88px] shrink-0 flex-col items-center gap-1.5"
-              >
-                <span className={`flex size-[26px] items-center justify-center rounded-full ${circle}`}>
-                  {state === 'done' ? <CheckGlyph /> : reverted ? '!' : i + 1}
-                </span>
-                <span
-                  className={`whitespace-nowrap text-[11px] ${
-                    state === 'current'
-                      ? reverted
-                        ? 'font-semibold text-negative'
-                        : 'font-semibold text-accent-deep'
-                      : 'text-ink-cap'
-                  }`}
-                >
-                  {STATUS_LABELS[s]}
-                </span>
-              </li>
-            </Fragment>
-          )
-        })}
-      </ol>
-    </div>
-  )
-}
-
-/** 레일 아래 '다음 단계' 블록 — 할 일 하나 + (있으면) 버튼 하나 */
-function NextStepBlock({
-  action,
-  description,
-  button,
-}: {
-  action: string
-  description: string
-  button?: ReactNode
-}) {
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-canvas p-4">
-      <div className="min-w-0">
-        <p className="text-sm font-semibold text-ink">다음 단계 — {action}</p>
-        <p className="mt-1.5 text-sm leading-relaxed text-ink-sub">{description}</p>
-      </div>
-      {button}
     </div>
   )
 }
@@ -723,295 +561,6 @@ function CuesheetMetaStrip({
   )
 }
 
-// ── 상태 액션 바 ──────────────────────────────────────────────────────
-function StatusActionBar({
-  deliverableId,
-  status,
-  category,
-  autoSnapshotDoc,
-  sendViaHeader = false,
-  showRail,
-  requiresApproval,
-  versions,
-  isPm,
-  canWriteArea,
-  isHost,
-  hasPartner,
-  onChanged,
-}: {
-  deliverableId: string
-  status: DeliverableStatus
-  category: string
-  /** v2.5 §23 — 발송 시 provider가 인쇄 스냅숏을 자동 버전 등록하는 정형 문서
-   *  (큐시트, 그리고 빌더 데이터가 있는 시나리오·운영가이드 — R-O2 doc-snapshot) */
-  autoSnapshotDoc: boolean
-  /** 3.16.4 — 시나리오·운영가이드 빌더 문서는 컨펌 발송을 문서 헤더(StructuredDocHeader)가
-   *  담당한다. true면 이 카드에서 발송 폼을 그리지 않는다(중복 노출 정리 — 반려·안내는 유지) */
-  sendViaHeader?: boolean
-  /** 3.17b — 6단계 진행 레일. 정형 문서는 상단 스트립 단일 표시를 유지하므로 그리지 않는다 */
-  showRail: boolean
-  requiresApproval: boolean
-  versions: Version[]
-  isPm: boolean
-  canWriteArea: boolean
-  /** v2.4 §10.1 — 주최형 행사면 발주처 컨펌 발송 UI를 숨긴다(DoD 31) */
-  isHost: boolean
-  /** partner_id가 있는 항목 — 파트너 보드에서 검토한다는 안내로 대체 */
-  hasPartner: boolean
-  onChanged: () => void
-}) {
-  // v1.3→v2.5 정형 문서(autoSnapshotDoc): 발송 시 provider(requestApproval)가 문서를 .pdf
-  // 스냅숏으로 자동 버전 등록하고 version_id는 무시한다 — 버전 선택 셀렉트 대신 안내 문구로
-  // 대체한다. 안내 문구만 큐시트("표")와 빌더 문서("인쇄 스냅숏")로 나눠 쓴다.
-  const isCuesheet = category === '큐시트'
-  const toReview = useMutation(() => provider.transitionStatus(deliverableId, 'internal_review'))
-  const [rejectComment, setRejectComment] = useState('')
-  const reject = useMutation((comment: string) =>
-    provider.transitionStatus(deliverableId, 'draft', { comment }),
-  )
-  const [versionId, setVersionId] = useState('')
-  const [dueAt, setDueAt] = useState('')
-  const requestApproval = useMutation(() =>
-    provider.requestApproval(deliverableId, {
-      // 정형 문서는 DataProvider가 version_id를 무시하고 createDocSnapshot으로 대체한다.
-      // 동결된 RequestApprovalInput이 version_id를 필수로 요구해 관례상 리터럴 'auto'를 보낸다
-      // (§8 doc-snapshot 전처리 — MockProvider.requestApproval 참조).
-      version_id: autoSnapshotDoc ? 'auto' : versionId,
-      due_at: dueAt ? new Date(dueAt).toISOString() : undefined,
-    }),
-  )
-
-  const handleToReview = async () => {
-    const result = await toReview.run()
-    if (result) onChanged()
-  }
-
-  const handleReject = async (e: FormEvent) => {
-    e.preventDefault()
-    if (!rejectComment.trim()) return
-    const result = await reject.run(rejectComment)
-    if (result) {
-      setRejectComment('')
-      onChanged()
-    }
-  }
-
-  const handleRequestApproval = async (e: FormEvent) => {
-    e.preventDefault()
-    if (!autoSnapshotDoc && !versionId) {
-      requestApproval.setError('발송할 버전을 선택하세요.')
-      return
-    }
-    const result = await requestApproval.run()
-    if (result) {
-      setVersionId('')
-      setDueAt('')
-      onChanged()
-    }
-  }
-
-  const uploadButton =
-    canWriteArea && !autoSnapshotDoc && !uploadLock(status, { hasPartner }) ? (
-      <button type="button" onClick={focusVersionUpload} className="btn btn-primary shrink-0">
-        새 버전 업로드
-      </button>
-    ) : undefined
-
-  // 상태별 '다음 단계' — 할 일 하나 + 버튼 하나. 상태 전이는 전부 기존 경로(transitionStatus·
-  // requestApproval)를 그대로 태운다. 여기 버튼은 업로드 폼으로 시선을 옮기거나(전이 없음)
-  // 기존 전이 버튼을 그 자리에 놓을 뿐이다.
-  let nextStep: ReactNode = null
-  if (status === 'requested') {
-    nextStep = (
-      <NextStepBlock
-        action={autoSnapshotDoc ? '문서 작성' : '첫 버전 업로드'}
-        description="첫 버전을 업로드하면 자동으로 초안(draft) 상태로 전환됩니다."
-        button={uploadButton}
-      />
-    )
-  } else if (status === 'draft') {
-    nextStep = canWriteArea ? (
-      <NextStepBlock
-        action="내부검토 요청"
-        description="담당자 작업이 끝났으면 PM 검토로 넘깁니다."
-        button={
-          <button
-            type="button"
-            onClick={handleToReview}
-            disabled={toReview.pending}
-            className="btn btn-primary shrink-0"
-          >
-            내부검토 요청
-          </button>
-        }
-      />
-    ) : (
-      <NextStepBlock action="담당자 작업" description="담당 역할이 초안을 다듬는 중입니다." />
-    )
-  } else if (status === 'internal_review') {
-    nextStep = isPm ? (
-      <NextStepBlock
-        action={isHost || sendViaHeader || !requiresApproval ? '내부 검토' : '컨펌 발송'}
-        description={
-          isHost
-            ? '주최형 행사입니다 — 발주처 컨펌 없이 내부에서 확정합니다.'
-            : sendViaHeader
-              ? '아래 문서 헤더에서 컨펌을 발송합니다.'
-              : requiresApproval
-                ? '아래에서 반려하거나, 버전과 기한을 정해 발주처에 컨펌을 발송합니다.'
-                : '컨펌 루프를 쓰지 않는 공통 문서입니다 — 내부 확인으로 마무리합니다.'
-        }
-      />
-    ) : (
-      <NextStepBlock
-        action="PM 검토 대기"
-        description="내부검토 중입니다. PM의 반려 또는 컨펌 발송을 기다리세요."
-      />
-    )
-  } else if (status === 'pending_approval') {
-    nextStep = (
-      <NextStepBlock
-        action={hasPartner ? '파트너 제출 검토' : '발주처 컨펌 대기'}
-        description={
-          hasPartner ? '파트너 보드에서 제출물을 검토하세요.' : '발주처의 승인 또는 수정요청을 기다립니다.'
-        }
-        button={
-          hasPartner ? (
-            <Link to="/partners" className="btn btn-ghost shrink-0">
-              파트너 보드에서 검토
-            </Link>
-          ) : undefined
-        }
-      />
-    )
-  } else if (status === 'changes_requested') {
-    nextStep = (
-      <NextStepBlock
-        action={hasPartner ? '파트너 재제출 대기' : '수정본 업로드'}
-        description={
-          hasPartner
-            ? '파트너가 재제출하면 검토 대기로 돌아옵니다.'
-            : '수정본을 올리면 초안으로 돌아가고, 내부검토 → 컨펌 발송을 다시 태웁니다.'
-        }
-        button={hasPartner ? undefined : uploadButton}
-      />
-    )
-  } else if (status === 'approved') {
-    nextStep = (
-      <NextStepBlock
-        action="확정 전환"
-        description={
-          hasPartner ? '승인되었습니다 — 확정본으로 전환 중입니다.' : '발주처가 승인했습니다 — 확정본으로 전환 중입니다.'
-        }
-      />
-    )
-  } else {
-    nextStep = <NextStepBlock action="없음" description="확정된 항목입니다. 후속 변경은 새 항목으로 진행하세요." />
-  }
-
-  const railIndex = railIndexOf(status)
-  const railCaption =
-    showRail && railIndex >= 0
-      ? `6단계 중 ${railIndex + 1}단계${status === 'changes_requested' ? ' · 되돌아옴' : ''}`
-      : null
-
-  return (
-    <Card
-      title={status === 'internal_review' && isPm ? '상태 액션 (PM)' : '상태 액션'}
-      action={railCaption ? <span className="t-caption">{railCaption}</span> : undefined}
-    >
-      <div className="space-y-4">
-        {showRail && <ProgressRail status={status} />}
-        {nextStep}
-
-        {status === 'internal_review' && isPm && (
-          <div className="space-y-5">
-            <form onSubmit={handleReject} className="space-y-2">
-              <p className="t-caption">반려 (사유 필수)</p>
-              <div className="flex flex-wrap gap-2">
-                <input
-                  value={rejectComment}
-                  onChange={(e) => setRejectComment(e.target.value)}
-                  placeholder="반려 사유"
-                  className="ui-input min-w-64 flex-1"
-                />
-                <button type="submit" disabled={reject.pending} className="btn btn-ghost">
-                  반려
-                </button>
-              </div>
-              <ErrorAlert message={reject.error} />
-            </form>
-
-            {isHost ? (
-              <p className="border-t border-border pt-4 text-xs text-ink-cap">
-                주최형 행사는 이 화면에서 발주처 컨펌을 발송하지 않습니다
-                {hasPartner ? ' — 파트너 제출 항목은 파트너 보드에서 검토하세요.' : '.'}
-              </p>
-            ) : sendViaHeader ? (
-              <p className="border-t border-border pt-4 text-xs text-ink-cap">
-                컨펌 발송은 아래 문서 헤더의 [컨펌 발송] 버튼으로 진행합니다.
-              </p>
-            ) : requiresApproval ? (
-              <form onSubmit={handleRequestApproval} className="space-y-2 border-t border-border pt-4">
-                <p className="t-caption">컨펌 발송</p>
-                {/* Phase 4.3.1 — 발주처 링크 0개면 보내도 열어볼 사람이 없다(발송은 막지 않는다) */}
-                <ClientLinkWarning />
-                <EmailPendingNote />
-                <div className="flex flex-wrap items-end gap-2">
-                  {isCuesheet ? (
-                    <p className="max-w-xs text-xs text-ink-sub">
-                      발송 시 표의 스냅숏(.pdf)이 자동 버전으로 등록됩니다.
-                    </p>
-                  ) : autoSnapshotDoc ? (
-                    <p className="max-w-xs text-xs text-ink-sub">
-                      발송 시 인쇄 스냅숏(.pdf)이 자동 버전으로 등록됩니다.
-                    </p>
-                  ) : (
-                    <label className="flex flex-col gap-1 t-caption">
-                      버전
-                      <select
-                        value={versionId}
-                        onChange={(e) => setVersionId(e.target.value)}
-                        className="ui-input ui-select w-64"
-                      >
-                        <option value="">버전 선택…</option>
-                        {versions.map((v) => (
-                          <option key={v.id} value={v.id}>
-                            v{v.version_no} — {v.file_name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  )}
-                  <label className="flex flex-col gap-1 t-caption">
-                    컨펌 기한
-                    <input
-                      type="datetime-local"
-                      value={dueAt}
-                      onChange={(e) => setDueAt(e.target.value)}
-                      className="ui-input"
-                    />
-                  </label>
-                  <button type="submit" disabled={requestApproval.pending} className="btn btn-accent">
-                    컨펌 발송
-                  </button>
-                </div>
-                <ErrorAlert message={requestApproval.error} />
-              </form>
-            ) : (
-              <p className="border-t border-border pt-4 text-sm text-ink-cap">
-                이 항목은 컨펌 루프를 사용하지 않습니다(공통 문서).
-              </p>
-            )}
-          </div>
-        )}
-
-        {status === 'draft' && canWriteArea && <ErrorAlert message={toReview.error} />}
-      </div>
-    </Card>
-  )
-}
-
 // ── 버전 항목 (미리보기 포함, 우측 메타 사이드의 버전 타임라인 1행) ────
 function VersionItem({
   version,
@@ -1052,15 +601,8 @@ function VersionItem({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="text-sm font-medium text-ink">v{version.version_no}</span>
-            {isLatest && (
-              <span
-                className={`inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium text-card ${
-                  isFinal ? 'bg-positive' : 'bg-accent'
-                }`}
-              >
-                최신
-              </span>
-            )}
+            {/* Phase 3.23 PR-4 — 흰 글자 주황 면(대비 3.07) 대신 의미 배지(§7-2.1) */}
+            {isLatest && <LevelBadge level={isFinal ? 'positive' : 'neutral'} label="최신" />}
             {storage && (
               <span title={storage.title} data-testid="version-storage">
                 <LevelBadge level={storage.level} label={storage.label} />
@@ -1075,102 +617,5 @@ function VersionItem({
         </div>
       </div>
     </li>
-  )
-}
-
-// ── 코멘트 스레드 ─────────────────────────────────────────────────────
-function CommentThread({
-  deliverableId,
-  comments,
-  memberName,
-  onAdded,
-}: {
-  deliverableId: string
-  comments: import('../types/entities').Comment[]
-  memberName: (userId: string | null) => string
-  onAdded: () => void
-}) {
-  const [body, setBody] = useState('')
-  const [shared, setShared] = useState(false)
-  const add = useMutation((visibility: CommentVisibility) =>
-    provider.addComment(deliverableId, { body, visibility }),
-  )
-
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault()
-    if (!body.trim()) return
-    const result = await add.run(shared ? 'shared' : 'internal')
-    if (result) {
-      setBody('')
-      setShared(false)
-      onAdded()
-    }
-  }
-
-  const sharedCount = comments.filter((c) => c.visibility === 'shared').length
-
-  return (
-    <Card
-      title="코멘트"
-      action={
-        comments.length > 0 ? (
-          <span className="t-caption">{`내부 ${comments.length - sharedCount} · 공유 ${sharedCount}`}</span>
-        ) : undefined
-      }
-    >
-      {comments.length === 0 && <p className="text-sm text-ink-cap">코멘트가 없습니다.</p>}
-      <ul className="space-y-3">
-        {comments.map((c) => (
-          // 3.17b 시안 — 공유(shared) 건만 좌측 3px steel 보더. 배지만으로는 스크롤 중 안 잡힌다.
-          <li
-            key={c.id}
-            data-visibility={c.visibility}
-            className={`rounded-md border border-border p-3 ${
-              c.visibility === 'shared' ? 'border-l-[3px] border-l-steel' : ''
-            }`}
-          >
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-sm font-medium text-ink">
-                {c.author_token ? '발주처' : memberName(c.author_user_id)}
-              </span>
-              <span
-                className={`inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${
-                  c.visibility === 'shared' ? 'bg-steel-tint text-steel' : 'bg-track text-ink-sub'
-                }`}
-              >
-                {c.visibility === 'shared' ? '공유' : '내부'}
-              </span>
-              <span className="text-xs text-ink-cap">{formatDateTime(c.created_at)}</span>
-            </div>
-            <p className="mt-1 whitespace-pre-wrap text-sm text-ink-sub">{c.body}</p>
-          </li>
-        ))}
-      </ul>
-
-      <form onSubmit={handleSubmit} className="mt-4 space-y-2 border-t border-border pt-4">
-        <textarea
-          value={body}
-          onChange={(e) => setBody(e.target.value)}
-          rows={2}
-          placeholder="코멘트를 입력하세요"
-          className="ui-input w-full"
-        />
-        <div className="flex items-center justify-between">
-          <label className="ui-check-row items-center text-xs text-ink-sub">
-            <input
-              type="checkbox"
-              checked={shared}
-              onChange={(e) => setShared(e.target.checked)}
-              className="ui-check"
-            />
-            발주처에 공유(shared) — 기본은 내부(internal)
-          </label>
-          <button type="submit" disabled={add.pending} className="btn btn-primary">
-            등록
-          </button>
-        </div>
-        <ErrorAlert message={add.error} />
-      </form>
-    </Card>
   )
 }

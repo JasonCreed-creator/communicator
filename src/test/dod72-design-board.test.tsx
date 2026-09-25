@@ -365,10 +365,10 @@ describe('DoD 72 ⑨ 갤러리 — 최신 시안 썸네일 · 보기 기억', ()
     expect(screen.queryByTestId('design-board-table')).toBeNull()
 
     const cardOf = (title: string) => cards.find((c) => c.textContent!.includes(title))!
-    const img = await within(cardOf('메인 키비주얼')).findByTestId('design-thumb-image')
+    const img = await within(cardOf('메인 키비주얼')).findByTestId('version-picture')
     expect(img.getAttribute('src')).toMatch(/^data:image\/svg\+xml/)
     expect(within(cardOf('메인 키비주얼')).getByRole('link', { name: '메인 키비주얼 v2 크게 보기' })).toBeTruthy()
-    expect(within(cardOf('참가자 명찰')).getByTestId('design-thumb-file').textContent).toContain('PDF')
+    expect(within(cardOf('참가자 명찰')).getByTestId('version-file-cover').textContent).toContain('PDF')
     const empty = within(cardOf('메인 게이트 현수막')).getByTestId('design-thumb-empty')
     const emptyLink = within(empty).getByRole('link')
     expect(emptyLink.textContent).toContain('아직 시안 없음 — 첫 시안 올리기')
