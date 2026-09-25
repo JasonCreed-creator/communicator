@@ -3,12 +3,14 @@
 // 한/영 토글 유지·다크 토글 제거. 저장은 항상 스냅샷(새 견적/새 버전) — §8 /quotes 계약.
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
+import SegmentedToggle from '../components/internal/SegmentedToggle'
 import QuoteGate from '../components/quote/QuoteGate'
 import StepHandoff from '../components/quote/StepHandoff'
 import StepOptions from '../components/quote/StepOptions'
 import StepReview from '../components/quote/StepReview'
 import StepScale from '../components/quote/StepScale'
 import StepVenue from '../components/quote/StepVenue'
+import { optionAmounts } from '../components/quote/optionAmounts'
 import {
   applyFieldRules,
   applyIncludeLeads,
@@ -16,6 +18,7 @@ import {
   fmtMoney,
   formFromQuote,
   formToInput,
+  OPT_CATALOG,
   type QuoteFormState,
 } from '../components/quote/quoteFormState'
 import QUOTE_STR, { type QuoteLang } from '../components/quote/quoteStrings'
@@ -103,6 +106,8 @@ function EditorBody({ quoteId, initialStep }: { quoteId: string | null; initialS
   const input = useMemo(() => formToInput(form), [form])
   const outputs = useMemo(() => computeQuoteOutputs(input), [input])
   const baseOutputs = useMemo(() => computeQuoteOutputs({ ...input, adjustments: [] }), [input])
+  // 옵션별 금액 · 옵션 없는 합계 — 엔진을 옵션 집합만 바꿔 돌려 읽는다(단가 중복 정의 없음)
+  const amounts = useMemo(() => optionAmounts(input, outputs), [input, outputs])
   const dirty = useMemo(
     () => !savedQuote || JSON.stringify(input) !== JSON.stringify(savedQuote.input),
     [input, savedQuote],
@@ -222,37 +227,56 @@ function EditorBody({ quoteId, initialStep }: { quoteId: string | null; initialS
   if (loadError) return <p className="p-6 text-sm text-negative">{loadError}</p>
 
   const p = outputs.result
+  const catalogLabel = (id: string) =>
+    id === '_other' ? t.asideOtherOption : (OPT_CATALOG.find((o) => o.id === id)?.[lang].label ?? id)
+  const pickedLines: [string, string, number][] = [
+    ...amounts.picked.map((o) => [o.id, catalogLabel(o.id), o.amount] as [string, string, number]),
+    ...(form.boothCount > 0 ? [['boothStd', `${t.boothStdTitle} × ${form.boothCount}`, amounts.boothStd] as [string, string, number]] : []),
+    ...(form.boothPremiumCount > 0
+      ? [['boothPremium', `${t.boothPremTitle} × ${form.boothPremiumCount}`, amounts.boothPremium] as [string, string, number]]
+      : []),
+  ]
+  const summaryRows: [string, string, number][] = [
+    ['s1', t.adjS1.replace(/^1\. /, ''), p.s1],
+    ['s2', t.adjS2.replace(/^2\. /, ''), p.s2],
+    ['s3', t.adjS3.replace(/^3\. /, ''), p.s3],
+    ['s4', t.adjS4.replace(/^4\. /, ''), p.s4],
+    ['s5', t.asidePco, p.s5],
+    ['ot', t.adjOt, p.ot],
+    ...(form.includeLeads ? [['lead', t.adjLead, p.leadPkg] as [string, string, number]] : []),
+    ...(p.genManage > 0 ? [['gen', t.genTitle, p.genManage] as [string, string, number]] : []),
+  ]
 
   return (
     <div className="p-4 md:p-6">
-      {/* 헤더 — 브랜드 태그 · 한/영 토글 · 러닝 총액 */}
-      <div className="flex flex-wrap items-center gap-3">
+      {/* 머리 — 캡션 · 제목(확정이면 자물쇠 배지) · 견적서 언어 토글. 합계는 옆 요약이 맡고 좁은 화면에서만 머리에 둔다 */}
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="t-caption">{t.listCaption}</p>
+          <p className="t-caption">{t.editorCaption}</p>
           <h1 className="t-page-title mt-1">
-            {savedQuote ? `${savedQuote.title} · v${savedQuote.version}` : t.listTitle}
+            {savedQuote ? `${savedQuote.title} · v${savedQuote.version}` : t.editorNewTitle}
             {savedQuote?.is_final && (
-              <span className="ml-2 align-middle rounded-full bg-positive-tint px-2.5 py-1 text-xs font-semibold text-positive">
-                🔒 {t.finalizedBadge}
+              <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-positive-tint px-2.5 py-1 align-middle text-xs font-semibold text-positive">
+                <svg aria-hidden viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4M5 11h14v10H5z" />
+                </svg>
+                {t.finalizedBadge}
               </span>
             )}
           </h1>
         </div>
-        <div className="ml-auto flex items-center gap-3">
-          <div className="flex overflow-hidden rounded-full border border-border" role="group" aria-label="언어">
-            {(['ko', 'en'] as QuoteLang[]).map((lc) => (
-              <button
-                key={lc}
-                type="button"
-                onClick={() => setLang(lc)}
-                className={`px-3 py-1.5 text-xs font-bold ${lang === lc ? 'bg-accent-deep text-white' : 'bg-card text-ink-sub'}`}
-              >
-                {lc.toUpperCase()}
-              </button>
-            ))}
-          </div>
-          <div className="text-right">
-            <p className="t-caption text-accent-deep">{t.estTotal}</p>
+        <div className="flex items-center gap-4">
+          <SegmentedToggle
+            label={t.langGroup}
+            value={lang}
+            options={[
+              { value: 'ko', label: '한국어' },
+              { value: 'en', label: 'English' },
+            ]}
+            onChange={setLang}
+          />
+          <div className="text-right lg:hidden">
+            <p className="t-caption">{t.asideTotal}</p>
             <p className="text-xl font-bold text-ink">{fmtMoney(p.pk, en)}</p>
           </div>
         </div>
@@ -262,29 +286,41 @@ function EditorBody({ quoteId, initialStep }: { quoteId: string | null; initialS
         <p className="mt-3 rounded-md bg-accent-tint px-3 py-2 text-sm font-medium text-accent-deep">{t.supersededBanner}</p>
       )}
 
-      {/* 스텝 탭 */}
-      <div className="mt-4 flex gap-0 overflow-x-auto border-b border-border" role="tablist">
+      {/* 단계 — 번호 원(지난 단계 = positive 틴트 · 지금 = ink · 다음 = track) + 지금 단계 accent 밑줄 */}
+      <nav aria-label={t.stepsNav} className="mt-5 flex overflow-x-auto border-b border-border">
         {t.steps.map((label, i) => {
           const n = i + 1
-          const active = step === n
+          const current = step === n
+          const before = n < step
           return (
             <button
               key={n}
               type="button"
-              role="tab"
-              aria-selected={active}
+              aria-current={current ? 'step' : undefined}
               onClick={() => setStep(n)}
-              className={`whitespace-nowrap border-b-2 px-4 py-3 text-sm ${
-                active ? 'border-accent font-semibold text-accent-deep' : 'border-transparent text-ink-sub hover:text-ink'
+              className={`-mb-px inline-flex items-center gap-2 whitespace-nowrap border-b-2 px-4 pb-3 pt-2.5 text-sm ${
+                current
+                  ? 'border-accent font-semibold text-ink'
+                  : before
+                    ? 'border-transparent font-medium text-brown hover:text-ink'
+                    : 'border-transparent font-medium text-ink-cap hover:text-ink'
               }`}
             >
-              {n}. {label}
+              <span
+                aria-hidden
+                className={`inline-flex size-5 items-center justify-center rounded-full text-[11px] font-semibold ${
+                  current ? 'bg-ink text-white' : before ? 'bg-positive-tint text-positive' : 'bg-track text-ink-cap'
+                }`}
+              >
+                {n}
+              </span>
+              {label}
             </button>
           )
         })}
-      </div>
+      </nav>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
+      <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="min-w-0">
           {step === 1 && (
             <StepScale
@@ -304,7 +340,7 @@ function EditorBody({ quoteId, initialStep }: { quoteId: string | null; initialS
           {step === 3 && (
             <StepOptions
               form={form}
-              outputs={outputs}
+              amounts={amounts}
               t={t}
               en={en}
               lang={lang}
@@ -357,50 +393,56 @@ function EditorBody({ quoteId, initialStep }: { quoteId: string | null; initialS
           )}
         </div>
 
-        {/* 사이드 요약 (RQC 우측 사이드바 이식 — 카드형) */}
-        <aside className="hidden lg:block">
-          <div className="ui-card sticky top-6 p-4">
-            <p className="t-caption">ESTIMATE</p>
-            <p className="t-caption mt-3 text-accent-deep">{t.estTotal}</p>
-            <p className="kpi-num">{fmtMoney(p.pk, en)}</p>
-            <p className="t-caption">{t.vatExcl}</p>
-            <dl className="mt-4 space-y-1.5 border-t border-border pt-3 text-sm">
-              {[
-                ['s1', t.adjS1.replace(/^1\. /, ''), p.s1],
-                ['s2', t.adjS2.replace(/^2\. /, ''), p.s2],
-                ['s3', t.adjS3.replace(/^3\. /, ''), p.s3],
-                ['s4', t.adjS4.replace(/^4\. /, ''), p.s4],
-                ['s5', 'PCO (25%)', p.s5],
-                ['ot', t.adjOt, p.ot],
-              ].map(([key, label, value]) => (
-                <div key={key as string} className="flex justify-between">
-                  <dt className="text-ink-sub">{label}</dt>
-                  <dd className={`font-semibold ${value === 0 ? 'text-ink-cap' : 'text-ink'}`}>{fmtMoney(value as number, en)}</dd>
+        {/* 옆 요약 — 합계(30) · 인원 · 옵션으로 +n · 8행 · 고른 옵션 · PCO 안내. 단계와 무관하게 같은 자리 */}
+        <aside className="hidden lg:block" aria-label={t.asideTotal}>
+          <div className="ui-card sticky top-6 flex flex-col gap-3.5 p-5" data-testid="quote-editor-summary">
+            <div className="flex flex-col gap-0.5">
+              <span className="t-caption">{t.asideTotal}</span>
+              <span className="text-[30px] font-bold leading-9 text-ink" data-testid="editor-total">
+                {fmtMoney(p.pk, en)}
+              </span>
+              <span className="t-caption text-ink-sub">
+                {t.asideHeadcount(form.target, form.includeLeads ? form.guarantee : null)}
+                {p.ot > 0 && (
+                  <>
+                    {' · '}
+                    <span className="font-semibold text-ink" data-testid="editor-options-delta">
+                      {t.asideOptionsDelta(fmtMoney(p.pk - amounts.pkWithoutOptions, en))}
+                    </span>
+                  </>
+                )}
+              </span>
+            </div>
+            <dl className="flex flex-col border-t border-border pt-2.5 text-sm">
+              {summaryRows.map(([key, label, value]) => (
+                <div key={key} className="flex justify-between gap-3 py-1">
+                  <dt className="text-brown">{label}</dt>
+                  <dd
+                    className={`ui-num ${value === 0 ? 'text-ink-cap' : 'text-ink'} ${
+                      key === 'ot' && step === 3 ? 'font-semibold' : 'font-medium'
+                    }`}
+                  >
+                    {fmtMoney(value, en)}
+                  </dd>
                 </div>
               ))}
-              {form.includeLeads && (
-                <div className="flex justify-between">
-                  <dt className="text-ink-sub">{t.adjLead}</dt>
-                  <dd className="font-semibold text-positive">{fmtMoney(p.leadPkg, en)}</dd>
-                </div>
-              )}
-              {p.genManage > 0 && (
-                <div className="flex justify-between">
-                  <dt className="text-ink-sub">{t.genTitle}</dt>
-                  <dd className="font-semibold text-accent-deep">{fmtMoney(p.genManage, en)}</dd>
-                </div>
-              )}
             </dl>
-            <dl className="mt-3 space-y-1.5 border-t border-border pt-3 text-sm">
-              <div className="flex justify-between">
-                <dt className="text-ink-sub">{form.includeLeads ? '참석 / 모객' : '참석'}</dt>
-                <dd className="font-semibold text-ink">
-                  {form.target}
-                  {form.includeLeads ? ` / ${form.guarantee}` : ''}
-                  {t.pax}
-                </dd>
+            {pickedLines.length > 0 && (
+              <div className="flex flex-col gap-1.5 rounded-[10px] bg-canvas px-3.5 py-3" data-testid="editor-picked-options">
+                <span className="t-caption font-semibold text-brown">{t.asidePicked}</span>
+                {pickedLines.map(([key, label, amount]) => (
+                  <div key={key} className="flex justify-between gap-3 text-[13px]">
+                    <span className="min-w-0 text-ink">{label}</span>
+                    <span className="ui-num shrink-0 text-ink">{fmtMoney(amount, en)}</span>
+                  </div>
+                ))}
               </div>
-            </dl>
+            )}
+            {p.ot > 0 && (
+              <p className="t-caption leading-[17px]" data-testid="editor-pco-note">
+                {t.asidePcoNote(fmtMoney(amounts.pcoWithoutOptions, en), fmtMoney(p.s5, en))}
+              </p>
+            )}
           </div>
         </aside>
       </div>

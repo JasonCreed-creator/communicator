@@ -358,5 +358,8 @@ export function fmtWon(n: number, en: boolean): string {
 }
 
 export function fmtMoney(n: number, en: boolean): string {
-  return en ? `KRW ${(n ?? 0).toLocaleString('en-US')}` : `${Math.round((n ?? 0) / 1e4).toLocaleString()}만원`
+  if (en) return `KRW ${(n ?? 0).toLocaleString('en-US')}`
+  // 만원 단위 반올림이 0이 되는 금액(0원·1만원 미만)은 '0만원'으로 뭉개지 않고 원 단위로 쓴다
+  if (Math.abs(n ?? 0) < 10_000) return fmtWon(n ?? 0, false)
+  return `${Math.round((n ?? 0) / 1e4).toLocaleString()}만원`
 }

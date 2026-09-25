@@ -10,7 +10,7 @@ import ClientLinkWarning, { EmailPendingNote } from '../internal/ClientLinkWarni
 import ErrorAlert from '../internal/ErrorAlert'
 import { ClientLinkButton, type ClientLinkTarget } from '../board/DesignNextAction'
 import { useMutation } from '../../hooks/useAsync'
-import { STATUS_STRIP_CLASSES, daysUntil, formatDate, objectParticle, waitingDays } from '../../lib/labels'
+import { STATUS_STRIP_CLASSES, daysUntil, formatDate, objectParticle, subjectParticle, waitingDays } from '../../lib/labels'
 import { uploadLock } from '../../lib/uploadGate'
 import { getDataProvider } from '../../providers'
 import type { DeliverableStatus } from '../../types/enums'
@@ -223,7 +223,7 @@ export default function NextStepCard({
         description = '컨펌 루프를 쓰지 않는 공통 문서입니다 — 내부 확인으로 마무리합니다.'
       } else if (inlineSend) {
         title = '검토하고 발주처로 보낼 차례'
-        description = `보내면 지금 표가 PDF로 저장돼 v${(latest?.version_no ?? 0) + 1}${objectParticle((latest?.version_no ?? 0) + 1) === '을' ? '이' : '가'} 됩니다.`
+        description = `보내면 지금 표가 PDF로 저장돼 v${(latest?.version_no ?? 0) + 1}${subjectParticle((latest?.version_no ?? 0) + 1)} 됩니다.`
         actions = <InlineSendForm deliverableId={d.id} onChanged={onChanged} />
       } else {
         title = '검토하고 발주처로 보낼 차례'
