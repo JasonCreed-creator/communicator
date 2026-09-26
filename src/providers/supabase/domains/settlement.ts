@@ -17,6 +17,9 @@ import type {
 } from '../../../types/entities'
 import type { SettlementBoardView, VendorQuoteImportView } from '../../../types/views'
 import { driveFor } from '../drive'
+import { aiFor } from '../ai'
+import { prepareAiFile } from '../../../lib/ai/prepareAiFile'
+import { aiMediaTypeFor, type VendorQuoteSourceDoc } from '../../../lib/vendorQuoteAi'
 import {
   buildVendorQuote,
   isVendorQuoteFile,
@@ -603,11 +606,28 @@ export function settlementDomain(ctx: SupabaseCtx): SettlementDomain {
         ctx.ok(v)
         if (!v.data) throw new ProviderError('validation', '협력사를 찾을 수 없습니다.')
       }
-      const doc = parseVendorQuoteWorkbook(input.data, input.file_name)
+      // 엑셀 = 파서(§19.5a) · PDF·사진 = 서버가 AI로 읽는다(Phase 4.8 §19.5b — 권한·하루 한도는 서버 SQL이 다시 본다).
+      // 어느 쪽이든 결과는 같은 확인 큐(제안만 저장)로 간다 — AI도 자동 저장하지 않는다
+      const aiMedia = aiMediaTypeFor(input.file_name)
+      let doc: VendorQuoteSourceDoc
+      let reader: VendorQuoteParsed['reader']
+      if (aiMedia) {
+        const file = await prepareAiFile(input.file_name, input.data)
+        const read = await aiFor(ctx).readVendorQuote({
+          project_id: projectId,
+          file_name: input.file_name,
+          media_type: file.media_type,
+          data_base64: file.data_base64,
+        })
+        doc = read.doc
+        reader = { kind: 'ai', model: read.model }
+      } else {
+        doc = parseVendorQuoteWorkbook(input.data, input.file_name)
+      }
       const buckets = ctx.q(
         await ctx.sb.from('settlement_buckets').select('*').eq('board_id', board.id),
       ) as SettlementBucket[]
-      const { parsed, questions } = buildVendorQuote(doc, buckets)
+      const { parsed, questions } = buildVendorQuote(doc, buckets, reader)
       let imp = ctx.q(
         await ctx.sb
           .from('settlement_imports')
@@ -627,7 +647,7 @@ export function settlementDomain(ctx: SupabaseCtx): SettlementDomain {
       const drive = driveFor(ctx)
       if (await drive.ready()) {
         try {
-          const r = await drive.client.settlementFile(imp.id, input.file_name, input.data)
+          const r = await drive.client.settlementFile(imp.id, input.file_name, input.data, aiMedia ?? undefined)
           imp = { ...imp, drive_file_id: r.file_id }
         } catch (e) {
           console.warn('[drive] 협력사 견적서 원본 보관 실패(가져오기는 그대로):', e instanceof Error ? e.message : e)

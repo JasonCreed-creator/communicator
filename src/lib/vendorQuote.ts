@@ -15,6 +15,7 @@ import { ProviderError } from './errors'
 import type { ParsedQuoteCheck, ParsedQuoteDoc, ParsedQuoteTotals } from '../modules/quote/import/types'
 import type { SettlementBucket } from '../types/entities'
 import { toVatExcluded } from './settlement'
+import { isAiVendorQuoteFile, type VendorQuoteSourceDoc } from './vendorQuoteAi'
 
 export type VendorQuoteRowSource = 'item' | 'agency_fee' | 'rounding'
 
@@ -45,7 +46,10 @@ export interface VendorQuoteVat {
 /** settlement_imports.parsed 저장 형태(원본 근거 스냅숏 — R-Q2와 같은 규약) */
 export interface VendorQuoteParsed {
   kind: 'vendor_quote'
-  format: ParsedQuoteDoc['format']
+  /** A·B·C = 엑셀 파서 서식 · 'ai' = PDF·사진을 AI가 읽음(Phase 4.8) */
+  format: VendorQuoteSourceDoc['format']
+  /** AI가 읽었으면 그 표시(확인 큐가 'AI가 읽음' 배지와 대조 안내를 띄운다) — 엑셀은 없음 */
+  reader?: { kind: 'ai'; model: string }
   header: { event_name?: string; manager?: string; quoted_at?: string; total_amount?: number; vat_mode?: 'included' | 'excluded' | 'unknown' }
   rows: VendorQuoteRow[]
   totals: ParsedQuoteTotals
@@ -116,7 +120,11 @@ export function vatOf(doc: Pick<ParsedQuoteDoc, 'totals' | 'header'>): VendorQuo
 }
 
 /** 파싱 결과 → 확인 큐(행·부가세·질문) */
-export function buildVendorQuote(doc: ParsedQuoteDoc, buckets: readonly SettlementBucket[]): { parsed: VendorQuoteParsed; questions: VendorQuoteQuestion[] } {
+export function buildVendorQuote(
+  doc: VendorQuoteSourceDoc,
+  buckets: readonly SettlementBucket[],
+  reader?: VendorQuoteParsed['reader'],
+): { parsed: VendorQuoteParsed; questions: VendorQuoteQuestion[] } {
   const rows: VendorQuoteRow[] = []
   for (const section of doc.sections) {
     for (const item of section.items) {
@@ -169,6 +177,7 @@ export function buildVendorQuote(doc: ParsedQuoteDoc, buckets: readonly Settleme
     parsed: {
       kind: 'vendor_quote',
       format: doc.format,
+      ...(reader ? { reader } : {}),
       header: {
         event_name: doc.header.event_name,
         manager: doc.header.manager,
@@ -231,12 +240,26 @@ export function supplyCheck(
   return { expected, actual, ok: expected === null || Math.abs(expected - actual) <= 1 }
 }
 
-/** 파일 형식 — 이번 단계는 엑셀만(§19.5 순서: 엑셀 → PDF → 사진) */
-export function isVendorQuoteFile(name: string): boolean {
+/** 엑셀 견적서 — 파서가 읽는다(§19.5a) */
+export function isVendorQuoteXlsx(name: string): boolean {
   return /\.xlsx$/i.test(name.trim())
 }
 
-export const VENDOR_QUOTE_FILE_MESSAGE = '엑셀(.xlsx) 견적서만 불러올 수 있습니다 — PDF·사진은 다음 단계입니다.'
+/** 받는 파일 — 엑셀(파서) + PDF·사진(AI — Phase 4.8 · §19.5b) */
+export function isVendorQuoteFile(name: string): boolean {
+  return isVendorQuoteXlsx(name) || isAiVendorQuoteFile(name)
+}
+
+export const VENDOR_QUOTE_FILE_MESSAGE =
+  '엑셀(.xlsx)·PDF·사진(JPG·PNG·WEBP) 견적서를 불러올 수 있습니다 — 아이폰 사진(HEIC)은 JPG로 바꿔 올려 주세요.'
+
+/** mock(데모)에는 AI 서버가 없다 — 흉내 내지 않고 사실대로 */
+export const VENDOR_QUOTE_AI_MOCK_MESSAGE =
+  'PDF·사진은 실서버에서 AI(Claude)가 읽습니다 — 데모에서는 엑셀(.xlsx) 견적서로 시험해 보세요.'
+
+/** 파일 입력 accept — 엑셀 + PDF + 사진 */
+export const VENDOR_QUOTE_ACCEPT =
+  '.xlsx,.pdf,.jpg,.jpeg,.png,.webp,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/pdf,image/jpeg,image/png,image/webp'
 
 export const VENDOR_QUOTE_NO_BOARD_MESSAGE = '정산보드를 먼저 만드세요 — 확정 견적을 불러와야 버킷이 생기고, 협력사 견적을 그 버킷에 나눌 수 있습니다.'
 export const VENDOR_QUOTE_NOT_PARSED_MESSAGE = '이미 확정했거나 버린 견적서입니다 — 다시 불러오세요.'

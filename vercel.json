@@ -4,6 +4,7 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "crons": [{ "path": "/api/notify", "schedule": "0 0 * * *" }],
+  "functions": { "api/ai.ts": { "maxDuration": 120 } },
   "rewrites": [
     { "source": "/leadgen/communicator/api/:path*", "destination": "/api/:path*" },
     { "source": "/leadgen/communicator/assets/:path*", "destination": "/assets/:path*" },
