@@ -1,36 +1,34 @@
-// v2.5 §10.2·§23 운영가이드 빌더 — 3.16.4에서 목업 v2.5 화면 C를 시각 정본으로 재구성:
-// 헤더 "운영가이드 — {문서명}"+상태 배지+우측 액션(인쇄·컨펌 발송 — 목업 배치, 연락망 포함 토글
-// 유지), 섹션 = 번호 헤더("1. 존별 운영")+우측 연동 배지(존운영 항목 연동·R&R 연동 — steel 톤,
-// 칩·제목 중복 제거), 본문은 기본 2줄 미리보기 접힘(클릭 시 펼침·편집 — 현행 수정 플로우 재사용),
-// 하단 각주 카드. props 계약은 CuesheetEditor와 동일(deliverableId·canEdit)에 선택 훅만 추가.
+// v2.5 §10.2·§23 운영가이드 빌더 → v2.13 §23.5 (Phase 3.24 PR-A · 디자인지시서 §7-2.13) 현장 운영 12섹션.
+// 헤더(StructuredDocHeader — 인쇄·컨펌 발송·연락망 포함 토글)는 그대로 두고, 본문을
+// 왼쪽 섹션 목록(묶음 = 준비 · 당일 · 안전·공통 · 기타 — 채움 상태) + 섹션 카드로 바꿨다.
 //
-// R-O4(연동 섹션 stale): source_ref가 있는 섹션이 source_stale=true면 "갱신 있음" 배지 +
-// "차이 확인"으로 원본(lib/guideAssembly.ts — provider와 동일 조립 로직)과 저장값을 나란히
-// 보여주고, 사람이 "반영"을 눌러야만 저장된다. 자동 덮어쓰기는 어디에도 없다.
+// 표 섹션(data): 설치·철거 · 인력·콜타임 · 무전·지휘 · 역할 분담 · D-day 진행표 · 구간별 체크리스트 ·
+// 등록 운영 · VIP 의전 · 안전관리 · (새 문서의) 비상 대응 — 저장하면 provider가 content를 data에서 다시 만든다.
+// 마크다운 섹션: 존별 운영(원본 연동 — R-O4 stale 그대로) · 연락망(R-O6) · 옛 문서의 역할별 체크리스트·비상 대응·커스텀.
 //
-// R-O6(개인 연락처): 연락망/비품 섹션에 안내 문구를 고정 노출하고, 인쇄(window.print)에서는
-// "연락망 포함" 체크가 꺼져 있는 기본값에서 해당 섹션에 plan-print-hidden을 부여해 제외한다
-// (createDocSnapshot의 opts.include_contacts 계약과 같은 의미).
+// 옛 문서(4섹션)는 그대로 열린다 — '뼈대 추가'를 눌러야 빠진 섹션이 정본 순서 자리에 끼워진다(기존 섹션 순서·내용 불변).
 import { useState } from 'react'
 import { flushSync } from 'react-dom'
 import ErrorAlert from '../internal/ErrorAlert'
-import InfoTip from '../internal/InfoTip'
 import StructuredDocHeader from '../internal/StructuredDocHeader'
 import { useAsync, useMutation } from '../../hooks/useAsync'
-import { GUIDE_STALE_HELP } from '../../lib/helpTexts'
-import { assembleRoleSectionContent, assembleZoneSectionContent } from '../../lib/guideAssembly'
+import { CONTACTS_SECTION_PLACEHOLDER, assembleZoneSectionContent } from '../../lib/guideAssembly'
+import {
+  GUIDE_GROUP_LABELS,
+  GUIDE_GROUP_ORDER,
+  GUIDE_KIND_META,
+  guideSkeletonInput,
+  isGuideSectionEmpty,
+  mergeGuideSkeleton,
+  missingGuideKinds,
+} from '../../lib/guideStructured'
 import { getDataProvider } from '../../providers'
-import type { GuideSection } from '../../types/entities'
+import type { GuideSection, GuideSectionData } from '../../types/entities'
+import type { GuideSectionKind } from '../../types/enums'
 import type { GuideSectionInput } from '../../types/views'
-import { renderLiteMarkdown } from '../plan/markdown'
+import GuideSectionCard from './GuideSectionCard'
 
 const provider = getDataProvider()
-
-/** 3.16.4 화면 C — 연동 배지 문구(steel 톤). source_ref 없는 섹션은 배지 없음 */
-const SOURCE_BADGE_LABELS: Record<string, string> = {
-  zone_items: '존운영 항목 연동',
-  role_charters: 'R&R 연동',
-}
 
 /** 현재 목록을 그대로 GuideSectionInput으로 편다 — 모든 변경(추가·삭제·정렬·수정)은
  *  이 배열을 한 군데만 고쳐 saveGuideSections로 통째 전송하는 방식으로 표현한다. */
@@ -42,6 +40,7 @@ function toInput(sections: readonly GuideSection[]): GuideSectionInput[] {
     content: s.content,
     source_ref: s.source_ref,
     source_stale: s.source_stale,
+    data: s.data ?? null,
   }))
 }
 
@@ -60,7 +59,7 @@ export default function GuideBuilder({
   const sections = useAsync(() => provider.listGuideSections(deliverableId), [deliverableId])
   const currentUser = useAsync(() => provider.getCurrentUser(), [])
   const [includeContacts, setIncludeContacts] = useState(false)
-  // 본문 펼침(3.16.4 — 기본 2줄 미리보기) — 인쇄 시 전 섹션을 펼쳐야 하므로 부모가 관리한다
+  // 마크다운 본문 펼침(3.16.4 — 기본 2줄 미리보기) — 인쇄 시 전 섹션을 펼쳐야 하므로 부모가 관리한다
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
 
   const list = sections.data ?? []
@@ -69,9 +68,16 @@ export default function GuideBuilder({
     () => (projectId ? provider.getProject(projectId) : Promise.resolve(null)),
     [projectId],
   )
+  const programSessions = useAsync(
+    () => (projectId ? provider.listProgramSessions(projectId) : Promise.resolve([])),
+    [projectId],
+  )
+  const sessionList = programSessions.data ?? []
 
   const seed = useMutation(() => provider.seedGuideFromSources(deliverableId))
   const save = useMutation((next: GuideSectionInput[]) => provider.saveGuideSections(deliverableId, next))
+  const [skeletonError, setSkeletonError] = useState<string | null>(null)
+  const [addingSkeleton, setAddingSkeleton] = useState(false)
 
   const replace = async (next: GuideSectionInput[]) => {
     const result = await save.run(next)
@@ -108,12 +114,15 @@ export default function GuideBuilder({
   const addSection = () => {
     void replace([
       ...toInput(list),
-      { kind: 'custom', title: '새 섹션', content: '', source_ref: null, source_stale: false },
+      { kind: 'custom', title: '새 섹션', content: '', source_ref: null, source_stale: false, data: null },
     ])
   }
 
-  const saveSectionEdit = (id: string, patch: { title: string; content: string }) =>
+  const saveMarkdown = (id: string, patch: { title: string; content: string }) =>
     replace(toInput(list).map((inp, i) => (list[i].id === id ? { ...inp, ...patch } : inp)))
+
+  const saveData = (id: string, patch: { title: string; data: GuideSectionData }) =>
+    replace(toInput(list).map((inp, i) => (list[i].id === id ? { ...inp, title: patch.title, data: patch.data } : inp)))
 
   const applyDiff = (id: string, newContent: string) =>
     replace(
@@ -121,6 +130,50 @@ export default function GuideBuilder({
         list[i].id === id ? { ...inp, content: newContent, source_stale: false } : inp,
       ),
     )
+
+  const missing = missingGuideKinds(list)
+
+  /** 옛 문서 — 빠진 섹션만 뼈대로 끼워 넣는다(행사 일시·장소·프로그램표·담당자 수로 채움). 기존 섹션은 그대로 */
+  const addSkeleton = async () => {
+    if (!projectId || missing.length === 0) return
+    setSkeletonError(null)
+    setAddingSkeleton(true)
+    try {
+      const [proj, sessionsNow, members, opsItems] = await Promise.all([
+        provider.getProject(projectId),
+        provider.listProgramSessions(projectId),
+        provider.listMembers(projectId),
+        missing.includes('zone') ? provider.listDeliverables(projectId, { area: 'ops' }) : Promise.resolve([]),
+      ])
+      const ctx = { project: proj, sessions: sessionsNow, memberCount: members.length }
+      const additions: GuideSectionInput[] = missing.flatMap((kind): GuideSectionInput[] => {
+        if (kind === 'zone') {
+          return [
+            {
+              kind,
+              title: GUIDE_KIND_META.zone.title,
+              content: assembleZoneSectionContent(opsItems),
+              source_ref: 'zone_items',
+              source_stale: false,
+              data: null,
+            },
+          ]
+        }
+        if (kind === 'contacts') {
+          return [
+            { kind, title: GUIDE_KIND_META.contacts.title, content: CONTACTS_SECTION_PLACEHOLDER, source_ref: null, source_stale: false, data: null },
+          ]
+        }
+        const input = guideSkeletonInput(kind, ctx)
+        return input ? [input] : []
+      })
+      await replace(mergeGuideSkeleton(toInput(list), additions))
+    } catch (e) {
+      setSkeletonError(e instanceof Error ? e.message : '뼈대를 만들지 못했습니다.')
+    } finally {
+      setAddingSkeleton(false)
+    }
+  }
 
   /** 인쇄 — 미리보기로 접힌 섹션 본문을 전부 펼친 뒤 인쇄한다(스태프 배포용 전문 출력) */
   const handlePrint = () => {
@@ -136,15 +189,17 @@ export default function GuideBuilder({
   }
 
   const d = deliverable.data
+  const filled = list.filter((s) => !isGuideSectionEmpty(s)).length
+  const headcount = project.data?.expected_headcount ?? null
 
   return (
-    <div className="ui-card">
+    <div className="ui-card @container">
       {d && (
         <StructuredDocHeader
           docTypeLabel="운영가이드"
           title={d.title}
           status={d.status}
-          desc="섹션 정형 편집 · 인쇄(A4)·PDF 스냅숏 → 스태프 배포 · 운영계획서 ④존별 운영·⑦비상 대응으로 자동 조립"
+          desc="현장 운영 섹션을 표로 채움 · 인쇄(A4)·PDF 스냅숏 → 스태프 배포 · 운영계획서 ④존별 운영·⑦비상 대응으로 자동 조립"
           deliverableId={deliverableId}
           isHost={project.data?.kind === 'host'}
           isPm={currentUser.data?.role === 'pm'}
@@ -174,53 +229,78 @@ export default function GuideBuilder({
         <ErrorAlert message={sections.error} />
         <ErrorAlert message={seed.error} />
         <ErrorAlert message={save.error} />
+        <ErrorAlert message={skeletonError} />
 
         {sections.loading && <p className="text-sm text-ink-cap">불러오는 중…</p>}
 
         {!sections.loading && list.length === 0 && (
           <div className="rounded-lg border border-dashed border-border p-6 text-center">
             <p className="text-sm text-ink-cap">아직 섹션이 없습니다.</p>
+            <p className="mt-1 text-xs text-ink-cap">
+              설치·철거부터 비상 대응까지 현장 운영 12개 섹션을 행사 일시·장소·프로그램표로 채운 뼈대로 만듭니다.
+            </p>
             {canEdit && (
               <button type="button" onClick={handleSeed} disabled={seed.pending} className="btn btn-primary mt-3">
-                기본 4섹션 만들기
+                기본 섹션 만들기
               </button>
             )}
           </div>
         )}
 
-        {list.length > 0 && (
-          <div className="space-y-3">
-            {list.map((s, i) => (
-              <GuideSectionCard
-                key={s.id}
-                section={s}
-                index={i}
-                total={list.length}
-                canEdit={canEdit}
-                projectId={projectId}
-                includeContactsInPrint={includeContacts}
-                saving={save.pending}
-                expanded={expanded.has(s.id)}
-                onToggleExpanded={() => toggleExpanded(s.id)}
-                onMoveUp={() => move(i, -1)}
-                onMoveDown={() => move(i, 1)}
-                onDelete={() => remove(s.id)}
-                onSaveEdit={saveSectionEdit}
-                onApplyDiff={applyDiff}
-              />
-            ))}
+        {list.length > 0 && canEdit && missing.length > 0 && (
+          <div
+            data-testid="guide-skeleton-banner"
+            className="plan-print-hidden mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-canvas px-4 py-3"
+          >
+            <p className="min-w-0 text-sm text-ink-sub">
+              현장 운영 섹션 {missing.length}개를 뼈대로 추가할 수 있습니다 —{' '}
+              <span className="text-ink">{missing.map((k) => GUIDE_KIND_META[k].title).join(' · ')}</span>. 지금 섹션은 그대로 둡니다.
+            </p>
+            <button type="button" onClick={addSkeleton} disabled={addingSkeleton || save.pending} className="btn btn-ghost btn-sm">
+              뼈대 추가
+            </button>
           </div>
         )}
 
-        {canEdit && list.length > 0 && (
-          <button
-            type="button"
-            onClick={addSection}
-            disabled={save.pending}
-            className="plan-print-hidden mt-4 btn btn-ghost btn-sm"
-          >
-            + 섹션 추가
-          </button>
+        {list.length > 0 && (
+          <div className="grid grid-cols-1 gap-5 @4xl:grid-cols-[200px_minmax(0,1fr)] @4xl:items-start">
+            <GuideRail sections={list} filled={filled} />
+            <div className="min-w-0 space-y-3">
+              {list.map((s, i) => (
+                <GuideSectionCard
+                  key={s.id}
+                  section={s}
+                  number={i + 1}
+                  isFirst={i === 0}
+                  isLast={i === list.length - 1}
+                  canEdit={canEdit}
+                  projectId={projectId}
+                  sessions={sessionList}
+                  headcount={headcount}
+                  includeContactsInPrint={includeContacts}
+                  saving={save.pending}
+                  expanded={expanded.has(s.id)}
+                  onToggleExpanded={() => toggleExpanded(s.id)}
+                  onMoveUp={() => move(i, -1)}
+                  onMoveDown={() => move(i, 1)}
+                  onDelete={() => remove(s.id)}
+                  onSaveMarkdown={saveMarkdown}
+                  onSaveData={saveData}
+                  onApplyDiff={applyDiff}
+                />
+              ))}
+              {canEdit && (
+                <button
+                  type="button"
+                  onClick={addSection}
+                  disabled={save.pending}
+                  className="plan-print-hidden btn btn-ghost btn-sm"
+                >
+                  + 섹션 추가
+                </button>
+              )}
+            </div>
+          </div>
         )}
 
         {/* 목업 화면 C 하단 각주 카드 */}
@@ -234,269 +314,51 @@ export default function GuideBuilder({
   )
 }
 
-// ── 섹션 카드 (목업 화면 C: 번호 헤더 + 연동 배지 + 본문 미리보기 접힘) ────────────
-function GuideSectionCard({
-  section,
-  index,
-  total,
-  canEdit,
-  projectId,
-  includeContactsInPrint,
-  saving,
-  expanded,
-  onToggleExpanded,
-  onMoveUp,
-  onMoveDown,
-  onDelete,
-  onSaveEdit,
-  onApplyDiff,
-}: {
-  section: GuideSection
-  index: number
-  total: number
-  canEdit: boolean
-  projectId: string | null
-  includeContactsInPrint: boolean
-  saving: boolean
-  expanded: boolean
-  onToggleExpanded: () => void
-  onMoveUp: () => void
-  onMoveDown: () => void
-  onDelete: () => void
-  onSaveEdit: (id: string, patch: { title: string; content: string }) => Promise<unknown>
-  onApplyDiff: (id: string, content: string) => Promise<unknown>
-}) {
-  const [editing, setEditing] = useState(false)
-  const [title, setTitle] = useState(section.title)
-  const [content, setContent] = useState(section.content ?? '')
-
-  const startEdit = () => {
-    setTitle(section.title)
-    setContent(section.content ?? '')
-    setEditing(true)
-  }
-
-  const submitEdit = async () => {
-    const result = await onSaveEdit(section.id, { title, content })
-    if (result) setEditing(false)
-  }
-
-  const isContacts = section.kind === 'contacts'
-  // R-O6: 인쇄에서 연락망 섹션은 명시 체크 전까지 제외 — plan-print-hidden(§23.2)을 재사용해
-  // 화면에는 그대로 두고 window.print()에서만 숨긴다.
-  const printClass = isContacts && !includeContactsInPrint ? 'plan-print-hidden' : ''
-  const sourceBadge = section.source_ref ? SOURCE_BADGE_LABELS[section.source_ref] : null
-  const hasBody = !!section.content?.trim()
-
+// ── 섹션 목록(묶음별 · 채움 상태) — 넓은 칸에서만(좁은 보드 인라인에서는 카드만) ─────────────
+function GuideRail({ sections, filled }: { sections: readonly GuideSection[]; filled: number }) {
+  const groupOf = (kind: GuideSectionKind) => GUIDE_KIND_META[kind]?.group ?? 'other'
   return (
-    <article className={`plan-section rounded-lg border border-border ${printClass}`}>
-      <header className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-2.5">
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
-          {editing ? (
-            <input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="ui-input text-sm font-semibold"
-            />
-          ) : (
-            <h3 className="min-w-0 truncate text-sm font-bold text-ink">
-              {index + 1}. {section.title}
-            </h3>
-          )}
-          {sourceBadge && (
-            <span className="inline-flex items-center rounded-md bg-steel-tint px-1.5 py-0.5 text-[10.5px] font-semibold text-steel">
-              {sourceBadge}
-            </span>
-          )}
-          {section.source_stale && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-accent-tint px-2 py-0.5 text-xs font-medium text-accent">
-              갱신 있음
-              <InfoTip text={GUIDE_STALE_HELP} />
-            </span>
-          )}
-        </div>
-        {canEdit && (
-          <div className="plan-print-hidden flex flex-wrap items-center gap-2">
-            {!editing && (
-              <button type="button" onClick={startEdit} className="text-xs text-ink-sub underline">
-                수정
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={onMoveUp}
-              disabled={index === 0}
-              className="text-xs text-ink-sub underline disabled:opacity-40"
-            >
-              위로
-            </button>
-            <button
-              type="button"
-              onClick={onMoveDown}
-              disabled={index === total - 1}
-              className="text-xs text-ink-sub underline disabled:opacity-40"
-            >
-              아래로
-            </button>
-            <button type="button" onClick={onDelete} className="text-xs text-negative underline">
-              삭제
-            </button>
+    <nav aria-label="섹션 목록" className="plan-print-hidden hidden rounded-lg border border-border p-2 @4xl:sticky @4xl:top-4 @4xl:block">
+      <p className="px-2 pb-1 pt-1 text-xs font-semibold text-ink" data-testid="guide-filled">
+        섹션 {filled} / {sections.length} 채움
+      </p>
+      {GUIDE_GROUP_ORDER.map((g) => {
+        const items = sections.map((s, i) => ({ s, i })).filter(({ s }) => groupOf(s.kind) === g)
+        if (items.length === 0) return null
+        return (
+          <div key={g}>
+            <p className="px-2 pb-1 pt-2 text-[11px] font-medium tracking-wide text-ink-cap">{GUIDE_GROUP_LABELS[g]}</p>
+            <ul>
+              {items.map(({ s, i }) => {
+                const state = s.source_stale ? 'stale' : isGuideSectionEmpty(s) ? 'empty' : 'ok'
+                return (
+                  <li key={s.id}>
+                    <a
+                      href={`#guide-sec-${s.id}`}
+                      // 주소(해시)는 바꾸지 않고 카드로만 스크롤 — 데모 아티팩트는 해시 라우팅이라 '#…'가 곧 화면 이동이 된다
+                      onClick={(e) => {
+                        e.preventDefault()
+                        document.getElementById(`guide-sec-${s.id}`)?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+                      }}
+                      className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-ink hover:bg-track"
+                    >
+                      <span className="w-5 text-[11px] tabular-nums text-ink-cap">{String(i + 1).padStart(2, '0')}</span>
+                      <span className="min-w-0 flex-1 truncate">{s.title}</span>
+                      {state === 'ok' && (
+                        <span className="text-xs text-positive" aria-label="채움">
+                          ✓
+                        </span>
+                      )}
+                      {state === 'empty' && <span className="whitespace-nowrap text-xs text-ink-cap">비어 있음</span>}
+                      {state === 'stale' && <span className="whitespace-nowrap text-xs font-semibold text-accent-deep">바뀜</span>}
+                    </a>
+                  </li>
+                )
+              })}
+            </ul>
           </div>
-        )}
-      </header>
-
-      <div className="px-4 py-3">
-        {isContacts && (
-          <p className="plan-print-hidden mb-3 rounded-md bg-canvas px-3 py-2 text-xs text-ink-sub">
-            개인 연락처(개인 휴대폰 등)는 넣지 마세요 — 화면·운영계획서 조립에서 제외되며, 인쇄 포함은
-            명시 옵션입니다.
-          </p>
-        )}
-
-        {editing ? (
-          <div className="space-y-2">
-            <textarea
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              rows={6}
-              className="ui-input w-full font-mono text-xs"
-            />
-            <div>
-              <p className="t-caption mb-1">미리보기</p>
-              <div className="rounded-md bg-canvas p-3">{renderLiteMarkdown(content || '_내용 없음_')}</div>
-            </div>
-            <div className="plan-print-hidden flex gap-2">
-              <button type="button" onClick={submitEdit} disabled={saving} className="btn btn-primary btn-sm">
-                저장
-              </button>
-              <button type="button" onClick={() => setEditing(false)} className="btn btn-ghost btn-sm">
-                취소
-              </button>
-            </div>
-          </div>
-        ) : hasBody ? (
-          <>
-            {/* 3.16.4 화면 C — 기본 2줄 미리보기(말줄임), 클릭 시 펼침. 본문은 항상 DOM에
-                있고 시각적으로만 접는다(line-clamp) — 인쇄 시 부모가 전 섹션을 펼친다. */}
-            <div
-              onClick={expanded ? undefined : onToggleExpanded}
-              className={`text-sm text-ink-sub ${expanded ? '' : 'line-clamp-2 cursor-pointer'}`}
-            >
-              {renderLiteMarkdown(section.content!)}
-            </div>
-            <button
-              type="button"
-              onClick={onToggleExpanded}
-              aria-expanded={expanded}
-              className="plan-print-hidden mt-1.5 text-xs font-medium text-steel underline underline-offset-2"
-            >
-              {expanded ? '접기 ▴' : '펼치기 ▾'}
-            </button>
-          </>
-        ) : (
-          <p className="text-xs text-ink-cap">본문 미작성</p>
-        )}
-
-        {section.source_stale && section.source_ref && projectId && (
-          <StaleDiffPanel
-            section={section}
-            projectId={projectId}
-            canApply={canEdit}
-            applying={saving}
-            onApply={(next) => onApplyDiff(section.id, next)}
-          />
-        )}
-      </div>
-    </article>
-  )
-}
-
-// ── R-O4 차이 확인 패널 ────────────────────────────────────────────────
-// "기준 견적 갱신"과 같은 패턴 — 저장된 내용과 현재 원본을 나란히 보여주기만 하고,
-// 반영 버튼을 사람이 직접 눌러야만 saveGuideSections가 호출된다(자동 덮어쓰기 금지).
-function StaleDiffPanel({
-  section,
-  projectId,
-  canApply,
-  applying,
-  onApply,
-}: {
-  section: GuideSection
-  projectId: string
-  canApply: boolean
-  applying: boolean
-  onApply: (content: string) => void
-}) {
-  const [open, setOpen] = useState(false)
-  const [current, setCurrent] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const handleToggle = async () => {
-    if (open) {
-      setOpen(false)
-      return
-    }
-    setOpen(true)
-    if (current !== null) return
-    setLoading(true)
-    setError(null)
-    try {
-      let assembled = section.content ?? ''
-      if (section.source_ref === 'zone_items') {
-        const items = await provider.listDeliverables(projectId, { area: 'ops' })
-        assembled = assembleZoneSectionContent(items)
-      } else if (section.source_ref === 'role_charters') {
-        const charters = await provider.listRoleCharters(projectId)
-        assembled = assembleRoleSectionContent(charters)
-      }
-      setCurrent(assembled)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : '원본을 불러오지 못했습니다.')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  return (
-    <div className="plan-print-hidden mt-3 border-t border-border pt-3">
-      <button type="button" onClick={handleToggle} className="text-xs font-medium text-steel underline">
-        {open ? '차이 확인 접기' : '차이 확인'}
-      </button>
-      {open && (
-        <div className="mt-2 space-y-3">
-          <ErrorAlert message={error} />
-          {loading && <p className="text-xs text-ink-cap">불러오는 중…</p>}
-          {!loading && current !== null && (
-            <>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div>
-                  <p className="t-caption mb-1">저장된 내용</p>
-                  <div className="rounded-md border border-border bg-canvas p-2 text-xs text-ink-sub">
-                    {renderLiteMarkdown(section.content ?? '_내용 없음_')}
-                  </div>
-                </div>
-                <div>
-                  <p className="t-caption mb-1">현재 원본</p>
-                  <div className="rounded-md border border-accent/40 bg-accent-tint/30 p-2 text-xs text-ink-sub">
-                    {renderLiteMarkdown(current || '_내용 없음_')}
-                  </div>
-                </div>
-              </div>
-              {canApply && (
-                <button
-                  type="button"
-                  onClick={() => onApply(current)}
-                  disabled={applying}
-                  className="btn btn-accent btn-sm"
-                >
-                  반영
-                </button>
-              )}
-            </>
-          )}
-        </div>
-      )}
-    </div>
+        )
+      })}
+    </nav>
   )
 }

@@ -86,6 +86,8 @@
 //   v15.1: Phase 6.1 착수 지시(2026-09-26 — "진행해", 1턴 시안 승인)가 동결 해제 승인을 겸함(v13.1·v14.1 전례) + 설계서 v2.12 §9 →
 //   **필드 추가만, 메서드 수 131 불변**: ProjectPatch.slack_thread_url(행사 스레드) · PersonInput/PersonWithAssignments.slack_user_id ·
 //   DeliverableDetail.request_acks(Slack 의뢰 확인 표식 — 상태 아님). 봇 발송·버튼 응답은 서버 함수(api/notify · api/slack-interact) 몫.
+//   v15.2: Phase 3.24 PR-A 착수 승인(2026-09-26 — 2턴 시안 "승인 → PR-A 착수")이 동결 해제 승인을 겸함(v15.1 전례) + 설계서 v2.13 §23.5 →
+//   **필드 추가만, 메서드 수 131 불변**: GuideSection.data · GuideSectionInput.data(운영가이드 표 섹션 — content는 data에서 파생).
 //
 // 프로젝트 스코프 규칙(설계서 v2.1 §4-21 R-L1): 프로젝트 단위 조회·생성 메서드는 projectId를
 // 인자로 받는다. currentUser()는 행위자 신원·권한 판정 전용이며 스코프 유도에 쓰지 않는다.

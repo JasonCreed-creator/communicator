@@ -90,18 +90,21 @@ describe('T2 — 운영가이드 빌더 헤더·섹션 컴포지션(화면 C)', 
 
   it('번호 섹션 헤더 + 연동 배지(steel), kind 칩·제목 중복은 제거된다', async () => {
     renderGuide(GUIDE_ID)
-    await screen.findByRole('heading', { name: /^1\. 존별 운영$/ })
-    expect(screen.getByRole('heading', { name: /^2\. 역할별 체크리스트$/ })).toBeTruthy()
+    // v2.13 §7-2.13 — 번호는 제목 앞의 두 자리 표시(01), 제목(h3)은 이름만
+    const zoneHeading = await screen.findByRole('heading', { name: '존별 운영' })
+    const zoneCard = zoneHeading.closest('article')!
+    expect(within(zoneCard).getByText('01')).toBeTruthy()
+    expect(screen.getByRole('heading', { name: '역할별 체크리스트' })).toBeTruthy()
     const zoneBadge = screen.getByText('존운영 항목 연동')
     expect(zoneBadge.className).toContain('bg-steel-tint')
     expect(screen.getByText('R&R 연동')).toBeTruthy()
-    // 예전 kind 칩("존별 운영" 단독 텍스트)이 더는 없다 — 제목 중복 제거(화면 C ①)
-    expect(screen.queryByText('존별 운영')).toBeNull()
+    // 예전 kind 칩("존별 운영" 단독 텍스트)이 카드 안에 더는 없다 — 제목 중복 제거(화면 C ①)
+    expect(within(zoneCard).getAllByText('존별 운영')).toHaveLength(1)
   })
 
   it('본문은 기본 미리보기 접힘(line-clamp) — 펼치기 토글로 펼쳐진다', async () => {
     renderGuide(GUIDE_ID)
-    await screen.findByRole('heading', { name: /^1\. 존별 운영$/ })
+    await screen.findByRole('heading', { name: '존별 운영' })
     const toggles = screen.getAllByRole('button', { name: '펼치기 ▾' })
     expect(toggles.length).toBeGreaterThan(0)
     await userEvent.click(toggles[0])
@@ -110,7 +113,7 @@ describe('T2 — 운영가이드 빌더 헤더·섹션 컴포지션(화면 C)', 
 
   it('하단 각주 카드(연동 확인 반영·개인정보 인쇄 스냅숏만)가 있다', async () => {
     renderGuide(GUIDE_ID)
-    await screen.findByRole('heading', { name: /^1\. 존별 운영$/ })
+    await screen.findByRole('heading', { name: '존별 운영' })
     expect(screen.getByText(/자동 덮어쓰기 없음/)).toBeTruthy()
     expect(screen.getByText(/인쇄 스냅숏에만 포함 옵션/)).toBeTruthy()
   })

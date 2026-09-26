@@ -20,7 +20,8 @@
 //             PR-6 견적 목록(고른 견적 옆 동작·구버전 고치기 막힘)·옵션(체크 카드·막힌 이유·고른 옵션 요약) ·
 //             PR-7 정산보드(머리 불러오기·할 일 알림·KPI 검산 배지·원가 없는 그룹행·발주 항목 ⋯ 메뉴) ·
 //             PR-8 행사 설정(번호 없는 탭·섹션 목록·고정 저장 바·변경 취소)·온보딩(진행 줄·2열·나중에 하기 확인) ·
-//       6.1: Slack 봇 — 행사 설정 ③ 스레드 링크(DM 링크 거부 → 등록 → 채널·Slack에서 열기 → 웹훅 예비 접힘 → 해제) · 담당자 Slack 칸)
+//       6.1: Slack 봇 — 행사 설정 ③ 스레드 링크(DM 링크 거부 → 등록 → 채널·Slack에서 열기 → 웹훅 예비 접힘 → 해제) · 담당자 Slack 칸 ·
+//       3.24 PR-A: 운영가이드 — 옛 문서 뼈대 추가 → 섹션 목록 · 등록 운영 대기 계산 · 목록 링크 = 스크롤만(해시 불변))
 // 캡처는 dist-demo/shots-interaction/ 에 남긴다. 실패 시 exit 1.
 import { createServer } from 'node:http'
 import { readFileSync, mkdirSync } from 'node:fs'
@@ -154,7 +155,52 @@ check(
   `${docCountBefore} → ${docRequests.length}`,
 )
 
-// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — **Phase 6.1 Slack 봇(2026-09-26)**.
+// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — **Phase 3.24 PR-A 운영가이드 현장 운영 섹션(2026-09-26)**.
+//     일정(②에서 도착) → RB27 '현장 운영가이드 (가안)'(옛 4섹션 문서): '뼈대 추가' 안내 9개 → 누르면 설치·철거 일정 등 새 섹션 ·
+//     섹션 목록(13개 · 묶음) · 존별 운영 '갱신 있음' 그대로 → 등록 운영 고치기: 라인 5 · 도착 400 → 20명/분 · 100명 · 약 5분 → 저장 →
+//     섹션 목록 'D-day 진행표' 누르기 = 해시 그대로 + 그 카드가 화면 안 → 다시 '일정'으로(아래 ③-이전 블록이 일정에서 시작한다).
+{
+  const docBefore = docRequests.length
+  await tab.evaluate(() => {
+    window.location.hash = '#/items/dlv-rb27-guide-01'
+  })
+  const banner = tab.getByTestId('guide-skeleton-banner')
+  await banner.waitFor({ timeout: 10_000 })
+  check(/9개/.test(await banner.innerText()), "옛 문서: '뼈대 추가' 안내 — 빠진 섹션 9개", await banner.innerText())
+  await banner.getByRole('button', { name: '뼈대 추가' }).click()
+  await tab.getByRole('heading', { name: '설치·철거 일정' }).waitFor({ timeout: 10_000 })
+  check((await tab.getByTestId('guide-skeleton-banner').count()) === 0, '뼈대 추가 → 안내 사라짐')
+  const rail = tab.getByRole('navigation', { name: '섹션 목록' })
+  check(await rail.isVisible(), '섹션 목록(넓은 칸에서 보임)')
+  const filled = (await tab.getByTestId('guide-filled').innerText()).trim()
+  check(/^섹션 \d+ \/ 13 채움$/.test(filled), '섹션 목록 채움 수(13섹션)', filled)
+  const zone = tab.locator('article', { has: tab.getByRole('heading', { name: '존별 운영' }) })
+  check(/갱신 있음/.test(await zone.innerText()), "존별 운영 '갱신 있음' 그대로(뼈대 추가가 건드리지 않음)")
+  // 고치는 동안 제목(h3)이 입력 칸으로 바뀌므로 카드는 id로 잡는다
+  const regId = await tab.locator('article', { has: tab.getByRole('heading', { name: '등록 운영' }) }).getAttribute('id')
+  const regCard = tab.locator(`[id="${regId}"]`)
+  await regCard.getByRole('button', { name: '고치기' }).click()
+  await regCard.getByLabel('접수 라인').fill('5')
+  await regCard.getByLabel('피크 도착 인원').fill('400')
+  const regText = await regCard.innerText()
+  check(/20명 \/ 분/.test(regText) && /100명/.test(regText) && /약 5분/.test(regText), '등록 운영: 입력하는 즉시 20명/분 · 100명 · 약 5분')
+  await regCard.getByRole('button', { name: '저장' }).click()
+  await regCard.getByRole('button', { name: '고치기' }).waitFor({ timeout: 10_000 })
+  check(/약 5분/.test(await regCard.innerText()), '저장 → 읽기 화면에 최대 대기 약 5분')
+  const hashBefore = await tab.evaluate(() => window.location.hash)
+  await rail.getByRole('link', { name: /D-day 진행표/ }).click()
+  await tab.waitForTimeout(600)
+  const hashAfter = await tab.evaluate(() => window.location.hash)
+  const dayBox = await tab.locator('article', { has: tab.getByRole('heading', { name: 'D-day 진행표' }) }).boundingBox()
+  const vh = tab.viewportSize()?.height ?? 900
+  check(hashAfter === hashBefore && dayBox !== null && dayBox.y >= -4 && dayBox.y < vh, "섹션 목록 링크 = 해시 그대로 · 그 카드가 화면 안", `${hashBefore} → ${hashAfter} · y=${dayBox?.y}`)
+  await tab.screenshot({ path: resolve(SHOTS, '03-guide-structured.png'), fullPage: true })
+  check(docRequests.length === docBefore, '운영가이드 뼈대 추가·고치기·목록 이동에 전체 리로드 0', `${docBefore} → ${docRequests.length}`)
+  await tab.locator('aside nav a', { hasText: '일정' }).first().click()
+  await tab.waitForURL(/#\/schedule/, { timeout: 10_000 })
+}
+
+// ── ③-이전(2026-09-26 Phase 6.1) Slack 봇 — 직전 세션 ③을 회귀 가드로 유지.
 //     일정(②에서 도착) → 행사 설정 ③ Slack 카드: DM 채널 링크 → 형식 문구 + '스레드 등록' 비활성 → 스레드 첫 글 링크 → 등록 →
 //     채널 id·'Slack에서 열기'(링크 그대로) · 웹훅은 예비로 접힘('예비 웹훅 보기' → 펼침) → '스레드 해제'(확인 수락) → 입력 칸 ·
 //     담당자(S-13): Slack 칸 머리 + 비어 있는 사람 '이메일로 자동' → 다시 '일정'으로(아래 ③-이전 블록이 일정에서 시작한다).

@@ -120,7 +120,7 @@ describe('v9 해피 패스 — 8메서드', () => {
     expect(savedZone.source_stale).toBe(false)
   })
 
-  it('seedGuideFromSources — 빈 문서에서 4섹션 초기 로드(존별 운영·R&R 연동)', async () => {
+  it('seedGuideFromSources — 빈 문서에서 현장 운영 12섹션 초기 로드(v2.13 §23.5 — 존별 운영은 원본 연동)', async () => {
     const fresh = await p.createDeliverable({
       project_id: RB27,
       area: 'ops',
@@ -128,15 +128,17 @@ describe('v9 해피 패스 — 8메서드', () => {
       title: '테스트 운영가이드',
     })
     const built = await p.seedGuideFromSources(fresh.id)
-    expect(built.map((s) => s.kind).sort()).toEqual(['contacts', 'emergency', 'role', 'zone'])
+    expect(built.map((s) => s.kind)).toEqual([
+      'setup', 'staffing', 'radio', 'raci', 'dayplan', 'checklists', 'registration', 'vip', 'safety', 'zone', 'emergency', 'contacts',
+    ])
     const zone = built.find((s) => s.kind === 'zone')!
     expect(zone.source_ref).toBe('zone_items')
     expect(zone.source_stale).toBe(false)
     // 존별 운영 원본(존 구성 (가안))에서 실제로 조립됐다
     expect(zone.content).toContain('존 구성 (가안)')
-    const role = built.find((s) => s.kind === 'role')!
-    expect(role.source_ref).toBe('role_charters')
-    expect((role.content ?? '').length).toBeGreaterThan(0)
+    // 새 문서에는 R&R 연동 섹션이 없다 — 역할 분담(표)이 대신한다
+    expect(built.some((s) => s.kind === 'role')).toBe(false)
+    expect(built.find((s) => s.kind === 'raci')!.data?.type).toBe('raci')
   })
 })
 

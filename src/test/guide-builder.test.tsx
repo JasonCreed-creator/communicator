@@ -101,11 +101,11 @@ describe('운영가이드 빌더 — RE:BUILD 27 픽스처', () => {
     expect(zone.content ?? '').toMatch(/애프터파티 정원 150명 유지 여부/)
   })
 
-  it('(e) 빈 문서에서는 "기본 4섹션 만들기" 시드 버튼이 보이고, 섹션이 있으면 보이지 않는다', async () => {
+  it('(e) 빈 문서에서는 "기본 섹션 만들기" 시드 버튼이 보이고(v2.13 — 현장 운영 12섹션), 섹션이 있으면 보이지 않는다', async () => {
     // RB27 가이드(GUIDE_ID)는 이미 섹션이 있으므로 시드 버튼이 없다
     renderBuilder(true)
     await screen.findByRole('heading', { name: /존별 운영$/ })
-    expect(screen.queryByRole('button', { name: '기본 4섹션 만들기' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '기본 섹션 만들기' })).toBeNull()
     cleanup()
 
     const fresh = await provider.createDeliverable({
@@ -119,17 +119,19 @@ describe('운영가이드 빌더 — RE:BUILD 27 픽스처', () => {
         <GuideBuilder deliverableId={fresh.id} canEdit />
       </MemoryRouter>,
     )
-    const seedBtn = await screen.findByRole('button', { name: '기본 4섹션 만들기' })
+    const seedBtn = await screen.findByRole('button', { name: '기본 섹션 만들기' })
     await userEvent.click(seedBtn)
 
     await screen.findByRole('heading', { name: /존별 운영$/ })
-    expect(screen.getByRole('heading', { name: /역할별 체크리스트/ })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: '설치·철거 일정' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'D-day 진행표' })).toBeTruthy()
     expect(screen.getByRole('heading', { name: /비상 대응/ })).toBeTruthy()
     expect(screen.getByRole('heading', { name: /연락망\/비품/ })).toBeTruthy()
-    expect(screen.queryByRole('button', { name: '기본 4섹션 만들기' })).toBeNull()
+    expect(screen.queryByRole('heading', { name: /역할별 체크리스트/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: '기본 섹션 만들기' })).toBeNull()
 
     const built = await provider.listGuideSections(fresh.id)
-    expect(built).toHaveLength(4)
+    expect(built).toHaveLength(12)
   })
 
   it('(f) 읽기 전용(canEdit=false)에서는 편집·정렬·삭제·추가·시드·반영 버튼이 전혀 없다', async () => {
@@ -149,7 +151,7 @@ describe('운영가이드 빌더 — RE:BUILD 27 픽스처', () => {
     expect(screen.queryByRole('button', { name: '아래로' })).toBeNull()
     expect(screen.queryByRole('button', { name: '삭제' })).toBeNull()
     expect(screen.queryByRole('button', { name: '+ 섹션 추가' })).toBeNull()
-    expect(screen.queryByRole('button', { name: '기본 4섹션 만들기' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '기본 섹션 만들기' })).toBeNull()
 
     // 인쇄·연락망 포함 체크는 열람 기능이라 읽기 전용에서도 남아 있다
     expect(screen.getByRole('button', { name: '인쇄' })).toBeTruthy()

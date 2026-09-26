@@ -1,11 +1,12 @@
 /** @vitest-environment jsdom */
-// DoD 37 (v2.5 §23) — 운영가이드: 섹션 4종 시드·존운영/R&R 초기 로드, 원본 변경 시 stale
+// DoD 37 (v2.5 §23 → v2.13 §23.5 개정) — 운영가이드: 섹션 시드(현장 운영 12섹션)·존운영 초기 로드, 원본 변경 시 stale
 // 표시·자동 덮어쓰기 없음(R-O4), 개인 연락처가 화면·S9 조립 데이터에 0건(R-O6), 인쇄 구조 계약.
 // 빌더 UI 세부는 guide-builder.test.tsx(3.16d)가, provider 세부는
 // MockProvider.opsDocs.test.ts(3.16a)가 정본 — 이 파일은 DoD 문장을 통합 각도로 증명한다.
 // 주의: 뒤쪽 describe는 라우트 싱글턴 provider를 쓰므로(파일 단위 상태 공유) 순서대로 읽을 것.
 import { cleanup, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
+import { GUIDE_CANON_ORDER } from '../lib/guideStructured'
 import { PROJECT_ID_REBUILD27 } from '../fixtures/sampleProject'
 import { MockProvider } from '../providers/mock/MockProvider'
 import { mockProvider, renderRoute } from './testUtils'
@@ -16,7 +17,7 @@ const GUIDE_ID = 'dlv-rb27-guide-01'
 afterEach(cleanup)
 
 describe('DoD 37 (a·b) — 시드·stale (독립 MockProvider)', () => {
-  it('(a) 새 운영가이드 시드 = 4섹션(zone·role·emergency·contacts), zone·role은 원본 연동으로 초기 로드', async () => {
+  it('(a) 새 운영가이드 시드 = 현장 운영 12섹션(v2.13 §23.5) — 존별 운영은 원본 연동, 표 섹션은 data + data에서 만든 글', async () => {
     const p = new MockProvider()
     const fresh = await p.createDeliverable({
       project_id: RB27,
@@ -26,14 +27,21 @@ describe('DoD 37 (a·b) — 시드·stale (독립 MockProvider)', () => {
     })
     const sections = await p.seedGuideFromSources(fresh.id)
 
-    expect(sections.map((s) => s.kind)).toEqual(['zone', 'role', 'emergency', 'contacts'])
-    const zone = sections[0]
-    const role = sections[1]
+    expect(sections.map((s) => s.kind)).toEqual([...GUIDE_CANON_ORDER])
+    const zone = sections.find((s) => s.kind === 'zone')!
     expect(zone.source_ref).toBe('zone_items')
-    expect(role.source_ref).toBe('role_charters')
-    // 존운영·R&R 원본에서 실제 내용이 조립돼 들어온다(빈 뼈대가 아니다)
+    // 존운영 원본에서 실제 내용이 조립돼 들어온다(빈 뼈대가 아니다)
     expect((zone.content ?? '').trim().length).toBeGreaterThan(0)
-    expect((role.content ?? '').trim().length).toBeGreaterThan(0)
+    expect(zone.data ?? null).toBeNull()
+    // 표 섹션은 data가 있고, content는 그 data에서 만든 글이다(S9·스냅숏이 읽는 사본)
+    for (const s of sections.filter((x) => !['zone', 'contacts'].includes(x.kind))) {
+      expect(s.data?.type).toBe(s.kind)
+      expect((s.content ?? '').trim().length).toBeGreaterThan(0)
+    }
+    // 연락망은 마크다운 그대로(R-O6 경고 문구)
+    expect(sections.find((s) => s.kind === 'contacts')!.data ?? null).toBeNull()
+    // 새 문서에는 R&R 연동 '역할별 체크리스트'가 없다 — 역할 분담(표)이 대신한다
+    expect(sections.some((s) => s.kind === 'role')).toBe(false)
     expect(sections.every((s) => s.source_stale === false)).toBe(true)
   })
 

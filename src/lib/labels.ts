@@ -204,13 +204,22 @@ export const SCENARIO_KIND_CHIP_CLASSES: Record<ScenarioBlockKind, string> = {
   custom: 'bg-track text-ink-sub',
 }
 
-/** v2.5 §23 — 운영가이드 빌더 섹션 카드 4종 라벨 */
+/** v2.5 §23 — 운영가이드 빌더 섹션 라벨. v2.13 §23.5: 현장 운영 섹션 9종 추가(정본 제목은 lib/guideStructured GUIDE_KIND_META) */
 export const GUIDE_KIND_LABELS: Record<GuideSectionKind, string> = {
   zone: '존별 운영',
   role: '역할별 체크리스트',
   emergency: '비상 대응',
   contacts: '연락망/비품',
   custom: '커스텀',
+  setup: '설치·철거 일정',
+  staffing: '현장 인력·콜타임',
+  radio: '무전·지휘 체계',
+  raci: '역할 분담',
+  dayplan: 'D-day 진행표',
+  checklists: '구간별 체크리스트',
+  registration: '등록 운영',
+  vip: 'VIP 의전',
+  safety: '안전관리',
 }
 
 /** v2.5 §23 — 운영보드 홈 유형 카드 4종 라벨(정형 3종 + 기타 제작물) */

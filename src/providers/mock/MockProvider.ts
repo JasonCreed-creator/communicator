@@ -171,6 +171,7 @@ import {
   toVatExcluded,
 } from '../../lib/settlement'
 import { buildGuideSeedSections } from '../../lib/guideAssembly'
+import { guideDataProblem, withDerivedContent } from '../../lib/guideStructured'
 import { buildCuesFromScenario, scenarioCueCandidates } from '../../lib/scenario'
 import { SCENARIO_KIND_LABELS } from '../../lib/labels'
 import { UPLOADABLE_STATUSES, uploadBlockedMessage } from '../../lib/uploadGate'
@@ -2486,17 +2487,26 @@ export class MockProvider implements DataProvider {
     const user = this.assertPmOps()
     const d = this.mustFindGuideDeliverable(deliverableId)
     this.assertWritable(d.project_id)
-    const built: GuideSection[] = sections.map((s, i) => ({
-      id: s.id ?? this.nextId('gds'),
-      deliverable_id: deliverableId,
-      kind: s.kind,
-      title: s.title,
-      content: s.content ?? null,
-      source_ref: s.source_ref ?? null,
-      // 사람이 직접 저장하면 반영 완료 — stale 해제(입력에 명시하지 않으면 false)
-      source_stale: s.source_stale ?? false,
-      sort_order: i + 1,
-    }))
+    // v2.13 §23.5 — 표 섹션은 종류에 맞는 data가 있어야 하고(422), content는 data에서 다시 만든다
+    for (const s of sections) {
+      const problem = guideDataProblem(s.kind, s.data ?? null)
+      if (problem) throw new ProviderError('validation', problem)
+    }
+    const built: GuideSection[] = sections.map((raw, i) => {
+      const s = withDerivedContent(raw)
+      return {
+        id: s.id ?? this.nextId('gds'),
+        deliverable_id: deliverableId,
+        kind: s.kind,
+        title: s.title,
+        content: s.content ?? null,
+        source_ref: s.source_ref ?? null,
+        // 사람이 직접 저장하면 반영 완료 — stale 해제(입력에 명시하지 않으면 false)
+        source_stale: s.source_stale ?? false,
+        sort_order: i + 1,
+        data: s.data ?? null,
+      }
+    })
     this.state.guide_sections = this.state.guide_sections
       .filter((x) => x.deliverable_id !== deliverableId)
       .concat(built)
@@ -2506,7 +2516,7 @@ export class MockProvider implements DataProvider {
     return built
   }
 
-  /** §8.2 guide-seed — 존별 운영·R&R에서 4섹션 초기 로드. 빈 문서에서만(R-O3) */
+  /** §8.2 guide-seed — v2.13: 현장 운영 12섹션 뼈대(존별 운영은 원본 연동). 빈 문서에서만(R-O3) */
   async seedGuideFromSources(deliverableId: UUID): Promise<GuideSection[]> {
     const user = this.assertPmOps()
     const d = this.mustFindGuideDeliverable(deliverableId)
@@ -2520,12 +2530,13 @@ export class MockProvider implements DataProvider {
     const opsItems = this.state.deliverables.filter(
       (x) => x.project_id === d.project_id && x.area === 'ops',
     )
-    const charters = await this.listRoleCharters(d.project_id)
     // v2.6 §25.4 — 포맷 운영 프리셋(DMS: Q&A 미운영·발표 40분 등)을 '진행 원칙' 섹션으로 함께 시드한다.
-    // 프리셋이 빈 포맷(컨퍼런스)은 기존 4섹션 그대로다 — 기존 시드 결과가 바뀌지 않는다.
+    // v2.13 §23.5 — 현장 운영 12섹션(행사 일시·장소·프로그램표·담당자 수로 뼈대를 채운다)
     const project = this.mustFindProject(d.project_id)
     const preset = FORMAT_PRESETS[presetCardOf(project.format, project.event_type)]
-    const seeds = buildGuideSeedSections(opsItems, charters, preset.opsNotes)
+    const sessions = await this.listProgramSessions(d.project_id)
+    const memberCount = this.state.members.filter((m) => m.project_id === d.project_id).length
+    const seeds = buildGuideSeedSections(opsItems, preset.opsNotes, { project, sessions, memberCount })
     const built: GuideSection[] = seeds.map((s, i) => ({
       id: this.nextId('gds'),
       deliverable_id: deliverableId,
@@ -2535,6 +2546,7 @@ export class MockProvider implements DataProvider {
       source_ref: s.source_ref,
       source_stale: false,
       sort_order: i + 1,
+      data: s.data,
     }))
     this.state.guide_sections.push(...built)
     this.log(d.project_id, `user:${user.id}`, 'guide.seed', 'deliverable', deliverableId, {})
