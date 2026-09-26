@@ -22,6 +22,7 @@ import NotFoundPage from '../pages/NotFoundPage'
 import OnboardingPage from '../pages/OnboardingPage'
 import PartnerBoardPage from '../pages/PartnerBoardPage'
 import PeoplePage from '../pages/PeoplePage'
+import PlanDeckPage from '../pages/PlanDeckPage'
 import PlanDocPage from '../pages/PlanDocPage'
 import LegacyGonePage from '../pages/LegacyGonePage'
 import ProjectListPage from '../pages/ProjectListPage'
@@ -66,6 +67,11 @@ export function renderRoute(path: string) {
         <Route element={<ProjectScope />}>
           {/* S0 온보딩 위저드 — 가드 대상 제외 (App.tsx와 동일 구성) */}
           <Route path="/onboarding" element={<OnboardingPage />} />
+
+          {/* S9-D 16:9 장표 — App.tsx와 동일하게 InternalLayout 밖·OnboardingGuard 안 */}
+          <Route element={<OnboardingGuard />}>
+            <Route path="/plan/deck" element={<PlanDeckPage />} />
+          </Route>
 
           <Route element={<InternalLayout />}>
             {/* v1.5: S-1·행사 설정은 OnboardingGuard 밖 (세팅 미완료 행사도 접근) */}

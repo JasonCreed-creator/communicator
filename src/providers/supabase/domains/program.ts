@@ -798,6 +798,16 @@ export function programDomain(ctx: SupabaseCtx): Pick<DataProvider, ProgramMetho
             }
           : null
 
+      // v2.13.2 §23.7 — 16:9 장표의 현장 운영 장 소스(같은 운영가이드 항목의 섹션 전부 · R-O6 연락망 제외)
+      const guide = guideDeliverable
+        ? {
+            deliverable_id: guideDeliverable.id,
+            title: guideDeliverable.title,
+            status: guideDeliverable.status,
+            sections: guideSections.filter((s) => s.kind !== 'contacts'),
+          }
+        : null
+
       // 3.17.1 T4 — 등록 수치가 시트에서 온 것이면 그 기준 시각을 지면에 밝힌다(§4-22 준용)
       const sheetRes = await ctx.sb
         .from('sheet_connections')
@@ -831,6 +841,7 @@ export function programDomain(ctx: SupabaseCtx): Pick<DataProvider, ProgramMetho
         scenario,
         guide_zone,
         emergency,
+        guide,
         section_progress: [
           { key: 'overview', done: overviewSlots.filter(Boolean).length, total: overviewSlots.length },
           { key: 'program', done: sessions.filter((s) => s.start_time).length, total: sessions.length },

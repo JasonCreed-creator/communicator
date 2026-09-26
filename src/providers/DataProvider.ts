@@ -90,6 +90,8 @@
 //   **필드 추가만, 메서드 수 131 불변**: GuideSection.data · GuideSectionInput.data(운영가이드 표 섹션 — content는 data에서 파생).
 //   v15.3: Phase 3.24 PR-B(같은 시안 승인 + "병합하고 다음스텝 진행") + 설계서 v2.13.1 §23.6 → **타입 값 1개 추가만, 131 불변**:
 //   ScenarioBlockKind += 'emergency'(비상 예비 멘트 — session_id·time 없음). 시드 틀은 lib/scenarioScript 한 곳.
+//   v15.4: Phase 3.24 PR-C(사용자 "모든 권한 허용하니 질문 그만" · "다음스텝 알아서 진행", 2026-09-26) + 설계서 v2.13.2 §23.7 →
+//   **필드 추가만, 131 불변**: PlanData.guide(첫 운영가이드의 섹션 — 연락망 제외) — 16:9 장표형 운영계획서의 현장 운영 장 소스.
 //
 // 프로젝트 스코프 규칙(설계서 v2.1 §4-21 R-L1): 프로젝트 단위 조회·생성 메서드는 projectId를
 // 인자로 받는다. currentUser()는 행위자 신원·권한 판정 전용이며 스코프 유도에 쓰지 않는다.

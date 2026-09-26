@@ -11,6 +11,7 @@ import type {
   Comment,
   Cue,
   Deliverable,
+  GuideSection,
   GuideSectionData,
   IsoDate,
   IsoDateTime,
@@ -683,6 +684,18 @@ export interface PlanEmergencySection {
   status: DeliverableStatus
 }
 
+/**
+ * v2.13.2 §23.7 (v15.4 필드만) — 16:9 장표형 운영계획서의 현장 운영 장(설치·인력·무전·역할 분담·D-day 진행표·
+ * 구간별 체크리스트·등록 운영·VIP·안전관리) 소스. guide_zone·emergency와 **같은 항목**(빌더 데이터를 가진 첫
+ * 운영가이드)의 섹션을 정렬 순서대로 담는다. R-O6: 연락망(contacts)은 담지 않는다.
+ */
+export interface PlanGuideDoc {
+  deliverable_id: UUID
+  title: string
+  status: DeliverableStatus
+  sections: GuideSection[]
+}
+
 export interface PlanData {
   project: Project
   /** sort_order 순 */
@@ -705,6 +718,8 @@ export interface PlanData {
   guide_zone: PlanGuideZone | null
   /** v2.5 §23 — 첫 운영가이드 항목의 emergency 섹션 (없으면 null) */
   emergency: PlanEmergencySection | null
+  /** v2.13.2 §23.7 — 첫 운영가이드 항목의 섹션 전부(연락망 제외). 없으면 null */
+  guide: PlanGuideDoc | null
 }
 
 // ── 운영보드 재구성 입력 (v2.5 §23·§8.2) ───────────────────────────────
