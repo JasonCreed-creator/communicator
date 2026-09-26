@@ -1,9 +1,9 @@
 /** @vitest-environment jsdom */
-// Phase 3.16.4 — 시나리오·운영가이드 빌더 시각 정합(목업 v2.5 화면 B·C = 시각 정본).
-// T1 화면 B: 헤더 컴포지션("시나리오 — {문서명}"+상태 배지+큐시트로 내보내기·인쇄·컨펌 발송),
-//   세션 카드(프로그램표 연동 배지·메타), 구분 배지 컬러 토큰, 역할 분리 각주 카드.
-// T2 화면 C: 헤더 컴포지션, 번호 섹션 헤더+연동 배지(칩·제목 중복 제거), 본문 미리보기 접힘, 각주 카드.
-// 컨펌 발송 동작 = 기존 상태 머신(내부검토+PM만, 주최형 숨김, 발송 시 doc-snapshot 자동 버전).
+// Phase 3.16.4 — 시나리오·운영가이드 빌더 시각 정합 → Phase 3.24 PR-B(디자인지시서 §7-2.14) 개정:
+// 빌더 안의 두 번째 머리("시나리오 — {문서명}" + 컨펌 발송)를 걷고 요약 줄만 둔다(큐시트 PR-4b와 같은 모양).
+// T1 시나리오: 요약 줄(멘트 n/m · 큐시트로 보내기 · 인쇄 · MC 배포용) · 세션 머리 · 구분 배지 컬러 · 역할 분리 각주.
+// T2 운영가이드: 요약 줄(섹션 n/m 채움 · 연락망 포함 · 인쇄 · 스태프 배포용) · 번호 섹션 머리 · 미리보기 접힘 · 각주.
+// 컨펌 발송 = 항목 상세 '다음 단계' 카드 한 줄(기존 상태 머신 — 내부검토+PM만, 주최형 숨김, 발송 시 doc-snapshot 자동 버전).
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -14,6 +14,7 @@ import { PROJECT_ID_REBUILD27 } from '../fixtures/sampleProject'
 import { PROJECT_ID_HOST } from '../fixtures/hostFixtures'
 import { getDataProvider } from '../providers'
 import type { MockProvider } from '../providers'
+import { renderRoute } from './testUtils'
 
 const provider = getDataProvider() as MockProvider
 const RB27 = PROJECT_ID_REBUILD27
@@ -38,54 +39,52 @@ function renderGuide(id: string, canEdit = true) {
   )
 }
 
-describe('T1 — 시나리오 빌더 헤더 컴포지션(화면 B)', () => {
-  it('"시나리오 — {문서명}"+상태 배지 헤더, 우측에 큐시트로 내보내기·인쇄·컨펌 발송 버튼', async () => {
+describe('T1 — 시나리오 빌더 요약 줄·원고 컴포지션(§7-2.14)', () => {
+  it('빌더 안에 두 번째 머리·컨펌 발송이 없고, 요약 줄에 멘트 n/m · 큐시트로 보내기 · 인쇄 · MC 배포용', async () => {
     renderScenario(SCENARIO_ID)
-    const heading = await screen.findByRole('heading', { name: /시나리오 — 진행 시나리오 \(가안\)/ })
-    // 상태 배지가 헤더 안에 있다(RB27 시나리오 = draft)
-    expect(within(heading).getByText('초안')).toBeTruthy()
-    expect(screen.getByRole('button', { name: '큐시트로 내보내기' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: '인쇄' })).toBeTruthy()
-    // draft 상태 — 발송 버튼은 disabled + 사유 InfoTip(동작은 기존 상태 머신 준수)
-    const sendBtn = screen.getByRole('button', { name: '컨펌 발송' }) as HTMLButtonElement
-    expect(sendBtn.disabled).toBe(true)
-    expect(screen.getAllByRole('button', { name: '도움말' }).length).toBeGreaterThan(0)
+    const bar = await screen.findByRole('region', { name: '원고 요약' })
+    expect(within(bar).getByTestId('scenario-progress').textContent).toMatch(/^멘트 \d+ \/ \d+ 작성$/)
+    expect(within(bar).getByRole('button', { name: '큐시트로 보내기' })).toBeTruthy()
+    expect(within(bar).getByRole('button', { name: '인쇄 · MC 배포용' })).toBeTruthy()
+    expect(screen.queryByRole('heading', { name: /시나리오 — / })).toBeNull()
+    expect(screen.queryByRole('button', { name: '컨펌 발송' })).toBeNull()
   })
 
-  it('구분 배지 컬러 — mc=steel 틴트·video=steel 솔리드·transition=accent 틴트(토큰 조합)', async () => {
+  it('구분 배지 컬러 — 멘트(MC·의전)=accent 틴트 · 영상·전환=steel 틴트 · 지시=중립(토큰 조합)', async () => {
     renderScenario(SCENARIO_ID)
-    await screen.findByRole('button', { name: /오프닝 키노트/ })
-    expect(screen.getAllByText('MC')[0].className).toContain('bg-steel-tint')
-    expect(screen.getAllByText('영상')[0].className).toContain('bg-steel ')
-    expect(screen.getAllByText('전환')[0].className).toContain('bg-accent-tint')
-    expect(screen.getAllByText('의전')[0].className).toContain('bg-track')
+    await screen.findByRole('heading', { name: /오프닝 키노트/ })
+    expect(screen.getAllByText('MC')[0].className).toContain('bg-accent-tint')
+    expect(screen.getAllByText('의전')[0].className).toContain('bg-accent-tint')
+    expect(screen.getAllByText('영상')[0].className).toContain('bg-steel-tint')
+    expect(screen.getAllByText('전환')[0].className).toContain('bg-steel-tint')
+    expect(screen.getAllByText('지시')[0].className).toContain('bg-track')
   })
 
   it('하단 역할 분리 각주 카드가 있다(목업 .note)', async () => {
     renderScenario(SCENARIO_ID)
-    await screen.findByRole('heading', { name: /시나리오 — 진행 시나리오/ })
+    await screen.findByRole('region', { name: '원고 요약' })
     expect(screen.getByText('역할 분리')).toBeTruthy()
     expect(screen.getByText(/큐 표기를 큐 뼈대로 변환해 큐시트 빌더에/)).toBeTruthy()
   })
 
-  it('세션 카드 헤더에 시각·제목·프로그램표 연동 배지·메타가 함께 표기된다', async () => {
+  it('세션 머리에 시각(크게)·제목(h3)·프로그램표 연동 배지가 함께 표기된다', async () => {
     renderScenario(SCENARIO_ID)
-    const groupBtn = await screen.findByRole('button', { name: /오프닝 키노트/ })
-    // 시각(start_time)이 헤더 버튼 안에 있다
-    expect(groupBtn.textContent).toContain('10:30')
-    const card = groupBtn.closest('section')!
-    expect(within(card).getByText('프로그램표 연동')).toBeTruthy()
+    const title = await screen.findByRole('heading', { level: 3, name: /오프닝 키노트/ })
+    const head = title.parentElement!
+    expect(within(head).getByText('10:30').className).toContain('text-[22px]')
+    expect(within(head).getByText('프로그램표 연동')).toBeTruthy()
   })
 })
 
 describe('T2 — 운영가이드 빌더 헤더·섹션 컴포지션(화면 C)', () => {
-  it('"운영가이드 — {문서명}"+상태 배지 헤더, 우측 인쇄·컨펌 발송·연락망 포함 토글', async () => {
+  it('요약 줄 — 섹션 n/m 채움 · 연락망 포함(인쇄) · 인쇄 · 스태프 배포용, 빌더 안 두 번째 머리·컨펌 발송 없음', async () => {
     renderGuide(GUIDE_ID)
-    const heading = await screen.findByRole('heading', { name: /운영가이드 — 현장 운영가이드 \(가안\)/ })
-    expect(within(heading).getByText('초안')).toBeTruthy()
-    expect(screen.getByRole('button', { name: '인쇄' })).toBeTruthy()
-    expect((screen.getByRole('button', { name: '컨펌 발송' }) as HTMLButtonElement).disabled).toBe(true)
-    expect(screen.getByRole('checkbox', { name: /연락망 포함/ })).toBeTruthy()
+    const bar = await screen.findByRole('region', { name: '가이드 요약' })
+    expect(within(bar).getByTestId('guide-summary').textContent).toMatch(/^섹션 \d+ \/ \d+ 채움$/)
+    expect(within(bar).getByRole('button', { name: '인쇄 · 스태프 배포용' })).toBeTruthy()
+    expect(within(bar).getByRole('checkbox', { name: /연락망 포함/ })).toBeTruthy()
+    expect(screen.queryByRole('heading', { name: /운영가이드 — / })).toBeNull()
+    expect(screen.queryByRole('button', { name: '컨펌 발송' })).toBeNull()
   })
 
   it('번호 섹션 헤더 + 연동 배지(steel), kind 칩·제목 중복은 제거된다', async () => {
@@ -119,8 +118,8 @@ describe('T2 — 운영가이드 빌더 헤더·섹션 컴포지션(화면 C)', 
   })
 })
 
-describe('컨펌 발송 — 헤더 버튼이 기존 상태 머신을 그대로 태운다', () => {
-  it('내부검토+PM이면 발송 가능 — 발송 시 pending_approval 전이 + 인쇄 스냅숏 자동 버전 등록', async () => {
+describe('컨펌 발송 — 항목 상세 다음 단계 카드 한 줄(큐시트와 같은 경로 · 기존 상태 머신)', () => {
+  it('내부검토+PM이면 원고 스냅숏이 새 버전이 되고 컨펌대기로 전이된다', async () => {
     const fresh = await provider.createDeliverable({
       project_id: RB27,
       area: 'ops',
@@ -131,16 +130,12 @@ describe('컨펌 발송 — 헤더 버튼이 기존 상태 머신을 그대로 �
       { session_id: null, time: '09:00', kind: 'mc', script: '발송 테스트 대본', note: null },
     ])
     await provider.transitionStatus(fresh.id, 'internal_review')
+    localStorage.setItem('communicator.currentProjectId', RB27)
 
-    renderScenario(fresh.id)
-    await screen.findByRole('button', { name: '컨펌 발송' })
-    // 활성화(비disabled)는 권한(currentUser)·행사(kind) 비동기 로드가 끝나야 확정된다
-    await waitFor(() => {
-      expect((screen.getByRole('button', { name: '컨펌 발송' }) as HTMLButtonElement).disabled).toBe(false)
-    })
-    await userEvent.click(screen.getByRole('button', { name: '컨펌 발송' }))
-    expect(await screen.findByText(/인쇄 스냅숏\(\.pdf\)이 자동 버전으로 등록됩니다/)).toBeTruthy()
-    await userEvent.click(screen.getByRole('button', { name: '발송' }))
+    renderRoute(`/items/${fresh.id}`)
+    const card = await screen.findByTestId('next-step-card')
+    expect(within(card).getByText(/보내면 지금 원고가 PDF로 저장돼 v1이 됩니다/)).toBeTruthy()
+    await userEvent.click(within(card).getByRole('button', { name: '컨펌 발송' }))
 
     await waitFor(async () => {
       const after = await provider.getDeliverable(fresh.id)
@@ -148,8 +143,8 @@ describe('컨펌 발송 — 헤더 버튼이 기존 상태 머신을 그대로 �
       expect(after.versions.length).toBe(1)
       expect(after.versions[0].file_name).toMatch(/\.pdf$/)
     })
-    // 헤더 배지도 갱신된다
-    expect(await screen.findByText('컨펌대기')).toBeTruthy()
+    // 머리 메타 한 줄에 최신 버전이 붙는다(큐시트와 같은 모양)
+    expect(await screen.findByText(/최신 v1 · /)).toBeTruthy()
   })
 
   it('주최형 행사에서는 컨펌 발송 버튼 자체가 없다(DoD 31 준수)', async () => {
@@ -159,12 +154,17 @@ describe('컨펌 발송 — 헤더 버튼이 기존 상태 머신을 그대로 �
       category: '시나리오',
       title: '주최형 시나리오',
     })
-    renderScenario(hostDoc.id)
-    await screen.findByRole('heading', { name: /시나리오 — 주최형 시나리오/ })
-    await waitFor(() => {
-      expect(screen.queryByRole('button', { name: '컨펌 발송' })).toBeNull()
-    })
+    await provider.saveScenarioBlocks(hostDoc.id, [
+      { session_id: null, time: '09:00', kind: 'mc', script: '주최형 대본', note: null },
+    ])
+    await provider.transitionStatus(hostDoc.id, 'internal_review')
+    localStorage.setItem('communicator.currentProjectId', PROJECT_ID_HOST)
+
+    renderRoute(`/items/${hostDoc.id}`)
+    const card = await screen.findByTestId('next-step-card')
+    await waitFor(() => expect(within(card).getByText('내부에서 검토하는 중')).toBeTruthy())
+    expect(screen.queryByRole('button', { name: '컨펌 발송' })).toBeNull()
     // 인쇄는 남는다
-    expect(screen.getByRole('button', { name: '인쇄' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '인쇄 · MC 배포용' })).toBeTruthy()
   })
 })

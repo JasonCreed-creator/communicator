@@ -154,7 +154,7 @@ describe('운영가이드 빌더 — RE:BUILD 27 픽스처', () => {
     expect(screen.queryByRole('button', { name: '기본 섹션 만들기' })).toBeNull()
 
     // 인쇄·연락망 포함 체크는 열람 기능이라 읽기 전용에서도 남아 있다
-    expect(screen.getByRole('button', { name: '인쇄' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '인쇄 · 스태프 배포용' })).toBeTruthy()
     expect(screen.getByRole('checkbox', { name: /연락망 포함/ })).toBeTruthy()
 
     // 차이 확인은 볼 수 있지만(저장된 내용·현재 원본 나란히) "반영" 버튼은 없다
@@ -168,7 +168,7 @@ describe('운영가이드 빌더 — RE:BUILD 27 픽스처', () => {
 
   it('(g) 인쇄 버튼은 렌더되는 버튼 요소다(jsdom은 실제 인쇄를 계산하지 않음 — DoD-9 선례 방식)', async () => {
     renderBuilder(true)
-    const printBtn = await screen.findByRole('button', { name: '인쇄' })
+    const printBtn = await screen.findByRole('button', { name: '인쇄 · 스태프 배포용' })
     expect(printBtn.tagName).toBe('BUTTON')
   })
 })

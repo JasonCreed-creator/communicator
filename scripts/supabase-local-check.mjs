@@ -720,6 +720,18 @@ select count(*) from save_guide_sections('${GD}', '[${staffing}]'::jsonb);`, { r
 select count(*) from save_guide_sections('${GD}', '[${staffing}]'::jsonb);
 ${assertSql(`(select count(*) from guide_sections where deliverable_id = '${GD}') = 1`)}`, { role: 'authenticated', sub: authId.ops })
 
+  // 5j. 시나리오 비상 예비 멘트 (Phase 3.24 PR-B · 설계서 v2.13 §23.6) — kind 'emergency' 저장 · 모르는 kind 거부
+  const SC = '00000000-0000-4000-8000-00000000a325'
+  const scSetup = `reset role;
+insert into deliverables (id, project_id, area, category, title) values ('${SC}', '${PRJ}', 'ops', '시나리오', '원고형 시나리오 검사');
+set local role authenticated;`
+  scenario('시나리오 원고형: 비상 예비 멘트(emergency)를 세션·시각 없이 저장 · 기존 kind와 섞여도 순서 그대로', `${scSetup}
+select count(*) from save_scenario_blocks('${SC}', '[{"kind":"mc","time":"14:00","script":"환영합니다.","note":"무대 조명 업"},{"kind":"emergency","script":"잠시만 기다려 주십시오.","note":"음향 교체"}]'::jsonb);
+${assertSql(`(select kind from scenario_blocks where deliverable_id = '${SC}' order by sort_order offset 1 limit 1) = 'emergency'`)}
+${assertSql(`(select session_id is null and "time" is null and note = '음향 교체' from scenario_blocks where deliverable_id = '${SC}' and kind = 'emergency')`)}`, { role: 'authenticated', sub: authId.ops })
+  scenario('시나리오 원고형: 모르는 kind → 거부', `${scSetup}
+select count(*) from save_scenario_blocks('${SC}', '[{"kind":"banquet","script":"x"}]'::jsonb);`, { role: 'authenticated', sub: authId.pm, expect: 'error', match: 'scenario_blocks_kind_check' })
+
   // 6. 시크릿 커밋 가드 (§8 DoD 9) — 실키 값 패턴이 레포 파일에 없는가
   const grep = spawnSync('grep', ['-rnE', 'sb_secret_[A-Za-z0-9_-]{10,}|sbp_[A-Za-z0-9]{20,}', 'src', 'supabase', 'scripts', '--include=*.ts', '--include=*.tsx', '--include=*.sql', '--include=*.mjs', '--include=*.md'], { encoding: 'utf8' })
   record('시크릿 커밋 가드: sb_secret_/sbp_ 실키 패턴 0건 (DoD 9)', grep.status === 1, grep.stdout)

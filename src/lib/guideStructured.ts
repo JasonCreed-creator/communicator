@@ -574,6 +574,37 @@ export function isGuideSectionEmpty(section: {
   return !(section.content ?? '').trim()
 }
 
+export interface GuideSummary {
+  /** 비어 있지 않은 섹션 / 전체 */
+  filled: number
+  total: number
+  /** 현장 인력 표의 인원 합(표가 없으면 null) */
+  staffTotal: number | null
+  /** 무전 채널 수(표가 없으면 null) */
+  radioChannels: number | null
+  /** 원본이 바뀐 섹션 수(R-O4) */
+  staleCount: number
+}
+
+/** 문서 요약 숫자 — 빌더 위 요약 줄과 운영 보드 카드·표가 같은 값을 읽는다(v2.13 §23.6) */
+export function guideSummary(
+  sections: ReadonlyArray<{ kind: GuideSectionKind; content: string | null; data?: GuideSectionData | null; source_stale: boolean }>,
+): GuideSummary {
+  let staffTotal: number | null = null
+  let radioChannels: number | null = null
+  for (const s of sections) {
+    if (s.data?.type === 'staffing') staffTotal = (staffTotal ?? 0) + staffingTotal(s.data)
+    if (s.data?.type === 'radio') radioChannels = (radioChannels ?? 0) + s.data.channels.length
+  }
+  return {
+    filled: sections.filter((s) => !isGuideSectionEmpty(s)).length,
+    total: sections.length,
+    staffTotal,
+    radioChannels,
+    staleCount: sections.filter((s) => s.source_stale).length,
+  }
+}
+
 // ── 옛 문서에 뼈대 끼워 넣기 ───────────────────────────────────────────
 
 /** 정본 12종 가운데 이 문서에 아직 없는 종류(정본 순서) */

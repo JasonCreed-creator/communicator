@@ -14,7 +14,7 @@ import NextStepCard from '../components/item/NextStepCard'
 import { ApprovalTimeline, VersionListCard, VersionPreviewCard } from '../components/item/VersionPanels'
 import DdayBadge from '../components/internal/DdayBadge'
 import ErrorAlert from '../components/internal/ErrorAlert'
-import StatusBadge, { LevelBadge } from '../components/internal/StatusBadge'
+import StatusBadge from '../components/internal/StatusBadge'
 import { useProject } from '../context/ProjectContext'
 import { useAsync } from '../hooks/useAsync'
 import { categoryGroupLabel } from '../lib/boardPresets'
@@ -28,8 +28,7 @@ import {
   formatDateWeekday,
 } from '../lib/labels'
 import { getDataProvider } from '../providers'
-import { providerKind } from '../providers/kind'
-import { uploadLock, versionStorage } from '../lib/uploadGate'
+import { uploadLock } from '../lib/uploadGate'
 import type { Version } from '../types/entities'
 import type { DeliverableArea, DeliverableStatus, MemberRole } from '../types/enums'
 import NotFoundPage from './NotFoundPage'
@@ -193,10 +192,9 @@ function ItemDetail({ itemId }: { itemId: string }) {
       canWriteArea={canWriteArea}
       isHost={isHost}
       autoSnapshotDoc={isStructuredPanel}
-      sendViaHeader={isBuilderDoc}
       showRail={!isStructuredPanel}
       clientLink={clientLink}
-      inlineSend={isCuesheet}
+      inlineSend={isStructuredPanel}
       onUpload={focusVersionUpload}
       onChanged={detail.reload}
     />
@@ -222,9 +220,8 @@ function ItemDetail({ itemId }: { itemId: string }) {
         title={d.title}
         area={d.area}
         category={d.category}
-        showMeta={!isStructuredPanel || isCuesheet}
         extraMeta={
-          isCuesheet && latestVersion
+          isStructuredPanel && latestVersion
             ? `최신 v${latestVersion.version_no} · ${formatDate(latestVersion.created_at.slice(0, 10))}`
             : undefined
         }
@@ -235,7 +232,7 @@ function ItemDetail({ itemId }: { itemId: string }) {
         done={d.status === 'final' || d.status === 'approved'}
         actions={
           <>
-            {(!isStructuredPanel || isCuesheet) && latestVersion && <LatestDownloadLink version={latestVersion} />}
+            {latestVersion && <LatestDownloadLink version={latestVersion} />}
             {menu}
           </>
         }
@@ -285,25 +282,20 @@ function ItemDetail({ itemId }: { itemId: string }) {
           />
         </div>
       ) : isStructuredPanel ? (
-        // 3.9.1 P1: 정형 문서 = 1단 전폭 — 표·빌더가 깨지지 않도록 메타를 에디터 위 가로 스트립으로
-        <div className="min-w-0 space-y-6">
-          <CuesheetMetaStrip
-            status={d.status}
-            assigneeName={memberName(d.assignee_id)}
-            dueDate={d.due_date}
-            versions={d.versions}
-            isFinal={d.status === 'final'}
-            uploaderNameFor={(userId) => memberName(userId)}
-          />
-          <BriefCard deliverable={d} />
+        // §7-2.14 — 시나리오·운영가이드도 큐시트와 같은 모양: 메타는 머리 한 줄(스트립 없음) · 다음 단계 한 줄(PM 발송 포함) ·
+        // 문서(요약 줄 + 본문) · 코멘트 | 컨펌 기록. 빌더 안에 두 번째 제목·상태·발송 버튼을 두지 않는다
+        <div className="min-w-0 space-y-5">
           {nextStep}
+          <BriefCard deliverable={d} />
           {isScenarioDoc ? (
-            <ScenarioBuilder deliverableId={d.id} canEdit={canEditCue} onStatusChanged={detail.reload} />
+            <ScenarioBuilder deliverableId={d.id} canEdit={canEditCue} />
           ) : (
-            <GuideBuilder deliverableId={d.id} canEdit={canEditCue} onStatusChanged={detail.reload} />
+            <GuideBuilder deliverableId={d.id} canEdit={canEditCue} />
           )}
-          {comments}
-          {timeline}
+          <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)]">
+            {comments}
+            {timeline}
+          </div>
         </div>
       ) : (
         // §7-2.7: 일반 항목 = 본문(다음 단계 · 큰 미리보기 · 업로드 · 코멘트) + 오른쪽 320(버전 이력 · 컨펌 기록 · 제작 가이드)
@@ -363,7 +355,6 @@ function ItemHeader({
   title,
   area,
   category,
-  showMeta,
   statusBadge,
   assigneeName,
   assigneeRole,
@@ -375,15 +366,13 @@ function ItemHeader({
   title: string
   area: DeliverableArea
   category: string
-  /** 정형 문서(큐시트·빌더)는 상단 스트립이 메타를 이미 표시한다 — 헤더는 복귀 경로만 */
-  showMeta: boolean
   statusBadge: ReactNode
   assigneeName: string
   assigneeRole: MemberRole | null
   dueDate: string | null
   /** 승인·확정 — 기한 칸에 '완료' */
   done: boolean
-  /** 메타 줄 끝에 덧붙일 것 — 큐시트의 '최신 vN · 날짜' */
+  /** 메타 줄 끝에 덧붙일 것 — 정형 문서(큐시트·시나리오·운영가이드)의 '최신 vN · 날짜' */
   extraMeta?: string
   actions: ReactNode
 }) {
@@ -405,9 +394,9 @@ function ItemHeader({
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2.5">
             <h1 className="t-page-title">{title}</h1>
-            {showMeta && statusBadge}
+            {statusBadge}
           </div>
-          {showMeta && (
+          {(
             <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-ink-sub">
               <span>{categoryGroupLabel(category)}</span>
               <span aria-hidden>·</span>
@@ -504,147 +493,5 @@ function ChangeRequestAlert({
         </p>
       </div>
     </div>
-  )
-}
-
-// ── 큐시트 메타 스트립 (3.9.1 P1) ────────────────────────────────────
-// 큐시트 항목 전용 — 우측 메타 사이드를 대신해 상태·담당·마감·버전을 에디터 위 한 줄로 요약한다.
-// 버전 이력은 최신 1건만 인라인, '전체 보기' 토글 시 기존 세로 타임라인을 그대로 펼친다.
-function CuesheetMetaStrip({
-  status,
-  assigneeName,
-  dueDate,
-  versions,
-  isFinal,
-  uploaderNameFor,
-}: {
-  status: DeliverableStatus
-  assigneeName: string
-  dueDate: string | null
-  versions: Version[]
-  isFinal: boolean
-  uploaderNameFor: (userId: string | null) => string
-}) {
-  const [expanded, setExpanded] = useState(false)
-  const latest = versions[0]
-
-  return (
-    <div className="ui-card p-4">
-      <div className="flex flex-wrap items-start gap-x-8 gap-y-3">
-        <div>
-          <p className="t-caption">상태</p>
-          <div className="mt-1.5">
-            <StatusBadge status={status} />
-          </div>
-        </div>
-        <div>
-          <p className="t-caption">담당</p>
-          <p className="mt-1.5 text-sm text-ink">{assigneeName}</p>
-        </div>
-        <div>
-          <p className="t-caption">마감</p>
-          <div className="mt-1.5 flex items-center gap-2 text-sm text-ink">
-            {dueDate ? (
-              <>
-                {formatDate(dueDate)}
-                <DdayBadge isoDate={dueDate} />
-              </>
-            ) : (
-              '미정'
-            )}
-          </div>
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="t-caption">버전 이력</p>
-          {latest ? (
-            <div className="mt-1.5 flex min-w-0 flex-wrap items-center gap-2 text-sm">
-              <span className="font-medium text-ink">v{latest.version_no}</span>
-              <span className="min-w-0 truncate text-ink-sub" title={latest.file_name}>
-                {latest.file_name}
-              </span>
-              {versions.length > 1 && (
-                <button type="button" onClick={() => setExpanded((v) => !v)} className="btn btn-ghost btn-sm">
-                  {expanded ? '접기' : `전체 보기 (${versions.length})`}
-                </button>
-              )}
-            </div>
-          ) : (
-            <p className="mt-1.5 text-sm text-ink-cap">업로드된 버전이 없습니다.</p>
-          )}
-        </div>
-      </div>
-      {expanded && versions.length > 0 && (
-        <ul className="mt-5 space-y-5 border-l border-border pl-5">
-          {versions.map((v, idx) => (
-            <VersionItem
-              key={v.id}
-              version={v}
-              isLatest={idx === 0}
-              isFinal={isFinal}
-              uploaderName={uploaderNameFor(v.uploaded_by)}
-            />
-          ))}
-        </ul>
-      )}
-    </div>
-  )
-}
-
-// ── 버전 항목 (미리보기 포함, 우측 메타 사이드의 버전 타임라인 1행) ────
-function VersionItem({
-  version,
-  isLatest,
-  isFinal,
-  uploaderName,
-}: {
-  version: Version
-  isLatest: boolean
-  /** 상위 항목(deliverable) 상태가 final인지 — 타임라인 도트·최신 뱃지 색 분기(§6 S3) */
-  isFinal: boolean
-  uploaderName: string
-}) {
-  const preview = useAsync(() => provider.getFileUrl(version.id), [version.id])
-  const [previewFailed, setPreviewFailed] = useState(false)
-  const dotClass = isLatest ? (isFinal ? 'bg-positive' : 'bg-accent') : 'bg-border-strong'
-  // Phase 4.3.1 ④ — 이 버전의 파일이 실제로 어디 있는가(실서버만 — mock은 전부 데모라 표시하지 않는다)
-  const storage = versionStorage(version.drive_file_id, providerKind())
-
-  return (
-    <li className="relative">
-      <span aria-hidden className={`absolute -left-6 top-1.5 size-2 rounded-full ${dotClass}`} />
-      <div className="flex flex-wrap items-start gap-3">
-        <div className="h-14 w-20 shrink-0 overflow-hidden rounded-md bg-track">
-          {preview.data && !previewFailed ? (
-            <img
-              src={preview.data}
-              alt={version.file_name}
-              className="h-full w-full object-cover"
-              onError={() => setPreviewFailed(true)}
-            />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center px-1 text-center text-[10px] text-ink-cap">
-              {version.file_name}
-            </div>
-          )}
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="text-sm font-medium text-ink">v{version.version_no}</span>
-            {/* Phase 3.23 PR-4 — 흰 글자 주황 면(대비 3.07) 대신 의미 배지(§7-2.1) */}
-            {isLatest && <LevelBadge level={isFinal ? 'positive' : 'neutral'} label="최신" />}
-            {storage && (
-              <span title={storage.title} data-testid="version-storage">
-                <LevelBadge level={storage.level} label={storage.label} />
-              </span>
-            )}
-          </div>
-          <p className="mt-0.5 truncate text-sm text-ink-sub">{version.file_name}</p>
-          {version.note && <p className="mt-0.5 text-xs text-ink-cap">{version.note}</p>}
-          <p className="mt-1 text-xs text-ink-cap">
-            {uploaderName} · {formatDateTime(version.created_at)}
-          </p>
-        </div>
-      </div>
-    </li>
   )
 }

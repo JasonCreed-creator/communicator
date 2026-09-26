@@ -2,7 +2,8 @@ import type { FormEvent } from 'react'
 import ErrorAlert from '../internal/ErrorAlert'
 import type { CueFormValues } from './cueFormValues'
 
-/** 큐 행 추가/편집 공용 필드 폼 — CuesheetEditor의 행 추가 폼과 CueRow의 인라인 편집이 공유한다 */
+/** 큐 행 추가/편집 공용 필드 폼 — CuesheetEditor의 행 추가 폼과 CueRow의 인라인 편집이 공유한다.
+ *  Phase 3.24 PR-B: 칸 순서·이름 = 표와 같게(시각 · 큐번호 · 구분 · MC·진행 · 조명 · 영상 · 음향) */
 export default function CueFieldsForm({
   values,
   onChange,
@@ -23,20 +24,20 @@ export default function CueFieldsForm({
   return (
     <form onSubmit={onSubmit} className="flex flex-wrap items-end gap-2">
       <label className="flex flex-col gap-1 t-caption">
+        시각
+        <input
+          value={values.time_at}
+          onChange={(e) => onChange({ time_at: e.target.value })}
+          placeholder="HH:MM"
+          className="ui-input w-16 text-xs"
+        />
+      </label>
+      <label className="flex flex-col gap-1 t-caption">
         큐번호
         <input
           value={values.cue_no}
           onChange={(e) => onChange({ cue_no: e.target.value })}
           placeholder="C05"
-          className="ui-input w-16 text-xs"
-        />
-      </label>
-      <label className="flex flex-col gap-1 t-caption">
-        시간
-        <input
-          value={values.time_at}
-          onChange={(e) => onChange({ time_at: e.target.value })}
-          placeholder="HH:MM"
           className="ui-input w-16 text-xs"
         />
       </label>
@@ -50,21 +51,13 @@ export default function CueFieldsForm({
         />
       </label>
       <label className="flex min-w-[220px] flex-1 flex-col gap-1 t-caption">
-        내용(대본)
+        MC·진행(대본)
         <textarea
           value={values.body}
           onChange={(e) => onChange({ body: e.target.value })}
           rows={2}
           placeholder="큐 내용·대본 전문(마크다운 — ### 헤더, - 불릿 지원)"
           className="ui-input text-xs"
-        />
-      </label>
-      <label className="flex flex-col gap-1 t-caption">
-        음향
-        <input
-          value={values.console_audio}
-          onChange={(e) => onChange({ console_audio: e.target.value })}
-          className="ui-input w-24 text-xs"
         />
       </label>
       <label className="flex flex-col gap-1 t-caption">
@@ -76,10 +69,18 @@ export default function CueFieldsForm({
         />
       </label>
       <label className="flex flex-col gap-1 t-caption">
-        스크린
+        영상
         <input
           value={values.console_screen}
           onChange={(e) => onChange({ console_screen: e.target.value })}
+          className="ui-input w-24 text-xs"
+        />
+      </label>
+      <label className="flex flex-col gap-1 t-caption">
+        음향
+        <input
+          value={values.console_audio}
+          onChange={(e) => onChange({ console_audio: e.target.value })}
           className="ui-input w-24 text-xs"
         />
       </label>

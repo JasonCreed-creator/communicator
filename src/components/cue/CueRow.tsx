@@ -159,8 +159,9 @@ export default function CueRow({
           </svg>
         </td>
       )}
-      <td className={canEdit ? 'static border-r-0 font-semibold' : 'font-semibold'}>{cue.cue_no ?? '—'}</td>
-      <td className="ui-num text-left text-ink-sub">{cue.time_at ?? '—'}</td>
+      {/* Phase 3.24 PR-B — 현장 큐시트 표기 순서: 시각 · 큐 · 구분 · MC·진행 · 조명 · 영상 · 음향(데이터 칸은 그대로) */}
+      <td className={`ui-num text-left text-ink-sub ${canEdit ? 'static border-r-0' : ''}`}>{cue.time_at ?? '—'}</td>
+      <td className="font-semibold">{cue.cue_no ?? '—'}</td>
       <td className="text-ink-sub">{cue.segment ?? '—'}</td>
       <td>
         <span className="flex min-w-0 items-center gap-2.5">
@@ -178,13 +179,13 @@ export default function CueRow({
         </span>
       </td>
       <td>
-        <ConsoleText value={cue.console_audio} />
-      </td>
-      <td>
         <ConsoleText value={cue.console_light} />
       </td>
       <td>
         <ConsoleText value={cue.console_screen} />
+      </td>
+      <td>
+        <ConsoleText value={cue.console_audio} />
       </td>
       {canEdit && (
         <td className="px-0 text-center">

@@ -58,7 +58,7 @@ describe('DoD 35 — 유형 우선 보드 (RE:BUILD 27)', () => {
   })
 
   // ── P10 (챗 검수 후속, 2026-08-28) — 카드 = 선택 컨트롤 ─────────────────────
-  it('(P10-a) 카드 선택 시 그 유형만 렌더되고, 기존 "빌더 열기" 인라인 펼침이 그 범위 안에서 동작한다', async () => {
+  it('(P10-a) 카드 선택 시 그 유형만 렌더되고, 행 끝 "열기" 인라인 펼침이 그 범위 안에서 동작한다', async () => {
     renderRoute('/board/ops')
     await screen.findByText('개막 세션 큐시트')
 
@@ -77,9 +77,8 @@ describe('DoD 35 — 유형 우선 보드 (RE:BUILD 27)', () => {
     expect(screen.queryByText('진행 시나리오 (가안)')).toBeNull()
     expect(screen.queryByText('현장 운영가이드 (가안)')).toBeNull()
 
-    // 인라인 빌더 — 기존 "빌더 열기" 로직 재사용
-    const row = screen.getByText('개막 세션 큐시트').closest('li')!
-    await userEvent.click(within(row).getByRole('button', { name: '빌더 열기' }))
+    // 인라인 빌더 — v2.13 §23.6부터 유형별 표의 행 끝 '열기'가 그 행 아래에서 펼친다
+    await userEvent.click(screen.getByRole('button', { name: '개막 세션 큐시트 열기' }))
     expect(await screen.findByTestId('builder-panel-cuesheet')).toBeTruthy()
 
     // 재클릭 = 해제 → 전체 그룹 목록 복귀
@@ -90,8 +89,8 @@ describe('DoD 35 — 유형 우선 보드 (RE:BUILD 27)', () => {
 
   it('(P10-b) 다른 유형 카드를 선택하면 열려 있던 타 유형 빌더 패널이 닫힌다(표시 정합)', async () => {
     renderRoute('/board/ops')
-    const row = (await screen.findByText('개막 세션 큐시트')).closest('li')!
-    await userEvent.click(within(row).getByRole('button', { name: '빌더 열기' }))
+    await screen.findByText('개막 세션 큐시트')
+    await userEvent.click(screen.getByRole('button', { name: '개막 세션 큐시트 열기' }))
     expect(await screen.findByTestId('builder-panel-cuesheet')).toBeTruthy()
 
     const scenarioCard = screen.getByTestId('ops-doc-card-scenario')
@@ -167,13 +166,16 @@ describe('DoD 35 — 유형 우선 보드 (RE:BUILD 27)', () => {
     expect(within(unified).getByLabelText('제목 검색')).toBeTruthy()
     expect(within(unified).getByRole('button', { name: '＋ 항목 추가' })).toBeTruthy()
 
-    // 빌더는 그 행(li) 안에서 펼쳐진다 — 페이지 하단 분리 패널이 아니다
-    const row = within(unified).getByText('개막 세션 큐시트').closest('li')!
-    await userEvent.click(within(row).getByRole('button', { name: '빌더 열기' }))
+    // 빌더는 그 행 바로 다음 줄(같은 표 안)에서 펼쳐진다 — 페이지 하단 분리 패널이 아니다
+    const row = within(unified).getByText('개막 세션 큐시트').closest('tr')!
+    const openBtn = within(row).getByRole('button', { name: '개막 세션 큐시트 열기' })
+    await userEvent.click(openBtn)
     const panel = await screen.findByTestId('builder-panel-cuesheet')
-    expect(row.contains(panel)).toBe(true)
+    const builderRow = row.nextElementSibling as HTMLElement
+    expect(builderRow.contains(panel)).toBe(true)
+    expect(within(row).getByRole('button', { name: '개막 세션 큐시트 닫기' }).getAttribute('aria-expanded')).toBe('true')
     // 펼침 헤더 우측에 상세 링크
-    expect(within(row).getByRole('link', { name: '상세 화면으로 이동' })).toBeTruthy()
+    expect(within(builderRow).getByRole('link', { name: '상세 화면으로 이동' })).toBeTruthy()
   })
 
   it('(P11-c) 상태 범례 행은 운영보드에서 사라지고 헤더 도움말이 그 내용을 담는다', async () => {

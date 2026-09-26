@@ -125,16 +125,18 @@ describe('v2.5 §10.2 — 레거시 파일 문서 보호 (RE:BUILD 26 · prj-stc
   it('버전 있음·빌더 행 0인 시나리오 항목(dlv-005)은 빌더를 열지 않고 "파일 문서" 안내만 노출한다', async () => {
     renderRoute('/board/ops')
 
-    const row = (await screen.findByText('운영 시나리오')).closest('li')!
+    const row = (await screen.findByText('운영 시나리오')).closest('tr')!
     expect(within(row).getByText('파일 문서 — 상세에서 열람')).toBeTruthy()
-    expect(within(row).queryByRole('button', { name: /^빌더 (열기|닫기)$/ })).toBeNull()
+    // 빌더를 펼치는 버튼 대신 상세로 가는 링크('열기')만 있다
+    expect(within(row).queryByRole('button', { name: '운영 시나리오 열기' })).toBeNull()
+    expect(within(row).getByRole('link', { name: '운영 시나리오 열기' }).getAttribute('href')).toContain('/items/')
   })
 
   it('버전 있는 큐시트(dlv-004)는 레거시 취급하지 않고 빌더 열기 버튼을 그대로 제공한다(대조군)', async () => {
     renderRoute('/board/ops')
 
-    const row = (await screen.findByText('개막식 큐시트')).closest('li')!
-    expect(within(row).getByRole('button', { name: '빌더 열기' })).toBeTruthy()
+    const row = (await screen.findByText('개막식 큐시트')).closest('tr')!
+    expect(within(row).getByRole('button', { name: '개막식 큐시트 열기' })).toBeTruthy()
     expect(within(row).queryByText('파일 문서 — 상세에서 열람')).toBeNull()
   })
 })

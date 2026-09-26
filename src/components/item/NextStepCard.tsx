@@ -110,6 +110,13 @@ export function ProgressRail({ status, labels }: { status: DeliverableStatus; la
   )
 }
 
+/** 발송 때 PDF로 저장되는 것 — 큐시트는 표, 시나리오는 원고, 운영가이드는 가이드(모두 받침 없음 → '가') */
+function snapshotNoun(category: string): string {
+  if (category === '시나리오') return '원고'
+  if (category === '운영가이드') return '가이드'
+  return '표'
+}
+
 // ── 카드 ───────────────────────────────────────────────────────────────
 export default function NextStepCard({
   deliverable: d,
@@ -117,7 +124,6 @@ export default function NextStepCard({
   canWriteArea,
   isHost,
   autoSnapshotDoc,
-  sendViaHeader = false,
   showRail,
   clientLink,
   inlineSend = false,
@@ -131,13 +137,11 @@ export default function NextStepCard({
   isHost: boolean
   /** v2.5 §23 — 발송 시 provider가 인쇄 스냅숏을 자동 버전 등록하는 정형 문서(큐시트·빌더 문서) */
   autoSnapshotDoc: boolean
-  /** 3.16.4 — 시나리오·운영가이드 빌더 문서는 컨펌 발송을 문서 헤더가 맡는다 */
-  sendViaHeader?: boolean
   /** 정형 문서는 레일을 그리지 않는다(상단 스트립 단일 표시 — 3.16.3/3.16.4) */
   showRail: boolean
   /** 컨펌대기일 때 발주처 링크 재전달(대행형 PM) — 없으면 버튼 없음 */
   clientLink: ClientLinkTarget | null
-  /** 큐시트(§7-2.8) — PM 컨펌 발송을 카드 한 줄 안에(답 기한 · 반려… · 컨펌 발송). 버전은 표 스냅숏이 자동으로 된다 */
+  /** 정형 문서(§7-2.8 큐시트 → §7-2.14 시나리오·운영가이드) — PM 컨펌 발송을 카드 한 줄 안에(답 기한 · 반려… · 컨펌 발송). 버전은 문서 스냅숏이 자동으로 된다 */
   inlineSend?: boolean
   /** 업로드 카드로 시선 옮기기(전이 없음) */
   onUpload: () => void
@@ -217,15 +221,12 @@ export default function NextStepCard({
       } else if (isHost || hasPartner) {
         title = '내부에서 검토하는 중'
         description = '주최형 행사입니다 — 발주처 컨펌 없이 내부에서 확정합니다.'
-      } else if (sendViaHeader) {
-        title = '검토하고 컨펌을 보낼 차례'
-        description = '아래 문서 머리의 [컨펌 발송]으로 보냅니다.'
       } else if (!d.requires_approval) {
         title = '내부 확인으로 마무리'
         description = '컨펌 루프를 쓰지 않는 공통 문서입니다 — 내부 확인으로 마무리합니다.'
       } else if (inlineSend) {
         title = '검토하고 발주처로 보낼 차례'
-        description = `보내면 지금 표가 PDF로 저장돼 v${(latest?.version_no ?? 0) + 1}${subjectParticle((latest?.version_no ?? 0) + 1)} 됩니다.`
+        description = `보내면 지금 ${snapshotNoun(d.category)}가 PDF로 저장돼 v${(latest?.version_no ?? 0) + 1}${subjectParticle((latest?.version_no ?? 0) + 1)} 됩니다.`
         actions = <InlineSendForm deliverableId={d.id} onChanged={onChanged} />
       } else {
         title = '검토하고 발주처로 보낼 차례'
@@ -310,7 +311,6 @@ export default function NextStepCard({
             isHost={isHost}
             hasPartner={hasPartner}
             autoSnapshotDoc={autoSnapshotDoc}
-            sendViaHeader={sendViaHeader}
             onChanged={onChanged}
           />
         )}
@@ -398,14 +398,12 @@ function PmReviewForms({
   isHost,
   hasPartner,
   autoSnapshotDoc,
-  sendViaHeader,
   onChanged,
 }: {
   deliverable: DeliverableDetail
   isHost: boolean
   hasPartner: boolean
   autoSnapshotDoc: boolean
-  sendViaHeader: boolean
   onChanged: () => void
 }) {
   const isCuesheet = d.category === '큐시트'
@@ -454,8 +452,6 @@ function PmReviewForms({
           주최형 행사는 이 화면에서 발주처 컨펌을 발송하지 않습니다
           {hasPartner ? ' — 파트너 제출 항목은 파트너 보드에서 검토하세요.' : '.'}
         </p>
-      ) : sendViaHeader ? (
-        <p className="text-xs text-ink-cap">컨펌 발송은 아래 문서 헤더의 [컨펌 발송] 버튼으로 진행합니다.</p>
       ) : d.requires_approval ? (
         <form onSubmit={handleRequestApproval} className="space-y-2">
           <p className="t-caption">컨펌 발송</p>

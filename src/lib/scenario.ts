@@ -12,6 +12,11 @@ const KIND_TO_SEGMENT: Record<'video' | 'transition', string> = {
   transition: '전환',
 }
 
+/** 대본 속 큐 표기 토큰(등장 순) — 원고형 화면의 '큐' 칩과 내보내기 후보 판정이 같은 규칙을 쓴다 */
+export function cueTokensIn(script: string | null | undefined): string[] {
+  return [...(script ?? '').matchAll(CUE_TOKEN)].map((m) => m[0])
+}
+
 export interface ScenarioCueCandidate {
   block: ScenarioBlock
   /** script에서 추출된 큐 표기 토큰 원문(등장 순) */
@@ -26,8 +31,7 @@ export function scenarioCueCandidates(blocks: readonly ScenarioBlock[]): Scenari
   const out: ScenarioCueCandidate[] = []
   for (const block of blocks) {
     if (block.kind !== 'video' && block.kind !== 'transition') continue
-    const script = block.script ?? ''
-    const tokens = [...script.matchAll(CUE_TOKEN)].map((m) => m[0])
+    const tokens = cueTokensIn(block.script)
     if (tokens.length === 0) continue
     out.push({ block, tokens })
   }

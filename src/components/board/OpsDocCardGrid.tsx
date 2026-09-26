@@ -1,5 +1,6 @@
 // P11(3.16.2) 운영보드 유형 카드 4종 — 시각 정본 = v2.5 목업 화면 A + 시안 `디자인 · 운영 보드`.
 // 카드 구조: 아이콘+이름 → 한 줄 설명(ink-cap·12px, min-h로 4카드 정렬) →
+//   **문서 요약**(v2.13 §23.6 — 굵은 줄 '큐 24개'·'멘트 12/16 작성'·'섹션 9/12 채움' + 그 아래 한 줄) →
 //   **진행 막대**(3.17b 정렬) → 하단 요약(건수 · 대표 상태 · 확정 n/m).
 // 진행 막대는 "3건"이 "3건 중 확정 2"로 읽히게 하려고 넣는다 — 건수만으로는 진척이 안 보였다.
 // 클릭 = 그 유형 선택(재클릭 해제). 선택 스타일은 P10 그대로(주황 테두리 + 틴트 링).
@@ -22,6 +23,9 @@ export interface OpsDocCardSummary {
   latestStatus: DeliverableStatus | null
   /** 확정(final) 건수 — 진행 막대와 "확정 n/m" 캡션의 분자 */
   doneCount: number
+  /** v2.13 §23.6 문서 요약 — 유형마다 그 문서가 담은 숫자(opsDocMetrics.cardSummary) */
+  headline: string
+  detail: string
 }
 
 export default function OpsDocCardGrid({
@@ -38,7 +42,7 @@ export default function OpsDocCardGrid({
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
       {OPS_DOC_CARD_ORDER.map((key) => {
-        const summary = byKey.get(key) ?? { key, count: 0, latestStatus: null, doneCount: 0 }
+        const summary = byKey.get(key) ?? { key, count: 0, latestStatus: null, doneCount: 0, headline: '문서 없음', detail: '' }
         const active = selected === key
         return (
           // InfoTip은 자체 <button>이라 카드 전체를 <button>으로 감싸면 버튼 중첩(무효 HTML)이
@@ -68,6 +72,12 @@ export default function OpsDocCardGrid({
               </span>
               <span className="mt-1 block min-h-[32px] text-xs leading-snug text-ink-cap">
                 {OPS_DOC_CARD_BLURBS[key]}
+              </span>
+              <span data-testid={`ops-doc-card-headline-${key}`} className="mt-2 block text-sm font-semibold text-ink">
+                {summary.headline}
+              </span>
+              <span className="mt-0.5 block min-h-[18px] truncate text-xs text-ink-sub" title={summary.detail}>
+                {summary.detail}
               </span>
               {/* 진행 막대 — 패턴 §07(6px · r3 · track/accent, 100%는 positive).
                   수치는 아래 요약 줄이 담으므로 바 자체의 수치 라벨은 끈다. */}

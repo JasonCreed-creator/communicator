@@ -174,6 +174,7 @@ import { buildGuideSeedSections } from '../../lib/guideAssembly'
 import { guideDataProblem, withDerivedContent } from '../../lib/guideStructured'
 import { buildCuesFromScenario, scenarioCueCandidates } from '../../lib/scenario'
 import { SCENARIO_KIND_LABELS } from '../../lib/labels'
+import { buildScenarioSeed } from '../../lib/scenarioScript'
 import { UPLOADABLE_STATUSES, uploadBlockedMessage } from '../../lib/uploadGate'
 import { normalizeSlackWebhook, SLACK_WEBHOOK_INVALID_MESSAGE } from '../../lib/slackWebhook'
 import { normalizeSlackThreadLink, normalizeSlackUserId, SLACK_THREAD_INVALID_MESSAGE, SLACK_USER_ID_INVALID_MESSAGE } from '../../lib/slackThread'
@@ -208,16 +209,16 @@ function renderCueSnapshotHtml(deliverable: Deliverable, cues: Cue[]): string {
   const rows = cues
     .map(
       (c) =>
-        `<tr><td>${escapeHtml(c.cue_no ?? '')}</td><td>${escapeHtml(c.time_at ?? '')}</td>` +
+        `<tr><td>${escapeHtml(c.time_at ?? '')}</td><td>${escapeHtml(c.cue_no ?? '')}</td>` +
         `<td>${escapeHtml(c.segment ?? '')}</td><td>${escapeHtml(c.body ?? '')}</td>` +
-        `<td>${escapeHtml(c.console_audio ?? '')}</td><td>${escapeHtml(c.console_light ?? '')}</td>` +
-        `<td>${escapeHtml(c.console_screen ?? '')}</td></tr>`,
+        `<td>${escapeHtml(c.console_light ?? '')}</td><td>${escapeHtml(c.console_screen ?? '')}</td>` +
+        `<td>${escapeHtml(c.console_audio ?? '')}</td></tr>`,
     )
     .join('')
   return (
     `<!doctype html><meta charset="utf-8"><title>${escapeHtml(deliverable.title)}</title>` +
     `<table border="1" cellspacing="0" cellpadding="6">` +
-    `<tr><th>큐</th><th>시간</th><th>구분</th><th>내용·대본</th><th>음향</th><th>조명</th><th>스크린</th></tr>` +
+    `<tr><th>시각</th><th>큐</th><th>구분</th><th>MC·진행</th><th>조명</th><th>영상</th><th>음향</th></tr>` +
     `${rows}</table>`
   )
 }
@@ -227,14 +228,18 @@ function renderScenarioSnapshotHtml(deliverable: Deliverable, blocks: ScenarioBl
   const rows = blocks
     .map(
       (b) =>
-        `<tr><td>${escapeHtml(b.time ?? '')}</td><td>${escapeHtml(SCENARIO_KIND_LABELS[b.kind])}</td>` +
-        `<td>${escapeHtml(b.script ?? '')}</td><td>${escapeHtml(b.note ?? '')}</td></tr>`,
+        // v2.13 §23.6 원고형 — 지시문(괄호)과 멘트를 가른다. 비상 예비 멘트는 구분 칸에 상황 이름
+        b.kind === 'emergency'
+          ? `<tr><td></td><td>${escapeHtml(`${SCENARIO_KIND_LABELS.emergency} · ${b.note ?? ''}`)}</td>` +
+            `<td></td><td>${escapeHtml(b.script ?? '')}</td></tr>`
+          : `<tr><td>${escapeHtml(b.time ?? '')}</td><td>${escapeHtml(SCENARIO_KIND_LABELS[b.kind])}</td>` +
+            `<td>${b.note ? escapeHtml(`(${b.note})`) : ''}</td><td>${escapeHtml(b.script ?? '')}</td></tr>`,
     )
     .join('')
   return (
     `<!doctype html><meta charset="utf-8"><title>${escapeHtml(deliverable.title)}</title>` +
     `<table border="1" cellspacing="0" cellpadding="6">` +
-    `<tr><th>시각</th><th>구분</th><th>대본</th><th>비고</th></tr>${rows}</table>`
+    `<tr><th>시각</th><th>구분</th><th>지시문</th><th>멘트·내용</th></tr>${rows}</table>`
   )
 }
 
@@ -2389,7 +2394,7 @@ export class MockProvider implements DataProvider {
     return built
   }
 
-  /** §8.2 scenario-seed — 프로그램표 세션당 그룹 헤더 + 기본 진행 블록. 빈 문서에서만(R-O3) */
+  /** §8.2 scenario-seed — v2.13 §23.6 세션 소개 멘트 + 비상 예비 멘트 3종. 빈 문서에서만(R-O3) */
   async seedScenarioFromProgram(deliverableId: UUID): Promise<ScenarioBlock[]> {
     const user = this.assertPmOps()
     const d = this.mustFindScenarioDeliverable(deliverableId)
@@ -2401,32 +2406,17 @@ export class MockProvider implements DataProvider {
       )
     }
     const sessions = await this.listProgramSessions(d.project_id)
-    const built: ScenarioBlock[] = []
-    let order = 0
-    for (const s of sessions) {
-      order += 1
-      built.push({
-        id: this.nextId('scb'),
-        deliverable_id: deliverableId,
-        session_id: s.id,
-        time: s.start_time,
-        kind: 'custom',
-        script: null,
-        note: `세션: ${s.title}`,
-        sort_order: order,
-      })
-      order += 1
-      built.push({
-        id: this.nextId('scb'),
-        deliverable_id: deliverableId,
-        session_id: s.id,
-        time: s.start_time,
-        kind: 'mc',
-        script: '',
-        note: null,
-        sort_order: order,
-      })
-    }
+    // v2.13 §23.6 — 멘트 원고 뼈대(세션 소개 멘트 + 비상 예비 멘트 3종). 틀은 lib/scenarioScript 한 곳
+    const built: ScenarioBlock[] = buildScenarioSeed(sessions).map((b, i) => ({
+      id: this.nextId('scb'),
+      deliverable_id: deliverableId,
+      session_id: b.session_id ?? null,
+      time: b.time ?? null,
+      kind: b.kind,
+      script: b.script ?? null,
+      note: b.note ?? null,
+      sort_order: i + 1,
+    }))
     this.state.scenario_blocks.push(...built)
     this.log(d.project_id, `user:${user.id}`, 'scenario.seed', 'deliverable', deliverableId, {
       session_count: sessions.length,

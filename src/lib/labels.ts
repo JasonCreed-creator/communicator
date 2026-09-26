@@ -183,25 +183,26 @@ export const PARTNER_STATUS_LABELS: Record<PartnerStatus, string> = {
   withdrawn: '철회',
 }
 
-/** v2.5 §23 — 시나리오 빌더 진행 블록 구분 칩 */
+/** v2.5 §23 — 시나리오 빌더 진행 블록 구분 칩. v2.13 §23.6(멘트 원고형): custom = 무대 지시('지시'), emergency = 비상 예비 멘트 */
 export const SCENARIO_KIND_LABELS: Record<ScenarioBlockKind, string> = {
   mc: 'MC',
   video: '영상',
   protocol: '의전',
   transition: '전환',
-  custom: '커스텀',
+  custom: '지시',
+  emergency: '비상 멘트',
 }
 
-/** 3.16.4 화면 B — 구분 배지 컬러(tokens.css 토큰 조합만 — 임의 팔레트 금지).
- *  mc=steel 틴트(목업 파랑 그대로), video=steel 솔리드(목업 보라 — 토큰에 보라가 없어 같은
- *  한색 계열의 진한 단계로 구분), transition=accent 틴트(목업 앰버 — 앱의 대기/주의 관례),
- *  protocol·custom=중립(목업 기본 칩). */
+/** v2.13 §23.6 — 구분 배지 컬러(tokens.css 토큰 조합만 — 임의 팔레트 금지).
+ *  원고형에서는 읽는 멘트(MC·의전)가 주인공이라 accent 틴트, 기계 동작(영상·전환)은 steel 틴트,
+ *  무대 지시·비상 멘트는 중립(캔버스 시안 "운영 문서 3종 실무화" ②). */
 export const SCENARIO_KIND_CHIP_CLASSES: Record<ScenarioBlockKind, string> = {
-  mc: 'bg-steel-tint text-steel',
-  video: 'bg-steel text-card',
-  protocol: 'bg-track text-ink-sub',
-  transition: 'bg-accent-tint text-accent-deep',
+  mc: 'bg-accent-tint text-accent-deep',
+  video: 'bg-steel-tint text-steel',
+  protocol: 'bg-accent-tint text-accent-deep',
+  transition: 'bg-steel-tint text-steel',
   custom: 'bg-track text-ink-sub',
+  emergency: 'bg-track text-ink-sub',
 }
 
 /** v2.5 §23 — 운영가이드 빌더 섹션 라벨. v2.13 §23.5: 현장 운영 섹션 9종 추가(정본 제목은 lib/guideStructured GUIDE_KIND_META) */

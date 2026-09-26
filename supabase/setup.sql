@@ -1,6 +1,6 @@
 -- ═══════════════════════════════════════════════════════════════════════
 -- MICE 커뮤니케이터 · Supabase setup.sql (생성물 — 직접 편집 금지)
--- 원본: supabase/migrations/ 23개 파일을 파일명 순으로 이어 붙였다.
+-- 원본: supabase/migrations/ 24개 파일을 파일명 순으로 이어 붙였다.
 -- 재생성: node scripts/supabase-build-setup.mjs
 --
 -- 사용법(설계서 §18-3 · §20 T1): 새 Supabase 프로젝트 → SQL Editor → 이 파일 전문을 붙여 넣고 Run 1회.
@@ -3785,6 +3785,21 @@ end $$;
 revoke execute on function public.save_guide_sections(uuid, jsonb) from public, anon;
 grant execute on function public.save_guide_sections(uuid, jsonb) to authenticated;
 -- <<< 20260926000200_guide_structured.sql
+
+-- >>> 20260926000300_scenario_emergency.sql
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 24. 시나리오 비상 예비 멘트 — 설계서 v2.13 §23.6 (Phase 3.24 PR-B, 2026-09-26)
+--   · scenario_blocks.kind에 'emergency' 추가 — 세션과 무관하게 현장에서 무대감독 콜이 오면 읽는 멘트
+--     (상황 이름 = note · 멘트 = script · session_id·time은 비워 둔다 — 앱이 그렇게 만든다)
+-- 표·함수·권한은 그대로다(save_scenario_blocks는 kind를 검사하지 않고 표 CHECK에 맡긴다). 기존 행은 그대로 통과한다.
+-- 두 번 실행해도 같다.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+alter table scenario_blocks drop constraint if exists scenario_blocks_kind_check;
+alter table scenario_blocks add constraint scenario_blocks_kind_check check (kind in (
+  'mc','video','protocol','transition','custom','emergency'
+));
+-- <<< 20260926000300_scenario_emergency.sql
 
 -- ═══════════════════════════════════════════════════════════════════════
 -- setup.sql 끝. 다음 두 줄은 필요할 때만 본인 값으로 바꿔 실행한다(§18-2 · §20 T1).

@@ -1,6 +1,7 @@
 // v2.5 §10.2·§23 운영가이드 빌더 → v2.13 §23.5 (Phase 3.24 PR-A · 디자인지시서 §7-2.13) 현장 운영 12섹션.
-// 헤더(StructuredDocHeader — 인쇄·컨펌 발송·연락망 포함 토글)는 그대로 두고, 본문을
-// 왼쪽 섹션 목록(묶음 = 준비 · 당일 · 안전·공통 · 기타 — 채움 상태) + 섹션 카드로 바꿨다.
+// 본문 = 왼쪽 섹션 목록(묶음 = 준비 · 당일 · 안전·공통 · 기타 — 채움 상태) + 섹션 카드.
+// PR-B(§7-2.14): 옛 문서 머리(StructuredDocHeader)를 걷고 위에 요약 줄(섹션 n/m 채움 · 비어 있는 섹션 ·
+// 원본 바뀜 · 연락망 포함 · 인쇄)만 둔다 — 제목·상태·컨펌 발송은 항목 상세 머리와 '다음 단계' 카드가 맡는다.
 //
 // 표 섹션(data): 설치·철거 · 인력·콜타임 · 무전·지휘 · 역할 분담 · D-day 진행표 · 구간별 체크리스트 ·
 // 등록 운영 · VIP 의전 · 안전관리 · (새 문서의) 비상 대응 — 저장하면 provider가 content를 data에서 다시 만든다.
@@ -10,7 +11,7 @@
 import { useState } from 'react'
 import { flushSync } from 'react-dom'
 import ErrorAlert from '../internal/ErrorAlert'
-import StructuredDocHeader from '../internal/StructuredDocHeader'
+import ProgressBar from '../internal/ProgressBar'
 import { useAsync, useMutation } from '../../hooks/useAsync'
 import { CONTACTS_SECTION_PLACEHOLDER, assembleZoneSectionContent } from '../../lib/guideAssembly'
 import {
@@ -18,6 +19,7 @@ import {
   GUIDE_GROUP_ORDER,
   GUIDE_KIND_META,
   guideSkeletonInput,
+  guideSummary,
   isGuideSectionEmpty,
   mergeGuideSkeleton,
   missingGuideKinds,
@@ -47,17 +49,13 @@ function toInput(sections: readonly GuideSection[]): GuideSectionInput[] {
 export default function GuideBuilder({
   deliverableId,
   canEdit,
-  onStatusChanged,
 }: {
   deliverableId: string
   /** pm·ops만 true — §8.2 guide-sections 쓰기 권한 */
   canEdit: boolean
-  /** 헤더 컨펌 발송 성공 시 상위 화면(상세·보드)이 상태 표시를 재조회하게 하는 훅(선택) */
-  onStatusChanged?: () => void
 }) {
   const deliverable = useAsync(() => provider.getDeliverable(deliverableId), [deliverableId])
   const sections = useAsync(() => provider.listGuideSections(deliverableId), [deliverableId])
-  const currentUser = useAsync(() => provider.getCurrentUser(), [])
   const [includeContacts, setIncludeContacts] = useState(false)
   // 마크다운 본문 펼침(3.16.4 — 기본 2줄 미리보기) — 인쇄 시 전 섹션을 펼쳐야 하므로 부모가 관리한다
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
@@ -183,48 +181,54 @@ export default function GuideBuilder({
     window.print()
   }
 
-  const handleSent = () => {
-    deliverable.reload()
-    onStatusChanged?.()
-  }
-
-  const d = deliverable.data
-  const filled = list.filter((s) => !isGuideSectionEmpty(s)).length
+  const summary = guideSummary(list)
+  const filled = summary.filled
   const headcount = project.data?.expected_headcount ?? null
+  const emptyTitles = list.filter((s) => isGuideSectionEmpty(s)).map((s) => s.title)
+  const staleTitles = list.filter((s) => s.source_stale).map((s) => s.title)
 
   return (
-    <div className="ui-card @container">
-      {d && (
-        <StructuredDocHeader
-          docTypeLabel="운영가이드"
-          title={d.title}
-          status={d.status}
-          desc="현장 운영 섹션을 표로 채움 · 인쇄(A4)·PDF 스냅숏 → 스태프 배포 · 운영계획서 ④존별 운영·⑦비상 대응으로 자동 조립"
-          deliverableId={deliverableId}
-          isHost={project.data?.kind === 'host'}
-          isPm={currentUser.data?.role === 'pm'}
-          requiresApproval={d.requires_approval}
-          onSent={handleSent}
-          actions={
-            <>
-              <label className="ui-check-row items-center text-xs text-ink-sub">
-                <input
-                  type="checkbox"
-                  checked={includeContacts}
-                  onChange={(e) => setIncludeContacts(e.target.checked)}
-                  className="ui-check"
-                />
-                연락망 포함(인쇄)
-              </label>
-              <button type="button" onClick={handlePrint} className="btn btn-ghost btn-sm">
-                인쇄
-              </button>
-            </>
-          }
-        />
-      )}
+    <div className="@container space-y-4">
+      <section
+        aria-label="가이드 요약"
+        className="ui-card flex flex-wrap items-center justify-between gap-3 px-5 py-3.5"
+      >
+        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
+          <span className="text-sm font-semibold text-ink" data-testid="guide-summary">
+            섹션 {summary.filled} / {summary.total} 채움
+          </span>
+          <span className="w-40">
+            <ProgressBar done={summary.filled} total={summary.total} hideValue />
+          </span>
+          {emptyTitles.length > 0 && list.length > 0 && (
+            <span className="t-caption min-w-0">비어 있음: {emptyTitles.join(' · ')}</span>
+          )}
+          {staleTitles.map((t) => (
+            <span
+              key={t}
+              className="inline-flex whitespace-nowrap rounded-full bg-accent-tint px-2 py-0.5 text-xs font-medium text-accent-deep"
+            >
+              {t} — 원본 바뀜
+            </span>
+          ))}
+        </div>
+        <div className="plan-print-hidden flex flex-wrap items-center gap-3">
+          <label className="ui-check-row items-center text-xs text-ink-sub">
+            <input
+              type="checkbox"
+              checked={includeContacts}
+              onChange={(e) => setIncludeContacts(e.target.checked)}
+              className="ui-check"
+            />
+            연락망 포함(인쇄)
+          </label>
+          <button type="button" onClick={handlePrint} className="btn btn-ghost btn-sm">
+            인쇄 · 스태프 배포용
+          </button>
+        </div>
+      </section>
 
-      <div className="p-5">
+      <div className="ui-card p-5">
         <ErrorAlert message={deliverable.error} />
         <ErrorAlert message={sections.error} />
         <ErrorAlert message={seed.error} />
