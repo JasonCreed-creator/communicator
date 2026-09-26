@@ -26,6 +26,8 @@ export default defineConfig({
       { find: /^\.\/driveClient$/, replacement: fileURLToPath(new URL('./demo/stubs/driveClientStub.ts', import.meta.url)) },
       // Phase 6 Slack 알림(api/notify 호출)도 싣지 않는다 — 화면용 게이트웨이(lib/notify/notifyGateway)가 mock이면 부르지 않는다.
       { find: /^\.\/notifyClient$/, replacement: fileURLToPath(new URL('./demo/stubs/notifyClientStub.ts', import.meta.url)) },
+      // Phase 6.2 행사 인테이크(api/intake 호출)도 싣지 않는다 — 게이트웨이(lib/intake/intakeGateway)가 mock이면 부르지 않는다.
+      { find: /^\.\/intakeClient$/, replacement: fileURLToPath(new URL('./demo/stubs/intakeClientStub.ts', import.meta.url)) },
     ],
   },
   plugins: [inlineBrandAssets(), react(), tailwindcss(), singleFileArtifact()],

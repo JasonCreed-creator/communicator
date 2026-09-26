@@ -101,7 +101,7 @@ interface Finish {
 }
 
 function fakeStore(claimImpl?: () => Promise<{ id: string; used: number; limit: number }>) {
-  const claims: { token: string; project: string; feature: string; limit: number }[] = []
+  const claims: { token: string; project: string | null; feature: string; limit: number }[] = []
   const finishes: Finish[] = []
   const store: AiUsageStore = {
     async claim(token, project, feature, limit) {

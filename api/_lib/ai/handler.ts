@@ -32,10 +32,12 @@ export interface AiEnv {
 }
 
 export type AiUsageStatus = 'ok' | 'unreadable' | 'failed'
+/** AI 기능(ai_usage.feature CHECK와 같은 목록) — vendor_quote(Phase 4.8) · project_intake(Phase 6.2, 행사 없이도 부른다) */
+export type AiFeature = 'vendor_quote' | 'project_intake'
 
 export interface AiUsageStore {
-  /** 사용자 JWT로 선점 — 권한·한도 판정은 SQL(ai_usage_claim). 실패는 AiError로 던진다 */
-  claim(accessToken: string, projectId: string, feature: 'vendor_quote', limit: number): Promise<{ id: string; used: number; limit: number }>
+  /** 사용자 JWT로 선점 — 권한·한도 판정은 SQL(ai_usage_claim). 실패는 AiError로 던진다. projectId null = 행사 없음(project_intake만) */
+  claim(accessToken: string, projectId: string | null, feature: AiFeature, limit: number): Promise<{ id: string; used: number; limit: number }>
   /** service 경로로 결과 기록(best-effort) */
   finish(id: string, status: AiUsageStatus, model: string | null, inputTokens: number, outputTokens: number, error: string | null): Promise<void>
 }

@@ -781,6 +781,43 @@ select 1 / coalesce((select case when status = 'ok' and input_tokens = 5000 and 
   scenario('AI 한도: anon은 선점 함수도 못 부른다', `select ai_usage_claim('${PRJ}', 'vendor_quote', 30);`,
     { role: 'anon', expect: 'error', match: 'permission denied' })
 
+  // 5l. 행사 인테이크 + 견적서 첨부 (Phase 6.2 · 설계서 v2.15 §10 S0 · §8.7) — 새 열 · AI 기능 project_intake · 파일 판정
+  scenario('인테이크: pm이 projects.intake · quote_attachment(jsonb)를 저장·다시 읽는다(RLS projects_update)', `
+update projects set intake = '{"source":"slack","slack_permalink":"https://slack.com/archives/C0PROJ001/p1727251234567890","posted_by":"동료","fetched_at":"2026-09-26T09:00:00Z","method":"rules","filled_keys":["name","event_date"]}'::jsonb,
+  quote_attachment = '{"kind":"link","url":"https://docs.google.com/spreadsheets/d/x","file_name":null,"drive_file_id":null,"source":"link","added_at":"2026-09-26T09:00:00Z"}'::jsonb
+where id = '${PRJ}';
+${assertSql(`(select intake->>'method' = 'rules' and quote_attachment->>'kind' = 'link' from projects where id = '${PRJ}')`)}`, { role: 'authenticated', sub: authId.pm })
+  scenario('인테이크: design(비 pm)은 두 열을 고치지 못한다(0행 갱신)', `
+update projects set intake = '{"source":"text"}'::jsonb where id = '${PRJ}';
+${assertSql(`(select intake is null from projects where id = '${PRJ}')`)}`, { role: 'authenticated', sub: authId.design })
+  scenario("AI 한도: project_intake는 행사 없이(null) 선점된다 · 기록 feature = project_intake", `
+${assertSql(`(select (r->>'used')::int = 1 from (select ai_usage_claim(null, 'project_intake', 30) r) x)`)}
+reset role;
+${assertSql(`(select count(*) from ai_usage where feature = 'project_intake' and project_id is null) = 1`)}`, { role: 'authenticated', sub: authId.pm })
+  scenario('AI 한도: project_intake는 멤버면(design도) 그 행사로 선점된다 · 남의 행사(비멤버)는 거부', `
+select ai_usage_claim('${PRJ}', 'project_intake', 30);
+select ai_usage_claim('${PRJ_CLOSED}', 'project_intake', 30);`, { role: 'authenticated', sub: authId.design, expect: 'error', match: '이 행사의 담당자만' })
+  scenario('AI 한도: vendor_quote는 행사 없이 부를 수 없다(422)', `select ai_usage_claim(null, 'vendor_quote', 30);`,
+    { role: 'authenticated', sub: authId.pm, expect: 'error', match: '행사가 필요합니다' })
+  scenario('AI 한도: 두 기능이 한 사람의 하루 한도를 함께 쓴다(한도 2 — vendor_quote 1 + project_intake 1 → 세 번째 거부)', `
+select ai_usage_claim('${PRJ}', 'vendor_quote', 2);
+select ai_usage_claim(null, 'project_intake', 2);
+select ai_usage_claim(null, 'project_intake', 2);`, { role: 'authenticated', sub: authId.pm, expect: 'error', match: 'P0429|모두 썼습니다' })
+  scenario('AI 한도: 로그인 없이 project_intake 거부', `select ai_usage_claim(null, 'project_intake', 30);`,
+    { role: 'authenticated', sub: '00000000-0000-4000-8000-0000000000ff', expect: 'error', match: '로그인이 필요합니다' })
+  scenario('견적서 첨부 Drive 판정: pm → 행사 정보(id·code·drive_root_folder_id) · design 403 · 종료 행사 409 · 없는 행사 404', `
+${assertSql(`(select r->>'id' = '${PRJ}' and r ? 'drive_root_folder_id' from (select drive_project_file_check('${PRJ}') r) x)`)}`, { role: 'authenticated', sub: authId.pm })
+  scenario('견적서 첨부 Drive 판정: design 거부', `select drive_project_file_check('${PRJ}');`,
+    { role: 'authenticated', sub: authId.design, expect: 'error', match: 'PM 전용' })
+  scenario('견적서 첨부 Drive 판정: 종료 행사 거부', `select drive_project_file_check('${PRJ_CLOSED}');`,
+    { role: 'authenticated', sub: authId.pm, expect: 'error', match: '종료된 행사' })
+  scenario('견적서 첨부 Drive 판정: 없는 행사 404', `select drive_project_file_check('00000000-0000-4000-8000-0000000000aa');`,
+    { role: 'authenticated', sub: authId.pm, expect: 'error', match: 'NOT_FOUND|FORBIDDEN' })
+  scenario('인박스: 견적서 첨부 파일은 아는 파일(drive_known_file_ids)', `
+reset role;
+update projects set quote_attachment = '{"kind":"drive","url":"https://drive.google.com/file/d/drv-quote-1/view","file_name":"견적.pdf","drive_file_id":"drv-quote-1","source":"upload","added_at":"2026-09-26T09:00:00Z"}'::jsonb where id = '${PRJ}';
+${assertSql(`'drv-quote-1' = any(drive_known_file_ids('${PRJ}'))`)}`)
+
   // 6. 시크릿 커밋 가드 (§8 DoD 9) — 실키 값 패턴이 레포 파일에 없는가
   const grep = spawnSync('grep', ['-rnE', 'sb_secret_[A-Za-z0-9_-]{10,}|sbp_[A-Za-z0-9]{20,}', 'src', 'supabase', 'scripts', '--include=*.ts', '--include=*.tsx', '--include=*.sql', '--include=*.mjs', '--include=*.md'], { encoding: 'utf8' })
   record('시크릿 커밋 가드: sb_secret_/sbp_ 실키 패턴 0건 (DoD 9)', grep.status === 1, grep.stdout)

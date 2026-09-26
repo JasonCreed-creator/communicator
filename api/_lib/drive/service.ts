@@ -411,6 +411,44 @@ export async function settlementFileOp(ctx: DriveCtx, jwt: string, importId: str
   return { file_id: progress.file.id, folder_id: folderId }
 }
 
+/** Phase 6.2(설계서 v2.15 §10 S0) — 견적서 첨부 폴더: 행사 폴더 02_견적·정산 아래 */
+export const QUOTE_ATTACHMENT_FOLDER = '견적서'
+export const APP_PROJECT_FILE_KEY = 'communicator_project_file'
+
+/**
+ * Phase 6.2 — 행사 폴더에 파일 하나를 한 번에 올린다(4MB 이하 — 견적서 첨부). 권한은 사용자 JWT로 SQL(drive_project_file_check:
+ * pm · 종료 안 된 행사)이 판정 → 행사 폴더 02_견적·정산/견적서 → 파일 id·보기 주소를 돌려준다. 기록(projects.quote_attachment)은
+ * 앱이 updateProject로 한다 — 서버 함수는 파일만 올린다. 인박스는 drive_known_file_ids(quote_attachment 포함)로 이 파일을 안다.
+ */
+export async function projectFileOp(ctx: DriveCtx, jwt: string, projectId: string, fileName: string, mimeType: string, bytes: Uint8Array) {
+  if (!UUID_RE.test(projectId)) throw new DriveError(400, 'validation', '행사 id 형식이 올바르지 않습니다.')
+  if (bytes.byteLength === 0) throw new DriveError(400, 'validation', '빈 파일입니다.')
+  if (bytes.byteLength > CHUNK_BYTES) {
+    throw new DriveError(413, 'validation', `견적서 첨부는 ${CHUNK_BYTES / 1024 / 1024}MB 이하 파일만 — 더 크면 Drive에 올린 뒤 링크로 붙여 주세요.`)
+  }
+  const root = driveRoot(ctx)
+  const project = await ctx.store.projectFileCheck(jwt, projectId)
+  const api = driveApiFor(ctx)
+  const { rootId } = await ensureProjectRoot(api, ctx.store, root, project)
+  const folderId = await ensurePartPath(api, rootId, [PART.money, QUOTE_ATTACHMENT_FOLDER])
+  const name = sanitizeName(fileName || '견적서', 200)
+  const session = await api.startResumable(
+    { name, parents: [folderId], appProperties: { [APP_PROJECT_FILE_KEY]: projectId }, description: '견적서 첨부(행사 만들기)' },
+    { mimeType: mimeType || 'application/octet-stream', size: bytes.byteLength },
+  )
+  const size = bytes.byteLength
+  const progress = await api.putChunk(session, bytes, 0, Math.max(0, size - 1), size)
+  if (!progress.done) throw new DriveError(502, 'validation', '파일을 다 올리지 못했습니다 — 잠시 후 다시 시도하세요.')
+  await ctx.store.log(project.id, 'drive.project_file', 'project', project.id, { file_id: progress.file.id, name })
+  await markLive(ctx)
+  return {
+    file_id: progress.file.id,
+    file_name: progress.file.name ?? name,
+    folder_id: folderId,
+    url: progress.file.webViewLink ?? `https://drive.google.com/file/d/${progress.file.id}/view`,
+  }
+}
+
 // ── 업로드 (4MB 조각 중계 — 브라우저→Google 직접 PUT은 CORS로 막힌다) ──────────
 interface UploadTicket {
   k: 'up'
