@@ -391,6 +391,14 @@
   margin: 16mm 14mm;
 }
 
+/* ── S9-D 16:9 장표형 운영계획서 인쇄 — 설계서 v2.13.2 §23.7 · 디자인지시서 §7-2.15 ──
+   장표 한 장(1280×720 CSS px) = 338.67mm×190.5mm = 파워포인트 16:9 한 쪽. 이름 붙은 쪽(page: deck)이라
+   A4 운영계획서(S9) 인쇄 규칙과 섞이지 않는다. 화면 배율(zoom)·그림자·둥근 모서리는 인쇄에서 뺀다. */
+@page deck {
+  size: 338.67mm 190.5mm;
+  margin: 0;
+}
+
 @media print {
   /* 패턴 기준 시트 §08 — 인쇄 시 숨김은 일괄 처리.
      .plan-print-hidden(S9 선례)을 전역 유틸리티 .print-hidden으로 승격하고 기존 클래스는 별칭으로 유지한다.
@@ -485,6 +493,30 @@
     padding: 0;
     border: none;
     box-shadow: none;
+  }
+
+  .deck-page {
+    min-height: 0;
+    background: #fff;
+  }
+
+  .deck-zoom {
+    zoom: 1 !important;
+    page: deck;
+    break-after: page;
+    page-break-after: always;
+  }
+
+  .deck-zoom:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+
+  .deck-slide {
+    border-radius: 0;
+    box-shadow: none;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
   }
 
   body {

@@ -22,7 +22,8 @@
 //             PR-8 행사 설정(번호 없는 탭·섹션 목록·고정 저장 바·변경 취소)·온보딩(진행 줄·2열·나중에 하기 확인) ·
 //       6.1: Slack 봇 — 행사 설정 ③ 스레드 링크(DM 링크 거부 → 등록 → 채널·Slack에서 열기 → 웹훅 예비 접힘 → 해제) · 담당자 Slack 칸 ·
 //       3.24 PR-A: 운영가이드 — 옛 문서 뼈대 추가 → 섹션 목록 · 등록 운영 대기 계산 · 목록 링크 = 스크롤만(해시 불변) ·
-//       3.24 PR-B: 운영 보드 유형별 표·카드 요약 → 시나리오 원고(뼈대 · 멘트 쓰기 · 연사 확인 · 비상 멘트) · 큐시트 칸 순서)
+//       3.24 PR-B: 운영 보드 유형별 표·카드 요약 → 시나리오 원고(뼈대 · 멘트 쓰기 · 연사 확인 · 비상 멘트) · 큐시트 칸 순서 ·
+//       3.24 PR-C: 16:9 장표 — 운영계획서 → 장표(사이드바 없음 · 목차 쪽 번호 · 본문 넘침 0 · 16:9) → 인쇄 PDF 쪽 수·용지 960×540pt)
 // 캡처는 dist-demo/shots-interaction/ 에 남긴다. 실패 시 exit 1.
 import { createServer } from 'node:http'
 import { readFileSync, mkdirSync } from 'node:fs'
@@ -156,7 +157,7 @@ check(
   `${docCountBefore} → ${docRequests.length}`,
 )
 
-// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — **Phase 3.24 PR-B 시나리오 원고형 · 운영 보드 표(2026-09-26)**.
+// ── ③-이전(2026-09-26 Phase 3.24 PR-B) 시나리오 원고형 · 운영 보드 표 — 직전 PR ③을 회귀 가드로 유지.
 //     일정(②에서 도착) → 운영 보드: 카드 굵은 줄(큐 n개 · 멘트 n/m 작성 · 섹션 n/m 채움) · 유형마다 다른 표 머리 ·
 //     '진행 시나리오 (가안) 열기' → 그 행 바로 아래 원고(세션 머리 · 요약 줄) → 닫기 → 새 시나리오 문서(＋ 항목 추가 → 시나리오) →
 //     '프로그램표에서 뼈대 만들기' → 세션마다 빈 멘트 + 비상 예비 멘트 3종 → '멘트 쓰기' → 멘트 칸 초점 → [소속] [직함] [연사 이름] 적고 저장 →
@@ -254,6 +255,71 @@ check(
   check(hashAfter === hashBefore && dayBox !== null && dayBox.y >= -4 && dayBox.y < vh, "섹션 목록 링크 = 해시 그대로 · 그 카드가 화면 안", `${hashBefore} → ${hashAfter} · y=${dayBox?.y}`)
   await tab.screenshot({ path: resolve(SHOTS, '03-guide-structured.png'), fullPage: true })
   check(docRequests.length === docBefore, '운영가이드 뼈대 추가·고치기·목록 이동에 전체 리로드 0', `${docBefore} → ${docRequests.length}`)
+  await tab.locator('aside nav a', { hasText: '일정' }).first().click()
+  await tab.waitForURL(/#\/schedule/, { timeout: 10_000 })
+}
+
+// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — **Phase 3.24 PR-C 16:9 장표형 운영계획서(2026-09-26)**.
+//     바로 위 PR-A 블록이 옛 운영가이드에 뼈대를 더한 뒤라 현장 운영 장(인력·무전·역할 분담·진행표·체크리스트·안전)이 실린다.
+//     일정(위 블록 끝) → 운영계획서(S9) '16:9 장표'(전체 리로드 0) → 사이드바 없음 · 1쪽 표지 · 2쪽 목차 · 목차 쪽 번호 = 그 장 첫 장표 ·
+//     현장 운영 장 제목 · 모든 장 본문 넘침 0 · 장표 16:9 · '싣지 못한 표' 펼침 → 인쇄 미디어 PDF: 쪽 수 = 장 수 · 용지 960×540pt(338.67×190.5mm) ·
+//     좁은 창(900px) 가로 스크롤 없음 · 장표가 창 폭에 맞춰 줄어듦 → '← 운영계획서' → 다시 '일정'으로.
+{
+  const docBefore = docRequests.length
+  await tab.locator('aside nav a', { hasText: '운영계획서' }).first().click()
+  await tab.waitForURL(/#\/plan$/, { timeout: 10_000 })
+  await tab.getByRole('link', { name: '16:9 장표' }).click()
+  await tab.waitForURL(/#\/plan\/deck$/, { timeout: 10_000 })
+  const slides = tab.getByTestId('deck-slide')
+  await slides.first().waitFor({ timeout: 10_000 })
+  await tab.waitForTimeout(300)
+  const n = await slides.count()
+  check((await tab.locator('aside nav').count()) === 0, '장표 화면 = 사이드바 없음(인쇄에 장표만)')
+  const labels = await slides.evaluateAll((els) => els.map((e) => e.getAttribute('aria-label') ?? ''))
+  check(labels[0] === '1쪽 — 표지' && labels[1] === '2쪽 — 목차', '1쪽 표지 · 2쪽 목차', `${labels[0]} / ${labels[1]}`)
+  const tocOk = await tab.evaluate(() => {
+    const all = Array.from(document.querySelectorAll('[data-testid="deck-slide"]'))
+    return Array.from(document.querySelectorAll('[data-testid="deck-toc-entry"]')).every((e) => {
+      const no = Number(e.getAttribute('data-slide-no'))
+      return all[no - 1]?.getAttribute('data-chapter') === e.getAttribute('data-chapter') && all[no - 2]?.getAttribute('data-chapter') !== e.getAttribute('data-chapter')
+    })
+  })
+  check(tocOk, '목차 쪽 번호 = 그 장의 첫 장표(8장 모두)')
+  const want = ['현장 인력·콜타임', '무전·지휘 체계', '역할 분담', 'D-day 진행표', '구간별 체크리스트', '안전관리', '설치·철거 일정']
+  const missing = want.filter((t) => !labels.some((l) => l.includes(t)))
+  check(missing.length === 0, '현장 운영 장 = 운영가이드 표 섹션이 장표로', missing.length ? `없음: ${missing.join(', ')}` : `${n}장`)
+  const over = await tab.$$eval('[data-testid="deck-body"]', (els) =>
+    els.map((e, i) => ({ i: i + 2, sh: e.scrollHeight, ch: e.clientHeight })).filter((x) => x.sh > x.ch + 1),
+  )
+  check(over.length === 0, `모든 장 본문 넘침 0(${n}장)`, over.map((o) => `${o.i}쪽 ${o.sh}>${o.ch}`).join(', '))
+  const b = await slides.nth(2).boundingBox()
+  check(!!b && Math.abs(b.width / b.height - 16 / 9) < 0.01, '장표 비율 16:9', b ? `${Math.round(b.width)}×${Math.round(b.height)}` : '')
+  const gapsBtn = tab.getByRole('button', { name: /^싣지 못한 표 \d+개$/ })
+  if (await gapsBtn.count()) {
+    await gapsBtn.click()
+    check((await gapsBtn.getAttribute('aria-expanded')) === 'true' && (await tab.locator('#deck-gaps').isVisible()), "'싣지 못한 표' → 어디서 채우는지 목록")
+  }
+  await tab.screenshot({ path: resolve(SHOTS, '03-deck-screen.png') })
+  await slides.nth(0).screenshot({ path: resolve(SHOTS, '03-deck-cover.png') })
+  const dayIdx = labels.findIndex((l) => l.includes('D-day 진행표'))
+  if (dayIdx >= 0) await slides.nth(dayIdx).screenshot({ path: resolve(SHOTS, '03-deck-dayplan.png') })
+  await tab.emulateMedia({ media: 'print' })
+  const pdf = await tab.pdf({ preferCSSPageSize: true, printBackground: true })
+  await tab.emulateMedia({ media: 'screen' })
+  const raw = pdf.toString('latin1')
+  const pages = (raw.match(/\/Type\s*\/Page[^s]/g) ?? []).length
+  const boxes = [...new Set([...raw.matchAll(/\/MediaBox\s*\[([^\]]*)\]/g)].map((m) => m[1].trim().replace(/\s+/g, ' ')))]
+  check(pages === n, '인쇄 PDF 쪽 수 = 장표 수', `${pages}쪽 / ${n}장`)
+  check(boxes.length === 1 && boxes[0] === '0 0 960 540', '인쇄 용지 = 16:9(960×540pt = 338.67×190.5mm)', boxes.join(' | '))
+  await tab.setViewportSize({ width: 900, height: 900 })
+  await tab.waitForTimeout(300)
+  const sw = await tab.evaluate(() => document.documentElement.scrollWidth)
+  const narrow = await slides.nth(2).boundingBox()
+  check(sw <= 900 && !!narrow && narrow.width < 900, '좁은 창(900px) — 가로 스크롤 없음 · 장표가 창 폭에 맞춰 줄어듦', `scrollWidth ${sw} · 장표 ${Math.round(narrow?.width ?? 0)}px`)
+  await tab.setViewportSize({ width: 1440, height: 900 })
+  await tab.getByRole('link', { name: '← 운영계획서' }).click()
+  await tab.waitForURL(/#\/plan$/, { timeout: 10_000 })
+  check(docRequests.length === docBefore, '운영계획서 ↔ 16:9 장표 이동·인쇄에 전체 리로드 0', `${docBefore} → ${docRequests.length}`)
   await tab.locator('aside nav a', { hasText: '일정' }).first().click()
   await tab.waitForURL(/#\/schedule/, { timeout: 10_000 })
 }

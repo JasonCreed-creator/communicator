@@ -2,6 +2,7 @@
 // 미입력 섹션이 하나라도 있으면 컨펌 발송을 잠근다(인쇄는 항상 허용) — 잠긴 이유는 InfoTip과
 // 하단 경고 띠에서 밝힌다. 관리 UI이므로 인쇄에서는 통째로 빠진다.
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import InfoTip from '../internal/InfoTip'
 import { LevelBadge } from '../internal/StatusBadge'
 import PrintExcludedChip from './PrintExcludedChip'
@@ -49,6 +50,10 @@ export default function PlanPublishGate({
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <PrintExcludedChip />
+          {/* v2.13.2 §23.7 — 같은 내용을 16:9 장표로(사이드바 없는 전체 화면 · 장표만 인쇄) */}
+          <Link to="/plan/deck" className="btn btn-ghost print-hidden">
+            16:9 장표
+          </Link>
           <button type="button" onClick={onPrint} className="btn btn-ghost print-hidden">
             인쇄 · PDF
           </button>

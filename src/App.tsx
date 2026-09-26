@@ -20,6 +20,7 @@ import OnboardingPage from './pages/OnboardingPage'
 import PartnerBoardPage from './pages/PartnerBoardPage'
 import PartnerPortalPage from './pages/PartnerPortalPage'
 import PeoplePage from './pages/PeoplePage'
+import PlanDeckPage from './pages/PlanDeckPage'
 import PlanDocPage from './pages/PlanDocPage'
 import ProjectListPage from './pages/ProjectListPage'
 import QuoteImportWizardPage from './pages/QuoteImportWizardPage'
@@ -71,6 +72,12 @@ export function AppRoutes() {
       <Route element={<ProjectScope />}>
         {/* S0 온보딩 위저드 — 가드 대상 제외 */}
         <Route path="/onboarding" element={<OnboardingPage />} />
+
+        {/* S9-D 16:9 장표형 운영계획서 — v2.13.2 §23.7. 인쇄하면 장표만 나가야 해서 사이드바(InternalLayout) 밖,
+            운영계획서(S9)와 같은 온보딩 가드 안 */}
+        <Route element={<OnboardingGuard />}>
+          <Route path="/plan/deck" element={<PlanDeckPage />} />
+        </Route>
 
         <Route element={<InternalLayout />}>
           {/* S-1 행사 목록·행사 설정 — 세팅 미완료 행사도 접근해야 하므로 OnboardingGuard 밖

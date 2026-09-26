@@ -3926,6 +3926,16 @@ export class MockProvider implements DataProvider {
           }
         : null
 
+    // v2.13.2 §23.7 — 16:9 장표의 현장 운영 장 소스(같은 운영가이드 항목의 섹션 전부 · R-O6 연락망 제외)
+    const guide = guideDeliverable
+      ? {
+          deliverable_id: guideDeliverable.id,
+          title: guideDeliverable.title,
+          status: guideDeliverable.status,
+          sections: guideSections.filter((s) => s.kind !== 'contacts'),
+        }
+      : null
+
     const overviewSlots = [
       project.event_date,
       project.theme,
@@ -3949,6 +3959,7 @@ export class MockProvider implements DataProvider {
       scenario,
       guide_zone,
       emergency,
+      guide,
       section_progress: [
         { key: 'overview', done: overviewSlots.filter(Boolean).length, total: overviewSlots.length },
         { key: 'program', done: sessions.filter((s) => s.start_time).length, total: sessions.length },
