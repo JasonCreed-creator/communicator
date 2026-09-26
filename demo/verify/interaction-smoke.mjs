@@ -24,7 +24,9 @@
 //       3.24 PR-A: 운영가이드 — 옛 문서 뼈대 추가 → 섹션 목록 · 등록 운영 대기 계산 · 목록 링크 = 스크롤만(해시 불변) ·
 //       3.24 PR-B: 운영 보드 유형별 표·카드 요약 → 시나리오 원고(뼈대 · 멘트 쓰기 · 연사 확인 · 비상 멘트) · 큐시트 칸 순서 ·
 //       3.24 PR-C: 16:9 장표 — 운영계획서 → 장표(사이드바 없음 · 목차 쪽 번호 · 본문 넘침 0 · 16:9) → 인쇄 PDF 쪽 수·용지 960×540pt ·
-//       4.8: 협력사 견적서 PDF·사진 — 불러오기 대화상자(엑셀·PDF·사진 받음 · AI 안내) → PDF 고르기 → 'AI로 읽기' → mock 사실 안내 · 서버 요청 0)
+//       4.8: 협력사 견적서 PDF·사진 — 불러오기 대화상자(엑셀·PDF·사진 받음 · AI 안내) → PDF 고르기 → 'AI로 읽기' → mock 사실 안내 · 서버 요청 0 ·
+//       6.2: 행사 만들기 인테이크 — 세팅 미완료 행사 온보딩 ① → Slack 글 붙이기 → 라벨 규칙으로 채움(주황 · 배너 · 기록) → 코드 '행사명에서 다시 만들기' →
+//            견적서 링크 붙이기 → 빼기 · 채운 버튼 1개 · /api 요청 0)
 // 캡처는 dist-demo/shots-interaction/ 에 남긴다. 실패 시 exit 1.
 import { createServer } from 'node:http'
 import { readFileSync, mkdirSync } from 'node:fs'
@@ -325,7 +327,69 @@ check(
   await tab.waitForURL(/#\/schedule/, { timeout: 10_000 })
 }
 
-// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — **Phase 4.8 협력사 견적서 PDF·사진(AI 읽기, 2026-09-26)**.
+// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — **Phase 6.2 행사 만들기 인테이크 · 견적서 첨부 · 행사 코드 자동(2026-09-26)**.
+//     세팅 미완료 행사(prj-forum-h2 — 필수 칸이 비어 있어 뒤 PR-5 블록의 '먼저 확인할 행사' 줄이 이 행사를 본다: 폼은 저장하지 않는다)의
+//     온보딩 ① → 'Slack 메시지에서 불러오기'에 라벨 글 붙이기 → 불러오기 → 결과(라벨 규칙 · 채운 칸 n) · 행사명·시작일·장소·인원 칸 채움(주황) ·
+//     배너 · 코드 칸 '행사명에서 다시 만들기' → 코드 = 이니셜+연도 · 견적서 '링크 붙이기' → 구글 시트 → 빼기(확인 수락) · 채운 버튼 = 다음: 담당자 하나 ·
+//     /api 요청 0(데모는 봇·AI 없이 라벨 규칙) → RB27 홈 → 다시 '일정'으로.
+{
+  const docBefore = docRequests.length
+  const apiCalls = []
+  const onReq = (req) => {
+    if (/\/api\//.test(req.url())) apiCalls.push(req.url())
+  }
+  tab.on('request', onReq)
+  await tab.evaluate(() => {
+    window.location.hash = '#/onboarding?project=prj-forum-h2'
+  })
+  await tab.getByRole('heading', { name: '행사 기본 정보' }).waitFor({ timeout: 10_000 })
+  const intakeCard = tab.getByTestId('slack-intake')
+  await intakeCard.waitFor({ timeout: 10_000 })
+  const brief = ['행사명: 가상 채용 박람회 2027', '일시: 2027. 5. 20(목) 10:00~17:00', '장소: 가상 전시장 B홀', '인원: 약 800명', '고객사: 가상인재㈜'].join('\n')
+  await intakeCard.getByLabel('Slack 메시지 링크 또는 글').fill(brief)
+  await intakeCard.getByRole('button', { name: '불러오기' }).click()
+  await intakeCard.getByTestId('slack-intake-result').waitFor({ timeout: 10_000 })
+  check((await intakeCard.getByTestId('slack-intake-summary').innerText()).includes('채운 칸 7개'), '불러오기 → 라벨 규칙으로 채운 칸 7개')
+  const nameBox = tab.getByLabel('행사명')
+  check((await nameBox.inputValue()) === '가상 채용 박람회 2027', '행사명 칸 채움', await nameBox.inputValue())
+  check(/bg-accent-tint/.test((await nameBox.getAttribute('class')) ?? ''), '채운 칸 = 주황 표시')
+  check((await tab.getByLabel('시작일').inputValue()) === '2027-05-20' && (await tab.getByLabel('장소').inputValue()) === '가상 전시장 B홀' && (await tab.getByLabel('예상 인원').inputValue()) === '800', '시작일·장소·인원 칸 채움')
+  check((await tab.getByTestId('intake-prefill-banner').count()) === 1, '인테이크 배너(원문과 대조 안내)')
+  // 코드: 이 행사는 정해진 코드가 있어 자동이 꺼져 있다 → '행사명에서 다시 만들기'로 이니셜+연도
+  await tab.getByRole('button', { name: '행사명에서 다시 만들기' }).click()
+  const codeVal = await tab.getByLabel('행사 코드').inputValue()
+  check(codeVal === 'GCB27', "코드 '행사명에서 다시 만들기' = 이니셜 + 행사일 연도", codeVal)
+  check((await tab.getByTestId('code-auto-hint').count()) === 1, '코드 자동 안내')
+  // 견적서 링크
+  const qa = tab.getByTestId('quote-attachment')
+  await qa.getByRole('button', { name: '링크 붙이기' }).click()
+  await qa.getByLabel('견적서 링크').fill('https://docs.google.com/spreadsheets/d/virtual-quote-demo')
+  await qa.getByRole('button', { name: '붙이기' }).click()
+  await qa.getByTestId('quote-attachment-current').waitFor({ timeout: 10_000 })
+  check((await qa.getByRole('link', { name: '구글 시트' }).count()) === 1, '견적서 링크 붙임 → 구글 시트')
+  await tab.screenshot({ path: resolve(SHOTS, '03-intake-onboarding.png'), fullPage: true })
+  const primaries = await tab.$$eval('button', (els) => els.filter((b) => /\bbtn-(primary|accent)\b/.test(b.className)).map((b) => b.textContent?.trim()))
+  check(primaries.length === 1 && primaries[0] === '다음: 담당자', '채운 버튼 = 다음: 담당자 하나', primaries.join(' · '))
+  tab.once('dialog', (d) => d.accept())
+  await qa.getByRole('button', { name: '빼기' }).click()
+  await qa.getByTestId('quote-attachment-empty').waitFor({ timeout: 10_000 })
+  check(true, '견적서 첨부 빼기(확인 수락) → 빈 상태')
+  tab.off('request', onReq)
+  check(apiCalls.length === 0, '데모에서 /api 요청 0(봇·AI 없이 라벨 규칙)', apiCalls.join(', '))
+  check(docRequests.length === docBefore, '인테이크·첨부에 전체 리로드 0', `${docBefore} → ${docRequests.length}`)
+  await tab.evaluate(() => {
+    window.location.hash = '#/home?project=prj-rebuild27'
+  })
+  await tab.waitForFunction(
+    () => localStorage.getItem('communicator.currentProjectId') === 'prj-rebuild27' && location.hash === '#/home',
+    null,
+    { timeout: 10_000 },
+  )
+  await tab.locator('aside nav a', { hasText: '일정' }).first().click()
+  await tab.waitForURL(/#\/schedule/, { timeout: 10_000 })
+}
+
+// ── ③-이전(2026-09-26 Phase 4.8) 협력사 견적서 PDF·사진 — 직전 세션 ③을 회귀 가드로 유지.
 //     일정(위 블록 끝) → 정산보드가 있는 샘플 행사(`?project=`) → 머리 '협력사 견적서 불러오기' → 파일 칸이 엑셀·PDF·사진을 받고
 //     AI 안내 한 줄 → 가상 PDF(이 자리에서 만든 최소 바이트 — 실견적서 커밋 금지) 고르기 → 버튼 이름 'AI로 읽기' → 누르기 →
 //     데모(mock)는 AI를 흉내 내지 않고 사실대로 안내 · 확인 큐 없음 · /api 요청 0 · 전체 리로드 0 → 취소 → RB27 홈 → 다시 '일정'으로.

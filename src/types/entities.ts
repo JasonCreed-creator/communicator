@@ -100,6 +100,13 @@ export interface Project {
    * 선택 필드 — 없는 행(옛 픽스처·mock)은 스레드 없음과 같다.
    */
   slack_thread_url?: string | null
+  /**
+   * v15.6(Phase 6.2 · 설계서 v2.15 §10 S0) — 행사 만들기 때 Slack 메시지에서 기본 정보를 불러온 기록. 원문은 저장하지 않는다
+   * (메시지 링크·시각·보낸 사람 표시 이름·읽은 방식·채운 칸만). 선택 필드 — 없는 행은 불러온 적 없음과 같다.
+   */
+  intake?: ProjectIntake | null
+  /** v15.6(Phase 6.2) — 견적서 첨부(파일은 Drive 행사 폴더 02_견적·정산/견적서 · 링크는 주소만). 행사 하나에 하나(바꾸면 교체) */
+  quote_attachment?: QuoteAttachment | null
   /** v1.3 — S0 온보딩에서 선택. general이면 등록 모듈 경량 모드(표시 계층 토글) */
   event_type: EventType
   /** v2.6 §25 — 행사 유형 4분류. 시드이지 잠금이 아니다(이후 kind·event_type 독립 변경 가능) */
@@ -121,6 +128,32 @@ export interface Project {
   partner_contact_email: string | null
   created_by: UUID | null
   created_at: IsoDateTime
+}
+
+/** Phase 6.2 — 행사 만들기 인테이크 기록(projects.intake jsonb). 금액·연락처 없음 */
+export interface ProjectIntake {
+  /** slack = 메시지 링크로 불러옴 · text = 글을 붙여 넣음 */
+  source: 'slack' | 'text'
+  slack_permalink: string | null
+  /** Slack 표시 이름(보낸 사람) — 내부 화면에만 */
+  posted_by: string | null
+  fetched_at: IsoDateTime
+  /** ai = Claude가 읽음(라벨 규칙 + AI) · rules = 라벨 규칙만 */
+  method: 'ai' | 'rules'
+  /** 채운 칸(EventBriefFields 키) */
+  filled_keys: string[]
+}
+
+/** Phase 6.2 — 견적서 첨부(projects.quote_attachment jsonb) */
+export interface QuoteAttachment {
+  /** drive = 행사 폴더 02_견적·정산/견적서에 보관한 파일 · link = 주소만(구글 시트·외부 Drive 등) */
+  kind: 'drive' | 'link'
+  url: string
+  file_name: string | null
+  drive_file_id: string | null
+  /** upload = 내 컴퓨터 · slack = Slack 메시지의 첨부 파일 · link = 주소 입력 */
+  source: 'upload' | 'slack' | 'link'
+  added_at: IsoDateTime
 }
 
 // §4-2 project_members
