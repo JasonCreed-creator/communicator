@@ -4,6 +4,23 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import type { EventRow, ManualRow, ReminderRow } from './format.js'
 
+/** 봇이 올린 의뢰 카드 한 장의 기록(항목마다 한 행) */
+export interface CardRecord {
+  card_id: string
+  project_id: string
+  rows: { deliverable_id: string; kind: 'work' | 'review'; notify_key: string }[]
+  recipient_ids: string[]
+  channel: string
+  message_ts: string
+  thread_ts: string | null
+}
+
+export type AckResult =
+  | { status: 'ok'; by: string; at: string; count: number }
+  | { status: 'already'; by: string | null; at: string }
+  | { status: 'not_recipient'; names: string[] }
+  | { status: 'not_found' }
+
 export interface NotifyStoreEnv {
   SUPABASE_URL?: string
   VITE_SUPABASE_URL?: string
@@ -20,8 +37,18 @@ export interface NotifyStore {
   memberRole(profileId: string, projectId: string): Promise<string | null>
   /** 발주처(/c)·파트너(/p) 링크가 살아 있는가 — 그 화면의 결정·제출 직후 신호용 */
   tokenActive(token: string): Promise<boolean>
-  /** '테스트 보내기'용 행사 정보(행사 채널 주소 포함) */
-  project(projectId: string): Promise<{ code: string; name: string; webhook: string | null } | null>
+  /** '테스트 보내기'용 행사 정보(행사 채널 주소 · v2.12 행사 스레드 포함) */
+  project(projectId: string): Promise<{ code: string; name: string; webhook: string | null; thread?: string | null } | null>
+  // ── v2.12 봇(Phase 6.1) ──
+  /** 이메일로 찾은 Slack ID를 적어 둔다(비어 있을 때만) */
+  setSlackUser(profileId: string, slackUserId: string): Promise<void>
+  /** 카드 기록 — 기록된 행 수 */
+  recordCard(card: CardRecord): Promise<number>
+  /** '확인했어요' — 멘션된 사람만 센다 */
+  ackCard(cardId: string, profileId: string | null): Promise<AckResult>
+  /** Slack ID·이메일 → 주소록 사람 */
+  profileBySlack(slackUserId: string): Promise<{ id: string; name: string } | null>
+  profileByEmail(email: string): Promise<{ id: string; name: string } | null>
 }
 
 export function notifyStoreConfigured(env: NotifyStoreEnv): boolean {
@@ -85,9 +112,39 @@ export function createSupabaseNotifyStore(env: NotifyStoreEnv): NotifyStore {
     },
     async project(projectId) {
       if (!UUID_RE.test(projectId)) return null
-      const { data } = await admin.from('projects').select('code, name, slack_webhook_url').eq('id', projectId).maybeSingle()
-      const row = data as { code: string; name: string; slack_webhook_url: string | null } | null
-      return row ? { code: row.code, name: row.name, webhook: row.slack_webhook_url } : null
+      let res = await admin.from('projects').select('code, name, slack_webhook_url, slack_thread_url').eq('id', projectId).maybeSingle()
+      // v2.12 열이 아직 없는 DB(setup.sql 적용 전 배포)면 옛 열만 — 홈 리마인드·테스트가 404로 깨지지 않게
+      if (res.error) res = await admin.from('projects').select('code, name, slack_webhook_url').eq('id', projectId).maybeSingle()
+      const row = res.data as { code: string; name: string; slack_webhook_url: string | null; slack_thread_url?: string | null } | null
+      return row ? { code: row.code, name: row.name, webhook: row.slack_webhook_url, thread: row.slack_thread_url ?? null } : null
+    },
+    async setSlackUser(profileId, slackUserId) {
+      await rpc<void>('notify_set_slack_user', { p_profile: profileId, p_slack_user: slackUserId })
+    },
+    async recordCard(card) {
+      return rpc<number>('notify_record_card', {
+        p_card: card.card_id,
+        p_project: card.project_id,
+        p_rows: card.rows,
+        p_recipients: card.recipient_ids,
+        p_channel: card.channel,
+        p_message_ts: card.message_ts,
+        p_thread_ts: card.thread_ts,
+      })
+    },
+    async ackCard(cardId, profileId) {
+      if (!UUID_RE.test(cardId)) return { status: 'not_found' }
+      return rpc<AckResult>('notify_ack_card', { p_card: cardId, p_profile: profileId })
+    },
+    async profileBySlack(slackUserId) {
+      const { data } = await admin.from('profiles').select('id, display_name').eq('slack_user_id', slackUserId).limit(1).maybeSingle()
+      const row = data as { id: string; display_name: string } | null
+      return row ? { id: row.id, name: row.display_name } : null
+    },
+    async profileByEmail(email) {
+      const { data } = await admin.from('profiles').select('id, display_name').ilike('email', email.replace(/[%_\\]/g, '\\$&')).limit(1).maybeSingle()
+      const row = data as { id: string; display_name: string } | null
+      return row ? { id: row.id, name: row.display_name } : null
     },
   }
 }

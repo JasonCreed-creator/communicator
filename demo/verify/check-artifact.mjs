@@ -89,6 +89,8 @@ const BENIGN_HOSTS = new Map([
   // v2.9 Drive 저장소: 링크 등록 입력 placeholder·Drive 링크 파서(lib/driveLink)·mock 링크 등록 버전의 '새 탭 열기' 주소.
   // 페이지가 가져오지 않는다(fetch 0) — 사람이 누르면 새 탭으로 이동할 뿐.
   ['drive.google.com', 'Drive 링크 문자열 (링크 등록 placeholder·파서·새 탭 열기 — 요청 없음)'],
+  // v2.12 Slack 봇: 행사 설정 ③ 스레드 링크 입력 placeholder·형식 안내 문구("https://….slack.com/archives/…"). 요청 없음
+  ['….slack.com', 'S6 Slack 스레드 링크 placeholder·안내 문구 (요청 없음)'],
 ])
 const urls = [...new Set(html.match(/https?:\/\/[^\s"'`)<>\\]+/g) ?? [])]
 const unknownHosts = new Set()

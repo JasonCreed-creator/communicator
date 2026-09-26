@@ -28,7 +28,7 @@ import type {
   Version,
   WbsTask,
 } from '../../../types/entities'
-import type { DashboardData, PendingApprovalItem } from '../../../types/views'
+import type { DashboardData, PendingApprovalItem, RequestAck } from '../../../types/views'
 
 type DeliverablesDomain = Pick<
   DataProvider,
@@ -59,6 +59,22 @@ const PM_ONLY_KEYS = ['assignee_id', 'brief', 'brief_refs', 'spec_size', 'spec_q
 
 /** 정렬 키 — null 마감은 뒤로(mock의 `?? '9999'`) */
 const LAST = '9999'
+
+
+/** request_acks 행 → 화면 모양(표식 — 확인한 사람 이름만) */
+function toRequestAcks(rows: unknown): RequestAck[] {
+  return ((rows as { kind: string; created_at: string; acknowledged_at: string | null; acknowledged_by_profile: { display_name: string } | { display_name: string }[] | null }[] | null) ?? [])
+    .filter((r) => r.kind === 'work' || r.kind === 'review')
+    .map((r) => {
+      const by = Array.isArray(r.acknowledged_by_profile) ? r.acknowledged_by_profile[0] : r.acknowledged_by_profile
+      return {
+        kind: r.kind as RequestAck['kind'],
+        requested_at: r.created_at,
+        acknowledged_at: r.acknowledged_at,
+        acknowledged_by_name: by?.display_name ?? null,
+      }
+    })
+}
 
 export function deliverablesDomain(ctx: SupabaseCtx): DeliverablesDomain {
   /** 활동 로그 최신순 — 행사 존재 검사는 호출부가 한다(대시보드는 이미 project를 읽었다) */
@@ -201,10 +217,17 @@ export function deliverablesDomain(ctx: SupabaseCtx): DeliverablesDomain {
 
     async getDeliverable(deliverableId) {
       const d = await ctx.deliverable(deliverableId)
-      const [versionRes, commentRes, approvalRes] = await Promise.all([
+      const [versionRes, commentRes, approvalRes, ackRes] = await Promise.all([
         ctx.sb.from('versions').select('*').eq('deliverable_id', deliverableId).order('version_no', { ascending: false }),
         ctx.sb.from('comments').select('*').eq('deliverable_id', deliverableId).order('created_at'),
         ctx.sb.from('approvals').select('*').eq('deliverable_id', deliverableId).order('requested_at'),
+        // v15.1(Phase 6.1) — Slack 의뢰 카드 확인 기록. 표식일 뿐이라 읽기에 실패해도(표 적용 전 등) 상세는 그대로 연다
+        ctx.sb
+          .from('request_acks')
+          .select('kind, created_at, acknowledged_at, acknowledged_by_profile:profiles(display_name)')
+          .eq('deliverable_id', deliverableId)
+          .order('created_at', { ascending: false })
+          .limit(10),
       ])
       return {
         ...d,
@@ -212,6 +235,7 @@ export function deliverablesDomain(ctx: SupabaseCtx): DeliverablesDomain {
         // 내부 화면은 전체(internal·shared) — 발주처 노출은 clientPortal 도메인이 shared만 돌려준다
         comments: ctx.q(commentRes) as Comment[],
         approvals: ctx.q(approvalRes) as Approval[],
+        request_acks: ackRes.error ? [] : toRequestAcks(ackRes.data),
       }
     },
 

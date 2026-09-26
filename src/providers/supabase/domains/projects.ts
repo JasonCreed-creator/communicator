@@ -9,6 +9,7 @@ import { driveFor } from '../drive'
 import { mapPgError, type PgErrorLike } from '../errors'
 import { ProviderError } from '../../../lib/errors'
 import { normalizeSlackWebhook, SLACK_WEBHOOK_INVALID_MESSAGE } from '../../../lib/slackWebhook'
+import { normalizeSlackThreadLink, normalizeSlackUserId, SLACK_THREAD_INVALID_MESSAGE, SLACK_USER_ID_INVALID_MESSAGE } from '../../../lib/slackThread'
 import { isDelayed, toIsoDate } from '../../../lib/wbs'
 import type { ClientContact, ClientToken, Project, UUID, WbsTask } from '../../../types/entities'
 import type { MemberRole } from '../../../types/enums'
@@ -72,6 +73,7 @@ interface PeopleRow {
   title: string | null
   phone: string | null
   org: string | null
+  slack_user_id?: string | null
   assignments: PersonAssignment[] | null
 }
 
@@ -409,6 +411,12 @@ export function projectsDomain(ctx: SupabaseCtx): ProjectsDomain {
         if (webhook === 'invalid') throw new ProviderError('validation', SLACK_WEBHOOK_INVALID_MESSAGE)
         row.slack_webhook_url = webhook
       }
+      // v15.1(Phase 6.1 §9) — 행사 스레드. Slack 메시지 링크만(서버 알림 함수가 여기서 채널·스레드를 읽는다)
+      if (patch.slack_thread_url !== undefined) {
+        const thread = normalizeSlackThreadLink(patch.slack_thread_url)
+        if (thread === 'invalid') throw new ProviderError('validation', SLACK_THREAD_INVALID_MESSAGE)
+        row.slack_thread_url = thread
+      }
       // v2.0 — "견적 연결" 액션: app_role admin·sales 전용 (§6.1·§10), 상호 링크 동기화
       if (patch.quote_id !== undefined) {
         if (me.app_role !== 'admin' && me.app_role !== 'sales') {
@@ -480,6 +488,7 @@ export function projectsDomain(ctx: SupabaseCtx): ProjectsDomain {
             email: r.email,
             title: r.title ?? null,
             phone: r.phone ?? null,
+            slack_user_id: r.slack_user_id ?? null,
             assignments: r.assignments ?? [],
           }),
         )
@@ -491,9 +500,11 @@ export function projectsDomain(ctx: SupabaseCtx): ProjectsDomain {
       const name = input.name.trim()
       const email = input.email.trim()
       if (!name || !email) throw new ProviderError('validation', '이름과 이메일은 필수입니다.')
+      const slackId = normalizeSlackUserId(input.slack_user_id)
+      if (slackId === 'invalid') throw new ProviderError('validation', SLACK_USER_ID_INVALID_MESSAGE)
       const res = await ctx.sb
         .from('profiles')
-        .insert({ display_name: name, email, title: input.title?.trim() || null, phone: input.phone?.trim() || null })
+        .insert({ display_name: name, email, title: input.title?.trim() || null, phone: input.phone?.trim() || null, slack_user_id: slackId })
         .select('id, display_name, email, title, phone')
         .single()
       // 이메일 유일 인덱스(lower(email)) 위반 = 이미 등록된 사람 — mock의 사전 검사와 같은 메시지
@@ -517,6 +528,13 @@ export function projectsDomain(ctx: SupabaseCtx): ProjectsDomain {
         const email = patch.email.trim()
         if (!email) throw new ProviderError('validation', '이메일은 비울 수 없습니다.')
         row.email = email
+        // v15.1 — 이메일이 바뀌면 Slack ID도 다시 찾게 비운다(서버가 새 이메일로 찾아 적는다)
+        if (email.toLowerCase() !== (existing.email ?? '').toLowerCase() && patch.slack_user_id === undefined) row.slack_user_id = null
+      }
+      if (patch.slack_user_id !== undefined) {
+        const slackId = normalizeSlackUserId(patch.slack_user_id)
+        if (slackId === 'invalid') throw new ProviderError('validation', SLACK_USER_ID_INVALID_MESSAGE)
+        row.slack_user_id = slackId
       }
       // 직함·전화는 비우는 것도 뜻이 있는 편집이라 빈 문자열을 null로 받아 적는다
       if (patch.title !== undefined) row.title = patch.title?.trim() || null

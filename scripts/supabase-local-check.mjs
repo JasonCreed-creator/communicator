@@ -518,6 +518,96 @@ end $$;
 select notify_claim_manual('${PRJ}', 'x');`, { expect: 'error', match: '리마인드 대상' })
   scenario('알림 notify_mark: 알 수 없는 결과 422', `select notify_mark(array['k'], 'maybe');`, { expect: 'error', match: '알 수 없는 결과' })
 
+  // 5g-2. Slack 봇 전환 + 의뢰 확인 버튼 (Phase 6.1 · 설계서 v2.12 §9) — 행사 스레드 · 멘션 대상 · 의뢰 카드 기록 · 확인은 멘션된 사람만 · 24시간 미확인 한 번
+  const pmProfile = `(select id from profiles where auth_user_id='${authId.pm}')`
+  const designProfile = `(select id from profiles where auth_user_id='${authId.design}')`
+  for (const [fn, call] of [
+    ['notify_record_card', `notify_record_card(gen_random_uuid(), '${PRJ}', '[]'::jsonb, '{}', 'C1', '1.1', null)`],
+    ['notify_ack_card', `notify_ack_card(gen_random_uuid(), null)`],
+    ['notify_set_slack_user', `notify_set_slack_user(gen_random_uuid(), 'U123')`],
+  ]) {
+    scenario(`Slack 봇 ${fn}: authenticated 실행 불가(service 전용)`, `select ${call};`, { role: 'authenticated', sub: authId.pm, expect: 'error', match: 'permission denied' })
+    scenario(`Slack 봇 ${fn}: anon 실행 불가`, `select ${call};`, { role: 'anon', expect: 'error', match: 'permission denied' })
+  }
+  scenario('Slack 봇 request_acks: 멤버도 직접 쓰기 불가(카드 기록은 서버만)', `insert into request_acks (card_id, project_id, deliverable_id, kind, notify_key, channel_id, message_ts) values (gen_random_uuid(), '${PRJ}', '${designItem}', 'work', 'k', 'C1', '1.1');`,
+    { role: 'authenticated', sub: authId.pm, expect: 'error', match: 'permission denied' })
+  scenario('Slack 봇 profiles.slack_user_id: pm은 고칠 수 있고 목록(list_people)에 실린다 · app_role은 계속 막힘', `update profiles set slack_user_id = 'U0DESIGN1' where id = ${designProfile};
+${assertSql(`(select slack_user_id from profiles where id = ${designProfile}) = 'U0DESIGN1'`)}
+${assertSql(`exists (select 1 from jsonb_array_elements(list_people()) e where e->>'slack_user_id' = 'U0DESIGN1')`)}`, { role: 'authenticated', sub: authId.pm })
+  scenario('Slack 봇 profiles.app_role: 여전히 authenticated가 못 바꾼다', `update profiles set app_role = 'admin' where id = ${designProfile};`,
+    { role: 'authenticated', sub: authId.pm, expect: 'error', match: 'permission denied' })
+  scenario('Slack 봇 사건 선점: 내부검토 요청만(다른 상태 전이 제외) · PM 멘션 대상(이메일·Slack ID) · 최신 버전 메모·파일 · 행사 스레드 · 새 지시는 담당자', `update projects set slack_thread_url = 'https://ws.slack.com/archives/C0TEST01/p1727251234567890' where id = '${PRJ}';
+update profiles set slack_user_id = 'U0PM00001' where id = ${pmProfile};
+update deliverables set assignee_id = ${designProfile} where id = '${designItem}';
+insert into versions (deliverable_id, version_no, drive_file_id, file_name, note) values ('${designItem}', 97, 'drv-sb-1', 'x_v97.pdf', '띠 높이를 줄였습니다');
+select app.write_log('${PRJ}', 'user:' || ${designProfile}, 'status.transitioned', 'deliverable', '${designItem}', '{"from":"draft","to":"internal_review"}');
+select app.write_log('${PRJ}', 'user:' || ${designProfile}, 'status.transitioned', 'deliverable', '${designItem}', '{"from":"internal_review","to":"pending_approval"}');
+select app.write_log('${PRJ}', 'user:' || ${pmProfile}, 'deliverable.requested', 'deliverable', '${designItem}', null);
+do $$ declare r jsonb; e jsonb; begin
+  r := notify_claim_events(200);
+  if (select count(*) from jsonb_array_elements(r) x where x->>'action' = 'status.transitioned') <> 1 then raise exception 'ASSERT_FAILED: only internal_review %', r; end if;
+  select x into e from jsonb_array_elements(r) x where x->>'action' = 'status.transitioned';
+  if e->>'thread' <> 'https://ws.slack.com/archives/C0TEST01/p1727251234567890' then raise exception 'ASSERT_FAILED: thread %', e; end if;
+  if (e->>'version_no')::int <> 97 or e->>'file_name' <> 'x_v97.pdf' or e->>'version_note' <> '띠 높이를 줄였습니다' then raise exception 'ASSERT_FAILED: version %', e; end if;
+  if not exists (select 1 from jsonb_array_elements(e->'recipients') p where p->>'slack_user_id' = 'U0PM00001' and p->>'email' is not null) then raise exception 'ASSERT_FAILED: pm recipient %', e; end if;
+  if exists (select 1 from jsonb_array_elements(e->'recipients') p where p->>'id' = (select id::text from profiles where email = 'design@example.com')) then raise exception 'ASSERT_FAILED: designer is not a review recipient'; end if;
+  select x into e from jsonb_array_elements(r) x where x->>'action' = 'deliverable.requested' and x->>'deliverable_id' = '${designItem}';
+  if jsonb_array_length(e->'recipients') <> 1 or (e->'recipients'->0->>'email') <> 'design@example.com' then raise exception 'ASSERT_FAILED: assignee recipient %', e; end if;
+  if r::text ~ 'total_amount|breakdown|contract_amount|ordered_amount|actual_amount|"phone"' then raise exception 'ASSERT_FAILED: money/phone'; end if;
+end $$;`)
+  scenario('Slack 봇 의뢰 카드: 기록(다른 행사 항목은 버림) → 멘션 안 된 사람 not_recipient → 멘션된 사람 ok → 두 번째 already → 없는 카드 not_found', `do $$ declare c uuid := gen_random_uuid(); r jsonb; other uuid; begin
+  select id into other from deliverables where project_id <> '${PRJ}' limit 1;
+  if notify_record_card(c, '${PRJ}', jsonb_build_array(jsonb_build_object('deliverable_id', '${designItem}', 'kind', 'work', 'notify_key', 'act:1'),
+       jsonb_build_object('deliverable_id', other, 'kind', 'work', 'notify_key', 'act:2')), array[${designProfile}], 'C0TEST01', '1727.0001', '1727251234.567890') <> 1 then raise exception 'ASSERT_FAILED: record'; end if;
+  r := notify_ack_card(c, ${pmProfile});
+  if r->>'status' <> 'not_recipient' or not (r->'names') ? (select display_name from profiles where id = ${designProfile}) then raise exception 'ASSERT_FAILED: not_recipient %', r; end if;
+  r := notify_ack_card(c, null);
+  if r->>'status' <> 'not_recipient' then raise exception 'ASSERT_FAILED: unknown user %', r; end if;
+  r := notify_ack_card(c, ${designProfile});
+  if r->>'status' <> 'ok' or (r->>'count')::int <> 1 then raise exception 'ASSERT_FAILED: ok %', r; end if;
+  if (select acknowledged_by from request_acks where card_id = c) <> ${designProfile} then raise exception 'ASSERT_FAILED: by'; end if;
+  r := notify_ack_card(c, ${designProfile});
+  if r->>'status' <> 'already' or r->>'by' is null then raise exception 'ASSERT_FAILED: already %', r; end if;
+  if notify_ack_card(gen_random_uuid(), ${designProfile})->>'status' <> 'not_found' then raise exception 'ASSERT_FAILED: not_found'; end if;
+  if (select status from deliverables where id = '${designItem}') is null then raise exception 'ASSERT_FAILED: status untouched'; end if;
+end $$;`)
+  scenario('Slack 봇 request_acks: 멤버는 자기 행사 카드 기록을 읽는다(앱 칩)', `reset role;
+select notify_record_card(gen_random_uuid(), '${PRJ}', jsonb_build_array(jsonb_build_object('deliverable_id', '${designItem}', 'kind', 'review', 'notify_key', 'act:3')), array[${pmProfile}], 'C0TEST01', '1727.0002', null);
+set local role authenticated;
+${assertSql(`(select count(*) from request_acks where deliverable_id = '${designItem}') = 1`)}`, { role: 'authenticated', sub: authId.design })
+  scenario('Slack 봇 리마인드: 24시간 넘은 미확인 카드는 한 번만(받는 사람·채널·원래 카드 ts) · 확인한 카드·하루 안 된 카드 제외 · 항목 마감 D-1 → 담당자', `do $$ declare c1 uuid := gen_random_uuid(); c2 uuid := gen_random_uuid(); c3 uuid := gen_random_uuid(); r jsonb; e jsonb; begin
+  perform notify_record_card(c1, '${PRJ}', jsonb_build_array(jsonb_build_object('deliverable_id', '${designItem}', 'kind', 'work', 'notify_key', 'a1')), array[${designProfile}], 'C0TEST01', '1727.1000', '1727.0000');
+  perform notify_record_card(c2, '${PRJ}', jsonb_build_array(jsonb_build_object('deliverable_id', '${designItem}', 'kind', 'work', 'notify_key', 'a2')), array[${designProfile}], 'C0TEST01', '1727.2000', '1727.0000');
+  perform notify_record_card(c3, '${PRJ}', jsonb_build_array(jsonb_build_object('deliverable_id', '${designItem}', 'kind', 'work', 'notify_key', 'a3')), array[${designProfile}], 'C0TEST01', '1727.3000', '1727.0000');
+  update request_acks set created_at = now() - interval '25 hours' where card_id in (c1, c2);
+  perform notify_ack_card(c2, ${designProfile});
+  update deliverables set due_date = (now() at time zone 'Asia/Seoul')::date + 1, status = 'draft' where id = '${designItem}';
+  r := notify_claim_reminders();
+  if (select count(*) from jsonb_array_elements(r) x where x->>'kind' = 'unacked') <> 1 then raise exception 'ASSERT_FAILED: unacked count %', r; end if;
+  select x into e from jsonb_array_elements(r) x where x->>'kind' = 'unacked';
+  if e->>'key' <> 'rem:unacked:' || c1 or e->>'message_ts' <> '1727.1000' or e->>'channel_id' <> 'C0TEST01' then raise exception 'ASSERT_FAILED: unacked row %', e; end if;
+  if (e->'recipients'->0->>'email') <> 'design@example.com' then raise exception 'ASSERT_FAILED: unacked recipients %', e; end if;
+  if (select reminded_at from request_acks where card_id = c1) is null then raise exception 'ASSERT_FAILED: reminded_at'; end if;
+  select x into e from jsonb_array_elements(r) x where x->>'kind' = 'deliverable_due' and x->>'deliverable_id' = '${designItem}';
+  if e is null or (e->'recipients'->0->>'email') <> 'design@example.com' then raise exception 'ASSERT_FAILED: deliverable_due %', r; end if;
+  delete from notification_log where key like 'rem:%';
+  if exists (select 1 from jsonb_array_elements(notify_claim_reminders()) x where x->>'kind' = 'unacked') then raise exception 'ASSERT_FAILED: unacked twice'; end if;
+end $$;`)
+  scenario('Slack 봇 notify_set_slack_user: 비어 있을 때만 적고(담당자 화면 값이 이김) · 형식이 틀리면 무시', `do $$ begin
+  update profiles set slack_user_id = null where email = 'ops@example.com';
+  perform notify_set_slack_user((select id from profiles where email = 'ops@example.com'), 'not-an-id');
+  if (select slack_user_id from profiles where email = 'ops@example.com') is not null then raise exception 'ASSERT_FAILED: invalid'; end if;
+  perform notify_set_slack_user((select id from profiles where email = 'ops@example.com'), 'U0OPS0001');
+  perform notify_set_slack_user((select id from profiles where email = 'ops@example.com'), 'U0OTHER99');
+  if (select slack_user_id from profiles where email = 'ops@example.com') <> 'U0OPS0001' then raise exception 'ASSERT_FAILED: no overwrite'; end if;
+end $$;`)
+  scenario('Slack 봇 항목 지우기: 의뢰 카드 기록도 함께 사라진다(cascade)', `do $$ declare c uuid := gen_random_uuid(); begin
+  perform notify_record_card(c, '${PRJ}', jsonb_build_array(jsonb_build_object('deliverable_id', '${designItem}', 'kind', 'work', 'notify_key', 'x')), array[]::uuid[], 'C1', '1.2', null);
+  delete from unregistered_files where linked_deliverable_id = '${designItem}';
+  delete from deliverables where id = '${designItem}';
+  if exists (select 1 from request_acks where card_id = c) then raise exception 'ASSERT_FAILED: cascade'; end if;
+end $$;`)
+
   // 5h. 협력사 견적서 불러오기 (Phase 4.7 · 설계서 v2.11 §19.5) — 확정 RPC(금액은 저장된 제안에서) · 원본 보관 판정 · 인박스 대조
   const BOARD = seedUuid('brd-001')
   const VQ = seedUuid('chk-vendor-import')

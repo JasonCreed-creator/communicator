@@ -7,6 +7,7 @@
 // 사용자 결정 2건(3.20): ① 별도 화면 + 행사 설정엔 피커 · ② 삭제는 차단하고 어디에 배정됐는지 보여준다.
 // 삭제 차단 사유(어느 행사인지)는 provider의 409 메시지에 그대로 담겨 오므로 화면은 삼키지 않고 그대로 띄운다.
 import { useState, type FormEvent } from 'react'
+import { isSlackUserId, SLACK_USER_ID_INVALID_MESSAGE } from '../lib/slackThread'
 import Card from '../components/internal/Card'
 import EmptyState from '../components/internal/EmptyState'
 import ErrorAlert from '../components/internal/ErrorAlert'
@@ -64,9 +65,11 @@ interface EditDraft {
   email: string
   title: string
   phone: string
+  /** v15.1(Phase 6.1) — Slack 멤버 ID. 비우면 서버가 이메일로 찾아 적는다 */
+  slack: string
 }
 
-const EMPTY_DRAFT: EditDraft = { name: '', email: '', title: '', phone: '' }
+const EMPTY_DRAFT: EditDraft = { name: '', email: '', title: '', phone: '', slack: '' }
 
 export default function PeoplePage() {
   const people = useAsync(() => provider.listPeople(), [])
@@ -75,14 +78,16 @@ export default function PeoplePage() {
 
   const [editingId, setEditingId] = useState<UUID | null>(null)
   const [draft, setDraft] = useState<EditDraft>(EMPTY_DRAFT)
-  const [draftError, setDraftError] = useState<{ name?: string; email?: string }>({})
+  const [draftError, setDraftError] = useState<{ name?: string; email?: string; slack?: string }>({})
 
-  const update = useMutation((personId: UUID, patch: EditDraft) =>
+  // Slack ID는 바꿨을 때만 보낸다 — 그 사이 서버가 이메일로 찾아 적은 값을 편집 전 값으로 덮지 않게
+  const update = useMutation((personId: UUID, patch: EditDraft, slackBefore: string) =>
     provider.updatePerson(personId, {
       name: patch.name.trim(),
       email: patch.email.trim(),
       title: patch.title.trim() || null,
       phone: patch.phone.trim() || null,
+      ...(patch.slack.trim() !== slackBefore ? { slack_user_id: patch.slack.trim() || null } : {}),
     }),
   )
   // removePerson은 void라 성공/실패를 반환값으로 못 가른다 — true를 얹어 호출부가 판단하게 한다
@@ -98,7 +103,7 @@ export default function PeoplePage() {
     remove.setError(null)
     setDraftError({})
     setEditingId(p.id)
-    setDraft({ name: p.name, email: p.email ?? '', title: p.title ?? '', phone: p.phone ?? '' })
+    setDraft({ name: p.name, email: p.email ?? '', title: p.title ?? '', phone: p.phone ?? '', slack: p.slack_user_id ?? '' })
   }
 
   const cancelEdit = () => {
@@ -109,12 +114,13 @@ export default function PeoplePage() {
   }
 
   const saveEdit = async (personId: UUID) => {
-    const errors: { name?: string; email?: string } = {}
+    const errors: { name?: string; email?: string; slack?: string } = {}
     if (!draft.name.trim()) errors.name = '이름을 입력하세요.'
     if (!draft.email.trim()) errors.email = '이메일을 입력하세요.'
+    if (draft.slack.trim() && !isSlackUserId(draft.slack)) errors.slack = SLACK_USER_ID_INVALID_MESSAGE
     setDraftError(errors)
-    if (errors.name || errors.email) return
-    const saved = await update.run(personId, draft)
+    if (errors.name || errors.email || errors.slack) return
+    const saved = await update.run(personId, draft, rows.find((p) => p.id === personId)?.slack_user_id ?? '')
     if (saved) {
       setEditingId(null)
       setDraft(EMPTY_DRAFT)
@@ -163,6 +169,7 @@ export default function PeoplePage() {
         <p data-testid="propagation-notice" className="mb-3 text-xs leading-relaxed text-ink-cap">
           여기서 고친 이름·직함·연락처는 이 사람이 올라간{' '}
           <span className="font-medium text-ink-sub">모든 행사와 발주처 화면</span>에 함께 반영됩니다.
+          Slack 멤버 ID는 알림 멘션에만 씁니다 — 비워 두면 첫 알림 때 이메일로 찾아 채웁니다(주소록 이메일과 Slack 이메일이 다를 때만 직접 넣으세요).
         </p>
 
         <ErrorAlert message={update.error} />
@@ -178,13 +185,14 @@ export default function PeoplePage() {
 
         {people.data && rows.length > 0 && (
           <div className="mt-3 overflow-x-auto">
-            <table className="ui-table min-w-[880px] text-sm" aria-label="담당자 목록">
+            <table className="ui-table min-w-[1010px] text-sm" aria-label="담당자 목록">
               <thead>
                 <tr>
                   <th className="ui-th w-[132px]">이름</th>
                   <th className="ui-th w-[148px]">직함</th>
                   <th className="ui-th w-[196px]">이메일</th>
                   <th className="ui-th w-[140px]">전화</th>
+                  <th className="ui-th w-[132px]">Slack</th>
                   <th className="ui-th">배정된 행사</th>
                   {isPm && <th className="ui-th w-[136px]">관리</th>}
                 </tr>
@@ -234,6 +242,17 @@ export default function PeoplePage() {
                           className="ui-input min-h-8 w-full"
                         />
                       </td>
+                      <td className="ui-cell-wrap">
+                        <input
+                          aria-label="Slack 멤버 ID"
+                          placeholder="비우면 자동"
+                          value={draft.slack}
+                          onChange={(e) => setDraft((d) => ({ ...d, slack: e.target.value }))}
+                          aria-invalid={draftError.slack ? true : undefined}
+                          className={`ui-input min-h-8 w-full${draftError.slack ? ' ui-input-error' : ''}`}
+                        />
+                        {draftError.slack && <span className="mt-1 block text-[11px] text-negative">{draftError.slack}</span>}
+                      </td>
                       <td className="text-ink-sub">
                         <AssignmentChips assignments={p.assignments} />
                       </td>
@@ -259,6 +278,17 @@ export default function PeoplePage() {
                       <td className="text-ink-sub">{p.title ?? '-'}</td>
                       <td className="text-ink-sub">{p.email ?? '-'}</td>
                       <td className="text-ink-sub">{p.phone ?? '-'}</td>
+                      <td data-testid={`person-slack-${p.id}`}>
+                        {p.slack_user_id ? (
+                          <span className="whitespace-nowrap font-mono text-xs text-ink-sub" title="Slack 멤버 ID — 알림에서 멘션됩니다">
+                            {p.slack_user_id}
+                          </span>
+                        ) : (
+                          <span className="whitespace-nowrap text-xs text-ink-cap" title="첫 알림 때 이메일로 찾아 채웁니다">
+                            이메일로 자동
+                          </span>
+                        )}
+                      </td>
                       <td className="text-ink-sub">
                         <AssignmentChips assignments={p.assignments} />
                       </td>

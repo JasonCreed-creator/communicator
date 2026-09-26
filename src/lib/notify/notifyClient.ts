@@ -7,6 +7,8 @@ import { ProviderError, type ErrorCode } from '../errors'
 export interface NotifyStatus {
   /** 공용 채널(서버 env SLACK_WEBHOOK_URL)이 설정됐는가 */
   slack: boolean
+  /** v2.12 — 봇 토큰(서버 env)이 있는가. 없으면 행사 스레드로 보내지 못한다(웹훅으로) */
+  bot?: boolean
   /** 매일 리마인드(Vercel cron 인증)가 설정됐는가 */
   cron: boolean
 }
@@ -56,7 +58,7 @@ export function createNotifyClient(opts: NotifyClientOptions) {
       const res = await fetchImpl(base, { method: 'GET' })
       if (!res.ok) throw new ProviderError('conflict', `알림 서버 오류(${res.status})`)
       const data = (await res.json()) as Partial<NotifyStatus>
-      return { slack: Boolean(data.slack), cron: Boolean(data.cron) }
+      return { slack: Boolean(data.slack), bot: Boolean(data.bot), cron: Boolean(data.cron) }
     },
 
     /** 사건 직후 신호(로그인 세션) — 짧은 시간의 여러 사건을 한 번으로 묶는다 */
@@ -76,7 +78,7 @@ export function createNotifyClient(opts: NotifyClientOptions) {
       fire({ action: 'drain', token }, null)
     },
 
-    test(projectId: string): Promise<{ sent: true; channel: 'project' | 'global' }> {
+    test(projectId: string): Promise<{ sent: true; channel: 'thread' | 'project' | 'global' }> {
       return call({ action: 'test', project_id: projectId })
     },
 

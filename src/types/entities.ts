@@ -95,6 +95,11 @@ export interface Project {
   quote_id: UUID | null
   drive_root_folder_id: string | null
   slack_webhook_url: string | null
+  /**
+   * v15.1(Phase 6.1 §9) — 행사 스레드(Slack '링크 복사' 주소). 있으면 봇이 모든 알림을 이 스레드의 답글로 남긴다.
+   * 선택 필드 — 없는 행(옛 픽스처·mock)은 스레드 없음과 같다.
+   */
+  slack_thread_url?: string | null
   /** v1.3 — S0 온보딩에서 선택. general이면 등록 모듈 경량 모드(표시 계층 토글) */
   event_type: EventType
   /** v2.6 §25 — 행사 유형 4분류. 시드이지 잠금이 아니다(이후 kind·event_type 독립 변경 가능) */

@@ -3,6 +3,7 @@
 import { useMemo, useState, type MouseEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { activeClientLinks } from '../internal/ClientLinkWarning'
+import RequestAckNote from '../item/RequestAckNote'
 import { useAsync, useMutation } from '../../hooks/useAsync'
 import { appUrl } from '../../lib/basePath'
 import { getDataProvider } from '../../providers'
@@ -50,13 +51,14 @@ export default function DesignNextActionView({
 }) {
   return (
     <div className="flex items-center justify-between gap-2.5" data-testid="design-next-action">
-      <span
-        className={`min-w-0 text-[13px] ${next.muted ? 'text-ink-sub' : 'text-brown'} ${
-          compact ? 'truncate' : 'whitespace-normal'
-        }`}
-        title={compact ? next.text : undefined}
-      >
-        {next.text}
+      <span className="min-w-0">
+        <span
+          className={`block text-[13px] ${next.muted ? 'text-ink-sub' : 'text-brown'} ${compact ? 'truncate' : 'whitespace-normal'}`}
+          title={compact ? next.text : undefined}
+        >
+          {next.text}
+        </span>
+        {!compact && <RequestAckNote line={row.ack ?? null} />}
       </span>
       {next.action && (
         <ActionButton row={row} kind={next.action.kind} label={next.action.label} clientLink={clientLink} onChanged={onChanged} />
