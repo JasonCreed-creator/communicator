@@ -32,26 +32,27 @@ export default function CuesheetSection({
               <table className="w-full min-w-[720px] border-collapse text-sm">
                 <thead>
                   <tr>
-                    <th className="ui-th">시간</th>
+                    {/* Phase 3.24 PR-B — 현장 큐시트 표기(시각 · 큐 · 구분 · MC·진행 · 조명 · 영상 · 음향) */}
+                    <th className="ui-th">시각</th>
                     <th className="ui-th">큐</th>
                     <th className="ui-th">구분</th>
-                    <th className="ui-th">내용</th>
-                    <th className="ui-th">음향</th>
+                    <th className="ui-th">MC·진행</th>
                     <th className="ui-th">조명</th>
-                    <th className="ui-th">스크린</th>
+                    <th className="ui-th">영상</th>
+                    <th className="ui-th">음향</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
                   {cuesheet.cues.map((c) => (
                     <tr key={c.id}>
-                      {/* 시간·큐·구분은 짧은 식별 칸 — 한 줄 고정. 내용·콘솔 3채널만 접힌다(상단 정렬) */}
+                      {/* 시각·큐·구분은 짧은 식별 칸 — 한 줄 고정. MC·진행·콘솔 3채널만 접힌다(상단 정렬) */}
                       <td className="whitespace-nowrap px-3 py-2 align-top text-ink-sub">{c.time_at ?? '—'}</td>
                       <td className="whitespace-nowrap px-3 py-2 align-top font-medium text-ink">{c.cue_no ?? '—'}</td>
                       <td className="whitespace-nowrap px-3 py-2 align-top text-ink-sub">{c.segment ?? '—'}</td>
                       <td className="px-3 py-2 align-top text-ink-sub">{summaryLine(c.body)}</td>
-                      <td className="px-3 py-2 align-top text-ink-cap">{c.console_audio ?? '—'}</td>
                       <td className="px-3 py-2 align-top text-ink-cap">{c.console_light ?? '—'}</td>
                       <td className="px-3 py-2 align-top text-ink-cap">{c.console_screen ?? '—'}</td>
+                      <td className="px-3 py-2 align-top text-ink-cap">{c.console_audio ?? '—'}</td>
                     </tr>
                   ))}
                 </tbody>

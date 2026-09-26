@@ -10,11 +10,13 @@ import { mockProvider, renderRoute } from './testUtils'
 
 afterEach(cleanup)
 
-/** 큐시트 표의 큐 번호를 순서대로 — Phase 3.23 PR-4b부터 행마다 data-testid="cue-row"(편집 가능하면 첫 칸은 손잡이) */
+/** 큐시트 표의 큐 번호를 순서대로 — Phase 3.23 PR-4b부터 행마다 data-testid="cue-row"(편집 가능하면 첫 칸은 손잡이).
+ *  Phase 3.24 PR-B부터 칸 순서 = 시각 · 큐 · 구분 … — 큐 번호는 데이터 칸의 두 번째 */
 function cueNoOrder(scope: ParentNode = document): string[] {
   return Array.from(scope.querySelectorAll('[data-testid="cue-table"] tbody > tr[data-testid="cue-row"]')).map((tr) => {
-    const cells = tr.querySelectorAll('td')
-    return (cells[0].getAttribute('aria-hidden') === 'true' ? cells[1] : cells[0]).textContent ?? ''
+    const cells = Array.from(tr.querySelectorAll('td'))
+    const data = cells[0].getAttribute('aria-hidden') === 'true' ? cells.slice(1) : cells
+    return data[1]?.textContent ?? ''
   })
 }
 
@@ -26,7 +28,7 @@ async function pickFromMenu(cueNo: string, item: RegExp | string) {
   await userEvent.click(within(screen.getByRole('menu', { name: `큐 메뉴 ${cueNo}` })).getByRole('menuitem', { name: item }))
 }
 
-/** S9 큐시트 섹션(열 순서: 시간·큐·구분…)의 '큐' 열(2번째 셀) 값을 순서대로 읽는다 */
+/** S9 큐시트 섹션(열 순서: 시각·큐·구분…)의 '큐' 열(2번째 셀) 값을 순서대로 읽는다 */
 function planCueOrder(section: HTMLElement): string[] {
   return Array.from(section.querySelectorAll('table tbody > tr')).map(
     (tr) => tr.querySelectorAll('td')[1]?.textContent ?? '',
@@ -49,7 +51,7 @@ describe('DoD-12 큐시트 정형 에디터', () => {
 
     // 표 머리 — 손잡이·메뉴 칸은 이름 없이 비어 있다(§7-2.8)
     const headerRow = within(sheet).getByTestId('cue-table').querySelector('thead tr')!
-    expect(headerRow.textContent).toBe('큐시간구분내용음향조명스크린')
+    expect(headerRow.textContent).toBe('시각큐구분MC·진행조명영상음향')
 
     // 큐 4행 (cue-001~004)
     expect(cueNoOrder()).toEqual(['C01', 'C02', 'C03', 'C04'])
@@ -77,12 +79,12 @@ describe('DoD-12 큐시트 정형 에디터', () => {
     await userEvent.click(within(sheet).getByRole('button', { name: '큐 추가' }))
     const form = await screen.findByTestId('cue-edit-row')
     expect((within(form).getByLabelText('큐번호') as HTMLInputElement).value).toBe('C05')
-    await userEvent.type(within(form).getByLabelText('시간'), '10:05')
+    await userEvent.type(within(form).getByLabelText('시각'), '10:05')
     await userEvent.type(within(form).getByLabelText('구분'), 'VIP 소개')
-    await userEvent.type(within(form).getByLabelText('내용(대본)'), 'VIP 등장 안내 멘트')
+    await userEvent.type(within(form).getByLabelText('MC·진행(대본)'), 'VIP 등장 안내 멘트')
     await userEvent.type(within(form).getByLabelText('음향'), 'SFX')
     await userEvent.type(within(form).getByLabelText('조명'), '스팟')
-    await userEvent.type(within(form).getByLabelText('스크린'), 'VIP 프로필')
+    await userEvent.type(within(form).getByLabelText('영상'), 'VIP 프로필')
     await userEvent.click(within(form).getByRole('button', { name: '저장' }))
 
     await waitFor(() => expect(cueNoOrder()).toEqual(['C01', 'C02', 'C03', 'C04', 'C05']))
@@ -100,7 +102,7 @@ describe('DoD-12 큐시트 정형 에디터', () => {
 
     await pickFromMenu('C01', '이 큐 고치기')
     const form = await screen.findByTestId('cue-edit-row')
-    const timeInput = within(form).getByLabelText('시간') as HTMLInputElement
+    const timeInput = within(form).getByLabelText('시각') as HTMLInputElement
     expect(timeInput.value).toBe('09:20')
     await userEvent.clear(timeInput)
     await userEvent.type(timeInput, '09:15')

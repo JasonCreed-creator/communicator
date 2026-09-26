@@ -75,9 +75,10 @@ function dataTransfer(initial: Record<string, string> = {}) {
   }
 }
 
+// 편집 가능 표 = 손잡이 · 시각 · 큐 · …(Phase 3.24 PR-B 칸 순서) — 큐 번호는 세 번째 칸
 const cueOrder = () =>
   Array.from(document.querySelectorAll('[data-testid="cue-table"] tbody > tr[data-testid="cue-row"]')).map(
-    (tr) => tr.querySelectorAll('td')[1]?.textContent ?? '',
+    (tr) => tr.querySelectorAll('td')[2]?.textContent ?? '',
   )
 const rowOf = (cueNo: string) => screen.getByText(cueNo, { selector: 'td' }).closest('tr')!
 
@@ -169,9 +170,10 @@ describe('DoD 74 ⑦ 운영 보드 인라인 편집', () => {
     mockProvider().switchUser('usr-pm')
     localStorage.setItem('communicator.currentProjectId', 'prj-stc26')
     renderRoute('/board/ops')
-    const row = (await screen.findByText('개막식 큐시트')).closest('li')!
-    await userEvent.click(within(row).getByRole('button', { name: '빌더 열기' }))
-    const panel = await within(row).findByTestId('builder-panel-cuesheet')
+    await screen.findByText('개막식 큐시트')
+    // Phase 3.24 PR-B — 운영 보드는 유형별 표(행 끝 '열기'가 그 행 아래에서 빌더를 펼친다)
+    await userEvent.click(screen.getByRole('button', { name: '개막식 큐시트 열기' }))
+    const panel = await screen.findByTestId('builder-panel-cuesheet')
     const sheet = await within(panel).findByRole('region', { name: '큐시트' })
     await within(sheet).findAllByTestId('cue-row')
     expect(within(sheet).getByRole('button', { name: '큐 추가' })).toBeTruthy()

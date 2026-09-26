@@ -6,6 +6,7 @@
 // 방식으로, 내부 경로에는 값이 실재함을 먼저 보인 뒤 포털·발주처 응답에서 0건임을 증명한다.
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
+import { GUIDE_CANON_ORDER } from '../lib/guideStructured'
 import { PARTNER_DEMO_TOKEN, PROJECT_ID_HOST } from '../fixtures/hostFixtures'
 import { mockProvider, renderRoute } from './testUtils'
 
@@ -117,7 +118,8 @@ describe('DoD 48 판매 플래너 (v2.6 §25)', () => {
     expect(seeded[0].title).toBe('진행 원칙')
     expect(seeded[0].content).toContain('발표 시간은 세션당 40분입니다.')
     expect(seeded[0].source_ref).toBeNull() // 연동 출처가 아니라 프리셋 시드다 — stale 판정 대상이 아니다
-    expect(seeded.map((s) => s.kind)).toEqual(['custom', 'zone', 'role', 'emergency', 'contacts'])
+    // v2.13 §23.5 — 진행 원칙 뒤로 현장 운영 12섹션(정본 순서)
+    expect(seeded.map((s) => s.kind)).toEqual(['custom', ...GUIDE_CANON_ORDER])
   })
 
   it('HT-3(참관객 이용권·경품)만 별도 카테고리로 전개된다 (§25.5 benefit)', async () => {

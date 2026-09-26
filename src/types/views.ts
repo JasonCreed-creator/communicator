@@ -11,6 +11,7 @@ import type {
   Comment,
   Cue,
   Deliverable,
+  GuideSectionData,
   IsoDate,
   IsoDateTime,
   Milestone,
@@ -725,6 +726,8 @@ export interface GuideSectionInput {
   content?: string | null
   source_ref?: 'zone_items' | 'role_charters' | null
   source_stale?: boolean
+  /** v2.13 §23.5 (v15.2 필드만) — 표로 채우는 섹션 데이터. 있으면 provider가 content를 이 데이터에서 다시 만든다 */
+  data?: GuideSectionData | null
 }
 
 // ── S-10 정산보드 뷰 (v2.2 §19) ───────────────────────────────────────

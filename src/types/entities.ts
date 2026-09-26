@@ -847,14 +847,171 @@ export interface GuideSection {
   deliverable_id: UUID
   kind: GuideSectionKind
   title: string
-  /** 마크다운 — S9 초경량 렌더러 재사용 */
+  /** 마크다운 — S9 초경량 렌더러 재사용. v2.13: data가 있는 섹션은 저장할 때 data에서 만든 글(표를 목록으로 옮긴 것) */
   content: string | null
   /** 연동 출처 — 없으면 수기 작성 섹션(비상 대응·연락망 등) */
   source_ref: 'zone_items' | 'role_charters' | null
   /** 원본 변경 감지 표시 — 자동 덮어쓰기 금지, 사람이 차이를 확인하고 반영(R-O4) */
   source_stale: boolean
   sort_order: number
+  /** v2.13 §23.5 — 표로 채우는 섹션의 데이터(type = 섹션 종류). null·없음 = 마크다운 섹션(옛 문서 포함) */
+  data?: GuideSectionData | null
 }
+
+// ── v2.13 §23.5 운영가이드 현장 운영 섹션 데이터 (guide_sections.data jsonb) ──────────
+// 섹션 종류마다 한 모양 — type이 섹션 kind와 같다. 칸은 전부 사람이 고치는 글이다(숫자 칸만 number|null).
+
+/** 역할 분담 표시 — 주관 ● · 협조 ○ · 해당 없음 — */
+export type GuideMark = 'main' | 'help' | 'none'
+
+export interface GuideSetupRow {
+  /** 표시용 날짜 글('12/9 (수)'·'D-1') */
+  date: string
+  time: string
+  task: string
+  place: string
+  owner: string
+}
+export interface GuideSetupData {
+  type: 'setup'
+  rows: GuideSetupRow[]
+  /** 시설 규정 메모 */
+  notes: string[]
+}
+
+export interface GuideStaffingRow {
+  role: string
+  count: number | null
+  call_time: string
+  duty: string
+  channel: string
+}
+export interface GuideStaffingData {
+  type: 'staffing'
+  rows: GuideStaffingRow[]
+  /** 별도 인력(협력사 기술 인력 등) 한 줄 */
+  extra: string
+}
+
+export interface GuideRadioChannel {
+  code: string
+  name: string
+  members: string
+}
+export interface GuideRadioData {
+  type: 'radio'
+  channels: GuideRadioChannel[]
+  /** 지휘 흐름(요청 → … → 현장) */
+  chain: string[]
+  /** 변경 결정 규칙 한 줄 */
+  rule: string
+}
+
+export interface GuideRaciRow {
+  area: string
+  /** parties와 같은 순서 3칸 */
+  marks: [GuideMark, GuideMark, GuideMark]
+  note: string
+}
+export interface GuideRaciData {
+  type: 'raci'
+  /** 열 이름 3개(대행형 = 주최사 · 우리 · 협력사·베뉴) */
+  parties: [string, string, string]
+  rows: GuideRaciRow[]
+}
+
+export interface GuideDayplanRow {
+  /** 사전 준비 · 본행사 · 마무리 */
+  group: 'pre' | 'main' | 'post'
+  time: string
+  segment: string
+  content: string
+  av: string
+  owner: string
+  /** 프로그램표 세션에서 온 행 — 표시용(연동 칩). 다시 불러오기는 사람이 한다 */
+  session_id: string | null
+}
+export interface GuideDayplanData {
+  type: 'dayplan'
+  rows: GuideDayplanRow[]
+}
+
+export interface GuideChecklistItem {
+  /** 시각·소요(타임라인형) — 체크형은 빈 글 */
+  at: string
+  text: string
+}
+export interface GuideChecklistBlock {
+  title: string
+  /** 구간 표시('12:45까지'·'20분') */
+  span: string
+  /** check = 체크 목록 · timeline = 시각/소요 + 할 일 */
+  style: 'check' | 'timeline'
+  items: GuideChecklistItem[]
+}
+export interface GuideChecklistsData {
+  type: 'checklists'
+  blocks: GuideChecklistBlock[]
+}
+
+export interface GuideRegistrationData {
+  type: 'registration'
+  /** 명찰 출력(접수) 라인 수 */
+  lines: number | null
+  /** 1인 처리 시간(초) */
+  seconds_per_person: number | null
+  /** 피크 구간(분) */
+  peak_minutes: number | null
+  /** 피크 구간 도착 인원 */
+  peak_arrivals: number | null
+  /** 기프트 지급 등 메모 */
+  notes: string[]
+}
+
+export interface GuideVipRow {
+  target: string
+  arrival: string
+  route: string
+  seat: string
+  owner: string
+}
+export interface GuideVipData {
+  type: 'vip'
+  rows: GuideVipRow[]
+}
+
+export interface GuideSafetyRow {
+  item: string
+  action: string
+  owner: string
+}
+export interface GuideSafetyData {
+  type: 'safety'
+  rows: GuideSafetyRow[]
+}
+
+export interface GuideEmergencyRow {
+  situation: string
+  action: string
+  owner: string
+  channel: string
+}
+export interface GuideEmergencyData {
+  type: 'emergency'
+  rows: GuideEmergencyRow[]
+}
+
+export type GuideSectionData =
+  | GuideSetupData
+  | GuideStaffingData
+  | GuideRadioData
+  | GuideRaciData
+  | GuideDayplanData
+  | GuideChecklistsData
+  | GuideRegistrationData
+  | GuideVipData
+  | GuideSafetyData
+  | GuideEmergencyData
 
 // ── v2.6 §24 sheet_connections — 등록 명단 구글 시트 연동 (행사당 1개) ──────
 // 대원칙(§24.1): 시트 → 앱 단방향(앱은 시트에 쓰지 않는다) · 자동 덮어쓰기 없음 ·

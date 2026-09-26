@@ -14,7 +14,8 @@ const provider = getDataProvider()
  * 큐시트 정형 에디터 — category='큐시트' 항목은 파일 미리보기·버전 업로드 대신 이 표를 쓴다(Phase 3.6c).
  * Phase 3.23 PR-4b(디자인지시서 v1.4 §7-2.8 · 캔버스 큐시트):
  *   · 머리 = '큐 n개' + 시작·마지막 큐 시각 · '대본 모아 보기'
- *   · 표 = 손잡이 · 큐 · 시간 · 구분 · 내용(+대본) · 음향 · 조명 · 스크린 · ⋯ — 칸마다 버튼 대신 행 끝 메뉴 하나
+ *   · 표 = 손잡이 · 시각 · 큐 · 구분 · MC·진행(+대본) · 조명 · 영상 · 음향 · ⋯ — 칸마다 버튼 대신 행 끝 메뉴 하나
+ *     (Phase 3.24 PR-B — 현장 큐시트 표기 순서. 데이터 칸 console_light·screen·audio는 그대로)
  *   · 순서 = 행을 끌어 옮기기(HTML5 DnD — 새 의존성 0) 또는 메뉴의 위/아래
  *   · 큐 추가 = 표 맨 아래 한 줄 — 다음 번호(C05)가 바로 생기고 그 줄이 편집 상태로 열린다
  *   · 대본 = 표 아래 칸에 고른 큐의 전문(side가 있으면 오른쪽에 코멘트·컨펌 기록)
@@ -164,25 +165,26 @@ export default function CuesheetEditor({
             <table className="ui-table min-w-[900px] table-fixed text-sm" data-testid="cue-table">
               <colgroup>
                 {canEdit && <col className="w-9" />}
-                <col className="w-[60px]" />
                 <col className="w-[76px]" />
+                <col className="w-[60px]" />
                 <col className="w-[84px]" />
                 <col />
-                <col className="w-[150px]" />
                 <col className="w-[116px]" />
                 <col className="w-[126px]" />
+                <col className="w-[150px]" />
                 {canEdit && <col className="w-11" />}
               </colgroup>
               <thead>
+                {/* Phase 3.24 PR-B — 칸 이름·순서 = 현장 큐시트 표기(시각 · 큐 · 구분 · MC·진행 · 조명 · 영상 · 음향) */}
                 <tr>
                   {canEdit && <th className="ui-th static border-r-0 px-0" aria-label="순서" />}
-                  <th className={`ui-th ${canEdit ? 'static border-r-0' : ''}`}>큐</th>
-                  <th className="ui-th">시간</th>
+                  <th className={`ui-th ${canEdit ? 'static border-r-0' : ''}`}>시각</th>
+                  <th className="ui-th">큐</th>
                   <th className="ui-th">구분</th>
-                  <th className="ui-th">내용</th>
-                  <th className="ui-th">음향</th>
+                  <th className="ui-th">MC·진행</th>
                   <th className="ui-th">조명</th>
-                  <th className="ui-th">스크린</th>
+                  <th className="ui-th">영상</th>
+                  <th className="ui-th">음향</th>
                   {canEdit && <th className="ui-th px-0" aria-label="메뉴" />}
                 </tr>
               </thead>

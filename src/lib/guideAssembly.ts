@@ -1,8 +1,9 @@
 // 운영가이드 섹션 조립 정본 (설계서 v2.5 §23). 순수 함수만 둔다 — provider(seedGuideFromSources)와
 // UI(빌더의 "갱신 있음" 차이 확인)가 같은 조립 로직을 재사용해야 결과가 어긋나지 않는다.
 // R-O4: 이 함수들은 "조립만" 한다 — 저장 여부·source_stale 판정은 호출부의 몫이다.
-import type { Deliverable, RoleCharter } from '../types/entities'
-import { STRUCTURED_DOC_CATEGORIES } from '../types/enums'
+import type { Deliverable, GuideSectionData, RoleCharter } from '../types/entities'
+import { STRUCTURED_DOC_CATEGORIES, type GuideSectionKind } from '../types/enums'
+import { GUIDE_CANON_ORDER, GUIDE_KIND_META, buildGuideData, guideDataMarkdown, type GuideSeedContext } from './guideStructured'
 
 const STRUCTURED = new Set<string>(STRUCTURED_DOC_CATEGORIES)
 
@@ -42,18 +43,25 @@ export const CONTACTS_SECTION_PLACEHOLDER =
 export const FORMAT_RULES_SECTION_TITLE = '진행 원칙'
 
 export interface GuideSeedSection {
-  kind: 'zone' | 'role' | 'emergency' | 'contacts' | 'custom'
+  kind: GuideSectionKind
   title: string
   content: string
   source_ref: 'zone_items' | 'role_charters' | null
+  /** v2.13 §23.5 — 표로 채우는 섹션의 데이터(content는 이 데이터에서 만든 글) */
+  data: GuideSectionData | null
 }
 
-/** §8.2 guide-seed — 4섹션(존별 운영·역할별 체크리스트·비상 대응·연락망) 시드 데이터.
- *  v2.6 §25.4: 포맷 운영 프리셋이 있으면 '진행 원칙'이 맨 앞에 하나 더 붙는다(없으면 4섹션 그대로). */
+/**
+ * §8.2 guide-seed — v2.13 §23.5(Phase 3.24): 현장 운영 12섹션(설치·철거 → 인력·콜타임 → 무전 → 역할 분담 →
+ * D-day 진행표 → 구간별 체크리스트 → 등록 운영 → VIP 의전 → 안전관리 → 존별 운영 → 비상 대응 → 연락망).
+ * 존별 운영만 원본 연동(zone_items — R-O4 stale 그대로), 나머지는 행사 데이터로 채운 뼈대다.
+ * v2.6 §25.4: 포맷 운영 프리셋이 있으면 '진행 원칙'이 맨 앞에 하나 더 붙는다.
+ * (옛 4섹션 시드의 '역할별 체크리스트'(R&R 연동)는 새 문서에 넣지 않는다 — 옛 문서의 그 섹션은 그대로 동작한다)
+ */
 export function buildGuideSeedSections(
   opsItems: readonly Deliverable[],
-  charters: readonly RoleCharter[],
-  formatOpsNotes: readonly string[] = [],
+  formatOpsNotes: readonly string[],
+  ctx: GuideSeedContext,
 ): GuideSeedSection[] {
   const formatRules: GuideSeedSection[] =
     formatOpsNotes.length === 0
@@ -64,23 +72,30 @@ export function buildGuideSeedSections(
             title: FORMAT_RULES_SECTION_TITLE,
             content: formatOpsNotes.map((n) => `- ${n}`).join('\n'),
             source_ref: null,
+            data: null,
           },
         ]
-  return [
-    ...formatRules,
-    {
-      kind: 'zone',
-      title: '존별 운영',
-      content: assembleZoneSectionContent(opsItems),
-      source_ref: 'zone_items',
-    },
-    {
-      kind: 'role',
-      title: '역할별 체크리스트',
-      content: assembleRoleSectionContent(charters),
-      source_ref: 'role_charters',
-    },
-    { kind: 'emergency', title: '비상 대응', content: EMERGENCY_SECTION_PLACEHOLDER, source_ref: null },
-    { kind: 'contacts', title: '연락망/비품', content: CONTACTS_SECTION_PLACEHOLDER, source_ref: null },
-  ]
+  const sections: GuideSeedSection[] = GUIDE_CANON_ORDER.map((kind) => {
+    if (kind === 'zone') {
+      return {
+        kind,
+        title: GUIDE_KIND_META.zone.title,
+        content: assembleZoneSectionContent(opsItems),
+        source_ref: 'zone_items',
+        data: null,
+      }
+    }
+    if (kind === 'contacts') {
+      return { kind, title: GUIDE_KIND_META.contacts.title, content: CONTACTS_SECTION_PLACEHOLDER, source_ref: null, data: null }
+    }
+    const data = buildGuideData(kind, ctx)
+    return {
+      kind,
+      title: GUIDE_KIND_META[kind].title,
+      content: data ? guideDataMarkdown(data) : '',
+      source_ref: null,
+      data,
+    }
+  })
+  return [...formatRules, ...sections]
 }

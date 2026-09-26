@@ -1,38 +1,27 @@
-import { useMemo, useState, type MouseEvent, type ReactNode } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useMemo, useState, type ReactNode } from 'react'
+import { useParams } from 'react-router-dom'
 import Card from '../components/internal/Card'
-import DdayBadge from '../components/internal/DdayBadge'
 import EmptyState from '../components/internal/EmptyState'
 import ErrorAlert from '../components/internal/ErrorAlert'
 import FilterEmptyState, { type AppliedFilter } from '../components/internal/FilterEmptyState'
 import InfoTip from '../components/internal/InfoTip'
 import PageHeader from '../components/internal/PageHeader'
-import StatusBadge from '../components/internal/StatusBadge'
 import BoardFilterBar from '../components/board/BoardFilterBar'
 import BoardGroupHeading from '../components/board/BoardGroupHeading'
 import DeliverableAddForm from '../components/board/DeliverableAddForm'
 import DesignBoard from '../components/board/DesignBoard'
 import OpsDocCardGrid, { type OpsDocCardSummary } from '../components/board/OpsDocCardGrid'
+import OpsDocTable, { type OpsBoardRow } from '../components/board/OpsDocTable'
 import {
   CARD_PRESET_CATEGORY,
   OPS_DOC_CARD_ORDER,
   classifyOpsCard,
   type OpsDocCardKey,
 } from '../components/board/opsDocCards'
-import CuesheetEditor from '../components/cue/CuesheetEditor'
-import ScenarioBuilder from '../components/scenario/ScenarioBuilder'
-import GuideBuilder from '../components/guide/GuideBuilder'
+import { cardSummary, cueMetrics, guideMetrics, scenarioMetrics, type OpsDocMetrics } from '../components/board/opsDocMetrics'
 import { useProject } from '../context/ProjectContext'
-import { useAsync, useMutation } from '../hooks/useAsync'
-import {
-  AREA_LABELS,
-  OPS_DOC_CARD_LABELS,
-  ROLE_BAR_CLASSES,
-  STATUS_LABELS,
-  STATUS_STRIP_CLASSES,
-  formatDate,
-} from '../lib/labels'
-import { categoryGroupLabel } from '../lib/boardPresets'
+import { useAsync } from '../hooks/useAsync'
+import { AREA_LABELS, OPS_DOC_CARD_LABELS, STATUS_LABELS } from '../lib/labels'
 import { BOARD_HELP, OPS_BOARD_HEADER_HELP } from '../lib/helpTexts'
 import { getDataProvider } from '../providers'
 import type { Deliverable } from '../types/entities'
@@ -42,29 +31,9 @@ import NotFoundPage from './NotFoundPage'
 const provider = getDataProvider()
 const BOARD_AREAS: DeliverableArea[] = ['design', 'ops']
 
-/** 3.17b 시안 정렬 — 항목 행 고정 열 그리드(상태 92 · 제목 flex · 버전 48 · 담당 84 · 마감 132 · 액션 96).
- *  옛 구조(flex-wrap + gap-3)는 제목 길이에 따라 뒤 열이 행마다 흔들려 세로 스캔이 안 됐다. */
-const ROW_GRID = 'grid grid-cols-[92px_minmax(0,1fr)_48px_84px_132px_96px] items-center gap-3'
-
 /** 확정(final) 건수 — 그룹 헤딩·유형 카드의 진행 막대 분자 */
 function doneCountOf(rows: { deliverable: Deliverable }[]): number {
   return rows.filter((r) => r.deliverable.status === 'final').length
-}
-
-interface BoardRow {
-  deliverable: Deliverable
-  latestVersionNo: number
-  /**
-   * 시나리오·운영가이드 항목의 빌더 행 수(scenario_blocks·guide_sections). 그 외 카테고리는 null
-   * (해당 없음). 레거시 파일 문서 판정에만 쓴다 — 0이고 버전이 있으면 v2.5 이전 자유 카테고리
-   * 문서로 간주해 빌더를 강제로 열지 않는다(브리프 "레거시 파일 문서 보호" 지시).
-   */
-  builderRowCount: number | null
-}
-
-/** 빌더 행 0 + 버전 1개 이상 = v2.5 이전부터 파일로 쌓아온 레거시 문서 — 빌더를 열지 않는다. */
-function isLegacyFileDoc(row: BoardRow): boolean {
-  return row.builderRowCount === 0 && row.latestVersionNo >= 1
 }
 
 export default function AreaBoardPage() {
@@ -93,24 +62,35 @@ function AreaBoard({ area }: { area: DeliverableArea }) {
   const currentUser = useAsync(() => provider.getCurrentUser(), [])
   const members = useAsync(() => provider.listMembers(projectId), [projectId])
 
-  const board = useAsync<BoardRow[]>(async () => {
+  const board = useAsync<OpsBoardRow[]>(async () => {
     const items = await provider.listDeliverables(projectId, {
       area,
       status: statusFilter || undefined,
       assignee_id: assigneeFilter || undefined,
     })
+    // v2.13 §23.6 — 유형마다 그 문서가 담은 숫자(큐·멘트·섹션). 읽기 전용 호출만 한다(R-O1 — 쓰기 0건)
+    const sessions = items.some((d) => d.category === '시나리오') ? await provider.listProgramSessions(projectId) : []
     return Promise.all(
       items.map(async (deliverable) => {
         const detail = await provider.getDeliverable(deliverable.id)
         let builderRowCount: number | null = null
+        let metrics: OpsDocMetrics
         // 레거시 판정은 시나리오·운영가이드에만 적용한다(큐시트는 3.6c부터 이미 빌더 전용이라
-        // 자유 카테고리 레거시 사례가 없다). 읽기 전용 호출만 한다(R-O1 — 쓰기 0건).
-        if (deliverable.category === '시나리오') {
-          builderRowCount = (await provider.listScenarioBlocks(deliverable.id)).length
+        // 자유 카테고리 레거시 사례가 없다).
+        if (deliverable.category === '큐시트') {
+          metrics = cueMetrics(await provider.listCues(deliverable.id))
+        } else if (deliverable.category === '시나리오') {
+          const blocks = await provider.listScenarioBlocks(deliverable.id)
+          builderRowCount = blocks.length
+          metrics = scenarioMetrics(blocks, sessions)
         } else if (deliverable.category === '운영가이드') {
-          builderRowCount = (await provider.listGuideSections(deliverable.id)).length
+          const sections = await provider.listGuideSections(deliverable.id)
+          builderRowCount = sections.length
+          metrics = guideMetrics(sections)
+        } else {
+          metrics = { type: 'other', latest: detail.versions[0] ?? null }
         }
-        return { deliverable, latestVersionNo: detail.versions[0]?.version_no ?? 0, builderRowCount }
+        return { deliverable, latest: detail.versions[0] ?? null, builderRowCount, metrics }
       }),
     )
   }, [projectId, area, statusFilter, assigneeFilter])
@@ -152,7 +132,7 @@ function AreaBoard({ area }: { area: DeliverableArea }) {
     const rows = board.data ?? []
     return OPS_DOC_CARD_ORDER.map((key) => {
       const items = rows.filter((r) => classifyOpsCard(r.deliverable.category) === key)
-      const latest = items.reduce<BoardRow | null>((acc, r) => {
+      const latest = items.reduce<OpsBoardRow | null>((acc, r) => {
         if (!acc) return r
         return r.deliverable.updated_at > acc.deliverable.updated_at ? r : acc
       }, null)
@@ -161,12 +141,23 @@ function AreaBoard({ area }: { area: DeliverableArea }) {
         count: items.length,
         latestStatus: latest?.deliverable.status ?? null,
         doneCount: doneCountOf(items),
+        ...cardSummary(
+          key,
+          items.map((r) => ({ status: r.deliverable.status, metrics: r.metrics })),
+        ),
       }
     })
   }, [area, board.data])
 
   const toggleBuilder = (deliverable: Deliverable) => {
+    // 닫을 때 표의 요약 숫자(큐·멘트·섹션)를 다시 읽는다 — 빌더에서 고친 것이 줄에 바로 보이게
+    if (expandedDoc?.id === deliverable.id) board.reload()
     setExpandedDoc((cur) => (cur?.id === deliverable.id ? null : deliverable))
+  }
+
+  const closeBuilder = () => {
+    board.reload()
+    setExpandedDoc(null)
   }
 
   // P10 — 카드 선택 시 아래 영역은 "그 유형의 목록 + 인라인 빌더만" 남는다:
@@ -191,18 +182,17 @@ function AreaBoard({ area }: { area: DeliverableArea }) {
     />
   )
 
-  const renderRow = (row: BoardRow) => (
-    <BoardRowItem
-      key={row.deliverable.id}
-      row={row}
-      assigneeName={memberName(row.deliverable.assignee_id)}
-      assigneeRole={memberRole(row.deliverable.assignee_id)}
+  const renderTable = (key: OpsDocCardKey, rows: OpsBoardRow[]) => (
+    <OpsDocTable
+      cardKey={key}
+      rows={rows}
+      memberName={memberName}
+      memberRole={memberRole}
       canWrite={!!canWrite}
-      isExpanded={expandedDoc?.id === row.deliverable.id}
       canEditBuilder={canEditCue}
+      expandedId={expandedDoc?.id ?? null}
       onToggleBuilder={toggleBuilder}
-      onCloseBuilder={() => setExpandedDoc(null)}
-      onChanged={board.reload}
+      onCloseBuilder={closeBuilder}
     />
   )
 
@@ -296,9 +286,7 @@ function AreaBoard({ area }: { area: DeliverableArea }) {
           <div className="space-y-4">
             {loadingMessage}
             {emptyMessage}
-            {cardFilteredRows.length > 0 && (
-              <ul className="space-y-2">{cardFilteredRows.map(renderRow)}</ul>
-            )}
+            {cardFilteredRows.length > 0 && renderTable(selectedCard, cardFilteredRows)}
             {addForm}
           </div>
         </Card>
@@ -307,7 +295,7 @@ function AreaBoard({ area }: { area: DeliverableArea }) {
           <div className="print-hidden">{filterBar(false)}</div>
           {loadingMessage}
           {emptyMessage}
-          <BoardGroupList rows={cardFilteredRows} renderRow={renderRow} />
+          <BoardGroupList rows={cardFilteredRows} renderTable={renderTable} />
           {addForm}
         </>
       )}
@@ -316,18 +304,17 @@ function AreaBoard({ area }: { area: DeliverableArea }) {
 }
 
 /**
- * 전체 보기(유형 미선택) 목록. P11 — 운영보드의 그룹 헤더는 **카드 명칭과 일치**시키고
- * (큐시트·시나리오·운영가이드·기타 제작물), 원시 카테고리(존운영 등)는 '기타 제작물' 그룹
- * 안의 소제목으로 내린다. 디자인 보드는 Phase 3.23 PR-3부터 `components/board/DesignBoard`가 그린다.
+ * 전체 보기(유형 미선택) 목록 — 유형마다 그룹 헤더(카드 명칭과 같다) + 그 유형의 표(v2.13 §23.6).
+ * 기타 제작물의 원시 카테고리(존운영 등)는 표의 문서 칸 아래 줄로 남긴다(어떤 항목인지 잃지 않게).
  */
 function BoardGroupList({
   rows,
-  renderRow,
+  renderTable,
 }: {
-  rows: BoardRow[]
-  renderRow: (row: BoardRow) => ReactNode
+  rows: OpsBoardRow[]
+  renderTable: (key: OpsDocCardKey, rows: OpsBoardRow[]) => ReactNode
 }) {
-  const byCard = new Map<OpsDocCardKey, BoardRow[]>()
+  const byCard = new Map<OpsDocCardKey, OpsBoardRow[]>()
   for (const row of rows) {
     const key = classifyOpsCard(row.deliverable.category)
     const list = byCard.get(key) ?? []
@@ -339,192 +326,17 @@ function BoardGroupList({
     <div className="space-y-6">
       {OPS_DOC_CARD_ORDER.filter((key) => (byCard.get(key)?.length ?? 0) > 0).map((key) => {
         const groupRows = byCard.get(key) ?? []
-        if (key !== 'other') {
-          return (
-            <div key={key} className="space-y-3">
-              <BoardGroupHeading
-                label={OPS_DOC_CARD_LABELS[key]}
-                count={groupRows.length}
-                doneCount={doneCountOf(groupRows)}
-              />
-              <ul className="space-y-2">{groupRows.map(renderRow)}</ul>
-            </div>
-          )
-        }
-        // 기타 제작물 — 원시 카테고리는 그룹 안 소제목으로 유지한다(어떤 항목인지 잃지 않게)
-        const byCategory = new Map<string, BoardRow[]>()
-        for (const row of groupRows) {
-          const list = byCategory.get(row.deliverable.category) ?? []
-          list.push(row)
-          byCategory.set(row.deliverable.category, list)
-        }
         return (
-          <div key={key} className="space-y-3">
+          <div key={key} className="space-y-3" data-testid={`ops-doc-group-${key}`}>
             <BoardGroupHeading
-              label={OPS_DOC_CARD_LABELS.other}
+              label={OPS_DOC_CARD_LABELS[key]}
               count={groupRows.length}
               doneCount={doneCountOf(groupRows)}
             />
-            <div className="space-y-4">
-              {[...byCategory.entries()].map(([category, categoryRows]) => (
-                <div key={category} className="space-y-2">
-                  <span className="block px-1 text-xs text-ink-cap">
-                    {categoryGroupLabel(category)}
-                  </span>
-                  <ul className="space-y-2">{categoryRows.map(renderRow)}</ul>
-                </div>
-              ))}
-            </div>
+            <div className="ui-card">{renderTable(key, groupRows)}</div>
           </div>
         )
       })}
     </div>
-  )
-}
-
-function BoardRowItem({
-  row,
-  assigneeName,
-  assigneeRole,
-  canWrite,
-  isExpanded,
-  canEditBuilder,
-  onToggleBuilder,
-  onCloseBuilder,
-  onChanged,
-}: {
-  row: BoardRow
-  assigneeName: string
-  /** 담당자 역할 — 이름 앞 8px 도트 색(역할은 면이 아니라 형태로만 표시한다, 패턴 §04) */
-  assigneeRole: MemberRole | null
-  canWrite: boolean
-  /** 이 항목의 인라인 빌더가 지금 펼쳐져 있는지(부모의 expandedDoc과 id 비교) */
-  isExpanded: boolean
-  /** pm·ops만 true — 빌더 편집 권한(§6.1) */
-  canEditBuilder: boolean
-  /** "빌더 열기/닫기" 클릭 — 부모가 expandedDoc을 토글한다(정형 3종·비레거시 항목에만 노출) */
-  onToggleBuilder: (deliverable: Deliverable) => void
-  onCloseBuilder: () => void
-  onChanged: () => void
-}) {
-  const { deliverable, latestVersionNo } = row
-  const transition = useMutation(() => provider.transitionStatus(deliverable.id, 'internal_review'))
-  const structured = isStructuredDocCategory(deliverable.category)
-  // 레거시 판정은 시나리오·운영가이드만 대상(builderRowCount가 null이 아닌 경우) — 큐시트는 해당 없음
-  const legacy = structured && isLegacyFileDoc(row)
-
-  const handleTransition = async (e: MouseEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    const result = await transition.run()
-    if (result) onChanged()
-  }
-
-  const handleToggleBuilder = (e: MouseEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    onToggleBuilder(deliverable)
-  }
-
-  return (
-    <li className="ui-card relative overflow-hidden">
-      <span aria-hidden className={`absolute inset-y-0 left-0 w-[3px] ${STATUS_STRIP_CLASSES[deliverable.status]}`} />
-      {/* 3.17b — 고정 열 그리드. 각 열은 행마다 같은 자리에 서고, 넘치는 값은 …로 자른다
-          (조건 2: 잘린 제목은 title 속성으로 전체 확인 가능). */}
-      <Link
-        to={`/items/${deliverable.id}`}
-        className={`${ROW_GRID} py-3 pr-4 pl-5 hover:opacity-70`}
-      >
-        <StatusBadge status={deliverable.status} />
-        <span className="min-w-0 truncate text-sm font-medium text-ink" title={deliverable.title}>
-          {deliverable.title}
-        </span>
-        <span
-          className="truncate text-xs text-ink-sub"
-          title={latestVersionNo > 0 ? `버전 v${latestVersionNo}` : '등록된 버전 없음'}
-        >
-          {latestVersionNo > 0 ? `v${latestVersionNo}` : '버전 없음'}
-        </span>
-        {/* 담당 — 역할은 pill이 아니라 이름 앞 8px 도트(형태)로만 나타낸다 */}
-        <span className="flex min-w-0 items-center gap-1.5 text-xs text-ink-sub">
-          <span
-            aria-hidden
-            className={`size-2 shrink-0 rounded-full ${
-              assigneeRole ? ROLE_BAR_CLASSES[assigneeRole] : 'bg-track'
-            }`}
-          />
-          <span className="truncate" title={assigneeName}>
-            {assigneeName}
-          </span>
-        </span>
-        {deliverable.due_date ? (
-          <span className="flex items-center gap-1.5 text-xs text-ink-sub">
-            {formatDate(deliverable.due_date)}
-            <DdayBadge isoDate={deliverable.due_date} />
-          </span>
-        ) : (
-          <span className="text-xs text-ink-cap">마감 미정</span>
-        )}
-        <span className="flex flex-wrap items-center justify-end gap-1">
-          {/* v2.5 §10.2 인라인 빌더 — 레거시 파일 문서는 빌더를 강제로 열지 않고 안내만 노출한다 */}
-          {structured && legacy && (
-            <span className="text-right text-[11px] leading-tight text-ink-cap">
-              파일 문서 — 상세에서 열람
-            </span>
-          )}
-          {structured && !legacy && (
-            <button type="button" onClick={handleToggleBuilder} className="btn btn-ghost btn-sm">
-              {isExpanded ? '빌더 닫기' : '빌더 열기'}
-            </button>
-          )}
-          {canWrite && deliverable.status === 'draft' && (
-            <button
-              type="button"
-              onClick={handleTransition}
-              disabled={transition.pending}
-              className="btn btn-ghost btn-sm"
-            >
-              내부검토 요청
-            </button>
-          )}
-        </span>
-      </Link>
-      {transition.error && (
-        <div className="px-5 pb-3">
-          <ErrorAlert message={transition.error} />
-        </div>
-      )}
-
-      {/* P11 — 빌더는 이 행 바로 아래(같은 카드 안)에서 펼쳐진다. 별도 화면 이동도,
-          페이지 하단 분리 패널도 없다(목업 화면 A "빌더 열기 시 이 자리에서 인라인"). */}
-      {isExpanded && (
-        <div className="border-t border-border bg-canvas px-5 py-4">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <h3 className="t-card-title">
-              {deliverable.category} 바로 편집 — {deliverable.title}
-            </h3>
-            <span className="flex items-center gap-3">
-              <Link to={`/items/${deliverable.id}`} className="text-sm text-steel hover:underline">
-                상세 화면으로 이동
-              </Link>
-              <button type="button" onClick={onCloseBuilder} className="btn btn-ghost btn-sm">
-                닫기
-              </button>
-            </span>
-          </div>
-          <div data-testid={`builder-panel-${classifyOpsCard(deliverable.category)}`}>
-            {deliverable.category === '큐시트' && (
-              <CuesheetEditor deliverableId={deliverable.id} canEdit={canEditBuilder} />
-            )}
-            {deliverable.category === '시나리오' && (
-              <ScenarioBuilder deliverableId={deliverable.id} canEdit={canEditBuilder} onStatusChanged={onChanged} />
-            )}
-            {deliverable.category === '운영가이드' && (
-              <GuideBuilder deliverableId={deliverable.id} canEdit={canEditBuilder} onStatusChanged={onChanged} />
-            )}
-          </div>
-        </div>
-      )}
-    </li>
   )
 }

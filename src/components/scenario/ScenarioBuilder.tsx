@@ -1,90 +1,67 @@
-// v2.5 §10.2·§23 시나리오 빌더 — 3.16.4에서 목업 v2.5 화면 B를 시각 정본으로 재구성:
-// 헤더 "시나리오 — {문서명}"+상태 배지+우측 액션(큐시트로 내보내기·인쇄·컨펌 발송, 목업 배치),
-// 세션 = 개별 카드(시각 세션명 [프로그램표 연동] — 메타), 대본 인라인 노출(장문만 풀 멘트 펼침),
-// 하단 역할 분리 각주 카드. 데이터 경로는 3.16c 그대로 — v9 계약이 개별 CRUD가 아니라 **벌크
-// 전체 교체**(saveScenarioBlocks)라 모든 변경은 "로컬 배열 재조립 → 벌크 저장 → reload" 한
-// 경로로 모인다. 컨펌 발송 동작은 기존 상태 머신 준수(StructuredDocHeader — 불가 상태는
-// disabled+사유 InfoTip), S3의 상태 액션 카드에서는 발송 폼을 정리(중복 노출 제거).
+// 시나리오 빌더 — v2.13 §23.6 멘트 원고형(Phase 3.24 PR-B · 디자인지시서 §7-2.14 · 캔버스 "운영 문서 3종 실무화" ②).
+// MC가 그대로 읽는 원고: 세션 제목(시각 크게) → 블록마다 시각·구분 → 괄호 지시문 → 멘트(크게, 문단).
+// 위 = 원고 요약(멘트 n/m 작성 · 연사 확인 대기 · 큐시트로 보내기 · 인쇄) / 왼쪽 = 세션 목록 /
+// 끝 = 비상 예비 멘트(세션 밖). 문서 제목·상태·컨펌 발송은 항목 상세 머리와 '다음 단계' 카드가 맡는다
+// (큐시트 PR-4b와 같은 모양 — 빌더 안에 두 번째 머리를 두지 않는다).
+// 데이터 경로는 3.16c 그대로 — v9 계약이 개별 CRUD가 아니라 **벌크 전체 교체**(saveScenarioBlocks)라
+// 모든 변경은 "로컬 배열 재조립 → 벌크 저장 → reload" 한 경로로 모인다.
 import { useMemo, useState, type FormEvent } from 'react'
-import { flushSync } from 'react-dom'
 import ErrorAlert from '../internal/ErrorAlert'
 import InfoTip from '../internal/InfoTip'
-import StructuredDocHeader from '../internal/StructuredDocHeader'
+import ProgressBar from '../internal/ProgressBar'
 import { useAsync, useMutation } from '../../hooks/useAsync'
 import { getDataProvider } from '../../providers'
 import { SCENARIO_VS_CUESHEET_HELP } from '../../lib/helpTexts'
+import { scenarioProgress } from '../../lib/scenarioScript'
 import type { ProgramSession, ScenarioBlock } from '../../types/entities'
 import ScenarioBlockForm from './ScenarioBlockForm'
-import ScenarioBlockRow from './ScenarioBlockRow'
 import ScenarioExportPanel from './ScenarioExportPanel'
-import { arrangeScenarioBlocks, groupScenarioBlocks, type ScenarioGroup } from './scenarioGroups'
+import ScenarioScriptBlock from './ScenarioScriptBlock'
+import {
+  EMERGENCY_GROUP_KEY,
+  arrangeScenarioBlocks,
+  groupScenarioBlocks,
+  sessionCaption,
+  type ScenarioGroup,
+} from './scenarioGroups'
 import { toFormValues, toInput, toPatch, type ScenarioBlockFormValues } from './scenarioFormValues'
 
 const provider = getDataProvider()
 
-/** 세션 카드 헤더 메타(목업 "— MC 김OO · 무대" 자리) — 프로그램표 보유 필드로 조립 */
-function sessionMeta(s: ProgramSession): string {
-  const parts: string[] = []
-  if (s.speaker_name) parts.push(`${s.speaker_name}${s.speaker_org ? ` (${s.speaker_org})` : ''}`)
-  if (s.note) parts.push(s.note)
-  return parts.join(' · ')
+const sectionId = (key: string) => `scn-sec-${key}`
+
+/** 레일 링크 — 주소(해시)는 바꾸지 않고 그 묶음으로만 스크롤(데모 아티팩트는 해시 라우팅) */
+function scrollToSection(key: string) {
+  document.getElementById(sectionId(key))?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
 }
 
 export default function ScenarioBuilder({
   deliverableId,
   canEdit,
-  onStatusChanged,
 }: {
   deliverableId: string
   /** pm·ops만 true — §8.2 scenario-blocks 쓰기 권한 */
   canEdit: boolean
-  /** 헤더 컨펌 발송 성공 시 상위 화면(상세·보드)이 상태 표시를 재조회하게 하는 훅(선택) */
-  onStatusChanged?: () => void
 }) {
   const deliverable = useAsync(() => provider.getDeliverable(deliverableId), [deliverableId])
   const blocksAsync = useAsync(() => provider.listScenarioBlocks(deliverableId), [deliverableId])
-  const currentUser = useAsync(() => provider.getCurrentUser(), [])
   const projectId = deliverable.data?.project_id ?? null
-  const project = useAsync(
-    () => (projectId ? provider.getProject(projectId) : Promise.resolve(null)),
-    [projectId],
-  )
-  // projectId 확정 전에는 pending을 유지한다 — []로 먼저 해소되면 "공통 그룹으로 렌더 →
-  // '불러오는 중' → 세션 그룹 재렌더"로 본문이 깜빡인다(3.16c부터 있던 창 — 3.16.4에서 제거).
+  // projectId 확정 전에는 pending을 유지한다 — []로 먼저 해소되면 "세션 밖 묶음으로 렌더 →
+  // 세션 묶음 재렌더"로 본문이 깜빡인다(3.16.4에서 없앤 창).
   const sessionsAsync = useAsync<ProgramSession[]>(
     () => (projectId ? provider.listProgramSessions(projectId) : new Promise(() => {})),
     [projectId],
   )
 
-  const blocks = blocksAsync.data ?? []
-  const sessions = sessionsAsync.data ?? []
+  const blocks = useMemo(() => blocksAsync.data ?? [], [blocksAsync.data])
+  const sessions = useMemo(() => sessionsAsync.data ?? [], [sessionsAsync.data])
   const groups = useMemo(() => groupScenarioBlocks(blocks, sessions), [blocks, sessions])
+  const progress = useMemo(() => scenarioProgress(blocks, sessions), [blocks, sessions])
 
-  // 세션 접기/펼치기(§10.2) — 순수 표시 상태, 저장하지 않는다
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
-  // 풀 멘트 패널 펼침 — 행이 아니라 여기서 관리한다: 인쇄(§10.2 "전 블록 대본 전문 포함") 시
-  // 접힌 행도 강제로 펼쳐야 하기 때문(handlePrint 참조)
-  const [openScripts, setOpenScripts] = useState<Set<string>>(new Set())
   const [exportOpen, setExportOpen] = useState(false)
   const [moveError, setMoveError] = useState<string | null>(null)
 
-  const toggleGroup = (key: string) =>
-    setCollapsedGroups((prev) => {
-      const next = new Set(prev)
-      if (next.has(key)) next.delete(key)
-      else next.add(key)
-      return next
-    })
-
-  const toggleScript = (blockId: string) =>
-    setOpenScripts((prev) => {
-      const next = new Set(prev)
-      if (next.has(blockId)) next.delete(blockId)
-      else next.add(blockId)
-      return next
-    })
-
-  /** 로컬 배열(bag) → 그룹 순서로 정규화 → 벌크 저장(saveScenarioBlocks). 모든 변경 경로의 공통 종점. */
+  /** 로컬 배열(bag) → 묶음 순서로 정규화 → 벌크 저장(saveScenarioBlocks). 모든 변경 경로의 공통 종점. */
   const persist = (bag: ScenarioBlock[]): Promise<ScenarioBlock[]> => {
     const arranged = arrangeScenarioBlocks(bag, sessions)
     return provider.saveScenarioBlocks(deliverableId, arranged.map(toInput))
@@ -96,12 +73,11 @@ export default function ScenarioBuilder({
   }
 
   const handleAdd = (values: ScenarioBlockFormValues) => {
-    const patch = toPatch(values)
     const draft: ScenarioBlock = {
       id: `scb-draft-${Date.now()}`,
       deliverable_id: deliverableId,
       sort_order: 0,
-      ...patch,
+      ...toPatch(values),
     }
     return persist([...blocks, draft])
   }
@@ -112,20 +88,17 @@ export default function ScenarioBuilder({
     const j = index + dir
     if (j < 0 || j >= group.items.length) return
     setMoveError(null)
-    const a = group.items[index]
-    const b = group.items[j]
-    // 그룹 내부 인접 교환 — arrangeScenarioBlocks가 항상 그룹 순서로 정규화하므로
-    // 전체 배열(bag)에서 두 블록의 위치만 맞바꾸면 된다.
+    // 묶음 안 인접 교환 — arrangeScenarioBlocks가 늘 묶음 순서로 정규화하므로 전체 배열(bag)에서 두 블록 자리만 바꾼다
     const bag = blocks.slice()
-    const ia = bag.findIndex((x) => x.id === a.id)
-    const ib = bag.findIndex((x) => x.id === b.id)
+    const ia = bag.findIndex((x) => x.id === group.items[index].id)
+    const ib = bag.findIndex((x) => x.id === group.items[j].id)
     if (ia === -1 || ib === -1) return
     ;[bag[ia], bag[ib]] = [bag[ib], bag[ia]]
     try {
       await persist(bag)
       blocksAsync.reload()
     } catch (err) {
-      setMoveError(err instanceof Error ? err.message : '순서 변경에 실패했습니다.')
+      setMoveError(err instanceof Error ? err.message : '순서를 바꾸지 못했습니다.')
     }
   }
 
@@ -135,147 +108,194 @@ export default function ScenarioBuilder({
     if (result) blocksAsync.reload()
   }
 
-  /**
-   * 인쇄(§10.2) — "세션 헤더·전 블록(대본 전문 포함)이 인쇄에 나오도록"이 요구사항이라,
-   * 접힌 세션·닫힌 풀 멘트 패널을 전부 펼친 뒤 인쇄한다. flushSync로 DOM 반영을 동기화해
-   * window.print()가 펼쳐진 상태를 그대로 캡처하게 한다.
-   */
-  const handlePrint = () => {
-    flushSync(() => {
-      setCollapsedGroups(new Set())
-      setOpenScripts(new Set(blocks.map((b) => b.id)))
-    })
-    window.print()
-  }
-
-  const handleSent = () => {
-    deliverable.reload()
-    onStatusChanged?.()
-  }
-
-  // sessions는 deliverable(→projectId)이 있어야만 실제 조회가 시작된다 — deliverable이
-  // 에러로 끝난 경우까지 세션 pending에 갇히지 않도록 데이터가 있을 때만 로딩으로 친다
+  // 세션 묶음은 deliverable(→projectId)이 있어야 조회가 시작된다 — deliverable이 에러로 끝난 경우까지
+  // 세션 pending에 갇히지 않도록 데이터가 있을 때만 로딩으로 친다
   const loading =
     deliverable.loading || blocksAsync.loading || (deliverable.data != null && sessionsAsync.loading)
-  const d = deliverable.data
+  const status = deliverable.data?.status
+  const writing = status === 'draft' || status === 'requested' || status === 'changes_requested'
+  const hasEmergencyGroup = groups.some((g) => g.kind === 'emergency')
 
   return (
-    <div className="ui-card">
-      {d && (
-        <StructuredDocHeader
-          docTypeLabel="시나리오"
-          title={d.title}
-          status={d.status}
-          desc={
-            sessions.length > 0
-              ? `프로그램표 ${sessions.length}세션 연동 · 세션마다 진행 블록을 추가해 대본을 작성합니다`
-              : '세션마다 진행 블록을 추가해 진행 대본을 작성합니다'
-          }
-          deliverableId={deliverableId}
-          isHost={project.data?.kind === 'host'}
-          isPm={currentUser.data?.role === 'pm'}
-          requiresApproval={d.requires_approval}
-          onSent={handleSent}
-          actions={
-            <>
-              {canEdit && (
-                <button
-                  type="button"
-                  onClick={() => setExportOpen((v) => !v)}
-                  aria-expanded={exportOpen}
-                  className="btn btn-ghost btn-sm"
-                >
-                  큐시트로 내보내기
-                </button>
-              )}
-              <button type="button" onClick={handlePrint} className="btn btn-ghost btn-sm">
-                인쇄
-              </button>
-            </>
-          }
-        />
+    <div className="@container space-y-4">
+      <section
+        aria-label="원고 요약"
+        className="ui-card flex flex-wrap items-center justify-between gap-3 px-5 py-3.5"
+      >
+        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
+          <span className="text-sm font-semibold text-ink" data-testid="scenario-progress">
+            멘트 {progress.spokenFilled} / {progress.spokenTotal} 작성
+          </span>
+          <span className="w-40">
+            <ProgressBar done={progress.spokenFilled} total={progress.spokenTotal} hideValue />
+          </span>
+          {progress.speakerPending > 0 && (
+            <span className="inline-flex whitespace-nowrap rounded-full bg-accent-tint px-2 py-0.5 text-xs font-medium text-accent-deep">
+              연사 확인 대기 {progress.speakerPending}
+            </span>
+          )}
+          {canEdit && writing && progress.spokenFilled < progress.spokenTotal && (
+            <span className="t-caption">다 채우면 PM 검토로 넘기세요</span>
+          )}
+        </div>
+        <div className="plan-print-hidden flex flex-wrap items-center gap-2">
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => setExportOpen((v) => !v)}
+              aria-expanded={exportOpen}
+              className="btn btn-ghost btn-sm"
+            >
+              큐시트로 보내기
+            </button>
+          )}
+          <button type="button" onClick={() => window.print()} className="btn btn-ghost btn-sm">
+            인쇄 · MC 배포용
+          </button>
+        </div>
+      </section>
+
+      {canEdit && exportOpen && (
+        <div className="plan-print-hidden flex flex-wrap items-center gap-2 rounded-lg bg-canvas p-3">
+          <span className="t-caption font-semibold text-ink">큐시트로 보내기</span>
+          <InfoTip text={SCENARIO_VS_CUESHEET_HELP} />
+          <ScenarioExportPanel deliverableId={deliverableId} projectId={projectId} />
+        </div>
       )}
 
-      <div className="space-y-4 p-5">
-        {canEdit && exportOpen && (
-          <div className="plan-print-hidden flex flex-wrap items-center gap-2 rounded-lg bg-canvas p-3">
-            <span className="t-caption font-semibold text-ink">큐시트로 내보내기</span>
-            <InfoTip text={SCENARIO_VS_CUESHEET_HELP} />
-            <ScenarioExportPanel deliverableId={deliverableId} projectId={projectId} />
-          </div>
-        )}
+      <ErrorAlert message={deliverable.error} />
+      <ErrorAlert message={sessionsAsync.error} />
+      <ErrorAlert message={blocksAsync.error} />
+      <ErrorAlert message={moveError} />
+      {loading && <p className="text-sm text-ink-cap">불러오는 중…</p>}
 
-        <ErrorAlert message={deliverable.error} />
-        <ErrorAlert message={sessionsAsync.error} />
-        <ErrorAlert message={blocksAsync.error} />
-        <ErrorAlert message={moveError} />
-        {loading && <p className="text-sm text-ink-cap">불러오는 중…</p>}
-
-        {!loading && blocks.length === 0 && (
-          <div className="space-y-2">
-            <p className="text-sm text-ink-cap">작성된 진행 블록이 없습니다.</p>
-            {canEdit && (
-              <>
-                <button
-                  type="button"
-                  onClick={handleSeed}
-                  disabled={seed.pending}
-                  className="btn btn-sm btn-primary plan-print-hidden"
-                >
-                  프로그램표에서 뼈대 만들기
-                </button>
-                <ErrorAlert message={seed.error} />
-              </>
-            )}
-          </div>
-        )}
-
-        {!loading &&
-          groups.map((g) => (
-            <SessionCard
-              key={g.key}
-              group={g}
-              sessions={sessions}
-              canEdit={canEdit}
-              collapsed={collapsedGroups.has(g.key)}
-              onToggle={() => toggleGroup(g.key)}
-              openScripts={openScripts}
-              onToggleScript={toggleScript}
-              onMove={handleMove}
-              onSave={handleSaveEdit}
-              onDelete={handleDelete}
-              onAdd={handleAdd}
-              onChanged={blocksAsync.reload}
-            />
-          ))}
-
-        {canEdit && !loading && (
-          <ScenarioAddForm sessions={sessions} onAdd={handleAdd} onAdded={blocksAsync.reload} />
-        )}
-
-        {/* 목업 화면 B 하단 역할 분리 각주 카드 */}
-        <div className="plan-print-hidden rounded-lg border border-dashed border-border-strong bg-canvas px-4 py-3 text-xs leading-relaxed text-ink-sub">
-          <span className="font-semibold text-ink">역할 분리</span>{' '}
-          <InfoTip text={SCENARIO_VS_CUESHEET_HELP} className="align-middle" /> — <b>시나리오</b>는
-          MC·진행팀이 읽는 대본이고, <b>큐시트</b>는 콘솔(음향·조명·영상) 오퍼레이터용 큐 목록입니다.
-          &quot;큐시트로 내보내기&quot;는 영상·전환 블록의 큐 표기를 큐 뼈대로 변환해 큐시트 빌더에
-          채웁니다(이후 독립 편집). 컨펌 발송 시 스냅숏 버전 등록은 큐시트 규약(doc-snapshot)을
-          재사용합니다.
+      {!loading && blocks.length === 0 && (
+        <div className="ui-card space-y-2 px-5 py-5">
+          <p className="text-sm text-ink-cap">아직 원고가 없습니다.</p>
+          {canEdit && (
+            <>
+              <p className="t-caption">
+                프로그램표 세션마다 소개 멘트 자리가 생기고(연사를 모르면 [연사 이름]으로 비워 둡니다), 비상 예비 멘트 3종이
+                함께 들어갑니다.
+              </p>
+              <button
+                type="button"
+                onClick={handleSeed}
+                disabled={seed.pending}
+                className="btn btn-sm btn-primary plan-print-hidden"
+              >
+                프로그램표에서 뼈대 만들기
+              </button>
+              <ErrorAlert message={seed.error} />
+            </>
+          )}
         </div>
+      )}
+
+      {!loading && blocks.length > 0 && (
+        <div className="grid grid-cols-1 items-start gap-5 @4xl:grid-cols-[220px_minmax(0,1fr)]">
+          <ScenarioRail groups={groups} canEdit={canEdit} />
+          <article aria-label="원고" className="ui-card space-y-8 px-5 py-6 @2xl:px-8">
+            {groups.map((g) => (
+              <GroupSection
+                key={g.key}
+                group={g}
+                sessions={sessions}
+                canEdit={canEdit}
+                onMove={handleMove}
+                onSave={handleSaveEdit}
+                onDelete={handleDelete}
+                onAdd={handleAdd}
+                onChanged={blocksAsync.reload}
+              />
+            ))}
+            {!hasEmergencyGroup && canEdit && (
+              <GroupSection
+                group={{ key: EMERGENCY_GROUP_KEY, kind: 'emergency', session: null, items: [] }}
+                sessions={sessions}
+                canEdit={canEdit}
+                onMove={handleMove}
+                onSave={handleSaveEdit}
+                onDelete={handleDelete}
+                onAdd={handleAdd}
+                onChanged={blocksAsync.reload}
+              />
+            )}
+          </article>
+        </div>
+      )}
+
+      {canEdit && !loading && <ScenarioAddForm sessions={sessions} onAdd={handleAdd} onAdded={blocksAsync.reload} />}
+
+      <div className="plan-print-hidden rounded-lg border border-dashed border-border-strong bg-canvas px-4 py-3 text-xs leading-relaxed text-ink-sub">
+        <span className="font-semibold text-ink">역할 분리</span>{' '}
+        <InfoTip text={SCENARIO_VS_CUESHEET_HELP} className="align-middle" /> — <b>시나리오</b>는 MC·진행팀이 읽는
+        원고이고, <b>큐시트</b>는 콘솔(음향·조명·영상) 오퍼레이터용 큐 목록입니다. &quot;큐시트로 보내기&quot;는 영상·전환
+        블록의 큐 표기를 큐 뼈대로 변환해 큐시트 빌더에 채웁니다(이후 독립 편집). 컨펌 발송 시 스냅숏 버전 등록은 큐시트
+        규약(doc-snapshot)을 재사용합니다.
       </div>
     </div>
   )
 }
 
-// ── 세션 카드 (목업 화면 B: 세션 = 개별 카드 + 시각/구분/대본·액션/비고 표) ──────────
-function SessionCard({
+// ── 세션 목록 (왼쪽) — 세션마다 멘트 채움 n/m, 끝에 세션 밖 진행·비상 예비 멘트 ─────────────
+function ScenarioRail({ groups, canEdit }: { groups: ScenarioGroup[]; canEdit: boolean }) {
+  const sessionGroups = groups.filter((g) => g.kind === 'session')
+  const tail = groups.filter((g) => g.kind !== 'session')
+  const showEmergencyStub = canEdit && !groups.some((g) => g.kind === 'emergency')
+
+  const link = (key: string, label: string, right: string, done: boolean) => (
+    <li key={key}>
+      <a
+        href={`#${sectionId(key)}`}
+        onClick={(e) => {
+          e.preventDefault()
+          scrollToSection(key)
+        }}
+        className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-ink hover:bg-track"
+      >
+        <span className="min-w-0 flex-1 truncate">{label}</span>
+        <span className={`whitespace-nowrap text-xs ${done ? 'text-positive' : 'text-ink-cap'}`}>{right}</span>
+      </a>
+    </li>
+  )
+
+  return (
+    <nav
+      aria-label="세션 목록"
+      className="ui-card plan-print-hidden hidden p-2 @4xl:sticky @4xl:top-4 @4xl:block"
+    >
+      <p className="flex items-center justify-between gap-2 px-2 pb-1.5 pt-1">
+        <span className="text-xs font-semibold text-ink">세션</span>
+        <span className="t-caption">프로그램표 연동 {sessionGroups.length}</span>
+      </p>
+      <ul>
+        {sessionGroups.map((g) => {
+          const p = scenarioProgress(g.items)
+          const done = p.spokenTotal > 0 && p.spokenFilled === p.spokenTotal && p.speakerPending === 0
+          const label = `${g.session?.start_time ? `${g.session.start_time} ` : ''}${g.session?.title ?? ''}`
+          const right = p.spokenTotal > 0 ? `${p.spokenFilled}/${p.spokenTotal}${done ? ' ✓' : ''}` : '지시만'
+          return link(g.key, label, right, done)
+        })}
+      </ul>
+      {(tail.length > 0 || showEmergencyStub) && <span aria-hidden className="mx-2 my-1.5 block h-px bg-border" />}
+      <ul>
+        {tail.map((g) =>
+          g.kind === 'emergency'
+            ? link(g.key, '비상 예비 멘트', `${g.items.length}종`, false)
+            : link(g.key, '세션 밖 진행', `${g.items.length}`, false),
+        )}
+        {showEmergencyStub && link(EMERGENCY_GROUP_KEY, '비상 예비 멘트', '없음', false)}
+      </ul>
+    </nav>
+  )
+}
+
+// ── 묶음 한 개 — 세션(시각 크게 + 제목 + 프로그램표 연동) · 세션 밖 진행 · 비상 예비 멘트 ─────────
+function GroupSection({
   group,
   sessions,
   canEdit,
-  collapsed,
-  onToggle,
-  openScripts,
-  onToggleScript,
   onMove,
   onSave,
   onDelete,
@@ -285,135 +305,130 @@ function SessionCard({
   group: ScenarioGroup
   sessions: ProgramSession[]
   canEdit: boolean
-  collapsed: boolean
-  onToggle: () => void
-  openScripts: Set<string>
-  onToggleScript: (blockId: string) => void
   onMove: (group: ScenarioGroup, index: number, dir: -1 | 1) => void
   onSave: (blockId: string, values: ScenarioBlockFormValues) => Promise<ScenarioBlock[]>
   onDelete: (blockId: string) => Promise<ScenarioBlock[]>
   onAdd: (values: ScenarioBlockFormValues) => Promise<ScenarioBlock[]>
   onChanged: () => void
 }) {
-  const [addOpen, setAddOpen] = useState(false)
-  const [values, setValues] = useState<ScenarioBlockFormValues>(() => ({
-    ...toFormValues(null),
-    session_id: group.session?.id ?? '',
-  }))
+  const [adding, setAdding] = useState<ScenarioBlockFormValues | null>(null)
   const create = useMutation((v: ScenarioBlockFormValues) => onAdd(v))
+  const emergency = group.kind === 'emergency'
+  const s = group.session
+  const lastTime = [...group.items].reverse().find((b) => b.time)?.time ?? s?.start_time ?? ''
 
-  const handleOpenAdd = () => {
-    setValues({ ...toFormValues(null), session_id: group.session?.id ?? '' })
-    setAddOpen(true)
-  }
+  const openAdd = (kind: 'mc' | 'custom' | 'emergency') =>
+    setAdding(toFormValues(null, { kind, session_id: s?.id ?? '', time: kind === 'emergency' ? '' : lastTime }))
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
-    const result = await create.run(values)
+    if (!adding) return
+    const result = await create.run(adding)
     if (result) {
-      setAddOpen(false)
+      setAdding(null)
       onChanged()
     }
   }
 
-  const meta = group.session ? sessionMeta(group.session) : ''
-
+  const titleId = `${sectionId(group.key)}-title`
   return (
-    <section className="rounded-lg border border-border p-4">
-      <header className="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          onClick={onToggle}
-          aria-expanded={!collapsed}
-          className="flex min-w-0 items-center gap-2 text-sm font-semibold text-ink"
-        >
-          <span aria-hidden className="plan-print-hidden text-ink-cap">
-            {collapsed ? '▸' : '▾'}
-          </span>
-          {group.session ? (
-            <>
-              {group.session.start_time && <span>{group.session.start_time}</span>}
-              <span className="min-w-0 truncate">{group.session.title}</span>
-            </>
-          ) : (
-            '공통/수동 블록'
-          )}
-          <span className="t-caption font-normal text-ink-cap">({group.items.length})</span>
-        </button>
-        {group.session && (
-          <span className="inline-flex items-center rounded-md bg-steel-tint px-1.5 py-0.5 text-[10.5px] font-semibold text-steel">
-            프로그램표 연동
-          </span>
+    <section
+      id={sectionId(group.key)}
+      aria-labelledby={titleId}
+      className={`scroll-mt-4 ${emergency ? 'rounded-[10px] border border-border bg-canvas px-5 py-4' : ''}`}
+    >
+      <header className="flex flex-wrap items-baseline gap-x-3 gap-y-1 pb-2">
+        {group.kind === 'session' && s ? (
+          <>
+            {s.start_time && (
+              <span className="text-[22px] font-bold tabular-nums text-ink-sub">{s.start_time}</span>
+            )}
+            <h3 id={titleId} className="text-xl font-bold text-ink">
+              {s.title}
+            </h3>
+            <span className="inline-flex items-center whitespace-nowrap rounded-md bg-steel-tint px-1.5 py-0.5 text-[11px] font-semibold text-steel">
+              프로그램표 연동
+            </span>
+            {sessionCaption(s) && <span className="text-[13px] text-ink-cap">{sessionCaption(s)}</span>}
+          </>
+        ) : emergency ? (
+          <>
+            <h3 id={titleId} className="text-[17px] font-bold text-ink">
+              비상 예비 멘트
+            </h3>
+            <span className="text-[13px] text-ink-cap">현장에서 무대감독 콜이 오면 바로 읽는 멘트</span>
+          </>
+        ) : (
+          <>
+            <h3 id={titleId} className="text-xl font-bold text-ink">
+              세션 밖 진행
+            </h3>
+            <span className="text-[13px] text-ink-cap">프로그램표 세션에 걸리지 않은 블록</span>
+          </>
         )}
-        {meta && <span className="min-w-0 truncate text-xs text-ink-sub">— {meta}</span>}
       </header>
 
-      {!collapsed && (
-        <>
-          <div className="mt-3 overflow-x-auto">
-            <table className="w-full min-w-[680px] border-collapse text-sm">
-              <thead>
-                <tr>
-                  <th className="ui-th w-[64px] whitespace-nowrap">시각</th>
-                  <th className="ui-th w-[84px] whitespace-nowrap">구분</th>
-                  <th className="ui-th min-w-[220px]">대본·액션</th>
-                  <th className="ui-th min-w-[130px]">비고</th>
-                  <th className="ui-th w-[160px] plan-print-hidden whitespace-nowrap">편집</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {group.items.map((block, i) => (
-                  <ScenarioBlockRow
-                    key={block.id}
-                    block={block}
-                    sessions={sessions}
-                    canEdit={canEdit}
-                    isFirst={i === 0}
-                    isLast={i === group.items.length - 1}
-                    onMoveUp={() => onMove(group, i, -1)}
-                    onMoveDown={() => onMove(group, i, 1)}
-                    onSave={onSave}
-                    onDelete={onDelete}
-                    onChanged={onChanged}
-                    scriptOpen={openScripts.has(block.id)}
-                    onToggleScript={() => onToggleScript(block.id)}
-                  />
-                ))}
-              </tbody>
-            </table>
-          </div>
+      {group.items.length === 0 && (
+        <p className="py-2 text-sm text-ink-cap">아직 없습니다 — 영상 장애·발표자 지연처럼 자주 생기는 상황을 적어 두세요.</p>
+      )}
 
-          {canEdit && !addOpen && (
-            <button
-              type="button"
-              onClick={handleOpenAdd}
-              className="plan-print-hidden mt-2 btn btn-ghost btn-sm"
-            >
-              + 진행 블록
+      <div>
+        {group.items.map((block, i) => (
+          <ScenarioScriptBlock
+            key={block.id}
+            block={block}
+            session={s}
+            sessions={sessions}
+            canEdit={canEdit}
+            isFirst={i === 0}
+            isLast={i === group.items.length - 1}
+            onMove={(dir) => onMove(group, i, dir)}
+            onSave={onSave}
+            onDelete={onDelete}
+            onChanged={onChanged}
+          />
+        ))}
+      </div>
+
+      {canEdit && !adding && (
+        <div className="plan-print-hidden flex flex-wrap gap-3 pt-2">
+          {emergency ? (
+            <button type="button" onClick={() => openAdd('emergency')} className="text-sm font-semibold text-accent-deep hover:underline">
+              ＋ 비상 멘트
             </button>
+          ) : (
+            <>
+              <button type="button" onClick={() => openAdd('mc')} className="text-sm font-semibold text-accent-deep hover:underline">
+                ＋ 멘트
+              </button>
+              <button type="button" onClick={() => openAdd('custom')} className="text-sm font-semibold text-accent-deep hover:underline">
+                ＋ 지시
+              </button>
+            </>
           )}
-          {canEdit && addOpen && (
-            <div className="plan-print-hidden mt-3 rounded-lg bg-canvas p-3">
-              <p className="mb-2 t-caption font-semibold">진행 블록 추가</p>
-              <ScenarioBlockForm
-                values={values}
-                onChange={(p) => setValues((v) => ({ ...v, ...p }))}
-                onSubmit={handleSubmit}
-                onCancel={() => setAddOpen(false)}
-                submitLabel="추가"
-                pending={create.pending}
-                error={create.error}
-                sessions={sessions}
-              />
-            </div>
-          )}
-        </>
+        </div>
+      )}
+      {canEdit && adding && (
+        <div className="plan-print-hidden mt-2 rounded-lg bg-canvas p-3">
+          <p className="mb-2 t-caption font-semibold">{emergency ? '비상 멘트 추가' : '블록 추가'}</p>
+          <ScenarioBlockForm
+            values={adding}
+            onChange={(p) => setAdding((v) => (v ? { ...v, ...p } : v))}
+            onSubmit={handleSubmit}
+            onCancel={() => setAdding(null)}
+            submitLabel="추가"
+            pending={create.pending}
+            error={create.error}
+            sessions={sessions}
+            focusScript
+          />
+        </div>
       )}
     </section>
   )
 }
 
-// ── 하단 공통 추가 폼 — 세션 카드가 없는 세션·공통 블록용 (세션은 폼에서 선택) ──────
+// ── 아래 공통 추가 폼 — 원고에 아직 없는 세션·세션 밖 블록용(세션은 폼에서 고른다) ──────────
 function ScenarioAddForm({
   sessions,
   onAdd,
@@ -439,19 +454,15 @@ function ScenarioAddForm({
 
   if (!open) {
     return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="plan-print-hidden btn btn-ghost btn-sm"
-      >
-        + 진행 블록 (공통·다른 세션)
+      <button type="button" onClick={() => setOpen(true)} className="plan-print-hidden btn btn-ghost btn-sm">
+        ＋ 블록 추가 (세션 고르기)
       </button>
     )
   }
 
   return (
-    <div className="plan-print-hidden rounded-lg bg-canvas p-3">
-      <p className="mb-2 t-caption font-semibold">진행 블록 추가</p>
+    <div className="plan-print-hidden ui-card p-4">
+      <p className="mb-2 t-caption font-semibold">블록 추가 — 원고에 아직 없는 세션이나 세션 밖 진행</p>
       <ScenarioBlockForm
         values={values}
         onChange={(p) => setValues((v) => ({ ...v, ...p }))}

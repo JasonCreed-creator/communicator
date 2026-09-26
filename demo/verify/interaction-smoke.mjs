@@ -20,7 +20,9 @@
 //             PR-6 견적 목록(고른 견적 옆 동작·구버전 고치기 막힘)·옵션(체크 카드·막힌 이유·고른 옵션 요약) ·
 //             PR-7 정산보드(머리 불러오기·할 일 알림·KPI 검산 배지·원가 없는 그룹행·발주 항목 ⋯ 메뉴) ·
 //             PR-8 행사 설정(번호 없는 탭·섹션 목록·고정 저장 바·변경 취소)·온보딩(진행 줄·2열·나중에 하기 확인) ·
-//       6.1: Slack 봇 — 행사 설정 ③ 스레드 링크(DM 링크 거부 → 등록 → 채널·Slack에서 열기 → 웹훅 예비 접힘 → 해제) · 담당자 Slack 칸)
+//       6.1: Slack 봇 — 행사 설정 ③ 스레드 링크(DM 링크 거부 → 등록 → 채널·Slack에서 열기 → 웹훅 예비 접힘 → 해제) · 담당자 Slack 칸 ·
+//       3.24 PR-A: 운영가이드 — 옛 문서 뼈대 추가 → 섹션 목록 · 등록 운영 대기 계산 · 목록 링크 = 스크롤만(해시 불변) ·
+//       3.24 PR-B: 운영 보드 유형별 표·카드 요약 → 시나리오 원고(뼈대 · 멘트 쓰기 · 연사 확인 · 비상 멘트) · 큐시트 칸 순서)
 // 캡처는 dist-demo/shots-interaction/ 에 남긴다. 실패 시 exit 1.
 import { createServer } from 'node:http'
 import { readFileSync, mkdirSync } from 'node:fs'
@@ -154,7 +156,109 @@ check(
   `${docCountBefore} → ${docRequests.length}`,
 )
 
-// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — **Phase 6.1 Slack 봇(2026-09-26)**.
+// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — **Phase 3.24 PR-B 시나리오 원고형 · 운영 보드 표(2026-09-26)**.
+//     일정(②에서 도착) → 운영 보드: 카드 굵은 줄(큐 n개 · 멘트 n/m 작성 · 섹션 n/m 채움) · 유형마다 다른 표 머리 ·
+//     '진행 시나리오 (가안) 열기' → 그 행 바로 아래 원고(세션 머리 · 요약 줄) → 닫기 → 새 시나리오 문서(＋ 항목 추가 → 시나리오) →
+//     '프로그램표에서 뼈대 만들기' → 세션마다 빈 멘트 + 비상 예비 멘트 3종 → '멘트 쓰기' → 멘트 칸 초점 → [소속] [직함] [연사 이름] 적고 저장 →
+//     '연사 확인 대기 1' · 멘트 작성 1/n → 세션 목록 링크 = 해시 그대로 → 다시 '일정'으로(아래 ③-이전 블록이 일정에서 시작한다).
+{
+  const docBefore = docRequests.length
+  await tab.locator('aside nav a', { hasText: '운영 보드' }).first().click()
+  await tab.waitForURL(/#\/board\/ops/, { timeout: 10_000 })
+  await tab.getByTestId('ops-doc-table-scenario').waitFor({ timeout: 10_000 })
+  const headline = async (key) => (await tab.getByTestId(`ops-doc-card-headline-${key}`).innerText()).trim()
+  check(/^큐 \d+개$/.test(await headline('cuesheet')), '카드: 큐시트 = 큐 n개', await headline('cuesheet'))
+  check(/^멘트 \d+\/\d+ 작성$/.test(await headline('scenario')), '카드: 시나리오 = 멘트 n/m 작성', await headline('scenario'))
+  check(/^섹션 \d+\/\d+ 채움$/.test(await headline('guide')), '카드: 운영가이드 = 섹션 n/m 채움', await headline('guide'))
+  const headOf = async (key) => (await tab.getByTestId(`ops-doc-table-${key}`).locator('thead tr').innerText()).replace(/\s+/g, '')
+  check((await headOf('scenario')) === '문서세션멘트작성연사확인비상멘트상태담당마감동작', '시나리오 표 머리 = 세션 · 멘트 작성 · 연사 확인 · 비상 멘트', await headOf('scenario'))
+  check((await headOf('guide')) === '문서섹션채움현장인력무전원본갱신상태담당마감동작', '운영가이드 표 머리 = 섹션 채움 · 현장 인력 · 무전 · 원본 갱신', await headOf('guide'))
+  await tab.getByRole('button', { name: '진행 시나리오 (가안) 열기' }).click()
+  const panel = tab.getByTestId('builder-panel-scenario')
+  await panel.getByRole('region', { name: '원고 요약' }).waitFor({ timeout: 10_000 })
+  check((await panel.getByRole('heading', { level: 3, name: /오프닝 키노트/ }).count()) === 1, '보드 안 원고: 세션 머리(h3)')
+  await tab.getByRole('button', { name: '진행 시나리오 (가안) 닫기' }).click()
+
+  await tab.getByRole('button', { name: '＋ 항목 추가' }).click()
+  const form = tab.locator('form', { has: tab.getByLabel('카테고리') }).first()
+  await form.getByLabel('카테고리').selectOption('시나리오')
+  await form.getByLabel('제목').fill('스모크 원고')
+  await form.getByRole('button', { name: '생성' }).click()
+  const created = tab.getByTestId('builder-panel-scenario')
+  await created.getByRole('button', { name: '프로그램표에서 뼈대 만들기' }).click()
+  const emergency = created.locator('section', { has: tab.getByRole('heading', { name: '비상 예비 멘트' }) })
+  await emergency.waitFor({ timeout: 10_000 })
+  const emText = await emergency.innerText()
+  check(/영상 장애/.test(emText) && /발표자 지연/.test(emText) && /음향 교체/.test(emText), '뼈대: 비상 예비 멘트 3종')
+  const empties = await created.getByText('멘트가 비어 있습니다').count()
+  check(empties > 0, '뼈대: 연사 없는 세션은 빈 멘트(추측 없음)', `${empties}곳`)
+  await created.getByRole('button', { name: '멘트 쓰기' }).first().click()
+  const ment = created.getByLabel('멘트', { exact: true })
+  check(await ment.evaluate((el) => el === document.activeElement), "'멘트 쓰기' → 멘트 칸에 초점")
+  await ment.fill('[소속] [직함] [연사 이름] 님을 큰 박수로 모시겠습니다.')
+  await created.getByRole('button', { name: '저장' }).click()
+  await created.getByTestId('speaker-pending').first().waitFor({ timeout: 10_000 })
+  const bar = await created.getByRole('region', { name: '원고 요약' }).innerText()
+  check(/연사 확인 대기 1/.test(bar) && /멘트 1 \/ \d+ 작성/.test(bar), "저장 → '연사 확인 대기 1' · 멘트 1/n 작성", bar.replace(/\s+/g, ' '))
+  const hashBefore = await tab.evaluate(() => window.location.hash)
+  const rail = created.getByRole('navigation', { name: '세션 목록' })
+  if (await rail.isVisible()) {
+    await rail.getByRole('link', { name: /비상 예비 멘트/ }).click()
+    await tab.waitForTimeout(500)
+    check((await tab.evaluate(() => window.location.hash)) === hashBefore, '세션 목록 링크 = 해시 그대로(스크롤만)')
+  }
+  await tab.screenshot({ path: resolve(SHOTS, '03-scenario-script.png'), fullPage: true })
+  check(docRequests.length === docBefore, '운영 보드·원고 뼈대·멘트 쓰기에 전체 리로드 0', `${docBefore} → ${docRequests.length}`)
+  await tab.locator('aside nav a', { hasText: '일정' }).first().click()
+  await tab.waitForURL(/#\/schedule/, { timeout: 10_000 })
+}
+
+// ── ③-이전(2026-09-26 Phase 3.24 PR-A) 운영가이드 현장 운영 섹션 — 직전 PR ③을 회귀 가드로 유지.
+//     일정(②에서 도착) → RB27 '현장 운영가이드 (가안)'(옛 4섹션 문서): '뼈대 추가' 안내 9개 → 누르면 설치·철거 일정 등 새 섹션 ·
+//     섹션 목록(13개 · 묶음) · 존별 운영 '갱신 있음' 그대로 → 등록 운영 고치기: 라인 5 · 도착 400 → 20명/분 · 100명 · 약 5분 → 저장 →
+//     섹션 목록 'D-day 진행표' 누르기 = 해시 그대로 + 그 카드가 화면 안 → 다시 '일정'으로(아래 ③-이전 블록이 일정에서 시작한다).
+{
+  const docBefore = docRequests.length
+  await tab.evaluate(() => {
+    window.location.hash = '#/items/dlv-rb27-guide-01'
+  })
+  const banner = tab.getByTestId('guide-skeleton-banner')
+  await banner.waitFor({ timeout: 10_000 })
+  check(/9개/.test(await banner.innerText()), "옛 문서: '뼈대 추가' 안내 — 빠진 섹션 9개", await banner.innerText())
+  await banner.getByRole('button', { name: '뼈대 추가' }).click()
+  await tab.getByRole('heading', { name: '설치·철거 일정' }).waitFor({ timeout: 10_000 })
+  check((await tab.getByTestId('guide-skeleton-banner').count()) === 0, '뼈대 추가 → 안내 사라짐')
+  const rail = tab.getByRole('navigation', { name: '섹션 목록' })
+  check(await rail.isVisible(), '섹션 목록(넓은 칸에서 보임)')
+  const filled = (await tab.getByTestId('guide-filled').innerText()).trim()
+  check(/^섹션 \d+ \/ 13 채움$/.test(filled), '섹션 목록 채움 수(13섹션)', filled)
+  const zone = tab.locator('article', { has: tab.getByRole('heading', { name: '존별 운영' }) })
+  check(/갱신 있음/.test(await zone.innerText()), "존별 운영 '갱신 있음' 그대로(뼈대 추가가 건드리지 않음)")
+  // 고치는 동안 제목(h3)이 입력 칸으로 바뀌므로 카드는 id로 잡는다
+  const regId = await tab.locator('article', { has: tab.getByRole('heading', { name: '등록 운영' }) }).getAttribute('id')
+  const regCard = tab.locator(`[id="${regId}"]`)
+  await regCard.getByRole('button', { name: '고치기' }).click()
+  await regCard.getByLabel('접수 라인').fill('5')
+  await regCard.getByLabel('피크 도착 인원').fill('400')
+  const regText = await regCard.innerText()
+  check(/20명 \/ 분/.test(regText) && /100명/.test(regText) && /약 5분/.test(regText), '등록 운영: 입력하는 즉시 20명/분 · 100명 · 약 5분')
+  await regCard.getByRole('button', { name: '저장' }).click()
+  await regCard.getByRole('button', { name: '고치기' }).waitFor({ timeout: 10_000 })
+  check(/약 5분/.test(await regCard.innerText()), '저장 → 읽기 화면에 최대 대기 약 5분')
+  const hashBefore = await tab.evaluate(() => window.location.hash)
+  await rail.getByRole('link', { name: /D-day 진행표/ }).click()
+  await tab.waitForTimeout(600)
+  const hashAfter = await tab.evaluate(() => window.location.hash)
+  const dayBox = await tab.locator('article', { has: tab.getByRole('heading', { name: 'D-day 진행표' }) }).boundingBox()
+  const vh = tab.viewportSize()?.height ?? 900
+  check(hashAfter === hashBefore && dayBox !== null && dayBox.y >= -4 && dayBox.y < vh, "섹션 목록 링크 = 해시 그대로 · 그 카드가 화면 안", `${hashBefore} → ${hashAfter} · y=${dayBox?.y}`)
+  await tab.screenshot({ path: resolve(SHOTS, '03-guide-structured.png'), fullPage: true })
+  check(docRequests.length === docBefore, '운영가이드 뼈대 추가·고치기·목록 이동에 전체 리로드 0', `${docBefore} → ${docRequests.length}`)
+  await tab.locator('aside nav a', { hasText: '일정' }).first().click()
+  await tab.waitForURL(/#\/schedule/, { timeout: 10_000 })
+}
+
+// ── ③-이전(2026-09-26 Phase 6.1) Slack 봇 — 직전 세션 ③을 회귀 가드로 유지.
 //     일정(②에서 도착) → 행사 설정 ③ Slack 카드: DM 채널 링크 → 형식 문구 + '스레드 등록' 비활성 → 스레드 첫 글 링크 → 등록 →
 //     채널 id·'Slack에서 열기'(링크 그대로) · 웹훅은 예비로 접힘('예비 웹훅 보기' → 펼침) → '스레드 해제'(확인 수락) → 입력 칸 ·
 //     담당자(S-13): Slack 칸 머리 + 비어 있는 사람 '이메일로 자동' → 다시 '일정'으로(아래 ③-이전 블록이 일정에서 시작한다).
@@ -405,17 +509,18 @@ check(
   await table.getByTestId('cue-row').first().waitFor({ timeout: 10_000 })
   const cueNos = async () =>
     tab.evaluate(() =>
-      [...document.querySelectorAll('[data-testid="cue-table"] tbody > tr[data-testid="cue-row"]')].map((tr) => tr.querySelectorAll('td')[1]?.textContent ?? ''),
+      [...document.querySelectorAll('[data-testid="cue-table"] tbody > tr[data-testid="cue-row"]')].map((tr) => tr.querySelectorAll('td')[2]?.textContent ?? ''),
     )
+  // Phase 3.24 PR-B — 현장 큐시트 표기 순서(손잡이 · 시각 · 큐 …) — 큐 번호는 세 번째 칸
   const head = (await table.locator('thead tr').innerText()).replace(/\s+/g, '')
-  check(head === '큐시간구분내용음향조명스크린', '큐시트 표 머리(손잡이·메뉴 칸은 이름 없음)', head)
+  check(head === '시각큐구분MC·진행조명영상음향', '큐시트 표 머리(손잡이·메뉴 칸은 이름 없음)', head)
   const before = await cueNos()
   check(before.join(',') === 'C01,C02,C03,C04', '큐 4행', before.join(','))
   const rowOf = (no) => table.locator('tr[data-testid="cue-row"]', { has: tab.locator('td', { hasText: new RegExp(`^${no}$`) }) })
   // 놓는 자리는 행의 아래 절반 — 그 행 '뒤'로 간다(위 절반이면 '앞')
   await rowOf('C01').dragTo(rowOf('C03'), { targetPosition: { x: 240, y: 44 } })
   await tab.waitForFunction(
-    () => [...document.querySelectorAll('[data-testid="cue-table"] tbody > tr[data-testid="cue-row"]')].map((tr) => tr.querySelectorAll('td')[1]?.textContent).join(',') === 'C02,C03,C01,C04',
+    () => [...document.querySelectorAll('[data-testid="cue-table"] tbody > tr[data-testid="cue-row"]')].map((tr) => tr.querySelectorAll('td')[2]?.textContent).join(',') === 'C02,C03,C01,C04',
     null,
     { timeout: 10_000 },
   ).catch(() => undefined)
@@ -429,7 +534,7 @@ check(
   const editRow = tab.getByTestId('cue-edit-row')
   await editRow.waitFor({ timeout: 10_000 })
   check((await editRow.getByLabel('큐번호').inputValue()) === 'C05', "'큐 추가' → C05 편집 줄이 바로 열림")
-  await editRow.getByLabel('시간').fill('10:05')
+  await editRow.getByLabel('시각').fill('10:05')
   await editRow.getByRole('button', { name: '저장' }).click()
   await tab.waitForFunction(() => document.querySelectorAll('[data-testid="cue-table"] tbody > tr[data-testid="cue-row"]').length === 5, null, { timeout: 10_000 })
   check((await cueNos()).at(-1) === 'C05', '저장 → 표 끝에 C05')

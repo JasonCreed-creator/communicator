@@ -85,7 +85,7 @@ describe('v9 해피 패스 — 8메서드', () => {
     expect(after[0].script).toBe('새 오프닝')
   })
 
-  it('seedScenarioFromProgram — 빈 문서에서 세션당 헤더+기본 블록 생성', async () => {
+  it('seedScenarioFromProgram — v2.13 §23.6 세션마다 MC 소개 멘트 1개 + 비상 예비 멘트 3종', async () => {
     const fresh = await p.createDeliverable({
       project_id: RB27,
       area: 'ops',
@@ -94,10 +94,13 @@ describe('v9 해피 패스 — 8메서드', () => {
     })
     const built = await p.seedScenarioFromProgram(fresh.id)
     const sessions = await p.listProgramSessions(RB27)
-    expect(built).toHaveLength(sessions.length * 2)
-    const sessionIds = new Set(built.map((b) => b.session_id))
-    expect(sessionIds.size).toBe(sessions.length)
-    expect(built.every((b) => b.kind === 'custom' || b.kind === 'mc')).toBe(true)
+    expect(built).toHaveLength(sessions.length + 3)
+    const inSessions = built.filter((b) => b.session_id !== null)
+    expect(new Set(inSessions.map((b) => b.session_id)).size).toBe(sessions.length)
+    expect(inSessions.every((b) => b.kind === 'mc')).toBe(true)
+    const emergency = built.filter((b) => b.kind === 'emergency')
+    expect(emergency.map((b) => b.note)).toEqual(['영상 장애', '발표자 지연', '음향 교체'])
+    expect(emergency.every((b) => b.session_id === null && b.time === null && !!b.script)).toBe(true)
   })
 
   it('listGuideSections·saveGuideSections — 벌크 전체 교체, id 재사용 시 identity 유지', async () => {
@@ -120,7 +123,7 @@ describe('v9 해피 패스 — 8메서드', () => {
     expect(savedZone.source_stale).toBe(false)
   })
 
-  it('seedGuideFromSources — 빈 문서에서 4섹션 초기 로드(존별 운영·R&R 연동)', async () => {
+  it('seedGuideFromSources — 빈 문서에서 현장 운영 12섹션 초기 로드(v2.13 §23.5 — 존별 운영은 원본 연동)', async () => {
     const fresh = await p.createDeliverable({
       project_id: RB27,
       area: 'ops',
@@ -128,15 +131,17 @@ describe('v9 해피 패스 — 8메서드', () => {
       title: '테스트 운영가이드',
     })
     const built = await p.seedGuideFromSources(fresh.id)
-    expect(built.map((s) => s.kind).sort()).toEqual(['contacts', 'emergency', 'role', 'zone'])
+    expect(built.map((s) => s.kind)).toEqual([
+      'setup', 'staffing', 'radio', 'raci', 'dayplan', 'checklists', 'registration', 'vip', 'safety', 'zone', 'emergency', 'contacts',
+    ])
     const zone = built.find((s) => s.kind === 'zone')!
     expect(zone.source_ref).toBe('zone_items')
     expect(zone.source_stale).toBe(false)
     // 존별 운영 원본(존 구성 (가안))에서 실제로 조립됐다
     expect(zone.content).toContain('존 구성 (가안)')
-    const role = built.find((s) => s.kind === 'role')!
-    expect(role.source_ref).toBe('role_charters')
-    expect((role.content ?? '').length).toBeGreaterThan(0)
+    // 새 문서에는 R&R 연동 섹션이 없다 — 역할 분담(표)이 대신한다
+    expect(built.some((s) => s.kind === 'role')).toBe(false)
+    expect(built.find((s) => s.kind === 'raci')!.data?.type).toBe('raci')
   })
 })
 

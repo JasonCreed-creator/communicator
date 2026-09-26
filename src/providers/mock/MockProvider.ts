@@ -171,8 +171,10 @@ import {
   toVatExcluded,
 } from '../../lib/settlement'
 import { buildGuideSeedSections } from '../../lib/guideAssembly'
+import { guideDataProblem, withDerivedContent } from '../../lib/guideStructured'
 import { buildCuesFromScenario, scenarioCueCandidates } from '../../lib/scenario'
 import { SCENARIO_KIND_LABELS } from '../../lib/labels'
+import { buildScenarioSeed } from '../../lib/scenarioScript'
 import { UPLOADABLE_STATUSES, uploadBlockedMessage } from '../../lib/uploadGate'
 import { normalizeSlackWebhook, SLACK_WEBHOOK_INVALID_MESSAGE } from '../../lib/slackWebhook'
 import { normalizeSlackThreadLink, normalizeSlackUserId, SLACK_THREAD_INVALID_MESSAGE, SLACK_USER_ID_INVALID_MESSAGE } from '../../lib/slackThread'
@@ -207,16 +209,16 @@ function renderCueSnapshotHtml(deliverable: Deliverable, cues: Cue[]): string {
   const rows = cues
     .map(
       (c) =>
-        `<tr><td>${escapeHtml(c.cue_no ?? '')}</td><td>${escapeHtml(c.time_at ?? '')}</td>` +
+        `<tr><td>${escapeHtml(c.time_at ?? '')}</td><td>${escapeHtml(c.cue_no ?? '')}</td>` +
         `<td>${escapeHtml(c.segment ?? '')}</td><td>${escapeHtml(c.body ?? '')}</td>` +
-        `<td>${escapeHtml(c.console_audio ?? '')}</td><td>${escapeHtml(c.console_light ?? '')}</td>` +
-        `<td>${escapeHtml(c.console_screen ?? '')}</td></tr>`,
+        `<td>${escapeHtml(c.console_light ?? '')}</td><td>${escapeHtml(c.console_screen ?? '')}</td>` +
+        `<td>${escapeHtml(c.console_audio ?? '')}</td></tr>`,
     )
     .join('')
   return (
     `<!doctype html><meta charset="utf-8"><title>${escapeHtml(deliverable.title)}</title>` +
     `<table border="1" cellspacing="0" cellpadding="6">` +
-    `<tr><th>큐</th><th>시간</th><th>구분</th><th>내용·대본</th><th>음향</th><th>조명</th><th>스크린</th></tr>` +
+    `<tr><th>시각</th><th>큐</th><th>구분</th><th>MC·진행</th><th>조명</th><th>영상</th><th>음향</th></tr>` +
     `${rows}</table>`
   )
 }
@@ -226,14 +228,18 @@ function renderScenarioSnapshotHtml(deliverable: Deliverable, blocks: ScenarioBl
   const rows = blocks
     .map(
       (b) =>
-        `<tr><td>${escapeHtml(b.time ?? '')}</td><td>${escapeHtml(SCENARIO_KIND_LABELS[b.kind])}</td>` +
-        `<td>${escapeHtml(b.script ?? '')}</td><td>${escapeHtml(b.note ?? '')}</td></tr>`,
+        // v2.13 §23.6 원고형 — 지시문(괄호)과 멘트를 가른다. 비상 예비 멘트는 구분 칸에 상황 이름
+        b.kind === 'emergency'
+          ? `<tr><td></td><td>${escapeHtml(`${SCENARIO_KIND_LABELS.emergency} · ${b.note ?? ''}`)}</td>` +
+            `<td></td><td>${escapeHtml(b.script ?? '')}</td></tr>`
+          : `<tr><td>${escapeHtml(b.time ?? '')}</td><td>${escapeHtml(SCENARIO_KIND_LABELS[b.kind])}</td>` +
+            `<td>${b.note ? escapeHtml(`(${b.note})`) : ''}</td><td>${escapeHtml(b.script ?? '')}</td></tr>`,
     )
     .join('')
   return (
     `<!doctype html><meta charset="utf-8"><title>${escapeHtml(deliverable.title)}</title>` +
     `<table border="1" cellspacing="0" cellpadding="6">` +
-    `<tr><th>시각</th><th>구분</th><th>대본</th><th>비고</th></tr>${rows}</table>`
+    `<tr><th>시각</th><th>구분</th><th>지시문</th><th>멘트·내용</th></tr>${rows}</table>`
   )
 }
 
@@ -2388,7 +2394,7 @@ export class MockProvider implements DataProvider {
     return built
   }
 
-  /** §8.2 scenario-seed — 프로그램표 세션당 그룹 헤더 + 기본 진행 블록. 빈 문서에서만(R-O3) */
+  /** §8.2 scenario-seed — v2.13 §23.6 세션 소개 멘트 + 비상 예비 멘트 3종. 빈 문서에서만(R-O3) */
   async seedScenarioFromProgram(deliverableId: UUID): Promise<ScenarioBlock[]> {
     const user = this.assertPmOps()
     const d = this.mustFindScenarioDeliverable(deliverableId)
@@ -2400,32 +2406,17 @@ export class MockProvider implements DataProvider {
       )
     }
     const sessions = await this.listProgramSessions(d.project_id)
-    const built: ScenarioBlock[] = []
-    let order = 0
-    for (const s of sessions) {
-      order += 1
-      built.push({
-        id: this.nextId('scb'),
-        deliverable_id: deliverableId,
-        session_id: s.id,
-        time: s.start_time,
-        kind: 'custom',
-        script: null,
-        note: `세션: ${s.title}`,
-        sort_order: order,
-      })
-      order += 1
-      built.push({
-        id: this.nextId('scb'),
-        deliverable_id: deliverableId,
-        session_id: s.id,
-        time: s.start_time,
-        kind: 'mc',
-        script: '',
-        note: null,
-        sort_order: order,
-      })
-    }
+    // v2.13 §23.6 — 멘트 원고 뼈대(세션 소개 멘트 + 비상 예비 멘트 3종). 틀은 lib/scenarioScript 한 곳
+    const built: ScenarioBlock[] = buildScenarioSeed(sessions).map((b, i) => ({
+      id: this.nextId('scb'),
+      deliverable_id: deliverableId,
+      session_id: b.session_id ?? null,
+      time: b.time ?? null,
+      kind: b.kind,
+      script: b.script ?? null,
+      note: b.note ?? null,
+      sort_order: i + 1,
+    }))
     this.state.scenario_blocks.push(...built)
     this.log(d.project_id, `user:${user.id}`, 'scenario.seed', 'deliverable', deliverableId, {
       session_count: sessions.length,
@@ -2486,17 +2477,26 @@ export class MockProvider implements DataProvider {
     const user = this.assertPmOps()
     const d = this.mustFindGuideDeliverable(deliverableId)
     this.assertWritable(d.project_id)
-    const built: GuideSection[] = sections.map((s, i) => ({
-      id: s.id ?? this.nextId('gds'),
-      deliverable_id: deliverableId,
-      kind: s.kind,
-      title: s.title,
-      content: s.content ?? null,
-      source_ref: s.source_ref ?? null,
-      // 사람이 직접 저장하면 반영 완료 — stale 해제(입력에 명시하지 않으면 false)
-      source_stale: s.source_stale ?? false,
-      sort_order: i + 1,
-    }))
+    // v2.13 §23.5 — 표 섹션은 종류에 맞는 data가 있어야 하고(422), content는 data에서 다시 만든다
+    for (const s of sections) {
+      const problem = guideDataProblem(s.kind, s.data ?? null)
+      if (problem) throw new ProviderError('validation', problem)
+    }
+    const built: GuideSection[] = sections.map((raw, i) => {
+      const s = withDerivedContent(raw)
+      return {
+        id: s.id ?? this.nextId('gds'),
+        deliverable_id: deliverableId,
+        kind: s.kind,
+        title: s.title,
+        content: s.content ?? null,
+        source_ref: s.source_ref ?? null,
+        // 사람이 직접 저장하면 반영 완료 — stale 해제(입력에 명시하지 않으면 false)
+        source_stale: s.source_stale ?? false,
+        sort_order: i + 1,
+        data: s.data ?? null,
+      }
+    })
     this.state.guide_sections = this.state.guide_sections
       .filter((x) => x.deliverable_id !== deliverableId)
       .concat(built)
@@ -2506,7 +2506,7 @@ export class MockProvider implements DataProvider {
     return built
   }
 
-  /** §8.2 guide-seed — 존별 운영·R&R에서 4섹션 초기 로드. 빈 문서에서만(R-O3) */
+  /** §8.2 guide-seed — v2.13: 현장 운영 12섹션 뼈대(존별 운영은 원본 연동). 빈 문서에서만(R-O3) */
   async seedGuideFromSources(deliverableId: UUID): Promise<GuideSection[]> {
     const user = this.assertPmOps()
     const d = this.mustFindGuideDeliverable(deliverableId)
@@ -2520,12 +2520,13 @@ export class MockProvider implements DataProvider {
     const opsItems = this.state.deliverables.filter(
       (x) => x.project_id === d.project_id && x.area === 'ops',
     )
-    const charters = await this.listRoleCharters(d.project_id)
     // v2.6 §25.4 — 포맷 운영 프리셋(DMS: Q&A 미운영·발표 40분 등)을 '진행 원칙' 섹션으로 함께 시드한다.
-    // 프리셋이 빈 포맷(컨퍼런스)은 기존 4섹션 그대로다 — 기존 시드 결과가 바뀌지 않는다.
+    // v2.13 §23.5 — 현장 운영 12섹션(행사 일시·장소·프로그램표·담당자 수로 뼈대를 채운다)
     const project = this.mustFindProject(d.project_id)
     const preset = FORMAT_PRESETS[presetCardOf(project.format, project.event_type)]
-    const seeds = buildGuideSeedSections(opsItems, charters, preset.opsNotes)
+    const sessions = await this.listProgramSessions(d.project_id)
+    const memberCount = this.state.members.filter((m) => m.project_id === d.project_id).length
+    const seeds = buildGuideSeedSections(opsItems, preset.opsNotes, { project, sessions, memberCount })
     const built: GuideSection[] = seeds.map((s, i) => ({
       id: this.nextId('gds'),
       deliverable_id: deliverableId,
@@ -2535,6 +2536,7 @@ export class MockProvider implements DataProvider {
       source_ref: s.source_ref,
       source_stale: false,
       sort_order: i + 1,
+      data: s.data,
     }))
     this.state.guide_sections.push(...built)
     this.log(d.project_id, `user:${user.id}`, 'guide.seed', 'deliverable', deliverableId, {})

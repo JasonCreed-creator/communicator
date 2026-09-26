@@ -692,6 +692,46 @@ reset role;
 select settlement_import_set_file('${VQ}', 'drv-vendor-original-1');
 ${assertSql(`'drv-vendor-original-1' = any(drive_known_file_ids('${PRJ}'))`)}`)
 
+  // 5i. 운영가이드 현장 운영 섹션 (Phase 3.24 · 설계서 v2.13 §23.5) — data 저장 · 모양 검사 · 새 kind · 권한
+  const GD = '00000000-0000-4000-8000-00000000a324'
+  const gdSetup = `reset role;
+insert into deliverables (id, project_id, area, category, title) values ('${GD}', '${PRJ}', 'ops', '운영가이드', '구조화 가이드 검사');
+set local role authenticated;`
+  const staffing = `{"kind":"staffing","title":"현장 인력·콜타임","content":"- 요원 3명","data":{"type":"staffing","rows":[{"role":"요원","count":3,"call_time":"12:00","duty":"","channel":"CH2"}],"extra":""}}`
+  scenario('운영가이드 구조화: pm이 표 섹션(data)과 마크다운 섹션을 함께 저장 · data 그대로 · 마크다운 섹션 data 없음 · emergency는 표/글 모두 허용', `${gdSetup}
+select count(*) from save_guide_sections('${GD}', '[${staffing}, {"kind":"zone","title":"존별 운영","content":"- 로비"}, {"kind":"emergency","title":"비상 대응","content":"- 글"}]'::jsonb);
+${assertSql(`(select (data->'rows'->0->>'count')::int from guide_sections where deliverable_id = '${GD}' and kind = 'staffing') = 3`)}
+${assertSql(`(select data from guide_sections where deliverable_id = '${GD}' and kind = 'zone') is null`)}
+select count(*) from save_guide_sections('${GD}', '[{"kind":"emergency","title":"비상 대응","content":"- 표","data":{"type":"emergency","rows":[]}}]'::jsonb);
+${assertSql(`(select data->>'type' from guide_sections where deliverable_id = '${GD}' and kind = 'emergency') = 'emergency'`)}`, { role: 'authenticated', sub: authId.pm })
+  for (const [label, body] of [
+    ['표 섹션에 data 없음', `[{"kind":"staffing","title":"x","content":"- a"}]`],
+    ['마크다운 섹션(zone)에 data', `[{"kind":"zone","title":"x","content":"- a","data":{"type":"zone"}}]`],
+    ['data.type이 kind와 다름', `[{"kind":"setup","title":"x","content":"- a","data":{"type":"staffing","rows":[],"extra":""}}]`],
+  ]) {
+    scenario(`운영가이드 구조화: ${label} → 거부`, `${gdSetup}
+select count(*) from save_guide_sections('${GD}', '${body}'::jsonb);`, { role: 'authenticated', sub: authId.pm, expect: 'error', match: 'guide_sections_data_shape' })
+  }
+  scenario('운영가이드 구조화: 모르는 kind → 거부', `${gdSetup}
+select count(*) from save_guide_sections('${GD}', '[{"kind":"banquet","title":"x","content":"- a"}]'::jsonb);`, { role: 'authenticated', sub: authId.pm, expect: 'error', match: 'guide_sections_kind_check' })
+  scenario('운영가이드 구조화: design은 저장 불가(pm·ops만)', `${gdSetup}
+select count(*) from save_guide_sections('${GD}', '[${staffing}]'::jsonb);`, { role: 'authenticated', sub: authId.design, expect: 'error', match: 'PM·운영 담당만' })
+  scenario('운영가이드 구조화: ops는 저장 가능', `${gdSetup}
+select count(*) from save_guide_sections('${GD}', '[${staffing}]'::jsonb);
+${assertSql(`(select count(*) from guide_sections where deliverable_id = '${GD}') = 1`)}`, { role: 'authenticated', sub: authId.ops })
+
+  // 5j. 시나리오 비상 예비 멘트 (Phase 3.24 PR-B · 설계서 v2.13 §23.6) — kind 'emergency' 저장 · 모르는 kind 거부
+  const SC = '00000000-0000-4000-8000-00000000a325'
+  const scSetup = `reset role;
+insert into deliverables (id, project_id, area, category, title) values ('${SC}', '${PRJ}', 'ops', '시나리오', '원고형 시나리오 검사');
+set local role authenticated;`
+  scenario('시나리오 원고형: 비상 예비 멘트(emergency)를 세션·시각 없이 저장 · 기존 kind와 섞여도 순서 그대로', `${scSetup}
+select count(*) from save_scenario_blocks('${SC}', '[{"kind":"mc","time":"14:00","script":"환영합니다.","note":"무대 조명 업"},{"kind":"emergency","script":"잠시만 기다려 주십시오.","note":"음향 교체"}]'::jsonb);
+${assertSql(`(select kind from scenario_blocks where deliverable_id = '${SC}' order by sort_order offset 1 limit 1) = 'emergency'`)}
+${assertSql(`(select session_id is null and "time" is null and note = '음향 교체' from scenario_blocks where deliverable_id = '${SC}' and kind = 'emergency')`)}`, { role: 'authenticated', sub: authId.ops })
+  scenario('시나리오 원고형: 모르는 kind → 거부', `${scSetup}
+select count(*) from save_scenario_blocks('${SC}', '[{"kind":"banquet","script":"x"}]'::jsonb);`, { role: 'authenticated', sub: authId.pm, expect: 'error', match: 'scenario_blocks_kind_check' })
+
   // 6. 시크릿 커밋 가드 (§8 DoD 9) — 실키 값 패턴이 레포 파일에 없는가
   const grep = spawnSync('grep', ['-rnE', 'sb_secret_[A-Za-z0-9_-]{10,}|sbp_[A-Za-z0-9]{20,}', 'src', 'supabase', 'scripts', '--include=*.ts', '--include=*.tsx', '--include=*.sql', '--include=*.mjs', '--include=*.md'], { encoding: 'utf8' })
   record('시크릿 커밋 가드: sb_secret_/sbp_ 실키 패턴 0건 (DoD 9)', grep.status === 1, grep.stdout)

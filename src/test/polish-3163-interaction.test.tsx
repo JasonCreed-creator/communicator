@@ -111,16 +111,18 @@ describe('T3① — S9 ④존별 운영 단일 표시', () => {
 })
 
 describe('T3② — S3 정형 문서 하단 메타 카드 제거', () => {
-  it('빌더 문서(RB27 시나리오)는 메타가 상단 스트립 1곳뿐 — 상태·담당·마감·버전 이력 중복 0', async () => {
+  it('빌더 문서(RB27 시나리오)는 메타가 머리 한 줄뿐(v2.13 §7-2.14 — 큐시트와 같은 모양) · 스트립·두 번째 머리 0', async () => {
     localStorage.setItem('communicator.currentProjectId', PROJECT_ID_REBUILD27)
     renderRoute('/items/dlv-rb27-scenario-01')
-    await screen.findByRole('heading', { name: '진행 시나리오 (가안)' })
-    await screen.findByText('상태') // 메타 스트립 로드 대기
-    expect(screen.getAllByText('상태')).toHaveLength(1)
-    expect(screen.getAllByText('담당')).toHaveLength(1)
-    expect(screen.getAllByText('마감')).toHaveLength(1)
-    expect(screen.getAllByText('버전 이력')).toHaveLength(1)
-    // 사이드바(aside) 외에 본문 메타 aside가 없다
+    const h1 = await screen.findByRole('heading', { level: 1, name: '진행 시나리오 (가안)' })
+    // 상태 배지는 머리 제목 옆 한 곳(옛 메타 스트립의 '상태·담당·버전 이력' 칸 이름이 없다)
+    const header = h1.parentElement!.parentElement!
+    expect(within(header).getByText('초안')).toBeTruthy()
+    await screen.findByLabelText('원고 요약')
+    expect(screen.queryByText('버전 이력')).toBeNull()
+    expect(screen.queryByText('상태')).toBeNull()
+    // 빌더 안에 '시나리오 — {문서명}' 두 번째 머리가 없다
+    expect(screen.queryByRole('heading', { name: /시나리오 — / })).toBeNull()
     expect(document.querySelectorAll('main aside')).toHaveLength(0)
   })
 

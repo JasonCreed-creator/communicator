@@ -39,7 +39,7 @@ describe('P7 통합 "항목 추가" 카드 — 접힘·토글 끔 경로·큐시
     await userEvent.type(within(form).getByLabelText('제목'), '현장 운영안 초안')
     await userEvent.click(within(form).getByRole('button', { name: '생성' }))
 
-    const row = (await screen.findByText('현장 운영안 초안')).closest('li')!
+    const row = (await screen.findByText('현장 운영안 초안')).closest('tr')!
     expect(within(row).getByText('초안')).toBeTruthy()
     expect(within(row).queryByText('가이드됨')).toBeNull()
 
