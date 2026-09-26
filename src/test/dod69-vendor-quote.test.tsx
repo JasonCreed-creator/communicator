@@ -98,9 +98,12 @@ describe('DoD 69 · ① 제안 — 행·버킷·부가세', () => {
     expect(vendorQuoteSums([{ amount: 3_000_000 }, { amount: -1_000_000 }], true)).toEqual({ raw: 2_000_000, supply: 2_727_273 - 909_091 })
   })
 
-  it('파일: 엑셀만 · 항목 표가 없으면 무엇을 확인할지 422', () => {
+  it('파일: 엑셀 + (Phase 4.8) PDF·사진 · 그 밖은 거부 · 항목 표가 없으면 무엇을 확인할지 422', () => {
     expect(isVendorQuoteFile('견적.xlsx')).toBe(true)
-    expect(isVendorQuoteFile('견적.pdf')).toBe(false)
+    // Phase 4.8(§19.5b) — PDF·사진은 AI가 읽는다(자세한 판정은 DoD 83)
+    expect(isVendorQuoteFile('견적.pdf')).toBe(true)
+    expect(isVendorQuoteFile('견적.csv')).toBe(false)
+    expect(isVendorQuoteFile('견적.heic')).toBe(false)
     expect(() => parseVendorQuoteWorkbook(new TextEncoder().encode('x').buffer as ArrayBuffer, 'x.xlsx')).toThrow(/견적서/)
   })
 })

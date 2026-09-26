@@ -26,6 +26,9 @@ const SERVICE_ONLY_TABLES = [
   'drive_connection',
   // v2.10.1 §9 — Slack 알림 선점 기록(한 번만 보내기). api/notify(secret 키)의 service 전용 함수만 읽고 쓴다
   'notification_log',
+  // v2.14 §19.5b — AI 사용 기록·하루 한도. 앱은 표를 직접 읽고 쓰지 않는다 — 선점 ai_usage_claim(사용자 JWT · definer)·
+  // 결과 ai_usage_finish(service)만. 정책을 열면 사용자가 자기 기록을 지워 한도를 우회할 수 있다
+  'ai_usage',
 ]
 
 function createdTables(sql: string): string[] {

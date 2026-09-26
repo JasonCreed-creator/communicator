@@ -182,12 +182,14 @@ import {
   buildVendorQuote,
   isVendorQuoteFile,
   parseVendorQuoteWorkbook,
+  VENDOR_QUOTE_AI_MOCK_MESSAGE,
   VENDOR_QUOTE_FILE_MESSAGE,
   VENDOR_QUOTE_NO_BOARD_MESSAGE,
   VENDOR_QUOTE_NOT_PARSED_MESSAGE,
   type VendorQuoteParsed,
   type VendorQuoteQuestion,
 } from '../../lib/vendorQuote'
+import { isAiVendorQuoteFile } from '../../lib/vendorQuoteAi'
 
 /** 3.18.1 §2 — 발주처 담당자 블록의 스태프 정렬(PM을 맨 위로). 표시 순서일 뿐 권한과 무관하다. */
 const CLIENT_STAFF_ROLE_ORDER: readonly MemberRole[] = ['pm', 'design', 'ops', 'reg']
@@ -4606,6 +4608,8 @@ export class MockProvider implements DataProvider {
     if (input.vendor_id && !this.state.vendors.some((v) => v.id === input.vendor_id)) {
       throw new ProviderError('validation', '협력사를 찾을 수 없습니다.')
     }
+    // Phase 4.8 — PDF·사진은 실서버의 AI가 읽는다. mock에는 AI 서버가 없어 흉내 내지 않고 사실대로 알린다
+    if (isAiVendorQuoteFile(input.file_name)) throw new ProviderError('validation', VENDOR_QUOTE_AI_MOCK_MESSAGE)
     const doc = parseVendorQuoteWorkbook(input.data, input.file_name)
     const buckets = this.state.settlement_buckets.filter((b) => b.board_id === board.id)
     const { parsed, questions } = buildVendorQuote(doc, buckets)

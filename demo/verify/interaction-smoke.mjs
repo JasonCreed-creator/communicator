@@ -23,7 +23,8 @@
 //       6.1: Slack 봇 — 행사 설정 ③ 스레드 링크(DM 링크 거부 → 등록 → 채널·Slack에서 열기 → 웹훅 예비 접힘 → 해제) · 담당자 Slack 칸 ·
 //       3.24 PR-A: 운영가이드 — 옛 문서 뼈대 추가 → 섹션 목록 · 등록 운영 대기 계산 · 목록 링크 = 스크롤만(해시 불변) ·
 //       3.24 PR-B: 운영 보드 유형별 표·카드 요약 → 시나리오 원고(뼈대 · 멘트 쓰기 · 연사 확인 · 비상 멘트) · 큐시트 칸 순서 ·
-//       3.24 PR-C: 16:9 장표 — 운영계획서 → 장표(사이드바 없음 · 목차 쪽 번호 · 본문 넘침 0 · 16:9) → 인쇄 PDF 쪽 수·용지 960×540pt)
+//       3.24 PR-C: 16:9 장표 — 운영계획서 → 장표(사이드바 없음 · 목차 쪽 번호 · 본문 넘침 0 · 16:9) → 인쇄 PDF 쪽 수·용지 960×540pt ·
+//       4.8: 협력사 견적서 PDF·사진 — 불러오기 대화상자(엑셀·PDF·사진 받음 · AI 안내) → PDF 고르기 → 'AI로 읽기' → mock 사실 안내 · 서버 요청 0)
 // 캡처는 dist-demo/shots-interaction/ 에 남긴다. 실패 시 exit 1.
 import { createServer } from 'node:http'
 import { readFileSync, mkdirSync } from 'node:fs'
@@ -320,6 +321,55 @@ check(
   await tab.getByRole('link', { name: '← 운영계획서' }).click()
   await tab.waitForURL(/#\/plan$/, { timeout: 10_000 })
   check(docRequests.length === docBefore, '운영계획서 ↔ 16:9 장표 이동·인쇄에 전체 리로드 0', `${docBefore} → ${docRequests.length}`)
+  await tab.locator('aside nav a', { hasText: '일정' }).first().click()
+  await tab.waitForURL(/#\/schedule/, { timeout: 10_000 })
+}
+
+// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — **Phase 4.8 협력사 견적서 PDF·사진(AI 읽기, 2026-09-26)**.
+//     일정(위 블록 끝) → 정산보드가 있는 샘플 행사(`?project=`) → 머리 '협력사 견적서 불러오기' → 파일 칸이 엑셀·PDF·사진을 받고
+//     AI 안내 한 줄 → 가상 PDF(이 자리에서 만든 최소 바이트 — 실견적서 커밋 금지) 고르기 → 버튼 이름 'AI로 읽기' → 누르기 →
+//     데모(mock)는 AI를 흉내 내지 않고 사실대로 안내 · 확인 큐 없음 · /api 요청 0 · 전체 리로드 0 → 취소 → RB27 홈 → 다시 '일정'으로.
+{
+  const docBefore = docRequests.length
+  const apiCalls = []
+  const onReq = (req) => {
+    if (/\/api\//.test(req.url())) apiCalls.push(req.url())
+  }
+  tab.on('request', onReq)
+  await tab.evaluate(() => {
+    window.location.hash = '#/settlement?project=prj-stc26'
+  })
+  await tab.getByTestId('settlement-kpis').waitFor({ timeout: 10_000 })
+  await tab.getByRole('button', { name: '협력사 견적서 불러오기' }).click()
+  const dlg = tab.getByTestId('vendor-quote-dialog')
+  await dlg.waitFor({ timeout: 10_000 })
+  const accept = (await dlg.getByLabel('견적서 파일').getAttribute('accept')) ?? ''
+  check(['.xlsx', '.pdf', '.jpg', '.png', '.webp'].every((x) => accept.includes(x)), '파일 칸 = 엑셀·PDF·사진', accept)
+  check((await dlg.getByTestId('vendor-quote-ai-note').innerText()).includes('AI(Claude)'), 'AI 안내 한 줄(하루 횟수 · 원본 대조)')
+  await dlg.getByLabel('견적서 파일').setInputFiles({
+    name: '가상음향_견적.pdf',
+    mimeType: 'application/pdf',
+    buffer: Buffer.from('%PDF-1.7\n%%EOF\n'),
+  })
+  const aiBtn = dlg.getByRole('button', { name: 'AI로 읽기' })
+  check((await aiBtn.count()) === 1, "PDF를 고르면 버튼 = 'AI로 읽기'")
+  await aiBtn.click()
+  await dlg.getByText('PDF·사진은 실서버에서 AI(Claude)가 읽습니다').waitFor({ timeout: 10_000 })
+  check(true, 'mock = 사실 안내(흉내 없음)')
+  check((await dlg.getByTestId('vendor-quote-rows').count()) === 0, '확인 큐 없음(가져오기 0건)')
+  await tab.screenshot({ path: resolve(SHOTS, '03-vendor-quote-ai-mock.png'), fullPage: true })
+  await dlg.getByRole('button', { name: '취소' }).click()
+  tab.off('request', onReq)
+  check(apiCalls.length === 0, '데모에서 /api 요청 0(AI 서버를 부르지 않음)', apiCalls.join(', '))
+  check(docRequests.length === docBefore, '불러오기 대화상자·AI 안내에 전체 리로드 0', `${docBefore} → ${docRequests.length}`)
+  await tab.evaluate(() => {
+    window.location.hash = '#/home?project=prj-rebuild27'
+  })
+  await tab.waitForFunction(
+    () => localStorage.getItem('communicator.currentProjectId') === 'prj-rebuild27' && location.hash === '#/home',
+    null,
+    { timeout: 10_000 },
+  )
   await tab.locator('aside nav a', { hasText: '일정' }).first().click()
   await tab.waitForURL(/#\/schedule/, { timeout: 10_000 })
 }

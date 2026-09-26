@@ -732,6 +732,55 @@ ${assertSql(`(select session_id is null and "time" is null and note = '음향 �
   scenario('시나리오 원고형: 모르는 kind → 거부', `${scSetup}
 select count(*) from save_scenario_blocks('${SC}', '[{"kind":"banquet","script":"x"}]'::jsonb);`, { role: 'authenticated', sub: authId.pm, expect: 'error', match: 'scenario_blocks_kind_check' })
 
+  // 5k. AI 사용 기록·하루 한도 (Phase 4.8 · 설계서 v2.14 §19.5b) — pm·종료 안 된 행사 · 한도 · 'failed' 제외 · 직접 접근 불가
+  const aiPmProfile = `(select id from profiles where auth_user_id = '${authId.pm}')`
+  scenario('AI 한도: pm이 선점 → id·오늘 1회째·한도 · 기록은 claimed(파일 이름·금액 칸 없음)', `
+select ai_usage_claim('${PRJ}', 'vendor_quote', 30);
+reset role;
+${assertSql(`(select count(*) from ai_usage where profile_id = ${aiPmProfile} and project_id = '${PRJ}' and feature = 'vendor_quote' and status = 'claimed') = 1`)}
+${assertSql(`not exists (select 1 from information_schema.columns where table_name = 'ai_usage' and column_name in ('file_name', 'amount', 'content'))`)}`, { role: 'authenticated', sub: authId.pm })
+  scenario('AI 한도: 선점 결과 = {id, used 1, limit 30}', `
+${assertSql(`(select (r->>'used')::int = 1 and (r->>'limit')::int = 30 and (r->>'id') is not null from (select ai_usage_claim('${PRJ}', 'vendor_quote', 30) r) x)`)}`, { role: 'authenticated', sub: authId.pm })
+  scenario('AI 한도: design(비 pm) 선점 거부', `select ai_usage_claim('${PRJ}', 'vendor_quote', 30);`,
+    { role: 'authenticated', sub: authId.design, expect: 'error', match: 'PM 전용' })
+  scenario('AI 한도: 종료 행사 선점 거부', `select ai_usage_claim('${PRJ_CLOSED}', 'vendor_quote', 30);`,
+    { role: 'authenticated', sub: authId.pm, expect: 'error', match: '종료된 행사' })
+  scenario('AI 한도: 모르는 기능 거부', `select ai_usage_claim('${PRJ}', 'plan_review', 30);`,
+    { role: 'authenticated', sub: authId.pm, expect: 'error', match: '알 수 없는 AI 기능' })
+  scenario('AI 한도: 로그인 없음 거부', `select ai_usage_claim('${PRJ}', 'vendor_quote', 30);`,
+    { role: 'authenticated', sub: '00000000-0000-4000-8000-0000000000ff', expect: 'error', match: '로그인이 필요합니다' })
+  scenario('AI 한도: 한도 2 → 두 번 선점 뒤 세 번째 거부(P0429 · 엑셀 안내)', `
+select ai_usage_claim('${PRJ}', 'vendor_quote', 2);
+select ai_usage_claim('${PRJ}', 'vendor_quote', 2);
+select ai_usage_claim('${PRJ}', 'vendor_quote', 2);`, { role: 'authenticated', sub: authId.pm, expect: 'error', match: 'LIMIT: 오늘 AI 읽기 2회를 모두 썼습니다.*엑셀' })
+  scenario("AI 한도: 'failed'(Claude 쪽 오류)는 세지 않는다 · 'unreadable'은 센다 · 어제(KST) 기록은 세지 않는다", `
+select ai_usage_claim('${PRJ}', 'vendor_quote', 2) \\gset c1_
+reset role;
+select ai_usage_finish((:'c1_ai_usage_claim'::jsonb->>'id')::uuid, 'failed', 'claude-sonnet-5', 0, 0, 'overloaded');
+insert into ai_usage (profile_id, project_id, feature, status, created_at) values (${aiPmProfile}, '${PRJ}', 'vendor_quote', 'ok', app.kst_day_start() - interval '1 minute');
+set local role authenticated;
+select ai_usage_claim('${PRJ}', 'vendor_quote', 2) \\gset c2_
+reset role;
+select ai_usage_finish((:'c2_ai_usage_claim'::jsonb->>'id')::uuid, 'unreadable', 'claude-sonnet-5', 1200, 30, 'not a quote');
+set local role authenticated;
+${assertSql(`(select (r->>'used')::int = 2 from (select ai_usage_claim('${PRJ}', 'vendor_quote', 2) r) x)`)}`, { role: 'authenticated', sub: authId.pm })
+  scenario('AI 한도: 결과 기록은 claimed 줄만 한 번(두 번째 기록은 무시)', `
+select ai_usage_claim('${PRJ}', 'vendor_quote', 30) \\gset c_
+reset role;
+select ai_usage_finish((:'c_ai_usage_claim'::jsonb->>'id')::uuid, 'ok', 'claude-sonnet-5', 5000, 800, null);
+select ai_usage_finish((:'c_ai_usage_claim'::jsonb->>'id')::uuid, 'failed', 'x', 0, 0, 'late');
+-- psql 변수는 do 블록 안에서 풀리지 않는다 — 거짓이면 0으로 나눠 실패시킨다
+select 1 / coalesce((select case when status = 'ok' and input_tokens = 5000 and output_tokens = 800 and finished_at is not null then 1 else 0 end
+  from ai_usage where id = (:'c_ai_usage_claim'::jsonb->>'id')::uuid), 0);`, { role: 'authenticated', sub: authId.pm })
+  scenario('AI 한도: 로그인 사용자는 ai_usage 표를 직접 읽지 못한다', `select count(*) from ai_usage;`,
+    { role: 'authenticated', sub: authId.pm, expect: 'error', match: 'permission denied' })
+  scenario('AI 한도: 로그인 사용자는 ai_usage에 직접 쓰지 못한다(한도 우회 차단)', `delete from ai_usage;`,
+    { role: 'authenticated', sub: authId.pm, expect: 'error', match: 'permission denied' })
+  scenario('AI 한도: 결과 기록 함수는 service 전용', `select ai_usage_finish(gen_random_uuid(), 'failed', 'x', 0, 0, null);`,
+    { role: 'authenticated', sub: authId.pm, expect: 'error', match: 'permission denied' })
+  scenario('AI 한도: anon은 선점 함수도 못 부른다', `select ai_usage_claim('${PRJ}', 'vendor_quote', 30);`,
+    { role: 'anon', expect: 'error', match: 'permission denied' })
+
   // 6. 시크릿 커밋 가드 (§8 DoD 9) — 실키 값 패턴이 레포 파일에 없는가
   const grep = spawnSync('grep', ['-rnE', 'sb_secret_[A-Za-z0-9_-]{10,}|sbp_[A-Za-z0-9]{20,}', 'src', 'supabase', 'scripts', '--include=*.ts', '--include=*.tsx', '--include=*.sql', '--include=*.mjs', '--include=*.md'], { encoding: 'utf8' })
   record('시크릿 커밋 가드: sb_secret_/sbp_ 실키 패턴 0건 (DoD 9)', grep.status === 1, grep.stdout)

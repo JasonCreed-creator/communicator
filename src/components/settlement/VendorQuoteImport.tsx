@@ -1,23 +1,27 @@
 // S-10 협력사 견적서 불러오기 (설계서 v2.11 §19.5 · Phase 4.7) — 업로드 → 확인 큐 → 발주 항목.
+// Phase 4.8(v2.14 §19.5b): PDF·사진도 받는다 — 실서버에서 AI(Claude)가 읽고, 확인 큐는 같다('AI가 읽음' 배지 + 원본 대조 안내).
 //
 // §19.5 정본: "확신이 서지 않는 것만 담당자에게 묻는다 — 어느 버킷인지, 부가세가 포함인지" · "읽은 결과는 항상 담당자 확인을
 // 거쳐 저장한다(오독이 곧 정산 오류)". 그래서 이 화면은 **제안을 보여 주고 고르게** 한다:
-//   ① 파일(.xlsx)과 협력사를 고른다 → 가져오기(제안만 저장 — 항목은 아직 없다)
+//   ① 파일(.xlsx · PDF · 사진)과 협력사를 고른다 → 가져오기(제안만 저장 — 항목은 아직 없다)
 //   ② 확인 큐: 부가세(모르면 반드시 고른다) · 행마다 포함 여부·버킷(원가 버킷만)·제목 · 공급가 대조 · 읽기 경고
 //   ③ 확정 → 고른 행마다 발주 항목(발주액 = 견적서 금액, 부가세 포함이면 분리) — 금액은 서버가 저장된 제안에서 읽는다
 // 발주는 항목 단위다(§19.3) — 협력사 묶음 한 줄로 넣는 선택지는 두지 않는다.
 // **내부 전용** — 금액은 이 화면과 정산보드에만(§4-24 R-S9).
 import { useMemo, useState } from 'react'
 import ErrorAlert from '../internal/ErrorAlert'
+import { LevelBadge } from '../internal/StatusBadge'
 import { useMutation } from '../../hooks/useAsync'
 import { toVatExcluded } from '../../lib/settlement'
 import {
   isVendorQuoteFile,
   supplyCheck,
   vendorQuoteSums,
+  VENDOR_QUOTE_ACCEPT,
   VENDOR_QUOTE_FILE_MESSAGE,
   type VendorQuoteRow,
 } from '../../lib/vendorQuote'
+import { isAiVendorQuoteFile } from '../../lib/vendorQuoteAi'
 import { getDataProvider } from '../../providers'
 import type { SettlementBucket, SettlementItem, Vendor } from '../../types/entities'
 import type { VendorQuoteImportView } from '../../types/views'
@@ -123,6 +127,7 @@ export function VendorQuoteDialog({
   const [drafts, setDrafts] = useState<Record<number, RowDraft>>(() => (initial ? draftsOf(initial, buckets) : {}))
   const [done, setDone] = useState<SettlementItem[] | null>(null)
   const costBuckets = useMemo(() => buckets.filter((b) => b.has_cost), [buckets])
+  const aiFile = !!file && isAiVendorQuoteFile(file.name)
 
   const load = useMutation(async () => {
     if (!file) throw new Error('견적서 파일을 고르세요.')
@@ -193,14 +198,18 @@ export function VendorQuoteDialog({
           <>
             <h2 className="t-card-title">협력사 견적서 불러오기</h2>
             <p className="mt-2 text-sm text-ink-sub">
-              엑셀(.xlsx) 견적서를 고르세요. 읽은 결과는 다음 화면에서 확인한 뒤에 저장합니다 — 지금은 아무것도 만들어지지 않습니다.
+              엑셀(.xlsx)·PDF·사진 견적서를 고르세요. 읽은 결과는 다음 화면에서 확인한 뒤에 저장합니다 — 지금은 아무것도 만들어지지 않습니다.
+            </p>
+            <p className="mt-1 text-xs text-ink-cap" data-testid="vendor-quote-ai-note">
+              PDF·사진은 AI(Claude)가 표를 옮겨 적습니다 — 한 사람이 하루에 쓸 수 있는 횟수가 정해져 있고, 금액은 확인 화면에서 원본과
+              대조해야 합니다. 엑셀은 AI 없이 바로 읽습니다.
             </p>
             <div className="mt-4 flex flex-col gap-3">
               <label className="flex flex-col gap-1 t-caption">
                 견적서 파일
                 <input
                   type="file"
-                  accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                  accept={VENDOR_QUOTE_ACCEPT}
                   aria-label="견적서 파일"
                   onChange={(e) => setFile(e.target.files?.[0] ?? null)}
                   className="text-sm"
@@ -219,20 +228,34 @@ export function VendorQuoteDialog({
               </label>
             </div>
             <ErrorAlert message={load.error} />
+            {load.pending && (
+              <p role="status" className="mt-3 text-sm text-ink-sub" data-testid="vendor-quote-reading">
+                {aiFile ? 'AI가 견적서를 읽는 중입니다 — 쪽수에 따라 1분쯤 걸립니다. 창을 닫지 마세요.' : '견적서를 읽는 중입니다…'}
+              </p>
+            )}
             <div className="mt-5 flex justify-end gap-2">
               <button type="button" className="btn btn-ghost" onClick={onClose}>
                 취소
               </button>
               <button type="button" className="btn btn-primary" disabled={!file || load.pending} onClick={handleLoad}>
-                읽기
+                {aiFile ? 'AI로 읽기' : '읽기'}
               </button>
             </div>
           </>
         ) : (
           <>
             <h2 className="t-card-title">확인하고 저장하기 — {view.file_name}</h2>
+            {view.parsed.format === 'ai' && (
+              <div className="mt-2 flex flex-wrap items-center gap-2 rounded-md border border-border bg-canvas px-3 py-2 text-sm text-ink" data-testid="vendor-quote-ai-read">
+                <LevelBadge level="attention" label="AI가 읽음" />
+                <span>금액을 원본 견적서와 한 줄씩 대조한 뒤 확정하세요 — 잘못 읽은 금액은 그대로 발주액이 됩니다.</span>
+              </div>
+            )}
             <p className="mt-1 text-xs text-ink-cap">
-              서식 {view.parsed.format}형 · 행 {view.parsed.rows.length}개
+              {view.parsed.format === 'ai'
+                ? `AI 읽기${view.parsed.reader?.model ? `(${view.parsed.reader.model})` : ''}`
+                : `서식 ${view.parsed.format}형`}{' '}
+              · 행 {view.parsed.rows.length}개
               {view.parsed.header.manager ? ` · 견적 담당 ${view.parsed.header.manager}` : ''}
               {view.drive_file_id ? ' · 원본은 Drive(02_견적·정산/협력사 견적서)에 보관했습니다' : ''}
             </p>
