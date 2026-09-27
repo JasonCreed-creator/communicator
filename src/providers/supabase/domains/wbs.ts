@@ -7,6 +7,7 @@ import { SupabaseCtx, newId, nowIso } from '../ctx'
 import { notifyFor } from '../notify'
 import { ProviderError } from '../../../lib/errors'
 import { offsetToDate } from '../../../lib/wbs'
+import { ISO_DATE_RE, normalizeGroupName, phaseNameFor } from '../../../lib/wbsCustom'
 import {
   HOST_ROLE_CHARTER_TEMPLATE,
   HOST_SUBMIT_CATEGORY,
@@ -32,7 +33,10 @@ type WbsMethods =
   | 'expandHostWbs'
   | 'listWbsTasks'
   | 'updateWbsTask'
+  | 'createWbsTask'
+  | 'deleteWbsTask'
   | 'listRoleCharters'
+  | 'updateRoleCharter'
   | 'listComplianceCards'
   | 'updateComplianceCard'
 
@@ -67,7 +71,7 @@ const AREA_BY_ROLE: Record<MemberRole, DeliverableArea> = {
 
 /** R&R 카드 표시 순서 — role_charters에는 정렬 열이 없어 템플릿 시드 순(pm→design→ops→reg)으로 맞춘다 */
 const ROLE_ORDER: readonly MemberRole[] = ['pm', 'design', 'ops', 'reg']
-function sortCharters(rows: RoleCharter[]): RoleCharter[] {
+export function sortCharters(rows: RoleCharter[]): RoleCharter[] {
   return [...rows].sort(
     (a, b) => ROLE_ORDER.indexOf(a.role) - ROLE_ORDER.indexOf(b.role) || a.title.localeCompare(b.title),
   )
@@ -87,7 +91,8 @@ function requireEventDate(project: Project): IsoDate {
  * 보존한다(설계서 v1.4.1 §4-15). target은 템플릿 정본에서 재시드, direction은 항상 internal(v2.4 §21).
  */
 function buildAgencyTasks(project: Project, eventDate: IsoDate, existing: readonly WbsTask[]): WbsTask[] {
-  const prev = new Map(existing.map((task) => [task.code, task]))
+  // v2.21 §27.4 — custom 행은 치환 대상이 아니다(RPC도 template 행만 지운다) · 배정·묶음은 code 매칭으로 잇는다
+  const prev = new Map(existing.filter((task) => task.source !== 'custom').map((task) => [task.code, task]))
   return wbsTemplateFor(project.event_type).map((tpl, i) => {
     const old = prev.get(tpl.code)
     return {
@@ -111,6 +116,9 @@ function buildAgencyTasks(project: Project, eventDate: IsoDate, existing: readon
       partner_id: null,
       note: old?.note ?? null,
       sort_order: i + 1,
+      assignee_id: old?.assignee_id ?? null,
+      group_name: old?.group_name ?? null,
+      source: 'template',
     }
   })
 }
@@ -127,7 +135,9 @@ function buildHostTasks(
   existing: readonly WbsTask[],
   activePartners: readonly Partner[],
 ): { tasks: WbsTask[]; inbound: NewInbound[] } {
-  const prevByKey = new Map(existing.map((task) => [`${task.code}:${task.partner_id ?? ''}`, task]))
+  const prevByKey = new Map(
+    existing.filter((task) => task.source !== 'custom').map((task) => [`${task.code}:${task.partner_id ?? ''}`, task]),
+  )
   const tasks: WbsTask[] = []
   const inbound: NewInbound[] = []
   let sortOrder = 1
@@ -158,6 +168,9 @@ function buildHostTasks(
         partner_id: partner?.id ?? null,
         note: old?.note ?? null,
         sort_order: sortOrder++,
+        assignee_id: old?.assignee_id ?? null,
+        group_name: old?.group_name ?? null,
+        source: 'template',
       }
       tasks.push(task)
 
@@ -192,6 +205,7 @@ function charterRows(project: Project): RoleCharter[] {
     origin_role: tpl.origin_role,
     title: tpl.title,
     items: [...tpl.items],
+    people: null,
   }))
 }
 
@@ -225,6 +239,18 @@ export function wbsDomain(ctx: SupabaseCtx): Pick<DataProvider, WbsMethods> {
         .eq('status', 'active')
         .order('created_at'),
     ) as Partner[]
+  }
+
+  /** v2.21 §27.4 R-M6 — 배정 대상은 그 행사 멤버만(주소록 사람이어도 멤버가 아니면 422). RPC·트리거가 같은 규칙을 다시 본다 */
+  async function assertAssignee(projectId: UUID, assigneeId: UUID | null): Promise<void> {
+    if (assigneeId === null) return
+    const res = await ctx.sb
+      .from('project_members')
+      .select('user_id', { count: 'exact', head: true })
+      .eq('project_id', projectId)
+      .eq('user_id', assigneeId)
+    ctx.ok(res)
+    if ((res.count ?? 0) === 0) throw new ProviderError('validation', '담당자는 이 행사 멤버여야 합니다.')
   }
 
   /** 행사에 그 표의 행이 하나도 없는지(백필 시드 판단 — "비어 있으면 시드") */
@@ -381,6 +407,13 @@ export function wbsDomain(ctx: SupabaseCtx): Pick<DataProvider, WbsMethods> {
         if (patch.linked_deliverable_id) await ctx.deliverable(patch.linked_deliverable_id)
         row.linked_deliverable_id = patch.linked_deliverable_id
       }
+      // v2.21 §27.4 — 사람 배정(그 행사 멤버만 · DB 트리거가 같은 규칙을 다시 본다) · Lv2 묶음 · 소통 대상
+      if (patch.assignee_id !== undefined) {
+        await assertAssignee(task.project_id, patch.assignee_id)
+        row.assignee_id = patch.assignee_id
+      }
+      if (patch.group_name !== undefined) row.group_name = normalizeGroupName(patch.group_name)
+      if (patch.target !== undefined) row.target = patch.target?.trim() || null
       if (Object.keys(row).length === 0) return task
       const updated = ctx.q(
         await ctx.sb.from('wbs_tasks').update(row).eq('id', taskId).select('*').single(),
@@ -391,11 +424,64 @@ export function wbsDomain(ctx: SupabaseCtx): Pick<DataProvider, WbsMethods> {
       return updated
     },
 
+    /**
+     * v2.21 §27.4(v17) — 행사별 태스크 추가(pm). 검증 순서·문구는 mock과 같다. code(`C-{n}`)·오프셋·sort_order는 RPC가
+     * 한 트랜잭션에서 매긴다(유일 인덱스 경합 방지) — 단계 이름만 앱이 템플릿에서 채워 넘긴다(RPC는 전개된 태스크의 이름을 우선).
+     */
+    async createWbsTask(projectId, input) {
+      await ctx.assertPm(projectId)
+      const project = await ctx.assertWritable(projectId)
+      if (!project.event_date) {
+        throw new ProviderError('validation', '행사일이 있어야 태스크를 추가할 수 있습니다.')
+      }
+      const title = input.title.trim()
+      if (!title) throw new ProviderError('validation', '태스크 제목은 필수입니다.')
+      if (!ISO_DATE_RE.test(input.start_date) || !ISO_DATE_RE.test(input.end_date)) {
+        throw new ProviderError('validation', '시작일·종료일을 입력하세요.')
+      }
+      if (input.end_date < input.start_date) {
+        throw new ProviderError('validation', '종료일은 시작일보다 앞설 수 없습니다.')
+      }
+      const mine = await tasksOf(projectId)
+      const phaseName = phaseNameFor(project, mine, input.phase_no)
+      if (!phaseName) throw new ProviderError('validation', '단계를 찾을 수 없습니다.')
+      await assertAssignee(projectId, input.assignee_id ?? null)
+      return ctx.rpc<WbsTask>('create_wbs_task', {
+        p_project: projectId,
+        p_input: {
+          phase_no: input.phase_no,
+          phase_name: phaseName,
+          group_name: normalizeGroupName(input.group_name),
+          title,
+          start_date: input.start_date,
+          end_date: input.end_date,
+          role: input.role,
+          assignee_id: input.assignee_id ?? null,
+          target: input.target?.trim() || null,
+          note: input.note?.trim() || null,
+        },
+      })
+    },
+
+    /** v2.21 §27.4(v17) — custom 태스크만(pm). 템플릿 태스크는 RPC가 409(완료 처리로 안내) */
+    async deleteWbsTask(taskId) {
+      await ctx.rpc<void>('delete_wbs_task', { p_task: taskId })
+    },
+
     async listRoleCharters(projectId) {
       await ctx.project(projectId)
       return sortCharters(
         ctx.q(await ctx.sb.from('role_charters').select('*').eq('project_id', projectId)) as RoleCharter[],
       )
+    },
+
+    /** v2.21 §27.4(v17) — R&R 카드 편집(pm). 주소록 사람 검사·중복 검사·공백 정리는 RPC가 한다(security definer · RLS 직접 쓰기 없음) */
+    async updateRoleCharter(charterId, patch) {
+      const body: Record<string, unknown> = {}
+      if (patch.title !== undefined) body.title = patch.title
+      if (patch.items !== undefined) body.items = patch.items
+      if (patch.people !== undefined) body.people = patch.people
+      return ctx.rpc<RoleCharter>('update_role_charter', { p_charter: charterId, p_patch: body })
     },
 
     // ── v2.0 컴플라이언스 카드 (§8 /compliance-cards — 체크 멤버·편집 pm) ──

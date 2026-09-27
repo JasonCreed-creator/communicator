@@ -34,8 +34,8 @@ function RoleDot({ role }: { role: MemberRole }) {
   return <span aria-hidden className={`inline-block size-2 shrink-0 rounded-full ${ROLE_BAR_CLASSES[role]}`} />
 }
 
-/** 카드 머리 글자 — 성(첫 글자)으로 사람을 빠르게 알아본다. 이미지 자산을 두지 않는다 */
-function initialOf(name: string): string {
+/** 카드 머리 글자 — 성(첫 글자)으로 사람을 빠르게 알아본다. 이미지 자산을 두지 않는다. v2.21 §27.4 WBS 담당자 피커가 같은 글자를 쓴다 */
+export function initialOf(name: string): string {
   return name.trim().charAt(0).toUpperCase() || '?'
 }
 

@@ -1,4 +1,5 @@
 import { Fragment, useState } from 'react'
+import AssigneePicker, { choicesFromMembers, type PersonChoice } from './AssigneePicker'
 import LinkedDeliverableBadge from './LinkedDeliverableBadge'
 import WbsStatusControl from './WbsStatusControl'
 import WbsTaskEditForm from './WbsTaskEditForm'
@@ -11,17 +12,26 @@ import {
   wbsUrgency,
 } from './wbsFormat'
 import DdayBadge from '../internal/DdayBadge'
+import ErrorAlert from '../internal/ErrorAlert'
 import SortableTh, { type SortDirection } from '../internal/SortableTh'
 import { LevelBadge } from '../internal/StatusBadge'
+import { useMutation } from '../../hooks/useAsync'
 import { ROLE_BAR_CLASSES, ROLE_LABELS, WBS_DIRECTION_LABELS, formatDate } from '../../lib/labels'
 import { toIsoDate } from '../../lib/wbs'
-import type { Deliverable, WbsTask } from '../../types/entities'
+import { groupTasksByGroupName } from '../../lib/wbsCustom'
+import { getDataProvider } from '../../providers'
+import type { Deliverable, UUID, WbsTask } from '../../types/entities'
+import type { MemberWithProfile } from '../../types/views'
+
+const provider = getDataProvider()
 
 interface WbsChecklistProps {
   tasks: WbsTask[]
   deliverables: Deliverable[]
   isPm: boolean
   onChanged: () => void
+  /** v2.21 §27.4 — 담당자 칸(이름·피커 후보) = 이 행사 멤버 */
+  members?: MemberWithProfile[]
   /** P6-② — true(주최형)면 행마다 방향 뱃지(▲▼■)를 표기. 대행형은 항상 false로 전달(미표기). */
   isHost?: boolean
   /** 패턴 기준 시트 §05 규칙 02 — 밀집 모드(행 36). 내부 관리 화면인 S5에만 노출한다(조건 1). */
@@ -42,12 +52,16 @@ export default function WbsChecklist({
   onChanged,
   isHost = false,
   dense = false,
+  members = [],
 }: WbsChecklistProps) {
   const today = toIsoDate(new Date())
   const [sortKey, setSortKey] = useState<SortKey>('code')
   const [sortDir, setSortDir] = useState<SortDirection>('asc')
   const groups = groupTasksByPhase(tasks)
   const colCount = isPm ? 8 : 7
+  // v2.21 §27.4 — 담당자 칸: 배정된 사람 이름(없으면 역할) · pm은 눌러서 멤버 카드로 고른다
+  const choices = choicesFromMembers(members)
+  const nameOf = (id: UUID | null): string | null => (id && choices.find((c) => c.id === id)?.name) || null
 
   if (tasks.length === 0) {
     return <p className="text-sm text-ink-cap">표시할 태스크가 없습니다.</p>
@@ -75,7 +89,7 @@ export default function WbsChecklist({
 
   return (
     <div className="overflow-x-auto">
-      <table className={`ui-table min-w-[1080px] text-sm ${dense ? 'ui-table-dense' : ''}`}>
+      <table className={`ui-table min-w-[1140px] text-sm ${dense ? 'ui-table-dense' : ''}`}>
         <thead>
           <tr>
             <SortableTh
@@ -86,7 +100,7 @@ export default function WbsChecklist({
             >
               태스크
             </SortableTh>
-            <th className="ui-th w-[104px]">담당</th>
+            <th className="ui-th w-[160px]">담당</th>
             <th className="ui-th w-[132px]">소통 대상</th>
             <SortableTh
               active={sortKey === 'period'}
@@ -104,7 +118,8 @@ export default function WbsChecklist({
         </thead>
         <tbody>
           {groups.map((g) => {
-            const rows = buildChecklistRows(sortTasks(g.tasks), deliverables)
+            // v2.21 §27.4 — Lv2 묶음(group_name): 단계 안에서 이름별로 묶고, 묶음 없는 행은 뒤에 이름 줄 없이
+            const buckets = groupTasksByGroupName(sortTasks(g.tasks))
             const summary = summarizePhase(g.tasks, today)
             return (
               <Fragment key={g.phase_no}>
@@ -124,30 +139,52 @@ export default function WbsChecklist({
                     </span>
                   </td>
                 </tr>
-                {rows.map((row) =>
-                  row.type === 'group' ? (
-                    <WbsPartnerGroupRow
-                      key={`grp-${row.group.code}`}
-                      group={row.group}
-                      deliverables={deliverables}
-                      isPm={isPm}
-                      today={today}
-                      onChanged={onChanged}
-                      isHost={isHost}
-                      colCount={colCount}
-                    />
-                  ) : (
-                    <WbsTaskRow
-                      key={row.task.id}
-                      task={row.task}
-                      deliverables={deliverables}
-                      isPm={isPm}
-                      today={today}
-                      onChanged={onChanged}
-                      isHost={isHost}
-                    />
-                  ),
-                )}
+                {buckets.map((bucket) => (
+                  <Fragment key={`${g.phase_no}:${bucket.group_name ?? ''}`}>
+                    {bucket.group_name && (
+                      <tr className="ui-table-subgroup" data-testid="wbs-group-row">
+                        <td colSpan={colCount}>
+                          <span className="inline-flex items-center gap-2">
+                            <span>{bucket.group_name}</span>
+                            <span className="font-normal text-ink-cap">{bucket.tasks.length}건</span>
+                          </span>
+                        </td>
+                      </tr>
+                    )}
+                    {buildChecklistRows(bucket.tasks, deliverables).map((row) =>
+                      row.type === 'group' ? (
+                        <WbsPartnerGroupRow
+                          key={`grp-${row.group.code}`}
+                          group={row.group}
+                          deliverables={deliverables}
+                          isPm={isPm}
+                          today={today}
+                          onChanged={onChanged}
+                          isHost={isHost}
+                          colCount={colCount}
+                          members={members}
+                          siblings={tasks}
+                          choices={choices}
+                          nameOf={nameOf}
+                        />
+                      ) : (
+                        <WbsTaskRow
+                          key={row.task.id}
+                          task={row.task}
+                          deliverables={deliverables}
+                          isPm={isPm}
+                          today={today}
+                          onChanged={onChanged}
+                          isHost={isHost}
+                          members={members}
+                          siblings={tasks}
+                          choices={choices}
+                          nameOf={nameOf}
+                        />
+                      ),
+                    )}
+                  </Fragment>
+                ))}
               </Fragment>
             )
           })}
@@ -193,6 +230,10 @@ function WbsPartnerGroupRow({
   onChanged,
   isHost,
   colCount,
+  members,
+  siblings,
+  choices,
+  nameOf,
 }: {
   group: WbsPartnerGroup
   deliverables: Deliverable[]
@@ -201,6 +242,10 @@ function WbsPartnerGroupRow({
   onChanged: () => void
   isHost: boolean
   colCount: number
+  members: MemberWithProfile[]
+  siblings: WbsTask[]
+  choices: PersonChoice[]
+  nameOf: (id: UUID | null) => string | null
 }) {
   const [expanded, setExpanded] = useState(false)
 
@@ -247,6 +292,10 @@ function WbsPartnerGroupRow({
             onChanged={onChanged}
             isHost={isHost}
             indent
+            members={members}
+            siblings={siblings}
+            choices={choices}
+            nameOf={nameOf}
           />
         ))}
     </>
@@ -261,6 +310,10 @@ function WbsTaskRow({
   onChanged,
   isHost = false,
   indent = false,
+  members,
+  siblings,
+  choices,
+  nameOf,
 }: {
   task: WbsTask
   deliverables: Deliverable[]
@@ -271,10 +324,24 @@ function WbsTaskRow({
   isHost?: boolean
   /** P5-② — 파트너 그룹 펼침 안의 인스턴스 행이면 코드 열을 들여쓴다 */
   indent?: boolean
+  members: MemberWithProfile[]
+  siblings: WbsTask[]
+  choices: PersonChoice[]
+  nameOf: (id: UUID | null) => string | null
 }) {
   const [editing, setEditing] = useState(false)
+  const [assigning, setAssigning] = useState(false)
   const urgency = wbsUrgency(task, today)
   const colCount = isPm ? 8 : 7
+  const assign = useMutation((assigneeId: UUID | null) => provider.updateWbsTask(task.id, { assignee_id: assigneeId }))
+  const assigneeName = nameOf(task.assignee_id)
+  const handleAssign = async (assigneeId: UUID | null) => {
+    const result = await assign.run(assigneeId)
+    if (result) {
+      setAssigning(false)
+      onChanged()
+    }
+  }
 
   return (
     <>
@@ -297,13 +364,36 @@ function WbsTaskRow({
                 {task.origin_role}
               </span>
             )}
+            {task.source === 'custom' && (
+              <span
+                className="inline-flex shrink-0 items-center rounded bg-accent-tint px-1.5 py-0.5 text-[10px] font-medium text-accent-deep"
+                title="행사별 태스크 — 템플릿 재전개가 건드리지 않습니다"
+              >
+                행사별
+              </span>
+            )}
           </span>
         </td>
         <td className="text-xs text-ink-sub">
-          <span className="inline-flex items-center gap-1.5">
-            <RoleDot role={task.role} />
-            {ROLE_LABELS[task.role]}
-          </span>
+          {/* v2.21 §27.4 — 담당: 배정된 사람 이름(역할 도트는 그대로) · 미배정 = 역할만 · pm은 눌러 고른다 */}
+          {isPm ? (
+            <button
+              type="button"
+              onClick={() => setAssigning((v) => !v)}
+              aria-expanded={assigning}
+              aria-label={`${task.code} 담당자 고르기`}
+              title={assigneeName ? `${assigneeName} · ${ROLE_LABELS[task.role]}` : `${ROLE_LABELS[task.role]} — 담당자 미배정`}
+              className="-mx-1 inline-flex max-w-full items-center gap-1.5 rounded px-1 py-0.5 hover:bg-track"
+            >
+              <RoleDot role={task.role} />
+              <span className={`truncate ${assigneeName ? 'font-medium text-ink' : ''}`}>{assigneeName ?? ROLE_LABELS[task.role]}</span>
+            </button>
+          ) : (
+            <span className="inline-flex max-w-full items-center gap-1.5" title={assigneeName ? ROLE_LABELS[task.role] : undefined}>
+              <RoleDot role={task.role} />
+              <span className={`truncate ${assigneeName ? 'font-medium text-ink' : ''}`}>{assigneeName ?? ROLE_LABELS[task.role]}</span>
+            </span>
+          )}
         </td>
         <td>
           {/* v2.0 §4-15b — 소통 대상 (템플릿 시드, 복수는 '·' 결합) */}
@@ -342,6 +432,32 @@ function WbsTaskRow({
           </td>
         )}
       </tr>
+      {assigning && isPm && !editing && (
+        <tr>
+          <td colSpan={colCount} className="ui-cell-wrap py-3">
+            <div className="space-y-2 rounded-md bg-canvas p-3">
+              <p className="t-caption">
+                {task.code} 담당자 — 이 행사 멤버 가운데 한 사람. 배정은 표시·오늘 할 일용이고 권한은 역할이 정한다
+              </p>
+              <AssigneePicker
+                label={`${task.code} 담당자`}
+                choices={choices}
+                value={task.assignee_id}
+                onPick={(id) => void handleAssign(id === task.assignee_id ? null : id)}
+                onClear={() => void handleAssign(null)}
+                disabled={assign.pending}
+                emptyHint="이 행사에 담당자가 없습니다 — 행사 설정 ②에서 먼저 배정하세요."
+              />
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={() => setAssigning(false)} className="btn btn-ghost btn-sm">
+                  닫기
+                </button>
+                <ErrorAlert message={assign.error} />
+              </div>
+            </div>
+          </td>
+        </tr>
+      )}
       {editing && isPm && (
         <tr>
           {/* 편집 폼 행 — 표 정본의 nowrap·ellipsis(§05 규칙 07)는 한 줄 셀용이라 이 행에서만 해제한다
@@ -350,8 +466,14 @@ function WbsTaskRow({
             <WbsTaskEditForm
               task={task}
               deliverables={deliverables}
+              members={members}
+              siblings={siblings}
               onCancel={() => setEditing(false)}
               onSaved={() => {
+                setEditing(false)
+                onChanged()
+              }}
+              onDeleted={() => {
                 setEditing(false)
                 onChanged()
               }}

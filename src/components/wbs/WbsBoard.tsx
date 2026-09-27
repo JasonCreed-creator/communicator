@@ -11,6 +11,7 @@ import PhaseFilterBar from './PhaseFilterBar'
 import RoleCharterGrid from './RoleCharterGrid'
 import WbsChecklist from './WbsChecklist'
 import WbsGantt from './WbsGantt'
+import WbsTaskCreateForm from './WbsTaskCreateForm'
 import {
   GANTT_AXIS_MAX,
   GANTT_AXIS_MIN,
@@ -47,9 +48,14 @@ export default function WbsBoard() {
   const wbsTasks = useAsync(() => provider.listWbsTasks(projectId), [projectId])
   const roleCharters = useAsync(() => provider.listRoleCharters(projectId), [projectId])
   const deliverables = useAsync(() => provider.listDeliverables(projectId), [projectId])
+  // v2.21 §27.4 — 담당자 칸(멤버) · 간트 마일스톤 마커 · R&R 사람 칩(주소록 — 멤버가 아닌 사람도)
+  const members = useAsync(() => provider.listMembers(projectId), [projectId])
+  const milestones = useAsync(() => provider.listMilestones(projectId), [projectId])
+  const people = useAsync(() => provider.listPeople(), [projectId])
   const currentUser = useAsync(() => provider.getCurrentUser(), [])
   const isPm = isPmUser(currentUser.data)
   const reexpand = useMutation(() => provider.expandWbs(projectId))
+  const [adding, setAdding] = useState(false)
   // P6-② — 주최형만 방향 뱃지(▲▼■) 표기, 대행형은 미표기
   const isHost = project.data?.kind === 'host'
 
@@ -76,15 +82,40 @@ export default function WbsBoard() {
         title="WBS"
         action={
           isPm ? (
-            <button type="button" onClick={handleReexpand} disabled={reexpand.pending} className="btn btn-ghost btn-sm">
-              템플릿 재전개
-            </button>
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={handleReexpand} disabled={reexpand.pending} className="btn btn-ghost btn-sm">
+                템플릿 재전개
+              </button>
+              {/* v2.21 §27.4 — 행사별 태스크. 채운 버튼은 이 화면에 하나 — 폼을 열면 ghost로 물러난다(PR-3·PR-7 전례) */}
+              <button
+                type="button"
+                onClick={() => setAdding((v) => !v)}
+                aria-expanded={adding}
+                disabled={!project.data?.event_date}
+                title={project.data && !project.data.event_date ? '행사일이 있어야 태스크를 추가할 수 있습니다' : undefined}
+                className={`btn btn-sm ${adding ? 'btn-ghost' : 'btn-primary'}`}
+              >
+                ＋ 태스크 추가
+              </button>
+            </div>
           ) : undefined
         }
       >
         <div className="space-y-4">
           <ErrorAlert message={wbsTasks.error} />
           <ErrorAlert message={reexpand.error} />
+          {adding && isPm && project.data && (
+            <WbsTaskCreateForm
+              project={project.data}
+              tasks={allTasks}
+              members={members.data ?? []}
+              onCreated={() => {
+                setAdding(false)
+                wbsTasks.reload()
+              }}
+              onCancel={() => setAdding(false)}
+            />
+          )}
 
           <div className="flex flex-wrap items-center justify-between gap-3">
             <PhaseFilterBar phases={phases} value={phase} onChange={setPhase} />
@@ -137,9 +168,15 @@ export default function WbsBoard() {
               onChanged={wbsTasks.reload}
               isHost={isHost}
               dense={dense}
+              members={members.data ?? []}
             />
           ) : (
-            <WbsGantt tasks={filteredTasks} eventDate={project.data?.event_date ?? null} />
+            <WbsGantt
+              tasks={filteredTasks}
+              eventDate={project.data?.event_date ?? null}
+              members={members.data ?? []}
+              milestones={milestones.data ?? []}
+            />
           )}
         </div>
       </Card>
@@ -148,7 +185,12 @@ export default function WbsBoard() {
       <div className="grid gap-6 xl:grid-cols-2">
         <Card title="R&R">
           <ErrorAlert message={roleCharters.error} />
-          <RoleCharterGrid charters={roleCharters.data ?? []} />
+          <RoleCharterGrid
+            charters={roleCharters.data ?? []}
+            people={people.data ?? []}
+            isPm={!!isPm}
+            onChanged={roleCharters.reload}
+          />
         </Card>
         <Card title="컴플라이언스">
           <ComplianceCards />

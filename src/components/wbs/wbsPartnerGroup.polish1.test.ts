@@ -28,6 +28,9 @@ function makeTask(overrides: Partial<WbsTask>): WbsTask {
     direction: 'internal',
     partner_id: null,
     note: null,
+    assignee_id: null,
+    group_name: null,
+    source: 'template',
     sort_order: taskSeq,
     ...overrides,
   }

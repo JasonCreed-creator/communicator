@@ -5,7 +5,7 @@
 // 줄 수를 어림해 넘치기 전에 다음 장으로 넘긴다(실브라우저 넘침 검사 = demo:smoke ③).
 // 금액·개인 연락처는 어떤 장에도 없다(#RULE-NO-PRICE-TO-CLIENT · R-O6 — PlanData에 애초에 없다).
 import { estimateRegistration, GUIDE_KIND_META, staffingTotal } from '../../../lib/guideStructured'
-import { AREA_LABELS, ddayLabel, formatDateWeekday, STATUS_LABELS } from '../../../lib/labels'
+import { AREA_LABELS, ddayLabel, formatDateWeekday, ROLE_LABELS, STATUS_LABELS } from '../../../lib/labels'
 import type {
   GuideChecklistsData,
   GuideDayplanRow,
@@ -918,6 +918,35 @@ function peopleChapter(plan: PlanData): ChapterResult {
 function orgChapter(plan: PlanData): ChapterResult {
   const slides: DeckSlide[] = []
   const gaps: DeckGap[] = []
+
+  // v2.21 §27.4 — R&R 카드(역할 · 사람 + 표시 역할 · 책임). 사람은 이름·표시 역할만(연락처 0). 카드가 없으면 싣지 못한 표
+  const charters = plan.role_charters ?? []
+  if (charters.length) {
+    const peopleCount = new Set(charters.flatMap((c) => c.people.map((p) => p.name))).size
+    slides.push(
+      ...tableSlides({
+        chapter: 'org',
+        title: '역할과 책임(R&R)',
+        subtitle: `역할 ${charters.length} · 사람 ${peopleCount}명`,
+        columns: [
+          { label: '역할', width: 0.2, strong: true, nowrap: true },
+          { label: '담당', width: 0.28 },
+          { label: '책임', width: 0.52 },
+        ],
+        rows: charters.map((c) => ({
+          cells: [
+            `${ROLE_LABELS[c.role]} · ${c.title}`,
+            c.people.length
+              ? c.people.map((p) => (p.display_role ? `${p.name} (${p.display_role})` : p.name)).join(' · ')
+              : '—',
+            c.items.length ? c.items.join(' · ') : '—',
+          ],
+        })),
+      }),
+    )
+  } else {
+    gaps.push({ chapter: 'org', label: '역할과 책임(R&R)', where: '일정·WBS·R&R' })
+  }
 
   const staffing = guideData(plan, 'staffing')
   const staffRows = staffing ? staffing.rows.filter((r) => filled([r.role, r.count, r.call_time, r.duty, r.channel])) : []

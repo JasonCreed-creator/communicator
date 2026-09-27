@@ -264,7 +264,7 @@ check(
   await tab.waitForURL(/#\/schedule/, { timeout: 10_000 })
 }
 
-// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — **Phase 6.11 PR-A 마스터 시트 대체 · 운영가이드 섹션 3종(2026-09-28)**.
+// ── ③-이전(2026-09-28 Phase 6.11 PR-A) 운영가이드 섹션 3종 — 직전 PR ③을 회귀 가드로 유지.
 //     일정(위 블록 끝) → RB27 운영가이드(위 블록이 뼈대를 더해 15종 다 있음): 답사 체크리스트(확인 0/14 · 표에 외부·내부·체크사항·확인내용) ·
 //     설치 도면(비어 있음 · 고치기 → 파일 입력 0 · 도면 추가 → 항목 연결 셀렉트 → 저장 → 카드에 항목 링크) ·
 //     참가자 안내(발송 완료 0/6 · 고치기 → 원고 칸 · 상태 '발송 완료' → 저장 → 1/6 · '원고 보기') · 전체 리로드 0 → 다시 '일정'으로.
@@ -313,6 +313,69 @@ check(
   check(docRequests.length === docBefore, '운영가이드 3종 고치기·저장에 전체 리로드 0', `${docBefore} → ${docRequests.length}`)
   await tab.locator('aside nav a', { hasText: '일정' }).first().click()
   await tab.waitForURL(/#\/schedule/, { timeout: 10_000 })
+}
+
+// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — **Phase 6.11 PR-C 마스터 시트 대체 · WBS 실무화(2026-09-28)**.
+//     일정(위 블록 끝 — 그 행사의 S5 · 데모 사용자 = pm): 담당 칸 = 역할 글자 → '담당자 고르기' → 멤버 카드 4장(파일 입력 0) → 카드 누르기 → 칸에 이름 ·
+//     '＋ 태스크 추가'(채운 버튼 1 · 열면 ghost) → 폼(단계·묶음·제목·기간·역할·담당자) → C-1 행(행사별 태그 · 묶음 줄 · 담당 이름) ·
+//     간트 → 담당자 이름 + 마일스톤 마커(◆) · R&R pm '편집' → '＋ 사람 추가' → 주소록 카드 → 표시 역할 → 저장 → 칩(이름 · 표시 역할) · 전체 리로드 0 · 일정에 머문다.
+{
+  const docBefore = docRequests.length
+  await tab.getByRole('heading', { name: 'WBS', exact: true }).waitFor({ timeout: 10_000 })
+  const firstAssign = tab.getByRole('button', { name: /담당자 고르기$/ }).first()
+  await firstAssign.waitFor({ timeout: 10_000 })
+  const firstCode = ((await firstAssign.getAttribute('aria-label')) ?? '').replace(' 담당자 고르기', '')
+  const beforeText = (await firstAssign.innerText()).trim()
+  check(/^(PM|디자인|운영|등록)$/.test(beforeText), '담당 칸: 미배정이면 역할 글자만', beforeText)
+  await firstAssign.click()
+  const picker = tab.getByRole('group', { name: `${firstCode} 담당자` })
+  await picker.waitFor({ timeout: 10_000 })
+  check((await picker.getByRole('button', { name: /^(김기획|이디자|박운영|최등록)/ }).count()) === 4, '담당자 피커 = 이 행사 멤버 카드 4장(인라인 · 파일 입력 0)')
+  check((await picker.locator('input[type="file"]').count()) === 0, '담당자 피커에 파일 입력 0')
+  await picker.getByRole('button', { name: '이디자' }).click()
+  await picker.waitFor({ state: 'detached', timeout: 10_000 })
+  const afterAssign = tab.getByRole('button', { name: `${firstCode} 담당자 고르기` })
+  check(/이디자/.test(await afterAssign.innerText()), `담당자 고르면 칸이 이름으로 (${firstCode} → 이디자)`)
+
+  const addBtn = tab.getByRole('button', { name: '＋ 태스크 추가' })
+  check((await addBtn.count()) === 1 && /btn-primary/.test((await addBtn.getAttribute('class')) ?? ''), 'WBS 카드의 채운 버튼 = ＋ 태스크 추가 하나')
+  await addBtn.click()
+  const form = tab.getByTestId('wbs-create-form')
+  await form.waitFor({ timeout: 10_000 })
+  check(/btn-ghost/.test((await addBtn.getAttribute('class')) ?? ''), '폼을 열면 채운 버튼이 ghost로 물러난다')
+  await form.getByLabel('묶음').fill('제작')
+  await form.getByLabel('태스크명').fill('현장 사인물 수량 확정')
+  await form.getByLabel('시작일').fill('2026-10-10')
+  await form.getByLabel('종료일').fill('2026-10-12')
+  await form.getByLabel('담당 역할').selectOption('ops')
+  await form.getByRole('button', { name: '박운영' }).click()
+  await form.getByRole('button', { name: '추가' }).click()
+  const codeCell = tab.getByText('C-1', { exact: true }).first()
+  await codeCell.waitFor({ timeout: 10_000 })
+  const customRow = tab.locator('tr', { has: tab.getByText('C-1', { exact: true }) }).first()
+  const customText = await customRow.innerText()
+  check(/행사별/.test(customText) && /현장 사인물 수량 확정/.test(customText) && /박운영/.test(customText), 'C-1 행 = 행사별 태그 · 제목 · 담당 이름')
+  check((await tab.getByTestId('wbs-group-row').count()) >= 1 && /제작/.test(await tab.getByTestId('wbs-group-row').first().innerText()), 'Lv2 묶음 줄 "제작"')
+  await tab.screenshot({ path: resolve(SHOTS, '03-wbs-people-checklist.png'), fullPage: true })
+
+  await tab.getByRole('button', { name: '간트', exact: true }).click()
+  await tab.getByTestId('wbs-gantt-bar').first().waitFor({ timeout: 10_000 })
+  check((await tab.getByTestId('wbs-gantt-assignee').count()) >= 2, '간트 라벨 칸에 담당자 이름(배정 2건 이상)')
+  check((await tab.getByTestId('wbs-gantt-milestone').count()) >= 1, '간트 마일스톤 마커(축 범위 안)')
+  await tab.screenshot({ path: resolve(SHOTS, '03-wbs-people-gantt.png'), fullPage: true })
+  await tab.getByRole('button', { name: '체크리스트', exact: true }).click()
+
+  const rrCard = tab.getByTestId('rr-card-pm')
+  await rrCard.getByRole('button', { name: /편집$/ }).click()
+  await rrCard.getByRole('button', { name: '＋ 사람 추가' }).click()
+  await rrCard.getByRole('button', { name: '이디자' }).click()
+  await rrCard.getByRole('textbox', { name: '이디자 표시 역할' }).fill('Sub PM')
+  await rrCard.getByRole('button', { name: '저장' }).click()
+  await rrCard.getByTestId('rr-people-pm').waitFor({ timeout: 10_000 })
+  const chips = await rrCard.getByTestId('rr-people-pm').innerText()
+  check(/이디자/.test(chips) && /Sub PM/.test(chips), 'R&R 사람 칩 = 이름 · 표시 역할')
+  await tab.screenshot({ path: resolve(SHOTS, '03-wbs-people-rr.png'), fullPage: true })
+  check(docRequests.length === docBefore, 'S5 담당자·태스크 추가·R&R 편집에 전체 리로드 0', `${docBefore} → ${docRequests.length}`)
 }
 
 // ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — **Phase 3.24 PR-C 16:9 장표형 운영계획서(2026-09-26)**.

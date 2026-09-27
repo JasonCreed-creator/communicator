@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────
-// DataProvider 인터페이스 v16 — 2026-09-27 재동결 (설계서 v2.18 §16.4) — 132메서드
+// DataProvider 인터페이스 v17 — 2026-09-28 재동결 (설계서 v2.21 §27.4) — 135메서드
 //   (아래 이력 전체를 유지한다. v7 표기는 2026-08-23 시점의 스냅숏이었다 — v8·v8.1·v9은
 //   그 뒤에 이어 붙은 것이므로 제목 줄만 최신으로 갱신한다.)
 //   v1: 2026-08-19 동결(35메서드). v2: v1.2 승인 근거로 41메서드 재동결.
@@ -98,6 +98,13 @@
 //   설계서 v2.18 §16.4 → **linkQuoteToProject 1메서드 추가 = 132메서드**. **기존 131메서드 시그니처 불변** 후 재동결.
 //   견적을 이미 있는 행사에 붙이는 유일한 경로(위저드 ③ '기존 행사에 연결' · 견적 목록 · 정산 시작의 미연결 견적 자동 연결이 전부 이 메서드).
 //   QuoteImportDistributeInput.link_project_id · QuoteImportDistributeResult.project_created · ParsedQuoteHeader.currency는 필드 추가.
+//   v16.1: Phase 6.6 담당자 중복 배정(사용자 버튼 승인 2026-09-27) + 설계서 v2.19 §4-2 → **removeMember(projectId, memberId, role?)
+//   시그니처 확장 + CurrentUser.roles 필드, 132 불변**. 권한은 역할 합집합(lib/roles).
+//   v17: 사용자 버튼 승인(2026-09-27 밤 — "DataProvider v17 = 메서드 3개 추가 승인") + 설계서 v2.21 §27.4(Phase 6.11 PR-C 마스터 시트
+//   대체 · WBS 실무화)를 근거로 동결 해제 → **createWbsTask·deleteWbsTask·updateRoleCharter 3메서드 추가 = 135메서드**.
+//   **기존 132메서드 시그니처 불변** 후 재동결. WbsTask.assignee_id·group_name·source · RoleCharter.people · WbsTaskPatch
+//   (assignee_id·group_name·target) · PlanData.role_charters는 필드 추가. 배정 ≠ 권한(R-M6) — status 변경·편집 권한은 §6.1 그대로.
+//   **다음 예약 슬롯 없음** — 새 메서드는 사용자 승인부터.
 //
 // 프로젝트 스코프 규칙(설계서 v2.1 §4-21 R-L1): 프로젝트 단위 조회·생성 메서드는 projectId를
 // 인자로 받는다. currentUser()는 행위자 신원·권한 판정 전용이며 스코프 유도에 쓰지 않는다.
@@ -199,6 +206,8 @@ import type {
   VendorQuoteConfirmInput,
   VendorQuoteImportInput,
   VendorQuoteImportView,
+  CreateWbsTaskInput,
+  RoleCharterPatch,
   WbsTaskFilter,
   WbsTaskPatch,
   SettlementBoardView,
@@ -385,11 +394,21 @@ export interface DataProvider {
   expandWbs(projectId: UUID): Promise<WbsTask[]>
   /** sort_order 순 */
   listWbsTasks(projectId: UUID, filter?: WbsTaskFilter): Promise<WbsTask[]>
-  /** status 변경 = 담당 역할+pm / 그 외 필드 편집 = pm 전용 */
+  /** status 변경 = 담당 역할+pm / 그 외 필드 편집(assignee_id·group_name·target 포함 — v2.21 §27.4) = pm 전용.
+   *  assignee_id는 그 행사 멤버만(아니면 validation) — 배정은 권한이 아니다(R-M6) */
   updateWbsTask(taskId: UUID, patch: WbsTaskPatch): Promise<WbsTask>
+  /**
+   * v2.21 §27.4(v17) — 행사별 태스크 추가(pm). code = `C-{n}` 자동(그 행사의 custom 순번) · source 'custom' · 오프셋은 행사일에서
+   * 계산(행사일 없으면 validation) · 종료 행사 conflict · assignee는 그 행사 멤버만. 재전개는 custom 행을 건드리지 않는다.
+   */
+  createWbsTask(projectId: UUID, input: CreateWbsTaskInput): Promise<WbsTask>
+  /** v2.21 §27.4(v17) — 행사별(custom) 태스크 지우기(pm). 템플릿 태스크는 conflict('완료 처리로' 안내 — 재전개가 되살린다) */
+  deleteWbsTask(taskId: UUID): Promise<void>
 
   // ── v1.4 R&R (§8 GET /role-charters, 멤버) ────────────────────────
   listRoleCharters(projectId: UUID): Promise<RoleCharter[]>
+  /** v2.21 §27.4(v17) — R&R 카드 편집(pm): 제목·책임·사람(주소록 사람 + 표시 역할 — 행사 멤버가 아니어도 됨 · 권한 역할 불변) */
+  updateRoleCharter(charterId: UUID, patch: RoleCharterPatch): Promise<RoleCharter>
 
   // ── v2.4 §21 주최형(파트너) — 등급·파트너·토큰 CRUD는 pm, 열람은 멤버 전원 ────
   /** sort 순 */

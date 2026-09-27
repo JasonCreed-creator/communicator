@@ -685,6 +685,9 @@ export function createFixtureState(): MockState {
     note: null,
     track: null,
     sort_order: i + 1,
+    assignee_id: null,
+    group_name: null,
+    source: 'template' as const,
   }))
   // 데모용 상태 분포: 1.1·1.2 완료, 1.3 진행 중, 2.8 제작물 ↔ dlv-007(현수막 가이드) 연결
   const byCode = new Map(state.wbs_tasks.map((task) => [task.code, task]))
@@ -701,6 +704,7 @@ export function createFixtureState(): MockState {
     origin_role: tpl.origin_role,
     title: tpl.title,
     items: [...tpl.items],
+    people: null,
   }))
 
   // ── v1.5 다중 행사 ②③④ — 오늘 기준 상대 날짜로 생성해 지연·미결·D-day 수치를 고정한다 ──
@@ -899,6 +903,9 @@ export function createFixtureState(): MockState {
     note: null,
     track: null,
     sort_order: i + 1,
+    assignee_id: null,
+    group_name: null,
+    source: 'template' as const,
   }))
   const pastTasks = partnerTasks.filter((t) => t.end_date! < today)
   pastTasks.forEach((t, idx) => {
@@ -916,6 +923,7 @@ export function createFixtureState(): MockState {
       origin_role: tpl.origin_role,
       title: tpl.title,
       items: [...tpl.items],
+      people: null,
     })),
   )
 

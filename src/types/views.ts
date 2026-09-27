@@ -27,6 +27,7 @@ import type {
   ScenarioBlock,
   SheetColumnMapping,
   SheetConnection,
+  RoleCharterPerson,
   UUID,
   Version,
   WbsTask,
@@ -612,6 +613,32 @@ export interface WbsTaskPatch {
   role?: MemberRole
   note?: string | null
   linked_deliverable_id?: UUID | null
+  /** v2.21 §27.4 — 사람 배정(그 행사 멤버만 · 아니면 422) · null = 배정 해제. pm 전용(다른 편집 필드와 같다) */
+  assignee_id?: UUID | null
+  /** v2.21 §27.4 — Lv2 묶음 이름 · null·빈 문자열 = 묶음 없음 */
+  group_name?: string | null
+  /** v2.21 §27.4 — 소통 대상(템플릿 시드 값을 사람이 고칠 수 있다) */
+  target?: string | null
+}
+
+/** v2.21 §27.4 — 행사별 태스크 추가(pm · code = `C-{n}` 자동 · source 'custom'). 날짜는 실날짜로 받고 오프셋은 행사일에서 계산 */
+export interface CreateWbsTaskInput {
+  phase_no: number
+  group_name?: string | null
+  title: string
+  start_date: IsoDate
+  end_date: IsoDate
+  role: MemberRole
+  assignee_id?: UUID | null
+  target?: string | null
+  note?: string | null
+}
+
+/** v2.21 §27.4 — R&R 카드 편집(pm). people = 사람 연결 + 표시 역할(권한 역할 4종은 불변) */
+export interface RoleCharterPatch {
+  title?: string
+  items?: string[]
+  people?: RoleCharterPerson[] | null
 }
 
 // ── v1.2 S9 운영계획서 (§8 GET /projects/{id}/plan) ────────────────
@@ -736,6 +763,18 @@ export interface PlanData {
   emergency: PlanEmergencySection | null
   /** v2.13.2 §23.7 — 첫 운영가이드 항목의 섹션 전부(연락망 제외). 없으면 null */
   guide: PlanGuideDoc | null
+  /** v2.21 §27.4 — R&R 카드(역할 · 카드 제목 · 책임 · 사람 이름 + 표시 역할). 연락처 0 — 16:9 장표 06 조직·인력이 싣는다 */
+  role_charters: PlanRoleCharter[]
+}
+
+/** v2.21 §27.4 — 운영계획서용 R&R 카드(사람은 이름·표시 역할만 — 이메일·전화 없음) */
+export interface PlanRoleCharter {
+  id: UUID
+  role: MemberRole
+  origin_role: string | null
+  title: string
+  items: string[]
+  people: { name: string; display_role: string }[]
 }
 
 // ── 운영보드 재구성 입력 (v2.5 §23·§8.2) ───────────────────────────────

@@ -962,6 +962,95 @@ reset role;
 update projects set quote_attachment = '{"kind":"drive","url":"https://drive.google.com/file/d/drv-quote-1/view","file_name":"견적.pdf","drive_file_id":"drv-quote-1","source":"upload","added_at":"2026-09-26T09:00:00Z"}'::jsonb where id = '${PRJ}';
 ${assertSql(`'drv-quote-1' = any(drive_known_file_ids('${PRJ}'))`)}`)
 
+  // 5m. WBS 실무화 (Phase 6.11 PR-C · 설계서 v2.21 §27.4) — 열 3+1 · RPC 3 · 배정 트리거 · 재전개 보존 · remove_member 배정 해제 · RLS 경로
+  const DESIGN_PROFILE = `(select id from profiles where email='design@example.com')`
+  const WBS_NEW = `'{"phase_no":2,"title":"현장 사인물 수량 확정","start_date":"2026-10-10","end_date":"2026-10-12","role":"ops","group_name":" 제작 ","target":"협력사","note":"x"}'::jsonb`
+  scenario('WBS 실무화: pm이 행사별 태스크 추가 → C-1 · custom · 오프셋 = 날짜 − 행사일(10/22) · 단계 이름 = 전개된 2단계 · 묶음 공백 정리 · 로그 금액 0', `
+select create_wbs_task('${PRJ}', ${WBS_NEW});
+${assertSql(`(select code = 'C-1' and source = 'custom' and offset_start = -12 and offset_end = -10 and phase_name = (select phase_name from wbs_tasks where project_id='${PRJ}' and phase_no = 2 and source='template' order by sort_order limit 1) and group_name = '제작' and target = '협력사' and assignee_id is null from wbs_tasks where project_id='${PRJ}' and code='C-1')`)}
+select create_wbs_task('${PRJ}', ${WBS_NEW});
+${assertSql(`(select count(*) from wbs_tasks where project_id='${PRJ}' and code in ('C-1','C-2') and source='custom') = 2`)}
+${assertSql(`(select count(*) from activity_log where project_id='${PRJ}' and action='wbs.task_created') = 2`)}`, { role: 'authenticated', sub: authId.pm })
+  scenario('WBS 실무화: 담당자 = 그 행사 멤버 → 배정 저장', `
+select create_wbs_task('${PRJ}', ${WBS_NEW} || jsonb_build_object('assignee_id', ${DESIGN_PROFILE}));
+${assertSql(`(select assignee_id = ${DESIGN_PROFILE} from wbs_tasks where project_id='${PRJ}' and code='C-1')`)}`, { role: 'authenticated', sub: authId.pm })
+  scenario('WBS 실무화: 담당자가 이 행사 멤버가 아니면 422(RPC)', `
+reset role;
+insert into profiles (display_name, email) values ('외부 사람', 'outsider@example.com');
+set local role authenticated;
+select create_wbs_task('${PRJ}', ${WBS_NEW} || jsonb_build_object('assignee_id', (select id from profiles where email='outsider@example.com')));`,
+    { role: 'authenticated', sub: authId.pm, expect: 'error', match: '이 행사 멤버' })
+  scenario('WBS 실무화: 트리거 — 직접 update로도 비멤버 배정은 422', `
+reset role;
+insert into profiles (display_name, email) values ('외부 사람', 'outsider@example.com');
+set local role authenticated;
+update wbs_tasks set assignee_id = (select id from profiles where email='outsider@example.com') where project_id='${PRJ}' and code='1.1';`,
+    { role: 'authenticated', sub: authId.pm, expect: 'error', match: '이 행사 멤버' })
+  scenario('WBS 실무화: 멤버 배정은 직접 update로 저장(RLS update 정책 그대로)', `
+update wbs_tasks set assignee_id = ${DESIGN_PROFILE}, group_name = '키비주얼' where project_id='${PRJ}' and code='1.1';
+${assertSql(`(select assignee_id = ${DESIGN_PROFILE} and group_name = '키비주얼' from wbs_tasks where project_id='${PRJ}' and code='1.1')`)}`, { role: 'authenticated', sub: authId.pm })
+  scenario('WBS 실무화: design은 태스크 추가 403', `select create_wbs_task('${PRJ}', ${WBS_NEW});`,
+    { role: 'authenticated', sub: authId.design, expect: 'error', match: 'PM 전용' })
+  scenario('WBS 실무화: 종료 행사 409', `select create_wbs_task('${PRJ_CLOSED}', ${WBS_NEW});`,
+    { role: 'authenticated', sub: authId.pm, expect: 'error', match: '종료된 행사' })
+  scenario('WBS 실무화: 종료일 < 시작일 422 · 제목 빈 칸 422 · 없는 단계 422', `
+do $$ begin
+  begin perform create_wbs_task('${PRJ}', ${WBS_NEW} || '{"end_date":"2026-10-09"}'::jsonb); raise exception 'ASSERT_FAILED: end<start'; exception when sqlstate 'P0422' then null; end;
+  begin perform create_wbs_task('${PRJ}', ${WBS_NEW} || '{"title":"  "}'::jsonb); raise exception 'ASSERT_FAILED: title'; exception when sqlstate 'P0422' then null; end;
+  begin perform create_wbs_task('${PRJ}', ${WBS_NEW} || '{"phase_no":9}'::jsonb); raise exception 'ASSERT_FAILED: phase'; exception when sqlstate 'P0422' then null; end;
+end $$;`, { role: 'authenticated', sub: authId.pm })
+  scenario('WBS 실무화: 템플릿 태스크 지우기 409(완료 처리로) · custom 지우기 OK + 로그', `
+select create_wbs_task('${PRJ}', ${WBS_NEW});
+do $$ begin
+  begin perform delete_wbs_task((select id from wbs_tasks where project_id='${PRJ}' and code='1.1')); raise exception 'ASSERT_FAILED: template'; exception when sqlstate 'P0409' then null; end;
+end $$;
+select delete_wbs_task((select id from wbs_tasks where project_id='${PRJ}' and code='C-1'));
+${assertSql(`not exists (select 1 from wbs_tasks where project_id='${PRJ}' and code='C-1')`)}
+${assertSql(`(select count(*) from activity_log where project_id='${PRJ}' and action='wbs.task_deleted') = 1`)}`, { role: 'authenticated', sub: authId.pm })
+  scenario('WBS 실무화: design은 custom 지우기도 403', `
+reset role;
+insert into wbs_tasks (project_id, phase_no, phase_name, code, title, offset_start, offset_end, role, source) values ('${PRJ}', 1, '사전착수', 'C-1', 'x', -1, -1, 'ops', 'custom');
+set local role authenticated;
+select delete_wbs_task((select id from wbs_tasks where project_id='${PRJ}' and code='C-1'));`,
+    { role: 'authenticated', sub: authId.design, expect: 'error', match: 'PM 전용' })
+  scenario('WBS 실무화: 재전개(replace_wbs_tasks)는 custom 행을 남기고 template 행의 배정·묶음을 잇는다 · 빠진 template 행만 지운다', `
+select create_wbs_task('${PRJ}', ${WBS_NEW});
+update wbs_tasks set assignee_id = ${DESIGN_PROFILE}, group_name = '키비주얼' where project_id='${PRJ}' and code='1.1';
+select count(*) from replace_wbs_tasks('${PRJ}', (select jsonb_agg(to_jsonb(t)) from wbs_tasks t where t.project_id='${PRJ}' and t.source='template' and t.code <> '6.6'));
+${assertSql(`(select count(*) from wbs_tasks where project_id='${PRJ}' and source='custom') = 1`)}
+${assertSql(`not exists (select 1 from wbs_tasks where project_id='${PRJ}' and code='6.6')`)}
+${assertSql(`(select assignee_id = ${DESIGN_PROFILE} and group_name = '키비주얼' and source = 'template' from wbs_tasks where project_id='${PRJ}' and code='1.1')`)}`, { role: 'authenticated', sub: authId.pm })
+  scenario('WBS 실무화: remove_member — 역할이 하나도 남지 않으면 배정 해제 · 다른 역할이 남으면 배정 유지', `
+update wbs_tasks set assignee_id = ${DESIGN_PROFILE} where project_id='${PRJ}' and code in ('1.1','1.2');
+select add_member('${PRJ}', '이디자', 'design@example.com', 'ops');
+select remove_member('${PRJ}', ${DESIGN_PROFILE}, 'design');
+${assertSql(`(select count(*) from wbs_tasks where project_id='${PRJ}' and assignee_id = ${DESIGN_PROFILE}) = 2`)}
+select remove_member('${PRJ}', ${DESIGN_PROFILE}, 'ops');
+${assertSql(`(select count(*) from wbs_tasks where project_id='${PRJ}' and assignee_id = ${DESIGN_PROFILE}) = 0`)}`, { role: 'authenticated', sub: authId.pm })
+  scenario('WBS 실무화: R&R update_role_charter — 사람(표시 역할 공백 정리)·제목·책임(빈 줄 제거) 저장 + 로그', `
+select update_role_charter((select id from role_charters where project_id='${PRJ}' and role='pm' limit 1),
+  jsonb_build_object('title', ' 총괄 ', 'items', '["a"," ","b "]'::jsonb, 'people', jsonb_build_array(jsonb_build_object('person_id', ${DESIGN_PROFILE}, 'display_role', ' Sub PM '))));
+${assertSql(`(select title = '총괄' and items = '["a","b"]'::jsonb and people = jsonb_build_array(jsonb_build_object('person_id', ${DESIGN_PROFILE}, 'display_role', 'Sub PM')) and role = 'pm' from role_charters where project_id='${PRJ}' and role='pm' limit 1)`)}
+${assertSql(`(select count(*) from activity_log where project_id='${PRJ}' and action='rr.updated') = 1`)}
+select update_role_charter((select id from role_charters where project_id='${PRJ}' and role='pm' limit 1), '{"people": null}'::jsonb);
+${assertSql(`(select people is null from role_charters where project_id='${PRJ}' and role='pm' limit 1)`)}`, { role: 'authenticated', sub: authId.pm })
+  scenario('WBS 실무화: R&R — 주소록에 없는 사람 422 · 같은 사람 두 번 422 · 빈 제목 422 · design 403', `
+do $$ begin
+  begin perform update_role_charter((select id from role_charters where project_id='${PRJ}' and role='pm' limit 1), '{"people":[{"person_id":"00000000-0000-4000-8000-0000000000aa","display_role":"x"}]}'::jsonb); raise exception 'ASSERT_FAILED: unknown'; exception when sqlstate 'P0422' then null; end;
+  begin perform update_role_charter((select id from role_charters where project_id='${PRJ}' and role='pm' limit 1), jsonb_build_object('people', jsonb_build_array(jsonb_build_object('person_id', ${DESIGN_PROFILE}, 'display_role', 'a'), jsonb_build_object('person_id', ${DESIGN_PROFILE}, 'display_role', 'b')))); raise exception 'ASSERT_FAILED: dup'; exception when sqlstate 'P0422' then null; end;
+  begin perform update_role_charter((select id from role_charters where project_id='${PRJ}' and role='pm' limit 1), '{"title":" "}'::jsonb); raise exception 'ASSERT_FAILED: title'; exception when sqlstate 'P0422' then null; end;
+end $$;`, { role: 'authenticated', sub: authId.pm })
+  scenario('WBS 실무화: R&R design은 403', `select update_role_charter((select id from role_charters where project_id='${PRJ}' and role='pm' limit 1), '{"title":"x"}'::jsonb);`,
+    { role: 'authenticated', sub: authId.design, expect: 'error', match: 'PM 전용' })
+  scenario('WBS 실무화: RLS — 로그인 사용자의 wbs_tasks 직접 insert 거부(정책 부재 · 추가는 RPC만)', `
+insert into wbs_tasks (project_id, phase_no, phase_name, code, title, offset_start, offset_end, role, source) values ('${PRJ}', 1, '사전착수', 'C-9', 'x', -1, -1, 'ops', 'custom');`,
+    { role: 'authenticated', sub: authId.pm, expect: 'error', match: 'row-level security' })
+  scenario('WBS 실무화: RLS — 직접 delete·R&R 직접 update는 0행(정책 부재)', `
+delete from wbs_tasks where project_id='${PRJ}' and code='1.1';
+${assertSql(`exists (select 1 from wbs_tasks where project_id='${PRJ}' and code='1.1')`)}
+update role_charters set title = 'hack' where project_id='${PRJ}';
+${assertSql(`not exists (select 1 from role_charters where project_id='${PRJ}' and title='hack')`)}`, { role: 'authenticated', sub: authId.pm })
+
   // 6. 시크릿 커밋 가드 (§8 DoD 9) — 실키 값 패턴이 레포 파일에 없는가
   const grep = spawnSync('grep', ['-rnE', 'sb_secret_[A-Za-z0-9_-]{10,}|sbp_[A-Za-z0-9]{20,}', 'src', 'supabase', 'scripts', '--include=*.ts', '--include=*.tsx', '--include=*.sql', '--include=*.mjs', '--include=*.md'], { encoding: 'utf8' })
   record('시크릿 커밋 가드: sb_secret_/sbp_ 실키 패턴 0건 (DoD 9)', grep.status === 1, grep.stdout)

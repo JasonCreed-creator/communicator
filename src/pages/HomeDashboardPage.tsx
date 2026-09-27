@@ -115,6 +115,7 @@ export default function HomeDashboardPage() {
       guides: dashboard.data?.my_requested ?? [],
       messaging: messaging.data ?? [],
       myRoles: rolesOf(me.data),
+      myId: me.data?.id ?? null,
       roleOf,
       nameOf,
     })

@@ -1,8 +1,9 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import WbsPhaseHeader from './WbsPhaseHeader'
-import { ROLE_BAR_CLASSES, dueLabel } from '../../lib/labels'
+import { ROLE_BAR_CLASSES, dueLabel, formatDate } from '../../lib/labels'
 import { isDelayed, isImminent, toIsoDate } from '../../lib/wbs'
-import type { IsoDate, WbsTask } from '../../types/entities'
+import type { IsoDate, Milestone, WbsTask } from '../../types/entities'
+import type { MemberWithProfile } from '../../types/views'
 import {
   GANTT_AXIS_MAX,
   GANTT_AXIS_MIN,
@@ -55,7 +56,14 @@ function barLabelInk(colorClass: string): string {
 interface WbsGanttProps {
   tasks: WbsTask[]
   eventDate: IsoDate | null
+  /** v2.21 §27.4 — 라벨 칸의 담당자 이름(배정된 태스크만) */
+  members?: MemberWithProfile[]
+  /** v2.21 §27.4 — 축 위 마일스톤 마커(기존 milestones · 축 범위 안만) */
+  milestones?: Milestone[]
 }
+
+/** 3.9.1 P2의 160px 라벨 칸 → 200px — 담당자 이름이 들어가면서 넓힌다(v2.21 §27.4 · 디자인지시서 §7-2.16) */
+const LABEL_COLUMN_CLASS = 'w-[200px]'
 
 /**
  * S5 간트 뷰 — 순수 CSS 바 차트. 가로축 D-42~D+30, offset 기반 % 포지셔닝.
@@ -63,11 +71,19 @@ interface WbsGanttProps {
  * 3.9.1 P2: 행 좌측 160px 라벨 컬럼(코드+제목) + 바 코드 라벨 + 7일 간격 눈금(D-day는 brown 실선).
  * 3.10.1 R2: 오늘이 축 범위 안이면 세로선+라벨, 밖이면 캡션은 WBS 카드 토글 왼쪽(WbsBoard 담당) — 축 행은 눈금만.
  */
-export default function WbsGantt({ tasks, eventDate }: WbsGanttProps) {
+export default function WbsGantt({ tasks, eventDate, members = [], milestones = [] }: WbsGanttProps) {
   const today = toIsoDate(new Date())
   const groups = groupTasksByPhase(tasks)
   const todayOffset = eventDate ? diffDays(today, eventDate) : null
   const showTodayLine = todayOffset !== null && todayOffset >= GANTT_AXIS_MIN && todayOffset <= GANTT_AXIS_MAX
+  const nameById = new Map(members.map((m) => [m.user_id, m.profile.name]))
+  // 마일스톤 마커 — 행사일이 있고 축 범위(D-42~D+30) 안에 드는 것만. 지난 것도 남긴다(완료는 흐리게)
+  const markers = eventDate
+    ? milestones
+        .map((m) => ({ milestone: m, offset: diffDays(m.due_date, eventDate) }))
+        .filter((x) => x.offset >= GANTT_AXIS_MIN && x.offset <= GANTT_AXIS_MAX)
+        .sort((a, b) => a.offset - b.offset)
+    : []
 
   // 3.10.1 R2 — 축 실측 폭으로 D+28↔D+30 간격을 픽셀 환산해 겹침(28px 미만) 시 D+28을 생략
   const axisRef = useRef<HTMLDivElement | null>(null)
@@ -93,7 +109,7 @@ export default function WbsGantt({ tasks, eventDate }: WbsGanttProps) {
       {/* 축 눈금 행 — 라벨 컬럼 폭만큼 들여쓰고 눈금 위치에 정렬.
           D+28 생략 시 D+30은 같은 줄 우측 정렬, 공존 시(광폭)만 겹침 방지로 아랫줄 */}
       <div className="flex">
-        <div className="w-[160px] shrink-0" />
+        <div className={`${LABEL_COLUMN_CLASS} shrink-0`} />
         <div ref={axisRef} className={`relative flex-1 ${showTodayLine ? 'h-9' : 'h-5'}`}>
           {ticks.map((t, i) => {
             const isFirst = i === 0
@@ -125,6 +141,30 @@ export default function WbsGantt({ tasks, eventDate }: WbsGanttProps) {
         </div>
       </div>
 
+      {/* v2.21 §27.4 — 마일스톤 줄: 축 바로 아래 한 줄에 ◆ 마커(steel · 완료는 흐리게). 이름은 제목 도움말과 접근성 이름으로 */}
+      {markers.length > 0 && (
+        <div className="flex" data-testid="wbs-gantt-milestones">
+          <div className={`${LABEL_COLUMN_CLASS} shrink-0 pr-3 text-[11px] font-semibold text-ink-cap`}>
+            마일스톤 <span className="font-normal">{markers.length}</span>
+          </div>
+          <div className="relative h-5 flex-1">
+            {markers.map(({ milestone, offset }) => (
+              <span
+                key={milestone.id}
+                role="img"
+                aria-label={`마일스톤 ${milestone.title} · ${formatDate(milestone.due_date)}${milestone.done ? ' · 완료' : ''}`}
+                title={`${milestone.title} · ${formatDate(milestone.due_date)} (${offsetLabel(offset)})${milestone.done ? ' · 완료' : ''}`}
+                data-testid="wbs-gantt-milestone"
+                className={`absolute top-0 text-[13px] leading-5 text-steel ${milestone.done ? 'opacity-40' : ''}`}
+                style={{ left: `${offsetToPercent(offset)}%`, transform: 'translateX(-50%)' }}
+              >
+                ◆
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
       {groups.map((g) => (
         <div key={g.phase_no}>
           <WbsPhaseHeader
@@ -133,16 +173,28 @@ export default function WbsGantt({ tasks, eventDate }: WbsGanttProps) {
             summary={summarizePhase(g.tasks, today)}
           />
           <div className="flex rounded-md bg-canvas p-2">
-            {/* 3.9.1 P2 — 고정 160px 라벨 컬럼: 코드 + 제목(truncate). 바 행과 같은 h-5·간격으로 정렬 유지 */}
-            <div className="w-[160px] shrink-0 space-y-1.5 pr-3">
-              {g.tasks.map((task) => (
-                <div key={task.id} className="flex h-5 min-w-0 items-center gap-1.5">
-                  <span className="shrink-0 text-[11px] font-semibold text-brown">{task.code}</span>
-                  <span className="truncate text-[11px] text-ink-sub" title={task.title}>
-                    {task.title}
-                  </span>
-                </div>
-              ))}
+            {/* 3.9.1 P2 — 고정 라벨 컬럼(200px · v2.21): 코드 + 제목(truncate) + 담당자 이름. 바 행과 같은 h-5·간격으로 정렬 유지 */}
+            <div className={`${LABEL_COLUMN_CLASS} shrink-0 space-y-1.5 pr-3`}>
+              {g.tasks.map((task) => {
+                const assignee = task.assignee_id ? nameById.get(task.assignee_id) ?? null : null
+                return (
+                  <div key={task.id} className="flex h-5 min-w-0 items-center gap-1.5">
+                    <span className="shrink-0 text-[11px] font-semibold text-brown">{task.code}</span>
+                    <span className="truncate text-[11px] text-ink-sub" title={task.title}>
+                      {task.title}
+                    </span>
+                    {assignee && (
+                      <span
+                        className="max-w-[4.5rem] shrink-0 truncate text-[11px] text-ink-cap"
+                        title={`담당 ${assignee}`}
+                        data-testid="wbs-gantt-assignee"
+                      >
+                        · {assignee}
+                      </span>
+                    )}
+                  </div>
+                )
+              })}
             </div>
             <div className="relative min-w-0 flex-1 space-y-1.5">
               {/* 눈금 세로선 — 7일 간격 대시(--border), D-day만 brown 실선. 생략된 눈금은 세로선도 함께 생략 */}
@@ -164,6 +216,15 @@ export default function WbsGantt({ tasks, eventDate }: WbsGanttProps) {
                   data-testid="wbs-gantt-today-line"
                 />
               )}
+              {/* 마일스톤 세로선 — 점선 steel(완료는 흐리게). 눈금 대시와 구분되게 굵기 1px·점선 */}
+              {markers.map(({ milestone, offset }) => (
+                <div
+                  key={`ms-${milestone.id}`}
+                  aria-hidden="true"
+                  className={`pointer-events-none absolute inset-y-0 w-0 border-l border-dotted border-steel ${milestone.done ? 'opacity-40' : ''}`}
+                  style={{ left: `${offsetToPercent(offset)}%` }}
+                />
+              ))}
               {g.tasks.map((task) => {
                 const left = offsetToPercent(task.offset_start)
                 const width = Math.max(offsetToPercent(task.offset_end) - left, 0.8)
