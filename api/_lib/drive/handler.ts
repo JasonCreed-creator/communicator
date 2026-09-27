@@ -32,6 +32,7 @@ import {
   uploadStatusOp,
   type DriveCtx,
   type DriveEnv,
+  projectFileUrlOp,
 } from './service.js'
 import { supabaseDriveStore, type DriveStore } from './store.js'
 
@@ -151,6 +152,9 @@ export async function handleDriveRequest(request: Request, env: DriveEnv, deps: 
         return json(200, await linkOp(ctx, jwt, body))
       case 'file-urls':
         return json(200, await fileUrlsOp(ctx, jwt, body.version_ids))
+      case 'project-file-url':
+        // Phase 6.7 — 온보딩 견적서 첨부를 견적 가져오기가 읽는 서명 URL(권한 = RLS로 행사가 보이는 사람)
+        return json(200, await projectFileUrlOp(ctx, jwt, String(body.project_id ?? '')))
       case 'scan':
         return json(200, await scanOp(ctx, user, String(body.project_id ?? '')))
       default:

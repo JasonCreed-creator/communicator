@@ -21,6 +21,7 @@
 //             PR-7 정산보드(머리 불러오기·할 일 알림·KPI 검산 배지·원가 없는 그룹행·발주 항목 ⋯ 메뉴) ·
 //             PR-8 행사 설정(번호 없는 탭·섹션 목록·고정 저장 바·변경 취소)·온보딩(진행 줄·2열·나중에 하기 확인) ·
 //       6.4: 견적 ↔ 기존 행사 연결 — 견적 목록 '기존 행사에 연결'(진행 중 행사만) → 그 행사 묶음으로 · 새 행사 0 · PDF 견적서 'AI로 읽기' → mock 사실 안내 ·
+//       6.7: 첨부 견적서 → 가져오기 다리 — 설정 ① 링크 첨부 → 정산보드 빈 상태 안내 '견적 가져오기로' → 위저드 ① 첨부 카드('링크 열기' · '이 파일로 읽기' 0) → 첨부 빼기 ·
 //       6.1: Slack 봇 — 행사 설정 ③ 스레드 링크(DM 링크 거부 → 등록 → 채널·Slack에서 열기 → 웹훅 예비 접힘 → 해제) · 담당자 Slack 칸 ·
 //       3.24 PR-A: 운영가이드 — 옛 문서 뼈대 추가 → 섹션 목록 · 등록 운영 대기 계산 · 목록 링크 = 스크롤만(해시 불변) ·
 //       3.24 PR-B: 운영 보드 유형별 표·카드 요약 → 시나리오 원고(뼈대 · 멘트 쓰기 · 연사 확인 · 비상 멘트) · 큐시트 칸 순서 ·
@@ -1104,7 +1105,7 @@ await laneOf('운영').getByText('박운영').waitFor({ timeout: 10_000 })
 check((await tab.getByRole('option', { name: '담당자 선택' }).count()) === 0, '담당자: 셀렉트 피커 대신 역할 칸 4개', 'PM·디자인·운영·등록')
 
 tab.once('dialog', (d) => d.accept())
-await laneOf('운영').getByRole('button', { name: '박운영 빼기' }).click()
+await laneOf('운영').getByRole('button', { name: '박운영 운영에서 빼기' }).click() // Phase 6.6 — 칸의 빼기는 그 역할만(이름에 역할)
 const poolList = tab.getByRole('list', { name: '배정할 수 있는 담당자' })
 const opsCard = poolList.locator('[data-person-card]', { hasText: '박운영' })
 await opsCard.waitFor({ timeout: 10_000 })
@@ -1113,10 +1114,12 @@ await tab.screenshot({ path: resolve(SHOTS, '03a-member-board.png'), fullPage: t
 
 await opsCard.dragTo(laneOf('운영'))
 await laneOf('운영').getByText('박운영').waitFor({ timeout: 10_000 })
-check((await poolList.count()) === 0 || (await poolList.locator('[data-person-card]', { hasText: '박운영' }).count()) === 0, '끌어놓기(실제 브라우저 DnD) → 운영 칸에 배정')
+// Phase 6.6 — 배정된 사람도 주소록 카드로 남고 '이 행사: 운영' 칩이 붙는다(옛 검사 = 카드가 사라짐)
+await poolList.getByTestId('person-held-usr-ops').waitFor({ timeout: 10_000 })
+check((await poolList.getByTestId('person-held-usr-ops').innerText()).includes('운영'), '끌어놓기(실제 브라우저 DnD) → 운영 칸에 배정 + 카드 칩 운영')
 
 tab.once('dialog', (d) => d.accept())
-await laneOf('등록').getByRole('button', { name: '최등록 빼기' }).click()
+await laneOf('등록').getByRole('button', { name: '최등록 등록에서 빼기' }).click()
 const regCard = tab.getByRole('button', { name: '최등록 역할 고르기' })
 await regCard.waitFor({ timeout: 10_000 })
 await regCard.click()
@@ -1318,6 +1321,56 @@ await tab.screenshot({ path: resolve(SHOTS, '03f-editor-step4-export.png'), full
   check(apiCalls.length === 0, '데모에서 /api 요청 0', apiCalls.join(', '))
   check(docRequests.length === docBefore, 'PDF 읽기 시도에 전체 리로드 0', `${docBefore} → ${docRequests.length}`)
   await tab.screenshot({ path: resolve(SHOTS, '03g-quote-import-pdf-mock.png'), fullPage: true })
+}
+
+// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — **Phase 6.7 첨부 견적서 → 견적 가져오기 다리(2026-09-27 밤)**.
+//     주최형 데모 행사(prj-partner-day — 정산보드 없음)의 행사 설정 ① 견적서 첨부에 링크 붙이기 → 정산보드 빈 상태에 안내 한 줄(구글 시트 ·
+//     '견적 가져오기로') → 누르면 견적 가져오기 ①에 첨부 카드(링크는 내려받아 올리라는 안내 + '링크 열기' · '이 파일로 읽기' 0 · 파일 칸 '또는 …') →
+//     설정 ①에서 첨부 빼기(mock 상태 복원) · /api 요청 0 · 전체 리로드 0. drive 첨부(파일)는 실서버에서만 생기므로 데모는 링크 첨부로 본다.
+{
+  const docBefore = docRequests.length
+  const apiCalls = []
+  const onReq = (req) => {
+    if (/\/api\//.test(req.url())) apiCalls.push(req.url())
+  }
+  tab.on('request', onReq)
+  await tab.evaluate(() => {
+    window.location.hash = '#/settings?project=prj-partner-day'
+  })
+  const qa = tab.getByTestId('quote-attachment')
+  await qa.waitFor({ timeout: 10_000 })
+  await qa.getByRole('button', { name: '링크 붙이기' }).click()
+  await qa.getByLabel('견적서 링크').fill('https://docs.google.com/spreadsheets/d/virtual-quote-bridge')
+  await qa.getByRole('button', { name: '붙이기' }).click()
+  await qa.getByTestId('quote-attachment-current').waitFor({ timeout: 10_000 })
+  await tab.evaluate(() => {
+    window.location.hash = '#/settlement?project=prj-partner-day'
+  })
+  const note = tab.getByTestId('settlement-attachment-note')
+  await note.waitFor({ timeout: 10_000 })
+  const noteText = await note.innerText()
+  check(noteText.includes('구글 시트') && noteText.includes('견적 가져오기에서 읽어'), '정산보드 빈 상태 = 첨부 안내 한 줄', noteText)
+  await tab.screenshot({ path: resolve(SHOTS, '03h-settlement-attachment-note.png'), fullPage: true })
+  await note.getByRole('link', { name: '견적 가져오기로' }).click()
+  await tab.getByRole('heading', { name: '견적서 가져오기' }).waitFor({ timeout: 10_000 })
+  const card = tab.getByTestId('import-attachment-card')
+  await card.waitFor({ timeout: 10_000 })
+  const cardText = await card.innerText()
+  check(cardText.includes('온보딩에서 첨부한 견적서') && cardText.includes('구글 시트') && cardText.includes('내려받은 뒤 올려'), '위저드 ① 첨부 카드(링크 = 내려받아 올리기 안내)', cardText)
+  check((await card.getByRole('link', { name: '링크 열기' }).count()) === 1 && (await card.getByRole('button', { name: '이 파일로 읽기' }).count()) === 0, "링크 첨부 = '링크 열기'만 · '이 파일로 읽기' 0")
+  check((await tab.getByText('또는 견적서 파일 올리기 (.xlsx · .pdf · 사진)').count()) === 1, "파일 칸 이름 = '또는 견적서 파일 올리기'")
+  await tab.screenshot({ path: resolve(SHOTS, '03h-quote-import-attachment-card.png'), fullPage: true })
+  // mock 상태 복원 — 설정 ①에서 첨부 빼기
+  await tab.evaluate(() => {
+    window.location.hash = '#/settings?project=prj-partner-day'
+  })
+  await qa.waitFor({ timeout: 10_000 })
+  tab.once('dialog', (d) => d.accept())
+  await qa.getByRole('button', { name: '빼기' }).click()
+  await qa.getByTestId('quote-attachment-empty').waitFor({ timeout: 10_000 })
+  tab.off('request', onReq)
+  check(apiCalls.length === 0, '데모에서 /api 요청 0', apiCalls.join(', '))
+  check(docRequests.length === docBefore, '첨부 다리 경로에 전체 리로드 0', `${docBefore} → ${docRequests.length}`)
 }
 
 await browser.close()

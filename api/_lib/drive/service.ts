@@ -457,6 +457,28 @@ export async function projectFileOp(ctx: DriveCtx, jwt: string, projectId: strin
   }
 }
 
+/**
+ * Phase 6.7 — 온보딩(설정 ①)에서 첨부한 견적서(projects.quote_attachment · Drive 행사 폴더 01_견적)를 견적 가져오기가
+ * 그대로 읽을 수 있게 **서명 스트림 토큰**을 돌려준다(fileUrlsOp와 같은 토큰 — 1시간). 권한 = 사용자 JWT의 RLS(행사 멤버·admin —
+ * 행사가 안 보이면 404). 링크 첨부(kind='link')·첨부 없음이면 token=null(형식만 알린다 — 앱이 파일을 내려받아 올리라고 안내).
+ * 서버는 파일을 읽어 두거나 저장하지 않는다 — 앱이 스트림으로 받아 파서·AI 경로(importQuoteFile)로 넘긴다.
+ */
+export async function projectFileUrlOp(
+  ctx: DriveCtx,
+  jwt: string,
+  projectId: string,
+): Promise<{ token: string | null; file_name: string | null; kind: 'drive' | 'link' | null }> {
+  if (!UUID_RE.test(projectId)) throw new DriveError(400, 'validation', '행사 id 형식이 올바르지 않습니다.')
+  const att = await ctx.store.projectAttachment(jwt, projectId)
+  if (!att) return { token: null, file_name: null, kind: null }
+  if (att.kind !== 'drive' || !att.drive_file_id || !looksLikeDriveFileId(att.drive_file_id)) {
+    return { token: null, file_name: att.file_name, kind: att.kind }
+  }
+  if (!driveConfigured(ctx.env)) throw notReady(NOT_CONFIGURED_MESSAGE)
+  const name = att.file_name || '견적서'
+  return { token: signToken({ k: 'st', f: att.drive_file_id, n: name }, key(ctx), INTERNAL_URL_TTL, ctx.now()), file_name: name, kind: 'drive' }
+}
+
 // ── 업로드 (4MB 조각 중계 — 브라우저→Google 직접 PUT은 CORS로 막힌다) ──────────
 interface UploadTicket {
   k: 'up'

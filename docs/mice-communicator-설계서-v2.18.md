@@ -974,6 +974,7 @@ SQL(`…20260926000400_ai_usage.sql`): 표 `ai_usage`(RLS on · 정책 없음 ·
 | POST /api/intake?action=`read` | 로그인한 내부 사용자(JWT → 주소록) | `{link}` 또는 `{text}` (+ `project_id`) → ① 링크면 봇이 글 한 개를 읽는다(`conversations.history` latest=oldest=ts · 답글 링크는 `conversations.replies`) — 봇 토큰 없음 503(글 붙여 넣기 안내) · `missing_scope` 403(**어느 권한을 더할지 그대로**: channels:history · groups:history · files:read → 재설치) · `not_in_channel` 403(앱 추가 안내) · 못 찾음 404 ② 글 정리(Slack mrkdwn → 읽기 글 · 사람 멘션은 '@담당자') ③ **라벨 규칙**(`src/lib/intake/eventBrief` — 서버·mock 공용 · **v2.15.1(2026-09-27 운영 실측)**: 규칙을 돌리기 전 Slack mrkdwn 정리(굵게 `*…*` · `•`/`◦` 불릿 · 팀 멘션 `<!subteam^…>` · 이모지 코드) → 라벨 동의어(고객사·행사일시·행사장소·타깃조건 …) → **워크플로 봇 양식(`[MICE 계약완료]` · `MICE 견적문의`)의 `주제` 줄은 행사명**(행사명 줄이 따로 없을 때 — 가정) → 영문 날짜 변수(`November 4th, 2026 at 12:00 AM UTC` — UTC 자정 = 날짜만 · 시각이 있으면 KST로) → 자리표시(`MICE only`·미정·TBD·`-`)는 빈 칸 → 라벨 값은 그 줄에서만(빈 라벨이 다음 줄을 삼키지 않음) → 참고 ID(아이템ID·매관시 계약 ID·집행 ID·재계약 ID)만 메모, **금액(계약 매출·계약금)·계약서류·인입채널·담당자 줄은 어떤 칸에도 옮기지 않는다** · 워크플로 글은 보낸 사람 = 봇 이름) ④ AI 키가 있고 글이 20자 이상이면 `ai_usage_claim(project_id|null, 'project_intake')` → Claude(구조화 출력 · 개인정보 칸 없음 · 오늘 날짜를 알려 연도 없는 날짜를 해석) → 검사 → **라벨 값이 이긴다**(mergeBrief). AI 실패·거절·한도(429)는 규칙 결과 + `ai_note`로 답한다(인테이크를 막지 않음) · 권한 오류(403·404·409)만 그대로 ⑤ 응답 `{source, message{permalink, posted_at, posted_by, text, channel, thread_ts}|null, files[{id,name,mimetype,size,looks_like_quote}], links[{url,label,looks_like_quote}], fields, filled, method ai|rules, ai_note}`. **서버는 저장하지 않는다**(글 원문도) — 앱이 사람 확인 뒤 `updateProject` |
 | POST /api/intake?action=`slack-file` | 로그인 + Drive 쪽 판정(그 행사 pm · 종료 안 됨) | `{project_id, file_id}` → `files.info` → 4MB 초과 413 → 봇 토큰으로 내려받기(`files.slack.com`만 · HTML이 오면 권한 없음 403) → `projectFileOp`(행사 폴더 `01_견적` — v2.17) → `{file_id, file_name, url, mimetype}`. 기록은 앱이 `quote_attachment`로 |
 | PUT /api/drive?action=`project-file`&project_id&name | 그 행사 pm(JWT → `drive_project_file_check`) | 본문 = 파일 바이트(4MB 이하 · 빈 파일 400 · id 형식 400 · 종료 409) → 행사 폴더 `01_견적`(v2.17 — 하위 폴더 없음) → `{file_id, file_name, folder_id, url}` · 로그 `drive.project_file`. 인박스는 `drive_known_file_ids`(quote_attachment 포함)로 이 파일을 안다 |
+| POST /api/drive `project-file-url` {project_id} | RLS로 행사가 보이는 사람(멤버·admin) | **(v2.20 · Phase 6.7 · §22.6)** `projects.quote_attachment`가 `drive`면 그 파일의 서명 스트림 토큰(1시간) → `{token, file_name, kind}` · 링크 첨부·없음 = token null · 파일 id 응답 0 · Drive 미설정 503 · 안 보이면 404 · 로그·저장 0. 앱 = `driveClient.projectAttachmentFile` → 위저드 ① '이 파일로 읽기' |
 
 SQL(`…20260926000500_intake.sql`): `projects.intake`·`projects.quote_attachment`(jsonb — pm의 projects_update로 쓴다) · `ai_usage.feature` CHECK에 `project_intake` · `ai_usage_claim` 재정의(vendor_quote = pm·종료 안 됨 · project_intake = 로그인(행사가 있으면 그 행사 멤버) — 한 사람의 하루 한도를 두 기능이 함께 쓴다) · `drive_project_file_check`(authenticated) · `drive_known_file_ids` 재정의. 서버 env 추가 없음(봇 토큰·AI 키·Drive env 재사용) — **봇 권한 3종 추가는 사람 몫**(§9). 앱 = `src/lib/intake/`(eventBrief · briefPrefill · intakeClient · intakeGateway) · `src/lib/projectCode.ts` · `src/lib/quoteAttachment.ts` · `components/onboarding/SlackIntakeCard` · `components/settings/QuoteAttachmentCard` · `driveClient.projectFile`. DataProvider **v15.6** — `Project`·`ProjectPatch`의 `intake`·`quote_attachment` 필드만(131 불변).
 
@@ -1137,6 +1138,9 @@ UI 공통: 한국어, 데스크톱 우선 + 반응형(발주처 화면은 모바
 
 ## 14. 개정 이력
 
+- **v2.20** (2026-09-27 밤): **첨부 견적서 → 견적 가져오기 다리**(Phase 6.7 — §22.6 신설 · §8 `project-file-url` · 실사용 "견적서를 온보딩 시점에서 올렸는데 적용이 안됨" · 서버 읽기 경로 1개 + 위저드 ① 첨부 카드 + 정산보드 빈 상태 안내 · SQL 0 · DataProvider 132 불변).
+- **v2.19** (2026-09-27 밤): **담당자 중복 배정**(Phase 6.6 — §4-2 키 (행사·사람·역할) · §6.1 여러 역할 = 합집합 · §8 members · SQL 32번째 `multi_role` · DataProvider v16.1 `removeMember` 역할 인자 — 132 불변).
+- **v2.18.1** (2026-09-27 저녁): **실사용 결함 묶음 1**(Phase 6.5 — §19.2 버킷 견적 금액 수기 조정 · §7.1 개요 저장 뒤 폴더 자리·이름 맞춤 · §6.1 전역 admin = 모든 행사 pm · SQL 31번째 `admin_full_access`).
 - **v2.18 PR-2** (2026-09-27): **PDF·사진 견적서 AI 읽기**(Phase 6.4 PR-2 — §22.5 신설 · §8.6 `quote-import` · SQL 30번째 `ai_quote_import`(format 'ai' · feature quote_import · claim 재정의) · DataProvider 132 불변). 운영은 Vercel `ANTHROPIC_API_KEY`가 있어야 동작.
 - **v2.18** (2026-09-27): **견적 ↔ 기존 행사 연결 + 영문 견적서 인식**(Phase 6.4 PR-1 — 운영 실측 "견적리스트에서 견적서를 선택하면 새로 행사를 만들어버림" + "정산보드에 견적이 안 붙음" → 원인 = 위저드 ③ 프리필 강제 · §16.4 신설 · §22.4 '기존 행사에 연결' 행 · §22.2 규칙 0 국/영문 · §19.2 정산 시작 연결 · §8 API 2행). SQL 29번째 `quote_link`(RPC 1 · 스키마 변경 0) · **DataProvider v16 = 132메서드**(사용자 승인 · `linkQuoteToProject`). PR-2 = PDF 견적서 AI 인식(사용자 결정 "AI로 읽기 — 키는 Vercel에").
 - **v2.17.1** (2026-09-27): **운영/디자인 스레드 2개 + 댓글 태그 — 운영 커뮤니케이션 프로토콜 v1.0 정합 [B2]**(Phase 6.3 — §9 v2.17.1 블록 · §8.4 `test` target · §4 projects.design_thread_url · §26.2 두 행 완료). SQL 28번째 `design_thread`(열 1 · 함수 재정의 5 · 알릴 사건 += 납품) · DataProvider v15.7(필드만 — 131 불변).
@@ -1904,6 +1908,21 @@ PDF 서식은 2차(xlsx 우선). 같은 행사의 복수 안(예: TAAS GBR/PLZ �
 | 금지 | AI 결과 자동 커밋(확인 큐 우회) · Claude가 계산한 합계를 검산 근거로 · 사람 이름·연락처 칸 · 외화 환산 · 새 AI 기능을 `ai_usage.feature` CHECK·`ai_usage_claim` 개정 없이 추가 |
 
 SQL 30번째 `20260927000400_ai_quote_import.sql`: `quote_imports.format` CHECK += 'ai' · `ai_usage.feature` CHECK += 'quote_import' · `ai_usage_claim` 재정의(quote_import 분기). DataProvider 132 불변(`importQuoteFile` 시그니처 그대로 — 파일 종류로 갈린다).
+
+---
+
+### 22.6 첨부 견적서 → 견적 가져오기 다리 (v2.20 · Phase 6.7 — 실사용 2026-09-27 "견적서를 온보딩 시점에서 올렸는데 적용이 안됨")
+
+온보딩 ①·설정 ①의 **견적서 첨부**(`projects.quote_attachment` — §10 S0 · 파일은 Drive 행사 폴더 `01_견적`)는 파일을 **보관**하는 자리이고, 정산보드의 기준은 **확정 견적**(§19.2 R-S2)이다. 둘 사이에 길이 없어 첨부만 하고 정산보드에 오면 '확정 견적 없음'이 떴다. 다리 = 첨부 파일을 견적 가져오기(§22)가 **그대로 읽는다** — 파서(엑셀)·AI(PDF·사진) 경로는 §22.2·§22.5 그대로, 새 저장 0 · DataProvider 132 불변.
+
+| 항목 | 규칙 |
+|---|---|
+| 서버 | `POST /api/drive {action:'project-file-url', project_id}` — 사용자 JWT의 **RLS로 행사가 보이는 사람**(멤버 · 전역 admin)이 `projects.quote_attachment`를 읽어, `kind='drive'`면 파일의 **서명 스트림 토큰**(내부 서명 URL과 같은 1시간 · `?action=stream&t=`)을 돌려준다 → `{token, file_name, kind}`. 링크 첨부 = `token:null · kind:'link'` · 첨부 없음 = 전부 null · 파일 id는 응답에 싣지 않는다(토큰 안에만) · Drive 미설정이면 503(흉내 없음) · 행사가 안 보이면 404 · 읽기는 로그·저장 0 |
+| 앱 | `driveClient.projectAttachmentFile(projectId)` = 토큰 → 스트림 → `File`(이름·형식 그대로). 위저드 ①에 **첨부 카드**(파일 이름 · `01_견적`) + `이 파일로 읽기` → 불러온 파일 이름 줄 + `다른 파일 고르기` → 기존 `인식 시작`/`AI로 읽기`(`importQuoteFile` 그대로 — 파일 종류로 갈린다). 링크 첨부 = "내려받아 올리라" 안내 + `링크 열기`(새 탭). 파일 칸 이름은 첨부가 있으면 `또는 견적서 파일 올리기` |
+| 정산보드 | 빈 상태(보드 없음)에서 첨부가 있고 **이 행사의 확정 견적이 없으면** 안내 한 줄(파일 이름 · "견적 가져오기에서 읽어 확정하면 여기서 정산을 시작") + `견적 가져오기로`(`/quotes/import` — 위저드 ③ 기본 '기존 행사에 연결' = 지금 보는 행사 §16.4) |
+| mock | Drive가 없어 파일을 가져오지 못한다 — 카드는 보이되 `이 파일로 읽기`는 사실 안내(흉내 없음 · 가져오기 0) |
+| 권한 | 서버는 RLS(행사가 보이는 사람)만 본다 — 견적 가져오기 화면의 영업·관리자 게이트(§6.1)는 앱(`QuoteGate`) 몫. 영역 담당이 파일을 받아도 견적 화면에는 못 들어간다 |
+| 금지 | 첨부를 자동으로 견적으로 만들기(사람이 위저드에서 읽고 확인·확정 — R-Q1) · 파일 id·바이트를 서버가 저장 · 응답에 파일 id · 링크 첨부를 서버가 대신 내려받기(외부 주소로 나가지 않는다) · 새 DataProvider 메서드 |
 
 ---
 

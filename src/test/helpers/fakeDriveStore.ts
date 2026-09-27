@@ -6,6 +6,7 @@ import type {
   DeliverableRow,
   DriveStore,
   MemberRole,
+  ProjectAttachmentRow,
   ProjectRow,
   RegisterVersionArgs,
   SnapshotTarget,
@@ -25,6 +26,7 @@ export function createFakeDriveStore() {
   const users = new Map<string, FakeUser>()
   const members = new Map<string, MemberRole>()
   const projects = new Map<string, ProjectRow>()
+  const attachments = new Map<string, ProjectAttachmentRow>() // Phase 6.7 — projects.quote_attachment 흉내
   const deliverables = new Map<string, DeliverableRow & { partner_id: string | null }>()
   const versions: VersionRow[] = []
   const inbox: { id: string; project_id: string; drive_file_id: string; file_name: string; detected_folder: string; linked: string | null; dismissed: boolean }[] = []
@@ -80,6 +82,15 @@ export function createFakeDriveStore() {
       if (role !== 'pm') throw new DriveError(403, 'forbidden', 'PM 전용 기능입니다.')
       if (p.status === 'closed') throw new DriveError(409, 'conflict', '종료된 행사입니다 — 재개(pm) 후 수정할 수 있습니다.')
       return { ...p }
+    },
+    async projectAttachment(jwt, projectId) {
+      // RLS 흉내 — 행사 멤버(또는 admin)에게만 보인다. 안 보이면 없는 행사와 같은 404
+      const u = userByJwt(jwt)
+      const p = projects.get(projectId)
+      const visible = !!u && !!p && (u.appRole === 'admin' || members.has(`${u.profileId}:${projectId}`))
+      if (!visible) throw new DriveError(404, 'not_found', '행사를 찾을 수 없습니다.')
+      const a = attachments.get(projectId)
+      return a ? { ...a } : null
     },
     async deliverableExists(deliverableId) {
       return deliverables.has(deliverableId)
@@ -263,6 +274,10 @@ export function createFakeDriveStore() {
     },
     addMember(profileId: string, projectId: string, role: MemberRole) {
       members.set(`${profileId}:${projectId}`, role)
+    },
+    setProjectAttachment(projectId: string, a: ProjectAttachmentRow | null) {
+      if (a) attachments.set(projectId, a)
+      else attachments.delete(projectId)
     },
     addDeliverable(d: DeliverableRow & { partner_id?: string | null }) {
       const row = { partner_id: null, ...d }

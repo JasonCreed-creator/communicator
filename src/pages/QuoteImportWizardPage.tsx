@@ -10,7 +10,10 @@ import { LevelBadge } from '../components/internal/StatusBadge'
 import QuoteGate from '../components/quote/QuoteGate'
 import { fmtWon } from '../components/quote/quoteFormState'
 import { useProject } from '../context/ProjectContext'
+import { useAsync } from '../hooks/useAsync'
+import { getDriveGateway } from '../lib/drive/driveGateway'
 import { IMPORT_STEP_HELP } from '../lib/helpTexts'
+import { quoteAttachmentLabel } from '../lib/quoteAttachment'
 import { QUOTE_IMPORT_BUCKETS, bucketLabel } from '../modules/quote/import/buckets'
 import { quoteImportFormatLabel } from '../modules/quote/import/types'
 import { aiMediaTypeFor } from '../lib/vendorQuoteAi'
@@ -28,6 +31,13 @@ const FORMAT_GUIDE = [
   { code: 'C형', desc: 'UNIT PRICE·QTY·AMOUNT(·SELECT) 패키지 견적서' },
   { code: 'PDF·사진', desc: 'AI(Claude)가 옮겨 적음 — 국문·영문 · 실서버에서만 · 한 사람 하루 횟수 제한' },
 ]
+
+/** Phase 6.7 — 온보딩 견적서 첨부를 여기서 바로 읽는 다리(설계서 §22.6). 데모(mock)는 Drive가 없어 파일을 가져오지 못한다 — 사실만 알린다 */
+export const QUOTE_IMPORT_ATTACHMENT_MOCK_MESSAGE =
+  '데모에서는 첨부 견적서를 저장한 곳(Drive)이 없어 읽어 올 수 없습니다 — 실서버에서는 행사 폴더 01_견적의 파일이 그대로 들어옵니다.'
+export const QUOTE_IMPORT_ATTACHMENT_LINK_MESSAGE =
+  '링크로 붙인 견적서는 여기서 바로 읽을 수 없습니다 — 링크를 열어 파일(.xlsx·.pdf·사진)로 내려받은 뒤 올려 주세요.'
+const QUOTE_IMPORT_ATTACHMENT_GONE_MESSAGE = '첨부한 견적서 파일을 찾지 못했습니다 — 행사 설정 ①에서 다시 붙이거나 파일을 직접 올려 주세요.'
 
 /** 위저드 ①이 받는 파일 — 엑셀(파서) + PDF·사진(AI, v2.18 §22.5) */
 const ACCEPT = '.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,.pdf,application/pdf,.jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp'
@@ -89,6 +99,11 @@ function WizardBody() {
 
   const [step, setStep] = useState(1)
   const [file, setFile] = useState<File | null>(null)
+  // Phase 6.7 — 온보딩 견적서 첨부(projects.quote_attachment)를 ①에서 바로 읽는다 · 'attachment' = 첨부에서 불러온 파일
+  const [fileSource, setFileSource] = useState<'picked' | 'attachment' | null>(null)
+  const [loadingAttachment, setLoadingAttachment] = useState(false)
+  const project = useAsync(() => (projectId ? provider.getProject(projectId) : Promise.resolve(null)), [projectId])
+  const attachment = project.data?.quote_attachment ?? null
   const [imp, setImp] = useState<QuoteImport | null>(null)
   const [mapping, setMapping] = useState<SectionMapping[]>([])
   const [quote, setQuote] = useState<Quote | null>(null)
@@ -123,6 +138,30 @@ function WizardBody() {
     () => (parsed?.sections ?? []).reduce((sum, s) => sum + s.items.length, 0),
     [parsed],
   )
+
+  const loadAttachment = async () => {
+    if (!attachment || !projectId) return
+    const drive = getDriveGateway()
+    if (drive.mode !== 'server') {
+      setError(QUOTE_IMPORT_ATTACHMENT_MOCK_MESSAGE)
+      return
+    }
+    setLoadingAttachment(true)
+    setError(null)
+    try {
+      const r = await drive.client.projectAttachmentFile(projectId)
+      if (!r.file) {
+        setError(r.kind === 'link' ? QUOTE_IMPORT_ATTACHMENT_LINK_MESSAGE : QUOTE_IMPORT_ATTACHMENT_GONE_MESSAGE)
+        return
+      }
+      setFile(r.file)
+      setFileSource('attachment')
+    } catch (err) {
+      setError(messageOf(err))
+    } finally {
+      setLoadingAttachment(false)
+    }
+  }
 
   const handleUpload = async () => {
     if (!file) return
@@ -218,14 +257,59 @@ function WizardBody() {
           <p className="mt-1 text-sm text-ink-sub">
             엑셀은 파서가, PDF·사진은 AI가 읽어 서식·섹션·항목·검산 결과만 보여 줍니다. 이 단계에서는 아무것도 저장되지 않습니다.
           </p>
+          {attachment && (
+            <div className="mt-4 rounded-md border border-border bg-canvas px-3 py-3" data-testid="import-attachment-card">
+              <p className="text-sm font-semibold text-ink">온보딩에서 첨부한 견적서</p>
+              <p className="mt-0.5 text-sm text-ink-sub">
+                {quoteAttachmentLabel(attachment)}
+                {attachment.kind === 'drive' ? ' · 행사 폴더 01_견적' : ' · 링크'}
+              </p>
+              {attachment.kind === 'drive' ? (
+                file && fileSource === 'attachment' ? (
+                  <p className="mt-2 text-sm text-positive" data-testid="import-attachment-loaded">
+                    불러온 파일: <span className="font-semibold">{file.name}</span> — 아래 버튼으로 읽기를 시작하세요.{' '}
+                    <button
+                      type="button"
+                      className="underline"
+                      onClick={() => {
+                        setFile(null)
+                        setFileSource(null)
+                      }}
+                    >
+                      다른 파일 고르기
+                    </button>
+                  </p>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm mt-2"
+                    disabled={loadingAttachment || busy}
+                    onClick={() => void loadAttachment()}
+                  >
+                    {loadingAttachment ? '불러오는 중…' : '이 파일로 읽기'}
+                  </button>
+                )
+              ) : (
+                <p className="mt-2 text-sm text-ink-sub">
+                  {QUOTE_IMPORT_ATTACHMENT_LINK_MESSAGE}{' '}
+                  <a href={attachment.url} target="_blank" rel="noreferrer" className="underline">
+                    링크 열기
+                  </a>
+                </p>
+              )}
+            </div>
+          )}
           <label className="mt-4 block">
-            <span className="t-caption">견적서 파일 (.xlsx · .pdf · 사진)</span>
+            <span className="t-caption">{attachment ? '또는 견적서 파일 올리기 (.xlsx · .pdf · 사진)' : '견적서 파일 (.xlsx · .pdf · 사진)'}</span>
             <input
               type="file"
               accept={ACCEPT}
               aria-label="견적서 파일"
               className="ui-input mt-1 block w-full"
-              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+              onChange={(e) => {
+                setFile(e.target.files?.[0] ?? null)
+                setFileSource(e.target.files?.[0] ? 'picked' : null)
+              }}
             />
           </label>
           {file && aiMediaTypeFor(file.name) && (
