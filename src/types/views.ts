@@ -451,6 +451,11 @@ export interface ProjectPatch {
    */
   slack_thread_url?: string | null
   /**
+   * v15.7(Phase 6.3 [B2] §9) — 디자인 스레드 링크. null·빈 칸 = 해제(design 알림도 운영 스레드로). 운영 스레드와 같은 링크는 422.
+   * Slack 메시지 링크만 받는다(src/lib/slackThread). pm 전용
+   */
+  design_thread_url?: string | null
+  /**
    * v15.6(Phase 6.2) — 인테이크 기록 · 견적서 첨부. null = 지움. pm 전용(updateProject 권한 그대로).
    * quote_attachment는 https 주소 + kind(drive|link)만 받는다(그 밖은 422 — src/lib/quoteAttachment)
    */

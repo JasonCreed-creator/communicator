@@ -15,8 +15,18 @@ export interface CardRecord {
   thread_ts: string | null
 }
 
+/** v2.17.1 [B2] — 확인된 카드의 행사 스레드 2개와 항목(운영 스레드 `[키비주얼] 일정 합의` 한 줄에 쓴다) */
+export interface AckContext {
+  project_id?: string | null
+  project_name?: string | null
+  thread?: string | null
+  design_thread?: string | null
+  kind?: 'work' | 'review' | string | null
+  items?: { deliverable_id: string; title: string; area: string | null; due_date: string | null }[] | null
+}
+
 export type AckResult =
-  | { status: 'ok'; by: string; at: string; count: number }
+  | ({ status: 'ok'; by: string; at: string; count: number } & AckContext)
   | { status: 'already'; by: string | null; at: string }
   | { status: 'not_recipient'; names: string[] }
   | { status: 'not_found' }
@@ -37,8 +47,8 @@ export interface NotifyStore {
   memberRole(profileId: string, projectId: string): Promise<string | null>
   /** 발주처(/c)·파트너(/p) 링크가 살아 있는가 — 그 화면의 결정·제출 직후 신호용 */
   tokenActive(token: string): Promise<boolean>
-  /** '테스트 보내기'용 행사 정보(행사 채널 주소 · v2.12 행사 스레드 포함) */
-  project(projectId: string): Promise<{ code: string; name: string; webhook: string | null; thread?: string | null } | null>
+  /** '테스트 보내기'용 행사 정보(행사 채널 주소 · v2.12 행사 스레드 · v2.17.1 디자인 스레드) */
+  project(projectId: string): Promise<{ code: string; name: string; webhook: string | null; thread?: string | null; design_thread?: string | null } | null>
   // ── v2.12 봇(Phase 6.1) ──
   /** 이메일로 찾은 Slack ID를 적어 둔다(비어 있을 때만) */
   setSlackUser(profileId: string, slackUserId: string): Promise<void>
@@ -112,11 +122,20 @@ export function createSupabaseNotifyStore(env: NotifyStoreEnv): NotifyStore {
     },
     async project(projectId) {
       if (!UUID_RE.test(projectId)) return null
-      let res = await admin.from('projects').select('code, name, slack_webhook_url, slack_thread_url').eq('id', projectId).maybeSingle()
-      // v2.12 열이 아직 없는 DB(setup.sql 적용 전 배포)면 옛 열만 — 홈 리마인드·테스트가 404로 깨지지 않게
+      let res = await admin.from('projects').select('code, name, slack_webhook_url, slack_thread_url, design_thread_url').eq('id', projectId).maybeSingle()
+      // v2.17.1·v2.12 열이 아직 없는 DB(setup.sql 적용 전 배포)면 옛 열만 — 홈 리마인드·테스트가 404로 깨지지 않게
+      if (res.error) res = await admin.from('projects').select('code, name, slack_webhook_url, slack_thread_url').eq('id', projectId).maybeSingle()
       if (res.error) res = await admin.from('projects').select('code, name, slack_webhook_url').eq('id', projectId).maybeSingle()
-      const row = res.data as { code: string; name: string; slack_webhook_url: string | null; slack_thread_url?: string | null } | null
-      return row ? { code: row.code, name: row.name, webhook: row.slack_webhook_url, thread: row.slack_thread_url ?? null } : null
+      const row = res.data as {
+        code: string
+        name: string
+        slack_webhook_url: string | null
+        slack_thread_url?: string | null
+        design_thread_url?: string | null
+      } | null
+      return row
+        ? { code: row.code, name: row.name, webhook: row.slack_webhook_url, thread: row.slack_thread_url ?? null, design_thread: row.design_thread_url ?? null }
+        : null
     },
     async setSlackUser(profileId, slackUserId) {
       await rpc<void>('notify_set_slack_user', { p_profile: profileId, p_slack_user: slackUserId })

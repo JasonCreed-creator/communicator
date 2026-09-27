@@ -131,3 +131,13 @@ export function normalizeSlackUserId(value: string | null | undefined): string |
   if (!v) return null
   return isSlackUserId(v) ? v : 'invalid'
 }
+
+/** [B2] 디자인 스레드는 운영 스레드와 다른 스레드여야 한다(같으면 한 스레드에 같은 글이 두 번 남는다) */
+export const SLACK_DESIGN_THREAD_SAME_MESSAGE = '디자인 스레드는 행사(운영) 스레드와 다른 스레드여야 합니다 — 디자인 채널의 행사 스레드 링크를 붙여 주세요.'
+
+/** 두 스레드 링크가 같은 채널·같은 스레드를 가리키는가(링크 표기가 달라도 채널·ts로 비교) */
+export function sameSlackThread(a: string | null | undefined, b: string | null | undefined): boolean {
+  const x = parseSlackThreadLink(a)
+  const y = parseSlackThreadLink(b)
+  return !!x && !!y && x.channel === y.channel && x.thread_ts === y.thread_ts
+}

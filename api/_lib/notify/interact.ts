@@ -6,11 +6,15 @@
 //     → 멘션된 사람이면 확인 기록 + 카드를 "✓ 이름 확인함 · 시각"으로 바꾼다(채널의 모두가 본다)
 //     → 아니면 그 사람에게만 보이는 안내(카드는 그대로)
 //   '앱에서 열기'(action_id=open, 링크 버튼)는 Slack이 알려만 준다 — 200만.
-// 확인은 상태가 아니라 표식이다 — 항목 상태(§5 전이표)는 바뀌지 않는다. Slack은 3초 안의 응답을 기대한다(DB 1회 + 응답 1회).
+//   v2.17.1 [B2]: 디자인 항목 제작 요청을 담당자가 확인하면(= 일정 합의) 운영 스레드에 `[키비주얼] 일정 합의` 한 줄 — 디자인 스레드가
+//   따로 있을 때만(카드가 디자인 스레드에 있었으니 운영팀은 이 줄로 안다). 실패해도 확인 기록·카드 교체는 그대로.
+// 확인은 상태가 아니라 표식이다 — 항목 상태(§5 전이표)는 바뀌지 않는다. Slack은 3초 안의 응답을 기대한다(DB 1회 + 응답 1~2회).
 import { createHmac, timingSafeEqual } from 'node:crypto'
-import { ackedBlocks, kstTime } from './cards.js'
-import { createSlackApi, postResponse } from './slack.js'
-import { createSupabaseNotifyStore, notifyStoreConfigured, type NotifyStore, type NotifyStoreEnv } from './store.js'
+import { parseSlackThreadLink } from '../../../src/lib/slackThread.js'
+import { ackedBlocks, dayLabel, kstTime } from './cards.js'
+import { hasSeparateDesignThread, isDesignArea, slackEscape, TAG } from './format.js'
+import { createSlackApi, postResponse, type SlackApi } from './slack.js'
+import { createSupabaseNotifyStore, notifyStoreConfigured, type AckContext, type NotifyStore, type NotifyStoreEnv } from './store.js'
 
 export interface InteractEnv extends NotifyStoreEnv {
   SLACK_SIGNING_SECRET?: string
@@ -45,6 +49,31 @@ interface BlockActionsPayload {
 
 function text(status: number, body = ''): Response {
   return new Response(body, { status, headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' } })
+}
+
+/**
+ * 운영 스레드에 남길 `[키비주얼] 일정 합의` 한 줄(v2.17.1) — 제작 요청(work) 카드 · design 항목 · 디자인 스레드가 운영 스레드와 별개일 때만.
+ * 여러 건이면 마감 이른 순 3건 + 외 n건. 조건이 안 맞으면 null(아무것도 남기지 않는다).
+ */
+export function keyVisualAgreedLine(ctx: AckContext, by: string): string | null {
+  if (ctx.kind !== 'work' || !hasSeparateDesignThread(ctx)) return null
+  const items = (ctx.items ?? []).filter((i) => isDesignArea(i.area))
+  if (items.length === 0) return null
+  const head = `[${slackEscape(ctx.project_name || '행사')}]`
+  const one = (i: (typeof items)[number]) => `${slackEscape(i.title)}${i.due_date ? ` 마감 ${dayLabel(i.due_date)}` : ''}`
+  const body =
+    items.length === 1
+      ? one(items[0])
+      : `${items.length}건 — ${items.slice(0, 3).map(one).join(', ')}${items.length > 3 ? ` 외 ${items.length - 3}건` : ''}`
+  return `${head} ${TAG.keyVisual} 일정 합의 — ${body} · ${slackEscape(by)} 확인`
+}
+
+async function postKeyVisualAgreed(api: SlackApi | null, ctx: AckContext, by: string): Promise<void> {
+  const line = keyVisualAgreedLine(ctx, by)
+  const ref = parseSlackThreadLink(ctx.thread)
+  if (!line || !ref || !api) return
+  const r = await api.postMessage({ channel: ref.channel, thread_ts: ref.thread_ts, text: line }).catch(() => ({ ok: false }))
+  if (!r.ok) console.warn('[slack-interact] 운영 스레드 [키비주얼] 일정 합의 줄을 남기지 못했습니다')
 }
 
 export async function handleSlackInteract(request: Request, env: InteractEnv, deps: InteractDeps = {}): Promise<Response> {
@@ -90,6 +119,7 @@ export async function handleSlackInteract(request: Request, env: InteractEnv, de
           { replace_original: true, text: payload.message?.text ?? '', blocks: ackedBlocks(payload.message?.blocks, result.by, result.at) },
           fetchImpl,
         )
+        await postKeyVisualAgreed(env.SLACK_BOT_TOKEN?.trim() ? createSlackApi(env.SLACK_BOT_TOKEN.trim(), fetchImpl) : null, result, result.by)
         break
       case 'already':
         await tell(`이미 ${result.by ?? '담당자'} 님이 ${kstTime(result.at)}에 확인했어요.`)

@@ -156,12 +156,12 @@ describe('DoD 68 · ② 보낼 곳 — 행사 채널 → 공용 → 없음', () 
     expect(s.posts.map((p) => p.url).sort()).toEqual([GLOBAL_HOOK, PROJECT_HOOK].sort())
     const project = s.posts.find((p) => p.url === PROJECT_HOOK)!.body.text.split('\n')
     expect(project).toHaveLength(2)
-    expect(s.posts.find((p) => p.url === GLOBAL_HOOK)!.body.text).toContain('[가상 컨퍼런스] 발주처 승인 — 메인 키비주얼')
+    expect(s.posts.find((p) => p.url === GLOBAL_HOOK)!.body.text).toContain('[가상 컨퍼런스] [확정] 메인 키비주얼 — 발주처 승인')
     expect(s.posts.every((p) => p.body.unfurl_links === false)).toBe(true)
   })
 })
 
-describe('DoD 68 · ③ 문구 — [코드] 사건 — 항목 (링크)', () => {
+describe('DoD 68 · ③ 문구 — [행사명] [태그] 항목 — 사건 (링크) (v2.17.1 태그)', () => {
   const base = appBaseUrl({}, `${BASE}/api/notify`)
 
   it('사건 5종 문구 · 항목 링크에 ?project= · 수정요청·승인 구분', () => {
@@ -176,11 +176,11 @@ describe('DoD 68 · ③ 문구 — [코드] 사건 — 항목 (링크)', () => {
       base,
     )
     const lines = units.map((u) => u.line)
-    expect(lines[0]).toBe(`[가상 컨퍼런스] 새 버전 — 메인 키비주얼 v3 · 김디자인 (<${BASE}/items/${D1}?project=${P1}|열기>)`)
-    expect(lines[1]).toContain('[가상 컨퍼런스] 컨펌 발송 — 메인 키비주얼 · 기한 10/1')
-    expect(lines[2]).toContain('[가상 컨퍼런스] 발주처 수정요청 — 메인 키비주얼')
-    expect(lines[3]).toContain('[가상 컨퍼런스] 파트너 제출 — 메인 키비주얼 · 가상 파트너 v1')
-    expect(lines[4]).toContain('[가상 컨퍼런스] 새 지시 — 메인 키비주얼 → 박운영')
+    expect(lines[0]).toBe(`[가상 컨퍼런스] [시안] 메인 키비주얼 v3 · 김디자인 (<${BASE}/items/${D1}?project=${P1}|열기>)`)
+    expect(lines[1]).toContain('[가상 컨퍼런스] [검토요청] 메인 키비주얼 — 발주처 컨펌 발송 · 기한 10/1')
+    expect(lines[2]).toContain('[가상 컨퍼런스] [피드백] 메인 키비주얼 — 발주처 수정요청')
+    expect(lines[3]).toContain('[가상 컨퍼런스] [제작] 메인 키비주얼 v1 — 파트너 제출 · 가상 파트너')
+    expect(lines[4]).toContain('[가상 컨퍼런스] [의뢰] 메인 키비주얼 — 제작 요청 → 박운영')
   })
 
   it('새 지시가 여러 건이면 행사마다 한 줄(보드 링크) · 키는 전부 그 줄에 묶인다', () => {
@@ -190,7 +190,7 @@ describe('DoD 68 · ③ 문구 — [코드] 사건 — 항목 (링크)', () => {
     const units = eventUnits(rows, base)
     expect(units).toHaveLength(1)
     expect(units[0].keys).toHaveLength(12)
-    expect(units[0].line).toContain('[가상 컨퍼런스] 새 지시 12건 — 제출물 1, 제출물 2, 제출물 3 외 9건')
+    expect(units[0].line).toContain('[가상 컨퍼런스] [제작] 제작 요청 12건 — 제출물 1, 제출물 2, 제출물 3 외 9건')
     expect(units[0].line).toContain(`/board/ops?project=${P1}|보드>`)
   })
 
@@ -221,9 +221,9 @@ describe('DoD 68 · ③ 문구 — [코드] 사건 — 항목 (링크)', () => {
       base,
     )
     expect(rem.map((u) => u.line?.split(' (')[0])).toEqual([
-      '[가상 컨퍼런스] 컨펌 기한 D-1 — 명찰 · 발주처 응답 없음',
-      '[가상 컨퍼런스] 마일스톤 D-1 — 인쇄 발주',
-      '[가상 컨퍼런스] 파트너 마감 D-1 — 가상 파트너 · 부스 도면 미제출',
+      '[가상 컨퍼런스] [결정] 명찰 — 컨펌 기한 D-1 · 발주처 응답 없음',
+      '[가상 컨퍼런스] [WBS] 인쇄 발주 — 마일스톤 D-1',
+      '[가상 컨퍼런스] [제작] 부스 도면 — 파트너 마감 D-1 · 가상 파트너 미제출',
       '[가상 컨퍼런스] 미등록 파일 3건 — 홈 인박스에서 항목에 연결하거나 무시하세요',
       undefined,
     ])

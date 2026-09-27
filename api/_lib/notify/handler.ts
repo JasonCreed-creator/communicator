@@ -9,6 +9,8 @@
 // 원칙(§9 v2.3): 알림은 본 동작을 막지 않는다 — 앱은 신호를 보내고 기다리지 않으며, 보낼 곳이 없으면 no-op(선점 행 'skipped').
 // 금액은 싣지 않는다(§19.7 — format.ts 화이트리스트).
 // v2.12(Phase 6.1 — 봇): 보낼 곳 = 행사 스레드(봇 토큰 + 행사 설정 ③ 스레드 링크) → 행사 웹훅 → 공용 웹훅 → 없음.
+// v2.17.1(Phase 6.3 [B2]): 스레드 2개 — design 영역 소식은 디자인 스레드(있을 때 · format.routeThread), 운영 스레드엔 `[키비주얼]` 3줄
+// (일정 합의 = 제작 요청 확인 · 확정 · 납품). 문구는 프로토콜 댓글 태그(format.TAG). `test`는 target='design'으로 디자인 스레드 시험.
 // 스레드에는 줄(한 메시지로 묶음)과 의뢰 카드('확인했어요' 버튼 — 카드마다 한 메시지)를 답글로 단다. DM은 쓰지 않는다(사용자 결정).
 // 서버가 요청하는 곳은 `https://slack.com/api/…`(봇) · `https://hooks.slack.com/services/…`(웹훅) 둘뿐이다.
 import { randomUUID } from 'node:crypto'
@@ -160,6 +162,8 @@ export async function deliver(
       continue
     }
     const ref = threadFor(u.thread, env)
+    // 스레드에만 남기는 소식(운영 스레드 [키비주얼]) — 스레드로 못 보내면 웹훅으로 흘리지 않고 조용히 건너뛴다(선점 키 없음)
+    if (u.threadOnly && !ref) continue
     if (ref) {
       const k = `${ref.channel}:${ref.thread_ts}`
       const g = byThread.get(k) ?? { ref, projectId: u.project_id ?? '', lines: [], cards: [] }
@@ -187,10 +191,10 @@ export async function deliver(
     summary.messages += 1
     if (error) {
       console.warn(`[notify] ${error}`)
-      await store.mark(keys, 'failed', error)
+      if (keys.length) await store.mark(keys, 'failed', error)
       summary.failed += keys.length
     } else {
-      await store.mark(keys, 'sent')
+      if (keys.length) await store.mark(keys, 'sent')
       summary.sent += keys.length
     }
   }
@@ -266,6 +270,7 @@ async function requireMember(store: NotifyStore, jwt: string | null, projectId: 
 }
 
 const NO_CHANNEL = '보낼 Slack 스레드·채널이 없습니다 — 행사 설정 ③ 유형·연동에서 이 행사의 Slack 스레드 링크를 등록하세요.'
+const NO_DESIGN_THREAD = '디자인 스레드로 보낼 수 없습니다 — 봇 토큰과 행사 설정 ③의 디자인 스레드 링크가 둘 다 있어야 합니다.'
 
 export async function handleNotifyRequest(request: Request, env: NotifyEnv, deps: NotifyDeps = {}): Promise<Response> {
   const fetchImpl = deps.fetchImpl ?? fetch
@@ -312,6 +317,15 @@ export async function handleNotifyRequest(request: Request, env: NotifyEnv, deps
       if (role !== 'pm') throw new NotifyError(403, 'forbidden', '알림 테스트는 PM만 보낼 수 있습니다.')
       const project = await store.project(projectId)
       if (!project) throw new NotifyError(404, 'not_found', '프로젝트를 찾을 수 없습니다.')
+      if (body.target === 'design') {
+        // v2.17.1 — 디자인 스레드 시험(봇 전용 — 웹훅 예비 없음)
+        const dref = threadFor(project.design_thread, env)
+        if (!dref) throw new NotifyError(409, 'conflict', NO_DESIGN_THREAD)
+        const api = createSlackApi(env.SLACK_BOT_TOKEN!.trim(), fetchImpl)
+        const r = await api.postMessage({ channel: dref.channel, thread_ts: dref.thread_ts, text: testLine({ project_code: project.code, project_name: project.name }, 'design') })
+        if (!r.ok) throw new NotifyError(502, 'conflict', slackErrorMessage(r.error))
+        return json(200, { sent: true, channel: 'design' })
+      }
       const ref = threadFor(project.thread, env)
       if (ref) {
         const api = createSlackApi(env.SLACK_BOT_TOKEN!.trim(), fetchImpl)

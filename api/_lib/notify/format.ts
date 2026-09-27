@@ -1,10 +1,14 @@
 // Slack 알림 문구 — 설계서 v2.10.1 §9 · Phase 6. 순수 함수만(테스트가 DB·네트워크 없이 문구·링크·금액 비노출을 본다).
-// 형식(§9): `[행사코드] 사건 — 항목명 (링크)`. 한 번 보낼 때 같은 채널로 가는 줄을 한 메시지로 묶는다(줄 상한 — 넘치면 '…외 N건').
+// 형식(§9 · v2.17.1): `[행사명] [태그] 항목명 — 사건 (링크)`. 태그 = 운영 커뮤니케이션 프로토콜 v1.0 댓글 태그(Phase 6.3 [B2]):
+//   디자인 영역 = [의뢰] [시안] [검토요청] [피드백] [확정] [납품] [일정] · 운영·공통 영역 = [제작] [결정] [WBS] · 운영 스레드의 디자인 소식 = [키비주얼].
+// 한 번 보낼 때 같은 채널로 가는 줄을 한 메시지로 묶는다(줄 상한 — 넘치면 '…외 N건').
+// 보낼 곳(v2.17.1): design 영역 행은 디자인 스레드(design_thread — 있을 때) → 없으면 운영 스레드. 컨펌 기한 D-1(발주처 재촉 = PM 몫)·
+// 수동 리마인드·미등록 파일은 늘 운영 스레드. 디자인 스레드가 따로 있으면 운영 스레드에 `[키비주얼]` 확정·납품 한 줄을 더 남긴다(threadOnly).
 // 금액은 싣지 않는다(§19.7) — 입력 행에 무엇이 더 붙어 와도 아래 화이트리스트 필드만 읽는다.
 // v2.12(Phase 6.1): 봇 경로에서는 할 일이 생긴 사람을 멘션하고(mentions), 의뢰(제작 요청·검토 요청·파트너 제출)는 카드(card)로 보낸다.
 // 줄(line)은 그대로 남아 웹훅 경로·카드 실패 대비의 본문이 된다 — 멘션은 보낼 때 붙인다(handler.renderLine).
 import { normalizeBasePath } from '../../../src/lib/basePath.js'
-import { slackMessageLink } from '../../../src/lib/slackThread.js'
+import { parseSlackThreadLink, slackMessageLink } from '../../../src/lib/slackThread.js'
 import { isSlackWebhookUrl } from '../../../src/lib/slackWebhook.js'
 import type { CardSpec, Recipient, WorkCardItem } from './cards.js'
 
@@ -18,6 +22,7 @@ export type NotifyAction =
   | 'partner.submitted'
   | 'deliverable.requested'
   | 'status.transitioned'
+  | 'drive.snapshot_copied'
 
 /** notify_claim_events 한 행 */
 export interface EventRow {
@@ -39,6 +44,8 @@ export interface EventRow {
   partner_name?: string | null
   // v2.12 — 행사 스레드 · 멘션 대상 · 카드 필드
   thread?: string | null
+  /** v2.17.1 [B2] — 디자인 채널의 행사 스레드(있으면 design 영역 행이 여기로) */
+  design_thread?: string | null
   recipients?: Recipient[] | null
   category?: string | null
   due_date?: string | null
@@ -72,6 +79,9 @@ export interface ReminderRow {
   // v2.12
   thread?: string | null
   recipients?: Recipient[] | null
+  // v2.17.1 [B2] — 행의 영역(design이면 디자인 스레드) · 디자인 스레드
+  area?: string | null
+  design_thread?: string | null
   request_kind?: 'work' | 'review' | string | null
   channel_id?: string | null
   message_ts?: string | null
@@ -87,6 +97,7 @@ export interface ManualRow {
   project_name: string
   webhook: string | null
   thread?: string | null
+  design_thread?: string | null
   total: number
   items: { title: string; date: string | null; deliverable_id?: string | null }[]
 }
@@ -104,6 +115,45 @@ export interface MessageUnit {
   mentions?: Recipient[]
   quote?: string | null
   card?: CardSpec | null
+  /** v2.17.1 — 스레드에만 남기는 줄(운영 스레드 `[키비주얼]` 소식). 스레드로 못 보내면 웹훅으로 가지 않고 조용히 건너뛴다 */
+  threadOnly?: boolean
+}
+
+/** 운영 커뮤니케이션 프로토콜 v1.0 댓글 태그(v2.17.1 [B2]) — 디자인 영역은 디자인 협업 태그, 그 밖은 운영 태그 */
+export const TAG = {
+  request: '[의뢰]',
+  draft: '[시안]',
+  review: '[검토요청]',
+  feedback: '[피드백]',
+  confirmed: '[확정]',
+  delivered: '[납품]',
+  schedule: '[일정]',
+  production: '[제작]',
+  decision: '[결정]',
+  wbs: '[WBS]',
+  keyVisual: '[키비주얼]',
+} as const
+
+export function isDesignArea(area: string | null | undefined): boolean {
+  return area === 'design'
+}
+
+/**
+ * 보낼 스레드 — design 영역이고 디자인 스레드가 있으면 디자인 스레드, 아니면 운영 스레드.
+ * 디자인 스레드가 운영 스레드와 같은 스레드면(설정이 막지만 옛 데이터 대비) 운영 스레드 하나로 본다.
+ */
+export function routeThread(row: { thread?: string | null; design_thread?: string | null; area?: string | null }, forceOps = false): string | null {
+  const ops = row.thread ?? null
+  if (forceOps || !isDesignArea(row.area)) return ops
+  const design = row.design_thread ?? null
+  return design && parseSlackThreadLink(design) ? design : ops
+}
+
+/** 디자인 스레드가 운영 스레드와 별개로 있는가(→ 운영 스레드에 `[키비주얼]` 소식을 따로 남길 때) */
+export function hasSeparateDesignThread(row: { thread?: string | null; design_thread?: string | null }): boolean {
+  const ops = parseSlackThreadLink(row.thread)
+  const design = parseSlackThreadLink(row.design_thread)
+  return !!ops && !!design && !(ops.channel === design.channel && ops.thread_ts === design.thread_ts)
 }
 
 /** Slack mrkdwn — 사용자 글자 중 &·<·>만 바꾼다(Slack 규약) */
@@ -169,7 +219,12 @@ function withLink(text: string, url: string | null, label = '열기'): string {
 export function eventUnits(rows: readonly EventRow[], base: string | null): MessageUnit[] {
   const units: MessageUnit[] = []
   const requested = new Map<string, EventRow[]>()
-  const dest = (r: EventRow) => ({ webhook: r.webhook, thread: r.thread ?? null, project_id: r.project_id })
+  const dest = (r: EventRow) => ({ webhook: r.webhook, thread: routeThread(r), project_id: r.project_id })
+  /** 운영 스레드에 남기는 `[키비주얼]` 소식 — 디자인 스레드가 따로 있을 때만(아니면 같은 스레드에 같은 소식이 두 번) */
+  const keyVisualNews = (r: EventRow, what: string) => {
+    if (!isDesignArea(r.area) || !hasSeparateDesignThread(r)) return
+    units.push({ keys: [], line: `${head(r)} ${TAG.keyVisual} ${what}`, webhook: null, thread: r.thread ?? null, project_id: r.project_id, threadOnly: true })
+  }
   for (const r of rows) {
     if (!r.deliverable_id || !r.title) {
       units.push({ keys: [r.key], line: null, ...dest(r) })
@@ -185,32 +240,40 @@ export function eventUnits(rows: readonly EventRow[], base: string | null): Mess
     }
     const title = slackEscape(r.title)
     const item = appLink(base, `items/${r.deliverable_id}`, r.project_id)
+    const design = isDesignArea(r.area)
+    const v = r.version_no ? ` v${r.version_no}` : ''
     let text: string | null = null
     let unit: Partial<MessageUnit> = {}
     switch (r.action) {
       case 'version.uploaded':
-        text = `${head(r)} 새 버전 — ${title}${r.version_no ? ` v${r.version_no}` : ''}${r.actor_name ? ` · ${slackEscape(r.actor_name)}` : ''}`
+        text = `${head(r)} ${design ? TAG.draft : TAG.production} ${title}${v}${design ? '' : ' 새 버전'}${r.actor_name ? ` · ${slackEscape(r.actor_name)}` : ''}`
         break
       case 'approval.requested': {
         const due = shortDate(r.due_at)
-        text = `${head(r)} 컨펌 발송 — ${title}${due ? ` · 기한 ${due}` : ''}`
+        text = `${head(r)} ${design ? TAG.review : TAG.production} ${title}${v} — 발주처 컨펌 발송${due ? ` · 기한 ${due}` : ''}`
         break
       }
       case 'approval.decided':
         text =
           r.decision === 'approved'
-            ? `${head(r)} 발주처 승인 — ${title}`
+            ? `${head(r)} ${design ? TAG.confirmed : TAG.decision} ${title}${v} — 발주처 승인`
             : r.decision === 'changes_requested'
-              ? `${head(r)} 발주처 수정요청 — ${title}`
+              ? `${head(r)} ${design ? TAG.feedback : TAG.decision} ${title}${v} — 발주처 수정요청`
               : null
         unit = { mentions: r.recipients ?? [], quote: r.decision === 'changes_requested' ? r.client_comment ?? null : null }
+        if (r.decision === 'approved') keyVisualNews(r, `확정 — ${title}${v} · 발주처 승인`)
+        break
+      case 'drive.snapshot_copied':
+        // 납품 = 확정본 사본이 03_제작·키비주얼/납품에 놓인 때(Drive 연결 시). Drive 없이 확정된 항목은 확정 줄로 끝난다
+        text = `${head(r)} ${design ? TAG.delivered : TAG.production} ${title}${v} — 확정본 저장(납품 폴더)`
+        keyVisualNews(r, `납품 — ${title}${v} · 확정본 납품 폴더`)
         break
       case 'partner.submitted':
       case 'status.transitioned': {
         const partner = r.action === 'partner.submitted'
         text = partner
-          ? `${head(r)} 파트너 제출 — ${title}${r.partner_name ? ` · ${slackEscape(r.partner_name)}` : ''}${r.version_no ? ` v${r.version_no}` : ''}`
-          : `${head(r)} 내부검토 요청 — ${title}${r.version_no ? ` v${r.version_no}` : ''}${r.actor_name ? ` · ${slackEscape(r.actor_name)}` : ''}`
+          ? `${head(r)} ${TAG.production} ${title}${v} — 파트너 제출${r.partner_name ? ` · ${slackEscape(r.partner_name)}` : ''}`
+          : `${head(r)} ${design ? TAG.review : TAG.production} ${title}${v} — 내부검토 요청${r.actor_name ? ` · ${slackEscape(r.actor_name)}` : ''}`
         unit = {
           mentions: r.recipients ?? [],
           card: {
@@ -265,15 +328,16 @@ export function eventUnits(rows: readonly EventRow[], base: string | null): Mess
       ),
     }
     const extra = { ...dest(first), card, mentions: first.recipients ?? [] }
+    const tag = isDesignArea(first.area) ? TAG.request : TAG.production
     if (list.length === 1) {
-      const text = `${head(first)} 새 지시 — ${slackEscape(first.title!)}${first.assignee_name ? ` → ${slackEscape(first.assignee_name)}` : ''}`
+      const text = `${head(first)} ${tag} ${slackEscape(first.title!)} — 제작 요청${first.assignee_name ? ` → ${slackEscape(first.assignee_name)}` : ''}`
       units.push({ keys, line: withLink(text, appLink(base, `items/${first.deliverable_id}`, first.project_id)), ...extra })
       continue
     }
     const names = list.slice(0, 3).map((r) => slackEscape(r.title!))
     const more = list.length > 3 ? ` 외 ${list.length - 3}건` : ''
     const who = first.assignee_name ? ` → ${slackEscape(first.assignee_name)}` : ''
-    const text = `${head(first)} 새 지시 ${list.length}건 — ${names.join(', ')}${more}${who}`
+    const text = `${head(first)} ${tag} 제작 요청 ${list.length}건 — ${names.join(', ')}${more}${who}`
     units.push({ keys, line: withLink(text, appLink(base, area ? `board/${area}` : 'home', first.project_id), area ? '보드' : '홈'), ...extra })
   }
   return units
@@ -283,19 +347,23 @@ export function eventUnits(rows: readonly EventRow[], base: string | null): Mess
 export function reminderUnits(rows: readonly ReminderRow[], base: string | null): MessageUnit[] {
   return rows.map((r) => {
     let line: string | null = null
+    const design = isDesignArea(r.area)
+    // 컨펌 기한 D-1은 발주처를 재촉하는 PM의 일 — 디자인 항목이어도 운영 스레드(디자인 스레드는 디자인 일만)
+    let forceOps = false
     switch (r.kind) {
       case 'approval_due':
+        forceOps = true
         line = r.title
-          ? withLink(`${head(r)} 컨펌 기한 D-1 — ${slackEscape(r.title)} · 발주처 응답 없음`, r.deliverable_id ? appLink(base, `items/${r.deliverable_id}`, r.project_id) : null)
+          ? withLink(`${head(r)} ${TAG.decision} ${slackEscape(r.title)} — 컨펌 기한 D-1 · 발주처 응답 없음`, r.deliverable_id ? appLink(base, `items/${r.deliverable_id}`, r.project_id) : null)
           : null
         break
       case 'milestone_due':
-        line = r.title ? withLink(`${head(r)} 마일스톤 D-1 — ${slackEscape(r.title)}`, appLink(base, 'schedule', r.project_id), '일정') : null
+        line = r.title ? withLink(`${head(r)} ${design ? TAG.schedule : TAG.wbs} ${slackEscape(r.title)} — 마일스톤 D-1`, appLink(base, 'schedule', r.project_id), '일정') : null
         break
       case 'partner_due':
         line = r.title
           ? withLink(
-              `${head(r)} 파트너 마감 D-1 — ${r.partner_name ? `${slackEscape(r.partner_name)} · ` : ''}${slackEscape(r.title)} 미제출`,
+              `${head(r)} ${TAG.production} ${slackEscape(r.title)} — 파트너 마감 D-1${r.partner_name ? ` · ${slackEscape(r.partner_name)}` : ''} 미제출`,
               appLink(base, 'partners', r.project_id),
               '파트너 보드',
             )
@@ -303,26 +371,30 @@ export function reminderUnits(rows: readonly ReminderRow[], base: string | null)
         break
       case 'deliverable_due':
         line = r.title
-          ? withLink(`${head(r)} 항목 마감 D-1 — ${slackEscape(r.title)}`, r.deliverable_id ? appLink(base, `items/${r.deliverable_id}`, r.project_id) : null)
+          ? withLink(`${head(r)} ${design ? TAG.schedule : TAG.production} ${slackEscape(r.title)} — 마감 D-1`, r.deliverable_id ? appLink(base, `items/${r.deliverable_id}`, r.project_id) : null)
           : null
         break
       case 'unacked': {
         if (!r.title) break
-        const card = r.channel_id && r.message_ts ? slackMessageLink(r.thread, r.channel_id, r.message_ts, r.thread_ts) : null
-        const what = r.request_kind === 'review' ? '검토 요청' : '제작 요청'
+        const threadLink = routeThread(r)
+        const card = r.channel_id && r.message_ts ? slackMessageLink(threadLink, r.channel_id, r.message_ts, r.thread_ts) : null
+        const review = r.request_kind === 'review'
+        const tag = design ? (review ? TAG.review : TAG.request) : TAG.production
+        const what = review ? '검토 요청' : '제작 요청'
         const many = r.count && r.count > 1 ? ` 외 ${r.count - 1}건` : ''
-        const text = `${head(r)} 어제 ${what}을 아직 확인하지 않았어요 — ${slackEscape(r.title)}${many}`
+        const text = `${head(r)} ${tag} ${slackEscape(r.title)}${many} — 어제 ${what}을 아직 확인하지 않았어요`
         line = card ? `${text} (<${card}|요청 카드>)` : withLink(text, r.deliverable_id ? appLink(base, `items/${r.deliverable_id}`, r.project_id) : null)
         break
       }
       case 'inbox_digest':
+        forceOps = true
         line =
           r.count && r.count > 0
             ? withLink(`${head(r)} 미등록 파일 ${r.count}건 — 홈 인박스에서 항목에 연결하거나 무시하세요`, appLink(base, 'home', r.project_id), '홈')
             : null
         break
     }
-    return { keys: [r.key], line, webhook: r.webhook, thread: r.thread ?? null, project_id: r.project_id, mentions: line ? r.recipients ?? [] : [] }
+    return { keys: [r.key], line, webhook: r.webhook, thread: routeThread(r, forceOps), project_id: r.project_id, mentions: line ? r.recipients ?? [] : [] }
   })
 }
 
@@ -346,8 +418,10 @@ export function manualUnit(row: ManualRow, base: string | null): MessageUnit {
 }
 
 /** 설정 화면 '테스트 보내기' 한 줄 — 스레드(봇)면 '이 스레드로', 웹훅이면 '이 채널로' */
-export function testLine(project: { project_code: string; project_name: string }, where: 'channel' | 'thread' = 'channel'): string {
-  return `[${slackEscape(project.project_name || '행사')}] 알림 테스트 — 이 행사의 알림이 이 ${where === 'thread' ? '스레드' : '채널'}로 옵니다.`
+export function testLine(project: { project_code: string; project_name: string }, where: 'channel' | 'thread' | 'design' = 'channel'): string {
+  const name = slackEscape(project.project_name || '행사')
+  if (where === 'design') return `[${name}] 알림 테스트 — 이 행사의 디자인 알림(의뢰·시안·검토요청·피드백·확정·납품)이 이 스레드로 옵니다.`
+  return `[${name}] 알림 테스트 — 이 행사의 알림이 이 ${where === 'thread' ? '스레드' : '채널'}로 옵니다.`
 }
 
 /** Slack Incoming Webhook 본문 — text 한 칸만(미리보기 펼침 끔). 금액 키가 들어갈 자리가 없다 */

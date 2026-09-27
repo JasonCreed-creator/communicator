@@ -177,7 +177,7 @@ import { SCENARIO_KIND_LABELS } from '../../lib/labels'
 import { buildScenarioSeed } from '../../lib/scenarioScript'
 import { UPLOADABLE_STATUSES, uploadBlockedMessage } from '../../lib/uploadGate'
 import { normalizeSlackWebhook, SLACK_WEBHOOK_INVALID_MESSAGE } from '../../lib/slackWebhook'
-import { normalizeSlackThreadLink, normalizeSlackUserId, SLACK_THREAD_INVALID_MESSAGE, SLACK_USER_ID_INVALID_MESSAGE } from '../../lib/slackThread'
+import { sameSlackThread, SLACK_DESIGN_THREAD_SAME_MESSAGE, normalizeSlackThreadLink, normalizeSlackUserId, SLACK_THREAD_INVALID_MESSAGE, SLACK_USER_ID_INVALID_MESSAGE } from '../../lib/slackThread'
 import { normalizeQuoteAttachment, QUOTE_ATTACHMENT_INVALID_MESSAGE } from '../../lib/quoteAttachment'
 import {
   buildVendorQuote,
@@ -2137,6 +2137,13 @@ export class MockProvider implements DataProvider {
       const thread = normalizeSlackThreadLink(patch.slack_thread_url)
       if (thread === 'invalid') throw new ProviderError('validation', SLACK_THREAD_INVALID_MESSAGE)
       project.slack_thread_url = thread
+    }
+    // v15.7(Phase 6.3 [B2] §9) — 디자인 스레드. 운영 스레드와 같은 스레드는 422(한 스레드에 같은 글이 두 번 남는다)
+    if (patch.design_thread_url !== undefined) {
+      const thread = normalizeSlackThreadLink(patch.design_thread_url)
+      if (thread === 'invalid') throw new ProviderError('validation', SLACK_THREAD_INVALID_MESSAGE)
+      if (thread && sameSlackThread(thread, project.slack_thread_url)) throw new ProviderError('validation', SLACK_DESIGN_THREAD_SAME_MESSAGE)
+      project.design_thread_url = thread
     }
     // v15.6(Phase 6.2) — 인테이크 기록 · 견적서 첨부(https 주소 + kind만)
     if (patch.intake !== undefined) project.intake = patch.intake

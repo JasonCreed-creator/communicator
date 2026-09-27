@@ -78,8 +78,9 @@ export function createNotifyClient(opts: NotifyClientOptions) {
       fire({ action: 'drain', token }, null)
     },
 
-    test(projectId: string): Promise<{ sent: true; channel: 'thread' | 'project' | 'global' }> {
-      return call({ action: 'test', project_id: projectId })
+    /** '테스트 보내기' — target 'design'이면 디자인 스레드로(없으면 서버 409) */
+    test(projectId: string, target?: 'design'): Promise<{ sent: true; channel: 'thread' | 'design' | 'project' | 'global' }> {
+      return call({ action: 'test', project_id: projectId, ...(target ? { target } : {}) })
     },
 
     remind(projectId: string, target: 'delayed' | 'approval'): Promise<{ sent: boolean; total: number }> {
