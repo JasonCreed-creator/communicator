@@ -2,6 +2,7 @@ import PlanSection from './PlanSection'
 import { type SectionProgressData } from './planSections'
 import { formatDateTime } from '../../lib/labels'
 import type { RegistrationStats } from '../../types/views'
+import type { PlanMessagingLine } from './planGuideExtras'
 
 /**
  * 06 등록 통계 — 응답률·등록수·체크인율 3종 타일(숫자 + 미니바).
@@ -13,6 +14,7 @@ export default function RegistrationSection({
   progress,
   guaranteePax,
   sheetSnapshotAt,
+  messaging = [],
 }: {
   stats: RegistrationStats
   progress: SectionProgressData
@@ -20,6 +22,8 @@ export default function RegistrationSection({
   guaranteePax?: number | null
   /** 3.17.1 T4 — 시트 연결 중이면 등록 수치의 기준 시각. 미연결이면 null이라 캡션도 없다 */
   sheetSnapshotAt?: string | null
+  /** v2.21 §27.2 — 참가자 안내(단계·발송일·채널·대상·상태 — 원고 제외). 운영가이드 messaging 섹션이 없으면 [] */
+  messaging?: PlanMessagingLine[]
 }) {
   const guarantee = guaranteePax != null && guaranteePax > 0 ? guaranteePax : null
   const attendeeRatio = guarantee ? stats.attendee_total / guarantee : null
@@ -56,6 +60,34 @@ export default function RegistrationSection({
         <p className="mt-3 text-[11px] text-ink-cap">
           등록수·체크인은 시트 기준 · 스냅숏 {formatDateTime(sheetSnapshotAt)} (응답률은 RSVP 기준)
         </p>
+      )}
+      {messaging.length > 0 && (
+        <div className="mt-5" data-testid="plan-messaging">
+          <h3 className="mb-2 text-sm font-semibold text-ink">참가자 안내 일정</h3>
+          <table className="w-full border-collapse">
+            <thead>
+              <tr>
+                <th className="ui-th w-[150px]">단계</th>
+                <th className="ui-th w-[130px]">발송일</th>
+                <th className="ui-th w-[80px]">채널</th>
+                <th className="ui-th">대상</th>
+                <th className="ui-th w-[110px]">상태</th>
+              </tr>
+            </thead>
+            <tbody>
+              {messaging.map((m, i) => (
+                <tr key={i} className="border-b border-track">
+                  <td className="whitespace-nowrap px-3 py-2 align-top text-sm font-semibold text-ink">{m.stage}</td>
+                  <td className="whitespace-nowrap px-3 py-2 align-top text-sm tabular-nums text-ink">{m.when}</td>
+                  <td className="whitespace-nowrap px-3 py-2 align-top text-sm text-ink-sub">{m.channel}</td>
+                  <td className="px-3 py-2 align-top text-sm text-ink-sub">{m.audience}</td>
+                  <td className="whitespace-nowrap px-3 py-2 align-top text-sm text-ink-sub">{m.status}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="mt-1.5 text-[11px] text-ink-cap">원고는 운영가이드에서 · 발송은 알림톡·이메일 도구에서</p>
+        </div>
       )}
     </PlanSection>
   )

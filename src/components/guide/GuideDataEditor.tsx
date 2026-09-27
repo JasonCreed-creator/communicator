@@ -1,6 +1,7 @@
 // 운영가이드 표 섹션 — 고치기 화면 (설계서 v2.13 §23.5 · 디자인지시서 §7-2.13). 섹션 종류마다 한 모양.
 // 저장은 부모(섹션 카드)가 한다 — 여기서는 바뀐 data를 돌려주기만 한다(content는 provider가 data에서 다시 만든다).
 import type {
+  Deliverable,
   GuideChecklistBlock,
   GuideDayplanRow,
   GuideMark,
@@ -21,6 +22,7 @@ import {
   VIP_COLUMNS,
 } from './GuideDataView'
 import { GuideLinesEditor, GuideRowsEditor, type GuideColumn } from './GuideRows'
+import { FloorplanEditor, MessagingEditor, SurveyEditor } from './GuideSheetSections'
 
 const RADIO_COLUMNS: GuideColumn<GuideRadioChannel>[] = [
   { key: 'code', label: '채널', short: true, width: '90px', placeholder: 'CH1' },
@@ -310,14 +312,23 @@ export function GuideDataEditor({
   sessions,
   onChange,
   idPrefix,
+  linkables = [],
 }: {
   data: GuideSectionData
   sessions: readonly ProgramSession[]
   onChange: (next: GuideSectionData) => void
   /** 입력 id 접두어 — 같은 화면에 여러 섹션 편집이 열려도 겹치지 않게 */
   idPrefix: string
+  /** v2.21 §27.2 — 설치 도면이 연결할 수 있는 이 행사의 항목(정형 문서 제외) */
+  linkables?: readonly Deliverable[]
 }) {
   switch (data.type) {
+    case 'survey':
+      return <SurveyEditor data={data} onChange={onChange} idPrefix={idPrefix} />
+    case 'floorplan':
+      return <FloorplanEditor items={data.items} linkables={linkables} onChange={(items) => onChange({ ...data, items })} />
+    case 'messaging':
+      return <MessagingEditor rows={data.rows} onChange={(rows) => onChange({ ...data, rows })} idPrefix={idPrefix} />
     case 'setup':
       return (
         <div className="space-y-4">

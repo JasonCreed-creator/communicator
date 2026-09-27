@@ -2,19 +2,22 @@
 // 한 목록으로 모으는 순수 파생 로직 (디자인지시서 v1.4 §7-2.5 · 캔버스 "커뮤니케이터 UX 개편" 홈).
 // provider·상태 머신은 건드리지 않는다 — 이미 받아온 데이터를 표시용 행으로 옮길 뿐이다.
 // 금액 키는 이 파일이 다루는 어떤 값에도 없다(정산 행은 버킷 이름만 싣는다 — 금액은 정산보드에서).
+import { MESSAGING_CHANNEL_LABELS } from '../../lib/guideStructured'
 import { AREA_LABELS, daysUntil, formatDate, waitingDays, type StatusLevel } from '../../lib/labels'
-import type { Deliverable, Milestone, UnregisteredFile, WbsTask } from '../../types/entities'
+import { toIsoDate } from '../../lib/wbs'
+import type { Deliverable, GuideMessagingRow, Milestone, UnregisteredFile, WbsTask } from '../../types/entities'
 import type { MemberRole } from '../../types/enums'
 import type { PendingApprovalItem } from '../../types/views'
 
-export type TodayKind = 'delayed' | 'milestone' | 'approval' | 'partner' | 'settlement' | 'inbox' | 'guide' | 'imminent'
+export type TodayKind = 'delayed' | 'milestone' | 'approval' | 'partner' | 'messaging' | 'settlement' | 'inbox' | 'guide' | 'imminent'
 
-/** 급한 순 — 늦은 일 → 남의 답을 기다리는 일 → 돈 → 정리할 파일 → 받은 가이드 → 곧 마감 */
+/** 급한 순 — 늦은 일 → 남의 답을 기다리는 일·오늘 보낼 안내 → 돈 → 정리할 파일 → 받은 가이드 → 곧 마감 */
 const KIND_ORDER: Record<TodayKind, number> = {
   delayed: 0,
   milestone: 0,
   approval: 1,
   partner: 1,
+  messaging: 1,
   settlement: 2,
   inbox: 3,
   guide: 4,
@@ -63,11 +66,21 @@ export interface TodayInput {
   inbox: UnregisteredFile[]
   /** 받은 가이드(dashboard.my_requested — 이미 '내 것') */
   guides: Deliverable[]
+  /** v2.21 §27.2 — 참가자 안내 가운데 발송일이 오늘이거나 지났는데 아직 발송 완료가 아닌 단계(운영가이드 messaging 섹션). 원고는 싣지 않는다 */
+  messaging?: TodayMessagingRow[]
   /** v16.1 — 내 역할 전부(한 사람이 여러 역할 · 합집합으로 '내 차례' 판정). 비멤버는 [] */
   myRoles: readonly MemberRole[]
   roleOf: (userId: string | null) => MemberRole | null
   nameOf: (userId: string | null) => string | null
   now?: Date
+}
+
+export interface TodayMessagingRow {
+  /** 운영가이드 항목 — 누르면 원고가 있는 곳으로 */
+  deliverableId: string
+  sectionId: string
+  index: number
+  row: GuideMessagingRow
 }
 
 /** 태스크에 연결된 산출물이 있으면 그 상세로, 없으면 일정으로 보낸다. */
@@ -229,6 +242,30 @@ export function buildTodayRows(input: TodayInput): TodayRow[] {
       mine: true,
       to: `/items/${d.id}`,
       action: '첫 시안 올리기',
+      inboxId: null,
+    })
+  }
+
+  // v2.21 §27.2 — 참가자 안내 발송일(오늘·지남). 발송은 앱 밖이라 여기서는 원고를 열어 보내라고만 — '내 차례' = pm·reg
+  const todayIso = toIsoDate(now)
+  for (const m of input.messaging ?? []) {
+    const past = !!m.row.send_on && m.row.send_on < todayIso
+    rows.push({
+      key: `messaging:${m.sectionId}:${m.index}`,
+      kind: 'messaging',
+      status: past ? '발송 지남' : '오늘 발송',
+      level: past ? 'blocked' : 'attention',
+      dot: false,
+      code: null,
+      title: `참가자 안내 · ${m.row.stage || `${m.index + 1}단계`}`,
+      sub: `${MESSAGING_CHANNEL_LABELS[m.row.channel] ?? m.row.channel}${m.row.audience ? ` · ${m.row.audience}` : ''}${m.row.send_at ? ` · ${m.row.send_at}` : ''} — 발송 도구에서 보낸 뒤 상태를 '발송 완료'로`,
+      role: 'reg',
+      owner: null,
+      due: m.row.send_on,
+      dueText: null,
+      mine: isPm || input.myRoles.includes('reg'),
+      to: `/items/${m.deliverableId}`,
+      action: '원고 열기',
       inboxId: null,
     })
   }

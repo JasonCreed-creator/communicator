@@ -8,6 +8,7 @@
 // 마크다운 섹션: 존별 운영(원본 연동 — R-O4 stale 그대로) · 연락망(R-O6) · 옛 문서의 역할별 체크리스트·비상 대응·커스텀.
 //
 // 옛 문서(4섹션)는 그대로 열린다 — '뼈대 추가'를 눌러야 빠진 섹션이 정본 순서 자리에 끼워진다(기존 섹션 순서·내용 불변).
+// v2.21 §27.2(Phase 6.11 PR-A): 답사 체크리스트 · 설치 도면(항목 버전에 연결만) · 참가자 안내(원고·발송일·상태)가 더해져 15섹션.
 import { useState } from 'react'
 import { flushSync } from 'react-dom'
 import ErrorAlert from '../internal/ErrorAlert'
@@ -26,7 +27,7 @@ import {
 } from '../../lib/guideStructured'
 import { getDataProvider } from '../../providers'
 import type { GuideSection, GuideSectionData } from '../../types/entities'
-import type { GuideSectionKind } from '../../types/enums'
+import { isStructuredDocCategory, type GuideSectionKind } from '../../types/enums'
 import type { GuideSectionInput } from '../../types/views'
 import GuideSectionCard from './GuideSectionCard'
 
@@ -71,6 +72,12 @@ export default function GuideBuilder({
     [projectId],
   )
   const sessionList = programSessions.data ?? []
+  // v2.21 §27.2 — 설치 도면이 연결할 항목 후보(이 행사의 디자인·운영 항목 — 큐시트·시나리오·운영가이드 제외)
+  const projectItems = useAsync(
+    () => (projectId ? provider.listDeliverables(projectId) : Promise.resolve([])),
+    [projectId],
+  )
+  const linkables = (projectItems.data ?? []).filter((d) => !isStructuredDocCategory(d.category) && d.area !== 'common')
 
   const seed = useMutation(() => provider.seedGuideFromSources(deliverableId))
   const save = useMutation((next: GuideSectionInput[]) => provider.saveGuideSections(deliverableId, next))
@@ -241,7 +248,7 @@ export default function GuideBuilder({
           <div className="rounded-lg border border-dashed border-border p-6 text-center">
             <p className="text-sm text-ink-cap">아직 섹션이 없습니다.</p>
             <p className="mt-1 text-xs text-ink-cap">
-              설치·철거부터 비상 대응까지 현장 운영 12개 섹션을 행사 일시·장소·프로그램표로 채운 뼈대로 만듭니다.
+              답사 체크리스트부터 참가자 안내·비상 대응까지 현장 운영 15개 섹션을 행사 일시·장소·프로그램표로 채운 뼈대로 만듭니다.
             </p>
             {canEdit && (
               <button type="button" onClick={handleSeed} disabled={seed.pending} className="btn btn-primary mt-3">
@@ -281,6 +288,7 @@ export default function GuideBuilder({
                   projectId={projectId}
                   sessions={sessionList}
                   headcount={headcount}
+                  linkables={linkables}
                   includeContactsInPrint={includeContacts}
                   saving={save.pending}
                   expanded={expanded.has(s.id)}

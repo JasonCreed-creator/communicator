@@ -35,16 +35,17 @@ afterEach(() => {
 })
 
 describe('DoD 80 — 운영가이드 빌더 화면', () => {
-  it('(a) 빈 문서 → 기본 섹션 만들기 → 12섹션 · 섹션 목록 11/12 채움 · VIP 의전만 비어 있음', async () => {
+  it('(a) 빈 문서 → 기본 섹션 만들기 → 15섹션 · 섹션 목록 13/15 채움 · VIP 의전·설치 도면만 비어 있음', async () => {
     const d = await provider.createDeliverable({ project_id: PROJECT_ID, area: 'ops', category: '운영가이드', title: '빈 가이드' })
     renderBuilder(d.id)
     await userEvent.click(await screen.findByRole('button', { name: '기본 섹션 만들기' }))
     await screen.findByRole('heading', { name: '설치·철거 일정' })
-    for (const name of ['현장 인력·콜타임', '무전·지휘 체계', '역할 분담', 'D-day 진행표', '구간별 체크리스트', '등록 운영', 'VIP 의전', '안전관리', '존별 운영', '비상 대응', '연락망/비품']) {
+    for (const name of ['답사 체크리스트', '설치 도면', '현장 인력·콜타임', '무전·지휘 체계', '역할 분담', 'D-day 진행표', '구간별 체크리스트', '참가자 안내', '등록 운영', 'VIP 의전', '안전관리', '존별 운영', '비상 대응', '연락망/비품']) {
       expect(screen.getByRole('heading', { name })).toBeTruthy()
     }
-    expect(screen.getByTestId('guide-filled').textContent).toBe('섹션 11 / 12 채움')
+    expect(screen.getByTestId('guide-filled').textContent).toBe('섹션 13 / 15 채움')
     expect(within(card('VIP 의전')).getByText('비어 있음')).toBeTruthy()
+    expect(within(card('설치 도면')).getByText('비어 있음')).toBeTruthy()
     expect(within(card('현장 인력·콜타임')).queryByText('비어 있음')).toBeNull()
     // 섹션 목록은 묶음(준비·당일·안전·공통)으로 나뉜다
     const rail = screen.getByRole('navigation', { name: '섹션 목록' })
@@ -152,18 +153,18 @@ describe('DoD 80 — 운영가이드 빌더 화면', () => {
     })
   })
 
-  it('(g) 옛 문서(RE:BUILD 27) — 뼈대 추가 안내 → 누르면 빠진 9섹션이 존별 운영 앞에 들어가고 기존 섹션·갱신 표시는 그대로', async () => {
+  it('(g) 옛 문서(RE:BUILD 27) — 뼈대 추가 안내 → 누르면 빠진 12섹션(v2.21 +3)이 존별 운영 앞에 들어가고 기존 섹션·갱신 표시는 그대로', async () => {
     const before = await provider.listGuideSections('dlv-rb27-guide-01')
     const zoneBefore = before.find((s) => s.kind === 'zone')!
     renderBuilder('dlv-rb27-guide-01')
     const banner = await screen.findByTestId('guide-skeleton-banner')
-    expect(banner.textContent).toContain('9개')
+    expect(banner.textContent).toContain('12개')
     await userEvent.click(within(banner).getByRole('button', { name: '뼈대 추가' }))
     await screen.findByRole('heading', { name: '설치·철거 일정' })
     await waitFor(() => expect(screen.queryByTestId('guide-skeleton-banner')).toBeNull())
     const after = await provider.listGuideSections('dlv-rb27-guide-01')
-    expect(after).toHaveLength(13)
-    expect(after.map((s) => s.kind).slice(0, 9)).toEqual(['setup', 'staffing', 'radio', 'raci', 'dayplan', 'checklists', 'registration', 'vip', 'safety'])
+    expect(after).toHaveLength(16)
+    expect(after.map((s) => s.kind).slice(0, 12)).toEqual(['survey', 'setup', 'floorplan', 'staffing', 'radio', 'raci', 'dayplan', 'checklists', 'messaging', 'registration', 'vip', 'safety'])
     const zoneAfter = after.find((s) => s.kind === 'zone')!
     expect(zoneAfter.id).toBe(zoneBefore.id)
     expect(zoneAfter.content).toBe(zoneBefore.content)

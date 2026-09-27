@@ -817,6 +817,38 @@ select count(*) from save_guide_sections('${GD}', '[${staffing}]'::jsonb);`, { r
 select count(*) from save_guide_sections('${GD}', '[${staffing}]'::jsonb);
 ${assertSql(`(select count(*) from guide_sections where deliverable_id = '${GD}') = 1`)}`, { role: 'authenticated', sub: authId.ops })
 
+  // 5i-2. 마스터 시트 대체 — 운영가이드 섹션 3종 (Phase 6.11 PR-A · 설계서 v2.21 §27.2) — 새 kind 3종 · data 필수 · 참가자 안내 D-1 리마인드
+  const survey = `{"kind":"survey","title":"답사 체크리스트","content":"- 주차","data":{"type":"survey","rows":[{"scope":"external","item":"주차","detail":"","check":"대수","finding":"","owner":""}],"visited_on":null,"notes":[]}}`
+  const floorplan = `{"kind":"floorplan","title":"설치 도면","content":"- (비어 있음)","data":{"type":"floorplan","items":[]}}`
+  const messagingRows = (sendOn) => `[{"stage":"최종 참가 안내","send_on":"${sendOn}","send_at":"10:00","channel":"alimtalk","audience":"참가 확정자","subject":"제목","body":"원고 본문","status":"ready"},{"stage":"발송 끝난 단계","send_on":"${sendOn}","send_at":null,"channel":"email","audience":"전원","subject":"","body":"","status":"sent"},{"stage":"발송일 없음","send_on":null,"send_at":null,"channel":"sms","audience":"","subject":"","body":"","status":"draft"}]`
+  const messaging = (sendOn) => `{"kind":"messaging","title":"참가자 안내","content":"- 최종 참가 안내","data":{"type":"messaging","rows":${messagingRows(sendOn)}}}`
+  scenario('마스터 시트 섹션 3종: survey·floorplan·messaging은 data와 함께 저장된다(type = kind)', `${gdSetup}
+select count(*) from save_guide_sections('${GD}', '[${survey}, ${floorplan}, ${messaging('2026-12-01')}]'::jsonb);
+${assertSql(`(select count(*) from guide_sections where deliverable_id = '${GD}' and kind in ('survey','floorplan','messaging')) = 3`)}
+${assertSql(`(select data->>'type' from guide_sections where deliverable_id = '${GD}' and kind = 'messaging') = 'messaging'`)}`, { role: 'authenticated', sub: authId.pm })
+  for (const [label, body] of [
+    ['survey에 data 없음', `[{"kind":"survey","title":"답사","content":"- 글"}]`],
+    ['messaging의 data.type이 다름', `[{"kind":"messaging","title":"안내","content":"- 글","data":{"type":"survey","rows":[]}}]`],
+    ['floorplan에 data 없음', `[{"kind":"floorplan","title":"도면","content":"- 글"}]`],
+  ]) {
+    scenario(`마스터 시트 섹션 3종: ${label} → 거부`, `${gdSetup}
+select count(*) from save_guide_sections('${GD}', '${body}'::jsonb);`, { role: 'authenticated', sub: authId.pm, expect: 'error', match: 'guide_sections_data_shape' })
+  }
+  scenario('참가자 안내 D-1 리마인드: 내일 발송일 + 발송 완료 아님 → messaging_due(단계·발송 시각·채널 · PM·등록 담당) · 발송 완료·발송일 없는 줄 제외 · 원고·대상 0 · 같은 날 두 번째 0', `${gdSetup}
+select count(*) from save_guide_sections('${GD}', replace('[${messaging('__TOMORROW__')}]', '__TOMORROW__', ((now() at time zone 'Asia/Seoul')::date + 1)::text)::jsonb);
+reset role;
+delete from notification_log where key like 'rem:messaging:%';
+do $$ declare r jsonb; e jsonb; begin
+  r := notify_claim_reminders();
+  select x into e from jsonb_array_elements(r) x where x->>'kind' = 'messaging_due' and x->>'deliverable_id' = '${GD}';
+  if e is null then raise exception 'ASSERT_FAILED: messaging_due %', r; end if;
+  if e->>'stage' <> '최종 참가 안내' or e->>'send_at' <> '10:00' or e->>'channel' <> 'alimtalk' or (e->>'row_index')::int <> 0 then raise exception 'ASSERT_FAILED: fields %', e; end if;
+  if e ? 'body' or e ? 'subject' or e ? 'audience' then raise exception 'ASSERT_FAILED: script leaked %', e; end if;
+  if jsonb_array_length(e->'recipients') < 1 then raise exception 'ASSERT_FAILED: recipients %', e; end if;
+  if (select count(*) from jsonb_array_elements(r) x where x->>'kind' = 'messaging_due' and x->>'deliverable_id' = '${GD}') <> 1 then raise exception 'ASSERT_FAILED: sent/no-date rows must be excluded %', r; end if;
+  if exists (select 1 from jsonb_array_elements(notify_claim_reminders()) x where x->>'kind' = 'messaging_due' and x->>'deliverable_id' = '${GD}') then raise exception 'ASSERT_FAILED: same-day dedupe'; end if;
+end $$;`, { role: 'authenticated', sub: authId.pm })
+
   // 5j. 시나리오 비상 예비 멘트 (Phase 3.24 PR-B · 설계서 v2.13 §23.6) — kind 'emergency' 저장 · 모르는 kind 거부
   const SC = '00000000-0000-4000-8000-00000000a325'
   const scSetup = `reset role;

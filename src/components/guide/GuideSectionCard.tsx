@@ -6,7 +6,7 @@ import { useState } from 'react'
 import InfoTip from '../internal/InfoTip'
 import { GUIDE_STALE_HELP } from '../../lib/helpTexts'
 import { GUIDE_KIND_META, hasGuideData, isGuideSectionEmpty } from '../../lib/guideStructured'
-import type { GuideSection, GuideSectionData, ProgramSession } from '../../types/entities'
+import type { Deliverable, GuideSection, GuideSectionData, ProgramSession } from '../../types/entities'
 import { renderLiteMarkdown } from '../plan/markdown'
 import { GuideDataEditor } from './GuideDataEditor'
 import { GuideDataView } from './GuideDataView'
@@ -27,6 +27,7 @@ export default function GuideSectionCard({
   projectId,
   sessions,
   headcount,
+  linkables = [],
   includeContactsInPrint,
   saving,
   expanded,
@@ -47,6 +48,8 @@ export default function GuideSectionCard({
   projectId: string | null
   sessions: readonly ProgramSession[]
   headcount: number | null
+  /** v2.21 §27.2 — 설치 도면이 연결할 항목 후보(정형 문서 제외) */
+  linkables?: readonly Deliverable[]
   includeContactsInPrint: boolean
   saving: boolean
   expanded: boolean
@@ -153,7 +156,7 @@ export default function GuideSectionCard({
         {editing ? (
           <div className="space-y-3">
             {structured && draft ? (
-              <GuideDataEditor data={draft} sessions={sessions} onChange={setDraft} idPrefix={`gs-${section.id}`} />
+              <GuideDataEditor data={draft} sessions={sessions} onChange={setDraft} idPrefix={`gs-${section.id}`} linkables={linkables} />
             ) : (
               <>
                 <textarea
@@ -179,7 +182,7 @@ export default function GuideSectionCard({
             </div>
           </div>
         ) : structured && section.data ? (
-          <GuideDataView data={section.data} headcount={headcount} />
+          <GuideDataView data={section.data} headcount={headcount} linkables={linkables} />
         ) : hasBody ? (
           <>
             {/* 3.16.4 화면 C — 기본 2줄 미리보기(말줄임), 클릭 시 펼침. 본문은 항상 DOM에

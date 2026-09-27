@@ -8,12 +8,19 @@
 //   등록 → 의전 → 안전)를 따르되, 값은 행사마다 사람이 고치는 **뼈대**다. 회사·행사 고유 명칭은 넣지 않는다.
 // - 옛 문서(마크다운 4섹션)는 그대로 둔다 — 빠진 섹션만 뼈대로 끼워 넣고(기존 섹션 순서·내용 불변),
 //   이미 있는 종류는 다시 만들지 않는다.
+// - v2.21 §27.2(Phase 6.11 PR-A): 마스터 시트의 답사 체크리스트·설치 도면·참가자 안내가 표 섹션 3종으로 들어온다(15종).
+//   참가자 안내 발송은 앱 밖(R-M5) — 여기서는 원고·발송일·상태만. 도면은 항목 버전에 연결만(R-M7).
 import type {
   GuideChecklistsData,
   GuideDayplanData,
   GuideDayplanRow,
   GuideEmergencyData,
+  GuideFloorplanData,
   GuideMark,
+  GuideMessagingChannel,
+  GuideMessagingData,
+  GuideMessagingRow,
+  GuideMessagingStatus,
   GuideRaciData,
   GuideRadioData,
   GuideRegistrationData,
@@ -21,6 +28,7 @@ import type {
   GuideSectionData,
   GuideSetupData,
   GuideStaffingData,
+  GuideSurveyData,
   GuideVipData,
   ProgramSession,
   Project,
@@ -30,14 +38,18 @@ import type { GuideSectionInput } from '../types/views'
 
 // ── 종류·순서·묶음 ────────────────────────────────────────────────────
 
-/** 섹션 순서 정본 — 새 문서 뼈대 순서이자 옛 문서에 끼워 넣을 자리의 기준 */
+/** 섹션 순서 정본 — 새 문서 뼈대 순서이자 옛 문서에 끼워 넣을 자리의 기준.
+ *  v2.21 §27.2: 답사(setup 앞) · 설치 도면(setup 뒤) · 참가자 안내(registration 앞) — 15종 */
 export const GUIDE_CANON_ORDER: readonly GuideSectionKind[] = [
+  'survey',
   'setup',
+  'floorplan',
   'staffing',
   'radio',
   'raci',
   'dayplan',
   'checklists',
+  'messaging',
   'registration',
   'vip',
   'safety',
@@ -58,12 +70,15 @@ export const GUIDE_GROUP_LABELS: Record<GuideGroup, string> = {
 }
 
 export const GUIDE_KIND_META: Record<GuideSectionKind, { title: string; group: GuideGroup; source: string | null }> = {
+  survey: { title: '답사 체크리스트', group: 'prep', source: '외부·내부 항목 뼈대' },
   setup: { title: '설치·철거 일정', group: 'prep', source: '행사 일시·장소에서 뼈대' },
+  floorplan: { title: '설치 도면', group: 'prep', source: '항목 버전에 연결' },
   staffing: { title: '현장 인력·콜타임', group: 'prep', source: '인원 합계 자동' },
   radio: { title: '무전·지휘 체계', group: 'prep', source: null },
   raci: { title: '역할 분담', group: 'prep', source: null },
   dayplan: { title: 'D-day 진행표', group: 'day', source: '프로그램표에서 뼈대' },
   checklists: { title: '구간별 체크리스트', group: 'day', source: null },
+  messaging: { title: '참가자 안내', group: 'day', source: '행사일 기준 발송일' },
   registration: { title: '등록 운영', group: 'day', source: '대기 시간 자동 계산' },
   vip: { title: 'VIP 의전', group: 'day', source: null },
   safety: { title: '안전관리', group: 'safety', source: null },
@@ -85,6 +100,9 @@ const DATA_KINDS = new Set<GuideSectionKind>([
   'registration',
   'vip',
   'safety',
+  'survey',
+  'floorplan',
+  'messaging',
 ])
 
 export function isDataGuideKind(kind: GuideSectionKind): boolean {
@@ -121,6 +139,14 @@ export function guideDateLabel(eventDate: string | null, offsetDays: number): st
   const t = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]) + offsetDays)
   const d = new Date(t)
   return `${d.getUTCMonth() + 1}/${d.getUTCDate()} (${WEEKDAYS[d.getUTCDay()]})`
+}
+
+/** 'YYYY-MM-DD' + 며칠 → 'YYYY-MM-DD'. 날짜가 없거나 모양이 틀리면 null(추측하지 않는다) */
+export function offsetIsoDate(eventDate: string | null, offsetDays: number): string | null {
+  const m = eventDate ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(eventDate) : null
+  if (!m) return null
+  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]) + offsetDays))
+  return d.toISOString().slice(0, 10)
 }
 
 // ── 뼈대(템플릿) ─────────────────────────────────────────────────────
@@ -370,9 +396,100 @@ export function buildEmergencyData(): GuideEmergencyData {
   }
 }
 
+// ── v2.21 §27.2 마스터 시트 대체 3종 ────────────────────────────────────
+
+export const SURVEY_SCOPE_LABELS: Record<GuideSurveyData['rows'][number]['scope'], string> = {
+  external: '외부',
+  internal: '내부',
+}
+
+/** 답사 항목 템플릿 — 확인내용·담당자는 비운다(답사에서 사람이 적는다). 회사·베뉴 고유 문구 없음 */
+const SURVEY_TEMPLATE: ReadonlyArray<{ scope: 'external' | 'internal'; item: string; detail: string; check: string }> = [
+  { scope: 'external', item: '주차', detail: '스태프 · 협력사 차량 · 참가자 안내', check: '대수 · 요금 · 정산 방식 · 진입 동선' },
+  { scope: 'external', item: '하역', detail: '반입 · 반출 차량', check: '하역장 위치 · 이용 시간 · 화물 엘리베이터 규격' },
+  { scope: 'external', item: '전원', detail: '무대 · LED · 부스 전력', check: '가용 용량 · 분전반 위치 · 등록업체 경유 여부' },
+  { scope: 'external', item: '통신', detail: '유선 · 무선 · 중계 회선', check: '전용 회선 · 무선 대역폭 · 동시 접속' },
+  { scope: 'external', item: '동선', detail: '참가자 입장 · VIP · 스태프', check: '출입구 · 엘리베이터 · 비상구 · 흡연 구역' },
+  { scope: 'external', item: '간판', detail: '외부 사이니지 · 배너', check: '설치 가능 위치 · 규격 · 반입 시각' },
+  { scope: 'internal', item: '무대', detail: '규격 · 구조물', check: '가로·세로·높이 · 층고 · 바닥 하중 · 방염' },
+  { scope: 'internal', item: '음향', detail: '스피커 · 마이크', check: '베뉴 보유 장비 · 반입 가능 · 리허설 시간' },
+  { scope: 'internal', item: '조명', detail: '무대 · 객석', check: '기본 조명 · 조광 가능 · 추가 트러스' },
+  { scope: 'internal', item: '스크린', detail: 'LED · 프로젝터', check: '규격 · 해상도 · 시야각 · 보조 화면' },
+  { scope: 'internal', item: '좌석', detail: '배치 · 수량', check: '극장식 · 강의식 · 최대 수용 · 통로 폭' },
+  { scope: 'internal', item: '등록 데스크', detail: '위치 · 크기', check: '로비 폭 · 대기 동선 · 전원 · 인터넷' },
+  { scope: 'internal', item: '대기실', detail: 'VIP · 연사 · 스태프', check: '수 · 위치 · 무대 접근 동선' },
+  { scope: 'internal', item: '케이터링', detail: '다과 · 식사', check: '반입 가능 · 지정 업체 · 배치 공간' },
+]
+
+export function buildSurveyData(): GuideSurveyData {
+  return {
+    type: 'survey',
+    rows: SURVEY_TEMPLATE.map((r) => ({ ...r, finding: '', owner: '' })),
+    visited_on: null,
+    notes: [],
+  }
+}
+
+/** 설치 도면 — 비운다. 도면 파일은 항목(design 또는 ops)의 버전으로 올리고 여기서 연결만(R-M7) */
+export function buildFloorplanData(): GuideFloorplanData {
+  return { type: 'floorplan', items: [] }
+}
+
+export const MESSAGING_CHANNEL_LABELS: Record<GuideMessagingChannel, string> = {
+  alimtalk: '알림톡',
+  email: '이메일',
+  sms: '문자',
+  other: '기타',
+}
+
+export const MESSAGING_STATUS_LABELS: Record<GuideMessagingStatus, string> = {
+  draft: '원고 작성 중',
+  ready: '발송 준비됨',
+  sent: '발송 완료',
+}
+
+/** 참가자 안내 단계 6 — 발송일은 행사일 오프셋(없으면 null) · 원고는 비운다 */
+const MESSAGING_TEMPLATE: ReadonlyArray<{ stage: string; audience: string; offset: number | null }> = [
+  { stage: '참석 선정 안내', audience: '선정자', offset: null },
+  { stage: '참가 대기 안내', audience: '대기자', offset: null },
+  { stage: '참석 불가 안내', audience: '미선정자', offset: null },
+  { stage: '최종 참가 안내', audience: '참가 확정자', offset: -7 },
+  { stage: 'D-1 리마인드', audience: '참가 확정자', offset: -1 },
+  { stage: '당일 안내', audience: '참가 확정자', offset: 0 },
+]
+
+export function buildMessagingData(ctx: Pick<GuideSeedContext, 'project'>): GuideMessagingData {
+  return {
+    type: 'messaging',
+    rows: MESSAGING_TEMPLATE.map((t) => ({
+      stage: t.stage,
+      send_on: t.offset === null ? null : offsetIsoDate(ctx.project.event_date, t.offset),
+      send_at: null,
+      channel: 'alimtalk',
+      audience: t.audience,
+      subject: '',
+      body: '',
+      status: 'draft',
+    })),
+  }
+}
+
+/** 오늘 챙길 참가자 안내 — 발송일이 오늘이거나 지났는데 아직 발송 완료가 아닌 줄(홈 '오늘 할 일'). 발송일 없는 줄은 없다 */
+export function messagingDueRows(data: GuideMessagingData, today: string): Array<{ index: number; row: GuideMessagingRow }> {
+  return data.rows
+    .map((row, index) => ({ index, row }))
+    .filter(({ row }) => !!row.send_on && row.send_on <= today && row.status !== 'sent')
+}
+
 /** 표 섹션 1개의 뼈대 데이터 */
 export function buildGuideData(kind: GuideSectionKind, ctx: GuideSeedContext): GuideSectionData | null {
   switch (kind) {
+    case 'survey':
+      return buildSurveyData()
+    case 'floorplan':
+      return buildFloorplanData()
+    case 'messaging':
+      return buildMessagingData(ctx)
     case 'setup':
       return buildSetupData(ctx)
     case 'staffing':
@@ -537,6 +654,39 @@ export function guideDataMarkdown(data: GuideSectionData): string {
           return `${r.situation}: ${r.action}${who ? ` (${who})` : ''}`
         }),
       )
+    case 'survey': {
+      const scopes: Array<GuideSurveyData['rows'][number]['scope']> = ['external', 'internal']
+      const parts = scopes
+        .map((scope) => {
+          const rows = data.rows.filter((r) => r.scope === scope)
+          if (rows.length === 0) return ''
+          const lines = rows.map((r) => {
+            const head = join([r.item, r.detail], ' · ')
+            const tail = join([r.check && `체크 ${r.check}`, r.finding && `확인 ${r.finding}`, r.owner && `담당 ${r.owner}`])
+            return head + (tail ? ` — ${tail}` : '')
+          })
+          return `### ${SURVEY_SCOPE_LABELS[scope]}\n${bullets(lines)}`
+        })
+        .filter(Boolean)
+      const meta = data.visited_on ? `답사일 ${data.visited_on}` : ''
+      const notes = data.notes.map((n) => n.trim()).filter(Boolean)
+      return join([meta, parts.join('\n\n'), notes.length ? `### 메모\n${bullets(notes)}` : ''], '\n\n')
+    }
+    case 'floorplan':
+      return bullets(data.items.map((it) => join([it.title, it.deliverable_id ? '항목 연결' : '연결 없음', it.note])))
+    case 'messaging':
+      return bullets(
+        data.rows.map((r) =>
+          join([
+            r.stage,
+            join([r.send_on, r.send_at], ' '),
+            MESSAGING_CHANNEL_LABELS[r.channel] ?? r.channel,
+            r.audience,
+            r.subject && `제목 ${r.subject}`,
+            MESSAGING_STATUS_LABELS[r.status] ?? r.status,
+          ]),
+        ),
+      )
   }
 }
 
@@ -563,6 +713,11 @@ export function isGuideSectionEmpty(section: {
       case 'emergency':
       case 'raci':
         return d.rows.length === 0
+      case 'survey':
+      case 'messaging':
+        return d.rows.length === 0
+      case 'floorplan':
+        return d.items.length === 0
       case 'radio':
         return d.channels.length === 0
       case 'checklists':
@@ -607,7 +762,7 @@ export function guideSummary(
 
 // ── 옛 문서에 뼈대 끼워 넣기 ───────────────────────────────────────────
 
-/** 정본 12종 가운데 이 문서에 아직 없는 종류(정본 순서) */
+/** 정본 15종 가운데 이 문서에 아직 없는 종류(정본 순서) */
 export function missingGuideKinds(existing: ReadonlyArray<{ kind: GuideSectionKind }>): GuideSectionKind[] {
   const have = new Set(existing.map((s) => s.kind))
   return GUIDE_CANON_ORDER.filter((k) => !have.has(k))

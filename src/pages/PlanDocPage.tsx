@@ -17,6 +17,7 @@ import ProgramSection from '../components/plan/ProgramSection'
 import RegistrationSection from '../components/plan/RegistrationSection'
 import ScheduleSection from '../components/plan/ScheduleSection'
 import ZonesSection from '../components/plan/ZonesSection'
+import { planFloorplanFigures, planMessagingLines, planSurveyFindings } from '../components/plan/planGuideExtras'
 import {
   PLAN_PAGES,
   PLAN_TOTAL_PAGES,
@@ -156,6 +157,8 @@ function PlanSheet({
             zones={plan.zones}
             progress={progress}
             guideZone={plan.guide_zone}
+            floorplans={planFloorplanFigures(plan)}
+            survey={planSurveyFindings(plan)}
           />
         )
       case 'production':
@@ -168,6 +171,7 @@ function PlanSheet({
             progress={progress}
             guaranteePax={plan.project.guarantee_pax}
             sheetSnapshotAt={plan.sheet_snapshot_at}
+            messaging={planMessagingLines(plan)}
           />
         )
       case 'emergency':

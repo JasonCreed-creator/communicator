@@ -178,7 +178,7 @@ describe('DoD 82 ④ 장표 조립 — 샘플 행사(운영가이드 없음)', (
   })
 })
 
-describe('DoD 82 ⑤ 현장 운영 장 — 새 운영가이드(뼈대 12섹션)', () => {
+describe('DoD 82 ⑤ 현장 운영 장 — 새 운영가이드(뼈대 12섹션 · v2.21 +3 = 15)', () => {
   it('PlanData.guide = 같은 운영가이드의 섹션(연락망 제외) · 장표에 인력·무전·역할 분담·진행표·체크리스트·안전·비상 표', async () => {
     const p = mockProvider()
     p.switchUser('usr-pm')
