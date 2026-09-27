@@ -44,7 +44,7 @@ function sampleInput(myRole: 'pm' | 'design' | 'ops' | 'reg') {
     ],
     partnerPending: [],
     overBudget: [{ id: 'b-1', label: '시스템 구축' }],
-    inbox: [{ id: 'f-1', file_name: '리플렛.pdf', detected_folder: '05_산출물/디자인', detected_at: `${today}T01:00:00.000Z` } as UnregisteredFile],
+    inbox: [{ id: 'f-1', file_name: '리플렛.pdf', detected_folder: '03_제작·키비주얼', detected_at: `${today}T01:00:00.000Z` } as UnregisteredFile],
     guides: [{ id: 'dlv-9', title: '입구 사이니지', category: '사이니지', assignee_id: 'u-d', due_date: addDays(today, 5) } as unknown as Deliverable],
     myRole,
     roleOf: (id: string | null) => (id === 'u-d' ? ('design' as const) : null),

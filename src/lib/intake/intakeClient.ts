@@ -92,7 +92,7 @@ export function createIntakeClient(opts: IntakeClientOptions) {
     read(input: { link?: string; text?: string; project_id?: string }): Promise<IntakeReadResult> {
       return post<IntakeReadResult>('read', input)
     },
-    /** Slack 첨부 파일 → 행사 폴더 02_견적·정산/견적서(4MB 이하) */
+    /** Slack 첨부 파일 → 행사 폴더 01_견적(4MB 이하) */
     slackFile(input: { project_id: string; file_id: string }): Promise<IntakeSlackFileResult> {
       return post<IntakeSlackFileResult>('slack-file', input)
     },

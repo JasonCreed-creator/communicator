@@ -11,14 +11,14 @@ import { driveReturnMessage, getDriveGateway, goToDriveConsent } from '../../lib
 import { useDriveStatus } from '../../lib/drive/useDriveStatus'
 import { formatDateTime } from '../../lib/labels'
 
-/** 설계서 §7.1 표준 트리 — 화면 안내용(실제 이름은 서버 tree.ts가 정본) */
+/** 설계서 v2.17 §7.1 표준 트리(운영 프로토콜 v1.0) — 화면 안내용(실제 이름은 서버 tree.ts가 정본) · 행사 폴더는 저장소/{연도}/{행사 ID}/ */
 export const STANDARD_TREE: readonly string[] = [
-  '01_기획',
-  '02_견적·정산',
-  '03_회의록',
-  '04_운영/{항목}',
-  '05_산출물/디자인/{항목}',
-  '06_발주처공유',
+  '01_견적',
+  '02_계약',
+  '03_제작·키비주얼/{항목} · KV · 초청장 · 현장물 · 납품',
+  '04_WBS·운영계획/{항목}',
+  '05_현장',
+  '06_결과보고·정산',
   '99_archive',
 ]
 
@@ -31,7 +31,7 @@ function Chip({ tone, children }: { tone: 'ok' | 'off' | 'warn'; children: strin
 function TreePreview() {
   return (
     <div className="rounded-md bg-canvas px-3 py-2.5">
-      <p className="mb-1.5 text-xs font-medium text-ink-sub">행사 폴더 표준 구조(자동 생성)</p>
+      <p className="mb-1.5 text-xs font-medium text-ink-sub">행사 폴더 표준 구조(자동 생성) — 저장소/연도/행사 ID/</p>
       <ul className="grid grid-cols-1 gap-x-4 gap-y-0.5 text-xs text-ink-sub sm:grid-cols-2">
         {STANDARD_TREE.map((p) => (
           <li key={p} className="whitespace-nowrap">
@@ -89,7 +89,7 @@ export default function DriveCard({
           <ul className="list-disc space-y-1 pl-5 text-xs leading-relaxed text-ink-sub">
             <li>업로드 3경로 — 끌어놓기(파일·폴더) · 파일/폴더 선택 · Drive에 직접 올린 파일의 링크 등록</li>
             <li>행사 폴더에 직접 올린 파일은 홈의 미등록 인박스에 잡힙니다</li>
-            <li>발주처가 승인한 버전은 06_발주처공유에 사본이 남은 뒤 확정됩니다</li>
+            <li>발주처가 승인한 버전은 03_제작·키비주얼/납품에 사본이 남은 뒤 확정됩니다</li>
           </ul>
           <TreePreview />
           <p className="text-xs text-ink-cap">데모에서는 올린 파일이 브라우저에만 임시 보관됩니다 — Supabase 실서버 전환 후 연결됩니다.</p>

@@ -82,11 +82,11 @@ describe('DoD 67 · ⑤ Drive — 지운 항목의 폴더만 행사 99_archive�
     const s = driveSetup()
     await s.clientAs('jwt-pm').upload({ deliverableId: DLV_COMMON, file: new Blob([new Uint8Array(4)]), fileName: 'm.docx', originalFileName: 'm.docx' })
     const partFolder = s.db.deliverables.get(DLV_COMMON)!.drive_folder_id!
-    expect(s.drive.files.get(partFolder)!.name).toBe('03_회의록')
+    expect(s.drive.files.get(partFolder)!.name).toBe('04_WBS·운영계획')
     s.db.deliverables.delete(DLV_COMMON)
     const r = await s.clientAs('jwt-pm').archiveItem({ project_id: 'prj-1', deliverable_id: DLV_COMMON, folder_id: partFolder, title: '킥오프 회의록' })
     expect(r).toMatchObject({ archived: false, reason: 'not_item_folder' })
-    expect(s.drive.files.get(partFolder)!.name).toBe('03_회의록')
+    expect(s.drive.files.get(partFolder)!.name).toBe('04_WBS·운영계획')
   })
 
   it('다른 행사 폴더 안의 폴더는 403 · 항목 id 형식 400', async () => {

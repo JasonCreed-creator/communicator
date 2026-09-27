@@ -5,7 +5,7 @@
 //   ③ AI 스키마·검사·병합: 구조화 출력 규약 · 개인정보 칸 0 · 틀린 날짜는 null · 종료 ≤ 시작 정리 · 라벨 값이 AI를 이긴다
 //   ④ 서버 read: 로그인 · 빈 입력 · 글 붙여 넣기(키 없음 = 규칙 · 키 있음 = AI 병합 · AI 실패·한도 = 규칙 + 사유) · 링크(봇 없음 503 ·
 //      권한 부족 403 스코프 안내 · 글·보낸 사람·첨부·링크·스레드 · 답글 링크는 replies) · 원문 미저장(응답만) · 응답에 토큰·키 0
-//   ⑤ 서버 slack-file: 4MB 초과 413 · HTML 응답 = 권한 안내 403 · 성공 = 행사 폴더 02_견적·정산/견적서 · pm 아님 403
+//   ⑤ 서버 slack-file: 4MB 초과 413 · HTML 응답 = 권한 안내 403 · 성공 = 행사 폴더 01_견적(v2.17 표준 폴더) · pm 아님 403
 //   ⑥ Drive project-file(PUT): pm → 폴더 경로 · 로그 · design 403 · 종료 409 · id 400 · 4MB 초과 413
 //   ⑦ 견적서 첨부 판정: https만 · kind · drive는 파일 id 필수 · 이름
 import { describe, expect, it, vi } from 'vitest'
@@ -489,7 +489,7 @@ function driveSetup() {
 }
 
 describe('DoD 84 · ⑤ api/intake slack-file → 행사 폴더', () => {
-  it('Slack 첨부(4MB 이하)를 봇으로 내려받아 02_견적·정산/견적서에 · 파일 id·주소 · pm 아님 403 · 4MB 초과 413 · HTML 응답 403 · id 형식 400', async () => {
+  it('Slack 첨부(4MB 이하)를 봇으로 내려받아 01_견적에 · 파일 id·주소 · pm 아님 403 · 4MB 초과 413 · HTML 응답 403 · id 형식 400', async () => {
     clearTokenCache()
     const d = driveSetup()
     const f = fakeSlackFetch()
@@ -501,8 +501,8 @@ describe('DoD 84 · ⑤ api/intake slack-file → 행사 폴더', () => {
     const file = d.drive.files.get(ok.body.file_id)!
     expect(file.name).toBe('가상_견적서.xlsx')
     const folder = d.drive.files.get(file.parents[0])!
-    expect(folder.name).toBe('견적서')
-    expect(d.drive.files.get(folder.parents[0])!.name).toBe('02_견적·정산')
+    expect(folder.name).toBe('01_견적')
+    expect(d.drive.files.get(folder.parents[0])!.appProperties.communicator_project_id).toBe(PRJ)
     expect(d.db.logs.some((l) => l.action === 'drive.project_file' && l.projectId === PRJ)).toBe(true)
     expect(f.calls.some((c) => c.method === 'download' && c.url.startsWith('https://files.slack.com/'))).toBe(true)
 
@@ -518,7 +518,7 @@ describe('DoD 84 · ⑤ api/intake slack-file → 행사 폴더', () => {
 })
 
 describe('DoD 84 · ⑥ api/drive project-file(PUT)', () => {
-  it('pm → 행사 폴더 02_견적·정산/견적서 · 보기 주소 · 로그 / design 403 · 종료 409 · id 400 · 4MB 초과 413 · 빈 파일 400', async () => {
+  it('pm → 행사 폴더 01_견적 · 보기 주소 · 로그 / design 403 · 종료 409 · id 400 · 4MB 초과 413 · 빈 파일 400', async () => {
     clearTokenCache()
     const d = driveSetup()
     const appFetch = (async (input: RequestInfo | URL, init?: RequestInit) =>
@@ -529,7 +529,7 @@ describe('DoD 84 · ⑥ api/drive project-file(PUT)', () => {
     const file = d.drive.files.get(r.file_id)!
     expect(file.name).toBe('가상 견적서.pdf')
     expect(file.mimeType).toBe('application/pdf')
-    expect(d.drive.files.get(d.drive.files.get(file.parents[0])!.parents[0])!.name).toBe('02_견적·정산')
+    expect(d.drive.files.get(file.parents[0])!.name).toBe('01_견적')
     expect(r.url).toContain(r.file_id)
     expect(d.db.logs.some((l) => l.action === 'drive.project_file')).toBe(true)
 

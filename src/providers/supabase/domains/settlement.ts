@@ -643,7 +643,7 @@ export function settlementDomain(ctx: SupabaseCtx): SettlementDomain {
           .select('*')
           .single(),
       ) as SettlementImport
-      // 원본은 근거로 보존(§19.5) — Drive가 연결돼 있으면 행사 폴더 02_견적·정산/협력사 견적서에. 실패해도 가져오기는 그대로
+      // 원본은 근거로 보존(§19.5) — Drive가 연결돼 있으면 행사 폴더 06_결과보고·정산/협력사 견적서에. 실패해도 가져오기는 그대로
       const drive = driveFor(ctx)
       if (await drive.ready()) {
         try {

@@ -4832,7 +4832,7 @@ export class MockProvider implements DataProvider {
 
     if (input.decision === 'approved') {
       d.status = 'approved'
-      // §5·§7.5: 06_발주처공유 스냅숏 성공 후 final 커밋 — Mock은 복사가 항상 성공한다고 가정.
+      // §5·§7.5: 03_제작·키비주얼/납품 스냅숏 성공 후 final 커밋 — Mock은 복사가 항상 성공한다고 가정.
       // 실제 Drive copy·재시도 큐는 Phase 5 DriveFileStore에서 구현.
       assertTransition(d.status, 'final', 'system')
       d.status = 'final'

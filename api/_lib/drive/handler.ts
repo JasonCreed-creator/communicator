@@ -4,7 +4,7 @@
 //   GET  ?action=stream&t=…       → 서명 URL 파일 스트림(§7.4)
 //   PUT  ?action=upload-chunk     → 조각 중계(헤더 x-upload-ticket · content-range, 본문 = 바이트 ≤ 4MB)
 //   PUT  ?action=settlement-file  → v15 협력사 견적서 원본 보관(Bearer · import_id · name, 본문 = 바이트 ≤ 4MB)
-//   PUT  ?action=project-file     → Phase 6.2 견적서 첨부(Bearer · project_id · name, 본문 = 바이트 ≤ 4MB → 행사 폴더 02_견적·정산/견적서)
+//   PUT  ?action=project-file     → Phase 6.2 견적서 첨부(Bearer · project_id · name, 본문 = 바이트 ≤ 4MB → 행사 폴더 01_견적)
 //   POST {action, …}              → JSON 액션(로그인 필요한 것은 Authorization: Bearer <Supabase 액세스 토큰>)
 import { driveConfigured } from './auth.js'
 import { DriveError, errorResponse, json } from './errors.js'

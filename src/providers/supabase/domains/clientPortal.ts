@@ -6,7 +6,7 @@
 // v2.9 §7.4: 파일 URL = api/drive 서명 프록시(토큰이 볼 수 있는 버전 목록은 SQL client_file_versions가 정한다) —
 //   Drive에 없는 버전(시드·Phase 4 자리표시)이나 Drive 미연결이면 자리표시(files.fileUrlFor). 발주처에게 Drive 링크는 주지 않는다.
 // v2.9 §7.5: 승인하면 client_decide가 (Drive가 살아 있는 행사에서) approved에 멈추고, 여기서 client-finalize를 불러
-//   06_발주처공유 복사 성공 후 final로 마감한다. 호출이 실패해도 인박스 스캔이 재시도한다.
+//   03_제작·키비주얼/납품(v2.17 · 옛 06_발주처공유) 복사 성공 후 final로 마감한다. 호출이 실패해도 인박스 스캔이 재시도한다.
 import type { DataProvider } from '../../DataProvider'
 import type { SupabaseCtx } from '../ctx'
 import { driveFor } from '../drive'
@@ -89,7 +89,7 @@ export function clientPortalDomain(ctx: SupabaseCtx): ClientPortalDomain {
       })
       notifyFor(ctx).pingToken(token) // Phase 6 §9 — 승인·수정요청 알림(발주처 화면은 로그인이 없어 링크 토큰으로)
       if (input.decision === 'approved') {
-        // §7.5 — 06_발주처공유 복사 성공 후 final(실패해도 approved로 남고 스캔이 재시도 — 발주처 화면은 막지 않는다)
+        // §7.5 — 03_제작·키비주얼/납품 복사 성공 후 final(실패해도 approved로 남고 스캔이 재시도 — 발주처 화면은 막지 않는다)
         await driveFor(ctx)
           .client.clientFinalize(token, input.approval_id)
           .catch((e) => console.warn('[drive] 확정 복사 요청 실패(재시도 예정):', e instanceof Error ? e.message : e))

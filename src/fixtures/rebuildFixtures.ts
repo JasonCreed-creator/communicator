@@ -1191,7 +1191,7 @@ export function appendRebuildFixtures(state: MockState): void {
     project_id: RB27,
     drive_file_id: 'drv-f-rb27-inbox-001',
     file_name: 'RB27_키비주얼_컬러시안_v0.png',
-    detected_folder: '05_산출물/디자인',
+    detected_folder: '03_제작·키비주얼',
     detected_at: '2026-08-20T05:00:00.000Z',
     linked_deliverable_id: null,
     dismissed: false,

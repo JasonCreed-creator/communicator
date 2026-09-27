@@ -327,7 +327,7 @@ check(
   await tab.waitForURL(/#\/schedule/, { timeout: 10_000 })
 }
 
-// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — **Phase 6.2 행사 만들기 인테이크 · 견적서 첨부 · 행사 코드 자동(2026-09-26)**.
+// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — **Phase 6.2 행사 만들기 인테이크 · 견적서 첨부(2026-09-26) + Phase 6.3 [A] 행사 ID · [B1] 표준 폴더 트리 안내(2026-09-27)**.
 //     세팅 미완료 행사(prj-forum-h2 — 필수 칸이 비어 있어 뒤 PR-5 블록의 '먼저 확인할 행사' 줄이 이 행사를 본다: 폼은 저장하지 않는다)의
 //     온보딩 ① → 'Slack 메시지에서 불러오기'에 라벨 글 붙이기 → 불러오기 → 결과(라벨 규칙 · 채운 칸 n) · 행사명·시작일·장소·인원 칸 채움(주황) ·
 //     배너 · 행사 ID 줄 = YYMMDD_고객사_행사명(코드 칸 없음) · 견적서 '링크 붙이기' → 구글 시트 → 빼기(확인 수락) · 채운 버튼 = 다음: 담당자 하나 ·
@@ -359,6 +359,19 @@ check(
   const labelVal = await tab.getByTestId('project-label-value').innerText()
   check(labelVal === '270520_가상인재㈜_가상 채용 박람회 2027', '행사 ID = YYMMDD_고객사_행사명(파생)', labelVal)
   check((await tab.getByLabel('행사 코드').count()) === 0, '행사 코드 칸 없음')
+  // 표준 폴더 트리(v2.17 [B1]) — 행사 설정 ③ Drive 카드의 안내가 프로토콜 표준 폴더를 적는다(옛 05_산출물 0)
+  await tab.evaluate(() => {
+    window.location.hash = '#/settings?project=prj-rb27&tab=integration'
+  })
+  const driveCard = tab.getByTestId('drive-card')
+  await driveCard.waitFor({ timeout: 10_000 })
+  const driveText = await driveCard.innerText()
+  check(/저장소\/연도\/행사 ID/.test(driveText) && driveText.includes('03_제작·키비주얼/{항목} · KV · 초청장 · 현장물 · 납품') && driveText.includes('06_결과보고·정산') && !driveText.includes('05_산출물'), 'Drive 카드 = 표준 폴더 트리(연도/행사 ID · 03 하위 4 · 옛 이름 0)')
+  await tab.screenshot({ path: resolve(SHOTS, '03-drive-tree.png') })
+  await tab.evaluate(() => {
+    window.location.hash = '#/onboarding?project=prj-forum-h2'
+  })
+  await tab.getByTestId('quote-attachment').waitFor({ timeout: 10_000 })
   // 견적서 링크
   const qa = tab.getByTestId('quote-attachment')
   await qa.getByRole('button', { name: '링크 붙이기' }).click()

@@ -1,5 +1,5 @@
 // 견적서 첨부(파일 또는 링크) — 온보딩 ①·행사 설정 ① 공용(Phase 6.2 · 설계서 v2.15 §10 S0·S6①). 사용자 지시 2026-09-26 "견적서도 첨부(파일 혹은 링크)".
-//   · 파일 = Drive 행사 폴더 02_견적·정산/견적서(서버 함수 · 4MB 이하) — Drive가 연결돼 있을 때만. mock(데모)은 저장할 곳이 없어 링크만
+//   · 파일 = Drive 행사 폴더 01_견적(서버 함수 · 4MB 이하) — Drive가 연결돼 있을 때만. mock(데모)은 저장할 곳이 없어 링크만
 //   · 링크 = https 주소만 기록(구글 시트·외부 Drive·사내 문서)
 //   · Slack 글에서 불러왔으면 그 글의 첨부 파일·링크를 골라 붙인다(파일은 서버가 봇으로 내려받아 행사 폴더에)
 //   · 행사 하나에 하나 — 바꾸면 교체(Drive의 옛 파일은 남는다 — 지우지 않는다). 내부 화면에만(발주처·운영계획서 밖 — 견적서는 금액 문서)
@@ -135,7 +135,7 @@ export default function QuoteAttachmentCard({
           </a>
           <span className="text-xs text-ink-cap">
             {SOURCE_LABEL[current.source]} · {formatDate(current.added_at.slice(0, 10))}
-            {current.kind === 'drive' ? ' · 행사 폴더 02_견적·정산/견적서' : ''}
+            {current.kind === 'drive' ? ' · 행사 폴더 01_견적' : ''}
           </span>
         </div>
       ) : (

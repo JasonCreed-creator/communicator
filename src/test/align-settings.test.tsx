@@ -163,7 +163,7 @@ describe('S6 행사 설정 — 필수 스트립 · 탭 배지 · 연동 빈 상�
     const drive = await screen.findByTestId('drive-card')
     expect(drive.textContent).toContain('미등록 인박스')
     expect(drive.textContent).toContain('실서버')
-    expect(drive.textContent).toContain('05_산출물/디자인')
+    expect(drive.textContent).toContain('03_제작·키비주얼')
 
     // v2.10.1(Phase 6): 'Phase 6 예정' 자리표시 → Slack 카드. mock은 보내는 흉내 없이 무엇이 언제 가는지와 실서버 전용임을 적는다
     const slack = screen.getByTestId('slack-card')

@@ -7,7 +7,7 @@
 //   link                                                    — Drive에 직접 올린 파일을 링크로 등록(§7.2b)
 //   file-urls · client-file-urls · stream                    — 서명 URL 프록시(§7.4, 100MB 상한)
 //   scan                                                    — 인박스 감지 + 확정 복사 재시도(§7.3·§7.5)
-//   client-finalize                                         — 발주처 승인 → 06_발주처공유 복사 성공 후 final(§7.5)
+//   client-finalize                                         — 발주처 승인 → 03_제작·키비주얼/납품 복사 성공 후 final(§7.5)
 // 불변 규칙: 공유 권한은 바꾸지 않는다(anyone 링크 0) · 루트 밖 파일은 읽어 들이지 않는다 · 권한 판정은 SQL 정본에 맡긴다.
 import { randomUUID } from 'node:crypto'
 import { driveFolderUrl, looksLikeDriveFileId, parseDriveLink } from '../../../src/lib/driveLink.js'
@@ -34,6 +34,7 @@ import {
   APP_SNAPSHOT_KEY,
   APP_UPLOAD_KEY,
   ARCHIVE_FOLDER,
+  DELIVERY_PATH,
   ensureChildFolder,
   ensureItemFolder,
   ensureParts,
@@ -41,10 +42,12 @@ import {
   ensureProjectRoot,
   ensureProjectTree,
   ensureRootFolders,
+  isYearFolderName,
   PART,
   QUOTE_FOLDER,
   sanitizeName,
-  SCAN_EXCLUDED_PARTS,
+  SCAN_EXCLUDED_PATHS,
+  syncProjectRootPlacement,
 } from './tree.js'
 
 export interface DriveEnv extends DriveAuthEnv, SigningEnv, StoreEnv {
@@ -286,7 +289,7 @@ export async function ensureTreeOp(ctx: DriveCtx, user: CallerIdentity, projectI
   return { folder_id: tree.rootId, folder_url: driveFolderUrl(tree.rootId), created: tree.created }
 }
 
-/** 기존 폴더를 행사 폴더로 지정(pm) — 루트 안 · 예약 폴더 아님 · 다른 행사 미사용 */
+/** 기존 폴더를 행사 폴더로 지정(pm) — 루트 안 · 예약·연도 폴더 아님 · 다른 행사 미사용. 지정하면 이름·연도 자리를 규약에 맞추고 빠진 파트만 채운다 */
 export async function adoptFolderOp(ctx: DriveCtx, user: CallerIdentity, projectId: string, link: string) {
   const role = await requireMember(ctx, user, projectId)
   if (role !== 'pm') throw new DriveError(403, 'forbidden', '행사 폴더 지정은 PM만 할 수 있습니다.')
@@ -306,6 +309,9 @@ export async function adoptFolderOp(ctx: DriveCtx, user: CallerIdentity, project
   if (f.parents?.includes(root) && (f.name === QUOTE_FOLDER || f.name === ARCHIVE_FOLDER)) {
     throw new DriveError(422, 'validation', `예약 폴더(${QUOTE_FOLDER}·${ARCHIVE_FOLDER})는 행사 폴더로 쓸 수 없습니다.`)
   }
+  if (f.parents?.includes(root) && isYearFolderName(f.name)) {
+    throw new DriveError(422, 'validation', `연도 폴더(${f.name})는 행사 폴더로 쓸 수 없습니다 — 그 안의 행사 폴더 링크를 붙여 주세요.`)
+  }
   if (!(await ancestorIds(api, f, root)).has(root)) {
     throw new DriveError(403, 'forbidden', 'MICE Communicator 폴더 밖의 폴더는 행사 폴더로 지정할 수 없습니다.')
   }
@@ -317,6 +323,8 @@ export async function adoptFolderOp(ctx: DriveCtx, user: CallerIdentity, project
   await api.update(f.id, { appProperties: { [APP_PROJECT_KEY]: projectId } })
   await ctx.store.setProjectRoot(projectId, f.id)
   await ctx.store.log(projectId, 'drive.tree_adopted', 'project', projectId, { folder_id: f.id })
+  project.drive_root_folder_id = f.id
+  await syncProjectRootPlacement(api, ctx.store, root, project, f)
   await ensureParts(api, f.id)
   await markLive(ctx)
   return { folder_id: f.id, folder_url: driveFolderUrl(f.id), created: false }
@@ -378,13 +386,13 @@ export async function archiveItemOp(ctx: DriveCtx, user: CallerIdentity, body: R
   return { archived: true, folder_id: f.id }
 }
 
-/** v15(§19.5) 협력사 견적서 원본 폴더 — 행사 폴더 02_견적·정산 아래 */
+/** v15(§19.5) 협력사 견적서 원본 폴더 — 행사 폴더 06_결과보고·정산 아래(v2.17 표준 폴더) */
 export const VENDOR_QUOTE_FOLDER = '협력사 견적서'
 export const APP_SETTLEMENT_KEY = 'communicator_settlement_import'
 
 /**
  * v15(§19.5 Phase 4.7) — 협력사 견적서 원본을 근거로 보관한다(한 번에 — 조각 중계 한도 4MB 이하). 권한은 사용자 JWT로
- * SQL(drive_settlement_file_check: pm · 확인 대기 · 종료 행사 아님)이 판정 → 행사 폴더 02_견적·정산/협력사 견적서에 올리고 →
+ * SQL(drive_settlement_file_check: pm · 확인 대기 · 종료 행사 아님)이 판정 → 행사 폴더 06_결과보고·정산/협력사 견적서에 올리고 →
  * service로 settlement_imports.drive_file_id 기록. 인박스는 이 원본을 아는 파일로 친다(drive_known_file_ids 재정의).
  */
 export async function settlementFileOp(ctx: DriveCtx, jwt: string, importId: string, fileName: string, mimeType: string, bytes: Uint8Array) {
@@ -396,7 +404,7 @@ export async function settlementFileOp(ctx: DriveCtx, jwt: string, importId: str
   const target = await ctx.store.settlementFileCheck(jwt, importId)
   const api = driveApiFor(ctx)
   const { rootId } = await ensureProjectRoot(api, ctx.store, root, target.project)
-  const folderId = await ensurePartPath(api, rootId, [PART.money, VENDOR_QUOTE_FOLDER])
+  const folderId = await ensurePartPath(api, rootId, [PART.report, VENDOR_QUOTE_FOLDER])
   const name = sanitizeName(fileName || target.file_name, 200)
   const session = await api.startResumable(
     { name, parents: [folderId], appProperties: { [APP_SETTLEMENT_KEY]: importId }, description: '협력사 견적서 원본(정산보드 가져오기)' },
@@ -411,13 +419,13 @@ export async function settlementFileOp(ctx: DriveCtx, jwt: string, importId: str
   return { file_id: progress.file.id, folder_id: folderId }
 }
 
-/** Phase 6.2(설계서 v2.15 §10 S0) — 견적서 첨부 폴더: 행사 폴더 02_견적·정산 아래 */
-export const QUOTE_ATTACHMENT_FOLDER = '견적서'
+/** Phase 6.2(설계서 v2.15 §10 S0) — 견적서 첨부는 행사 폴더 01_견적에 바로(v2.17 표준 폴더 — 하위 폴더 없음) */
+export const QUOTE_ATTACHMENT_PATH: readonly string[] = [PART.quote]
 export const APP_PROJECT_FILE_KEY = 'communicator_project_file'
 
 /**
  * Phase 6.2 — 행사 폴더에 파일 하나를 한 번에 올린다(4MB 이하 — 견적서 첨부). 권한은 사용자 JWT로 SQL(drive_project_file_check:
- * pm · 종료 안 된 행사)이 판정 → 행사 폴더 02_견적·정산/견적서 → 파일 id·보기 주소를 돌려준다. 기록(projects.quote_attachment)은
+ * pm · 종료 안 된 행사)이 판정 → 행사 폴더 01_견적 → 파일 id·보기 주소를 돌려준다. 기록(projects.quote_attachment)은
  * 앱이 updateProject로 한다 — 서버 함수는 파일만 올린다. 인박스는 drive_known_file_ids(quote_attachment 포함)로 이 파일을 안다.
  */
 export async function projectFileOp(ctx: DriveCtx, jwt: string, projectId: string, fileName: string, mimeType: string, bytes: Uint8Array) {
@@ -430,7 +438,7 @@ export async function projectFileOp(ctx: DriveCtx, jwt: string, projectId: strin
   const project = await ctx.store.projectFileCheck(jwt, projectId)
   const api = driveApiFor(ctx)
   const { rootId } = await ensureProjectRoot(api, ctx.store, root, project)
-  const folderId = await ensurePartPath(api, rootId, [PART.money, QUOTE_ATTACHMENT_FOLDER])
+  const folderId = await ensurePartPath(api, rootId, QUOTE_ATTACHMENT_PATH)
   const name = sanitizeName(fileName || '견적서', 200)
   const session = await api.startResumable(
     { name, parents: [folderId], appProperties: { [APP_PROJECT_FILE_KEY]: projectId }, description: '견적서 첨부(행사 만들기)' },
@@ -716,7 +724,7 @@ export async function streamOp(ctx: DriveCtx, t: string | null, range: string | 
 
 // ── 확정 복사 §7.5 ────────────────────────────────────────────────────
 /**
- * 승인된 버전을 06_발주처공유로 복사한 **뒤에만** final. 같은 버전의 복사본이 이미 있으면 재사용(재시도 멱등).
+ * 승인된 버전을 03_제작·키비주얼/납품(v2.17 — 옛 06_발주처공유)으로 복사한 **뒤에만** final. 같은 버전의 복사본이 이미 있으면 재사용(재시도 멱등).
  * 원본이 Drive 파일이 아니거나(Phase 4 이전 자리표시) Drive에서 사라졌으면 복사 없이 마감한다(로그로 남김) —
  * 영원히 approved에 묶이지 않게. 복사가 실패하면 3회(지수 백오프) 후 approved 유지 + 실패 로그 → 스캔이 재시도.
  */
@@ -735,7 +743,7 @@ export async function snapshotAndFinalize(ctx: DriveCtx, api: DriveApi, t: Snaps
         return 'skipped'
       }
       const { rootId } = await ensureProjectRoot(api, ctx.store, driveRoot(ctx), t.project)
-      const shareId = await ensurePartPath(api, rootId, [PART.share])
+      const shareId = await ensurePartPath(api, rootId, DELIVERY_PATH)
       const existing = await api.list(
         `'${qEscape(shareId)}' in parents and appProperties has { key='${APP_SNAPSHOT_KEY}' and value='${qEscape(t.version_id)}' } and trashed = false`,
         undefined,
@@ -813,8 +821,9 @@ export async function scanOp(ctx: DriveCtx, user: CallerIdentity, projectId: str
     const children = await api.listAll(`'${qEscape(id)}' in parents and trashed = false`, 2000)
     for (const f of children) {
       if (f.mimeType === FOLDER_MIME) {
-        if (path === '' && SCAN_EXCLUDED_PARTS.includes(f.name)) continue
-        queue.push({ id: f.id, path: path ? `${path}/${f.name}` : f.name })
+        const childPath = path ? `${path}/${f.name}` : f.name
+        if (SCAN_EXCLUDED_PATHS.includes(childPath)) continue
+        queue.push({ id: f.id, path: childPath })
         continue
       }
       if (f.mimeType === SHORTCUT_MIME || f.appProperties?.[APP_SNAPSHOT_KEY]) continue

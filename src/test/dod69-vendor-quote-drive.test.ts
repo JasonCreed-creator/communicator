@@ -1,5 +1,5 @@
 // DoD 69 ⑤ (Phase 4.7 · 설계서 v2.11 §19.5 "원본 파일은 근거로 보존") — 협력사 견적서 원본을 Drive 행사 폴더
-// 02_견적·정산/협력사 견적서에 보관한다(api/drive PUT settlement-file). 가짜 Drive·가짜 DB로 도는 서버 계약(node 환경 — DoD 61 방식).
+// 06_결과보고·정산/협력사 견적서에 보관한다(api/drive PUT settlement-file — v2.17 표준 폴더). 가짜 Drive·가짜 DB로 도는 서버 계약(node 환경 — DoD 61 방식).
 //   · pm만(영역 담당 403) · 확인 대기만(확정 뒤 409) · 로그인 없음 401 · id 형식 400 · 4MB 초과 413
 //   · 보관한 원본은 인박스 스캔이 '모르는 파일'로 올리지 않는다(아는 파일 = 버전 + 인박스 + 정산 원본)
 import { beforeEach, describe, expect, it } from 'vitest'
@@ -56,7 +56,7 @@ function bytes(n: number): Uint8Array {
 describe('DoD 69 · ⑤ 협력사 견적서 원본 보관(Drive)', () => {
   beforeEach(() => clearTokenCache())
 
-  it('pm → 행사 폴더 02_견적·정산/협력사 견적서에 원본 · 가져오기에 파일 id 기록 · 로그', async () => {
+  it('pm → 행사 폴더 06_결과보고·정산/협력사 견적서에 원본 · 가져오기에 파일 id 기록 · 로그', async () => {
     const s = setup()
     const data = bytes(2048)
     const r = await s.clientAs('jwt-pm').settlementFile(IMP, '가상음향_견적.xlsx', data.buffer as ArrayBuffer)
@@ -64,7 +64,7 @@ describe('DoD 69 · ⑤ 협력사 견적서 원본 보관(Drive)', () => {
     expect(file.name).toBe('가상음향_견적.xlsx')
     const folder = s.drive.files.get(file.parents[0])!
     expect(folder.name).toBe('협력사 견적서')
-    expect(s.drive.files.get(folder.parents[0])!.name).toBe('02_견적·정산')
+    expect(s.drive.files.get(folder.parents[0])!.name).toBe('06_결과보고·정산')
     expect(s.db.settlementImports.get(IMP)!.drive_file_id).toBe(r.file_id)
     expect(s.db.logs.some((l) => l.action === 'drive.settlement_file' && l.targetId === IMP)).toBe(true)
   })

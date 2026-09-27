@@ -528,7 +528,7 @@ export interface DataProvider {
   /**
    * v15(§19.5 Phase 4.7) — 협력사 견적서(.xlsx)를 읽어 **확인 큐**를 만든다(항목은 아직 만들지 않는다). pm 전용 · 종료 행사 409 ·
    * 정산보드가 없으면 409 · 엑셀이 아니면 422 · 읽을 수 없는 서식이면 422. 버킷·부가세는 제안만(원가 버킷만 제안).
-   * 실서버는 원본 파일을 Drive 행사 폴더 `02_견적·정산/협력사 견적서`에 보관한다(연결돼 있을 때 — best-effort).
+   * 실서버는 원본 파일을 Drive 행사 폴더 `06_결과보고·정산/협력사 견적서`에 보관한다(연결돼 있을 때 — best-effort).
    */
   importVendorQuote(projectId: UUID, input: VendorQuoteImportInput): Promise<VendorQuoteImportView>
   /** v15 — 이 행사 정산보드의 견적서 가져오기 이력(최신순). 보드가 없으면 빈 배열 */
