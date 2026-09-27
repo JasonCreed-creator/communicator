@@ -10,6 +10,7 @@
 import { Fragment, useState, type ReactNode } from 'react'
 import DensityToggle from '../internal/DensityToggle'
 import { LevelBadge } from '../internal/StatusBadge'
+import { MoneyInput } from '../internal/MoneyField'
 import type { SettlementTotals } from '../../lib/settlement'
 import type { SettlementBucketView } from '../../types/views'
 
@@ -45,6 +46,15 @@ function SpendCell({ rate, over }: { rate: number | null; over: boolean }) {
   )
 }
 
+function Pencil() {
+  return (
+    <svg aria-hidden viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-ink-sub">
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+    </svg>
+  )
+}
+
 function Chevron({ open }: { open: boolean }) {
   return (
     <svg aria-hidden viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`shrink-0 text-ink-sub transition-transform ${open ? 'rotate-90' : ''}`}>
@@ -61,6 +71,7 @@ export default function SettlementBucketTable({
   onToggleExpand,
   renderExpanded,
   action,
+  onEditQuote,
 }: {
   buckets: SettlementBucketView[]
   totals: SettlementTotals
@@ -71,8 +82,23 @@ export default function SettlementBucketTable({
   renderExpanded: (view: SettlementBucketView) => ReactNode
   /** 카드 머리 오른쪽 동작(버킷 추가 등) */
   action?: ReactNode
+  /**
+   * 버킷 견적 금액 수기 조정(pm · 종료 행사 제외 — 있을 때만 견적 칸에 고치기 단추). 2026-09-27 실사용 요청
+   * "버킷의 견적 금액 자체를 고치고 싶음" — 가져온 견적의 버킷 분배가 실제와 다를 때 표에서 바로 잡는다.
+   * 저장 = updateSettlementBucket({quote_amount}) · 기준 견적 갱신은 스냅숏 값으로 다시 덮는다(§19.2)
+   */
+  onEditQuote?: (bucketId: string, amount: number) => Promise<unknown>
 }) {
   const [dense, setDense] = useState(false)
+  const [editingQuote, setEditingQuote] = useState<{ id: string; draft: number | null; busy: boolean } | null>(null)
+  const quoteDraftValid = editingQuote != null && editingQuote.draft != null && Number.isInteger(editingQuote.draft) && editingQuote.draft >= 0
+  const saveQuote = async (bucketId: string) => {
+    if (!onEditQuote || !editingQuote || editingQuote.id !== bucketId || !quoteDraftValid || editingQuote.busy) return
+    setEditingQuote({ ...editingQuote, busy: true })
+    const ok = await onEditQuote(bucketId, editingQuote.draft as number)
+    if (ok !== undefined) setEditingQuote(null)
+    else setEditingQuote((cur) => (cur && cur.id === bucketId ? { ...cur, busy: false } : cur))
+  }
 
   const costRows = buckets.filter((b) => b.bucket.has_cost)
   const noCostRows = buckets.filter((b) => !b.bucket.has_cost)
@@ -89,6 +115,7 @@ export default function SettlementBucketTable({
     const rate = spendRate(b)
     const negativeMarkup = inBase && b.markup < 0
     const panelId = `bucket-panel-${b.bucket.id}`
+    const quoteEditing = editingQuote?.id === b.bucket.id
     return (
       <Fragment key={b.bucket.id}>
         <tr
@@ -124,7 +151,27 @@ export default function SettlementBucketTable({
               {b.bucket.source === 'custom' && <LevelBadge level="neutral" label="추가 버킷" />}
             </span>
           </td>
-          <td className="ui-num text-ink">{num(b.bucket.quote_amount)}</td>
+          <td className="ui-num text-ink">
+            {onEditQuote ? (
+              <button
+                type="button"
+                data-testid={`bucket-quote-edit-${b.bucket.code}`}
+                aria-label={`${b.bucket.label} 견적 금액 고치기`}
+                aria-expanded={quoteEditing}
+                title="견적 금액 고치기"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setEditingQuote(quoteEditing ? null : { id: b.bucket.id, draft: b.bucket.quote_amount, busy: false })
+                }}
+                className="inline-flex items-center gap-1 rounded px-1 font-[inherit] text-ink hover:bg-canvas hover:underline"
+              >
+                {num(b.bucket.quote_amount)}
+                <Pencil />
+              </button>
+            ) : (
+              num(b.bucket.quote_amount)
+            )}
+          </td>
           <td className={`ui-num ${b.bucket.has_cost ? 'text-ink' : 'text-ink-cap'}`}>{b.bucket.has_cost ? num(b.ordered) : '—'}</td>
           <td className={`ui-num ${b.bucket.has_cost ? 'text-ink' : 'text-ink-cap'}`}>{b.bucket.has_cost ? num(b.actual) : '—'}</td>
           <td>
@@ -137,6 +184,53 @@ export default function SettlementBucketTable({
             {inBase ? pct(b.markup_rate) : '—'}
           </td>
         </tr>
+        {quoteEditing && editingQuote && (
+          <tr data-testid={`bucket-quote-form-${b.bucket.code}`} onClick={(e) => e.stopPropagation()}>
+            {/* 견적 금액 고치기 줄 — 128px 견적 칸엔 입력·단추가 안 들어가서 펼침 행처럼 한 줄을 쓴다 */}
+            <td
+              colSpan={7}
+              className="p-0"
+              style={{ whiteSpace: 'normal', overflow: 'visible', position: 'static', borderRight: 'none', fontWeight: 400 }}
+            >
+              <form
+                className="flex flex-wrap items-center gap-2 border-t border-border bg-accent-tint/40 px-4 py-2.5"
+                onSubmit={(e) => {
+                  e.preventDefault()
+                  void saveQuote(b.bucket.id)
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    e.stopPropagation()
+                    setEditingQuote(null)
+                  }
+                }}
+              >
+                <label htmlFor={`bucket-quote-${b.bucket.id}`} className="text-sm font-medium text-ink">
+                  {b.bucket.label} 견적 금액
+                </label>
+                <MoneyInput
+                  id={`bucket-quote-${b.bucket.id}`}
+                  ariaLabel={`${b.bucket.label} 견적 금액`}
+                  value={editingQuote.draft}
+                  onChange={(next) => setEditingQuote((cur) => (cur && cur.id === b.bucket.id ? { ...cur, draft: next } : cur))}
+                  invalid={!quoteDraftValid}
+                  disabled={editingQuote.busy}
+                  className="w-40"
+                />
+                <span className="text-xs text-ink-cap">원 · 부가세 별도</span>
+                <button type="submit" className="btn btn-primary btn-sm" disabled={!quoteDraftValid || editingQuote.busy}>
+                  저장
+                </button>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditingQuote(null)} disabled={editingQuote.busy}>
+                  취소
+                </button>
+                <span className="t-caption basis-full sm:basis-auto">
+                  가져온 견적의 버킷 분배가 실제와 다를 때 여기서 잡습니다. 기준 견적을 다시 갱신하면 그 스냅숏 값으로 돌아갑니다.
+                </span>
+              </form>
+            </td>
+          </tr>
+        )}
         {open && (
           <tr data-testid={`bucket-panel-${b.bucket.code}`}>
             {/* 펼침 행 — 표 정본의 nowrap·ellipsis(§05 규칙 07)·스티키는 한 줄 셀용이라 이 칸에서만 푼다

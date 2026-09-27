@@ -154,12 +154,14 @@ export default function SettlementPage() {
     return true as const
   })
   const promoteVendor = useMutation((name: string) => provider.upsertVendor({ name }))
+  // 버킷 견적 금액 수기 조정(§19.2 · 2026-09-27 실사용 요청) — 기존 updateSettlementBucket이 quote_amount를 받는다(DataProvider 불변)
+  const editQuote = useMutation((bucketId: string, amount: number) => provider.updateSettlementBucket(bucketId, { quote_amount: amount }))
 
   const view = board.data
   const totals = view?.totals
 
   const mutationError =
-    createBoard.error ?? rebase.error ?? addBucket.error ?? createItem.error ?? updateItem.error ?? deleteItem.error
+    createBoard.error ?? rebase.error ?? addBucket.error ?? editQuote.error ?? createItem.error ?? updateItem.error ?? deleteItem.error
 
   const header = (actions?: ReactNode) => (
     <div className="flex flex-wrap items-end justify-between gap-3">
@@ -432,6 +434,15 @@ export default function SettlementPage() {
         contractTotal={contractTotal}
         expandedId={expanded}
         onToggleExpand={(id) => setExpanded(expanded === id ? null : id)}
+        onEditQuote={
+          canEdit
+            ? async (bucketId, amount) => {
+                const ok = await editQuote.run(bucketId, amount)
+                if (ok) board.reload()
+                return ok
+              }
+            : undefined
+        }
         action={
           canEdit ? (
             <button type="button" className="btn btn-ghost btn-sm" aria-pressed={addingBucket} onClick={() => setAddingBucket((v) => !v)}>

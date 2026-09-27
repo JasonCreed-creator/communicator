@@ -69,7 +69,8 @@ describe('S-10 정산보드 화면', () => {
     expect(within(screen.getByTestId('bucket-row-s1')).getByRole('button', { name: '베뉴 사용료' }).getAttribute('aria-expanded')).toBe('true')
 
     const s5 = screen.getByTestId('bucket-row-s5')
-    expect(within(s5).queryByRole('button')).toBeNull()
+    // 펼침 단추만 없다 — 견적 칸의 '견적 금액 고치기'(DoD 90 ① · PM)는 원가 없는 버킷에도 있다
+    expect(within(s5).queryAllByRole('button').filter((b) => !/견적 금액 고치기$/.test(b.getAttribute('aria-label') ?? ''))).toHaveLength(0)
     await user.click(s5)
     expect(screen.queryByTestId('bucket-panel-s5')).toBeNull()
   })

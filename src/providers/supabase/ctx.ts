@@ -139,6 +139,11 @@ export class SupabaseCtx {
   async roleIn(projectId: UUID): Promise<MemberRole | null> {
     if (this.roleCache.has(projectId)) return this.roleCache.get(projectId) ?? null
     const me = await this.me()
+    // 전역 admin은 어느 행사에서든 pm(멤버 아니어도) — SQL app.member_role과 같은 판정(설계서 v2.18.1 §6.1)
+    if (me.app_role === 'admin') {
+      this.roleCache.set(projectId, 'pm')
+      return 'pm'
+    }
     const { data, error } = await this.sb
       .from('project_members')
       .select('role')
@@ -176,7 +181,7 @@ export class SupabaseCtx {
       email: me.email,
       title: me.title,
       phone: me.phone,
-      role: pick?.role ?? 'reg',
+      role: me.app_role === 'admin' ? 'pm' : (pick?.role ?? 'reg'),
       project_id: pick?.project_id ?? '',
       app_role: me.app_role,
     }

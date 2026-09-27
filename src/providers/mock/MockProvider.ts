@@ -327,11 +327,13 @@ export class MockProvider implements DataProvider {
   private currentUser(): CurrentUser {
     const user = this.mustFindUser(this.state.current_user_id)
     const membership = this.state.members.find((m) => m.user_id === user.id)
+    const appRole = this.appRoleOf(user.id)
     return {
       ...user,
-      role: membership?.role ?? 'reg',
+      // 전역 admin은 어느 행사에서든 pm(멤버 아니어도) — supabase ctx.roleIn·SQL app.member_role과 같은 판정(설계서 v2.18.1 §6.1)
+      role: appRole === 'admin' ? 'pm' : (membership?.role ?? 'reg'),
       project_id: membership?.project_id ?? '',
-      app_role: this.appRoleOf(user.id),
+      app_role: appRole,
     }
   }
 
