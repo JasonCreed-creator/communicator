@@ -193,18 +193,131 @@ export function findTimes(text: string): { start: string; end: string | null } |
 }
 
 // ── 라벨 규칙 ─────────────────────────────────────────────────────────
+// 라벨 동의어는 실제 요청 글 두 갈래를 덮는다 — ① 사람이 쓴 글("행사명: · 일시: · 장소:") ② Slack 워크플로 봇 양식
+// ("[MICE 계약완료]" · "MICE 견적문의" — `• *고객사:* … · *주제:* … · *행사일시:* November 4th, 2026 at 12:00 AM UTC · *행사장소:* …`,
+// 빈 칸은 "MICE only"·빈 값 — 2026-09-27 운영 실측). 굵은 글씨 별표·불릿·팀 멘션·이모지 코드는 규칙을 돌리기 전에 걷어낸다.
 
+const BULLET = String.raw`[-•·◦▪●○▸►]?`
 const LABELED: { key: Exclude<BriefKey, 'event_type' | 'notes' | 'event_end_date' | 'end_time' | 'expected_headcount'>; re: RegExp }[] = [
-  { key: 'name', re: /^\s*[-•*·]?\s*(?:행사명|행사 이름|행사\s*타이틀|이벤트명|프로젝트명|프로젝트|제목|행사)\s*[:：]\s*(.+)$/m },
-  { key: 'venue', re: /^\s*[-•*·]?\s*(?:장소|행사장|행사 장소|베뉴|개최 장소|위치)\s*[:：]\s*(.+)$/m },
-  { key: 'organizer', re: /^\s*[-•*·]?\s*(?:발주처|고객사|클라이언트|주최|주관|주최·주관|주최\/주관|의뢰사|고객)\s*[:：]\s*(.+)$/m },
-  { key: 'theme', re: /^\s*[-•*·]?\s*(?:주제|슬로건|테마|목적|행사 목적)\s*[:：]\s*(.+)$/m },
-  { key: 'target_audience', re: /^\s*[-•*·]?\s*(?:참가 대상|대상|타겟|참석 대상|참가자 대상)\s*[:：]\s*(.+)$/m },
+  {
+    key: 'name',
+    re: new RegExp(
+      String.raw`^\s*${BULLET}\s*(?:행사명|행사\s*이름|행사\s*타이틀|행사\s*제목|행사\s*명칭|이벤트명|이벤트\s*이름|세미나명|컨퍼런스명|프로젝트명|프로젝트|제목|명칭|행사)\s*[:：][ \t]*(.+)$`,
+      'm',
+    ),
+  },
+  { key: 'venue', re: new RegExp(String.raw`^\s*${BULLET}\s*(?:행사\s*장소|장소명|장소|행사장|개최\s*장소|개최지|베뉴|위치|venue)\s*[:：][ \t]*(.+)$`, 'mi') },
+  {
+    key: 'organizer',
+    re: new RegExp(String.raw`^\s*${BULLET}\s*(?:발주처|고객사명|고객사|고객명|클라이언트|광고주|주최·주관|주최/주관|주최|주관|의뢰사|고객)\s*[:：][ \t]*(.+)$`, 'm'),
+  },
+  { key: 'theme', re: new RegExp(String.raw`^\s*${BULLET}\s*(?:주제|슬로건|테마|컨셉|콘셉트|목적|행사\s*목적)\s*[:：][ \t]*(.+)$`, 'm') },
+  {
+    key: 'target_audience',
+    re: new RegExp(
+      String.raw`^\s*${BULLET}\s*(?:참가\s*대상|참석\s*대상|참가자\s*대상|모객\s*대상|타깃\s*조건|타겟\s*조건|타깃\s*대상|타겟\s*대상|타깃|타겟|대상)\s*[:：][ \t]*(.+)$`,
+      'm',
+    ),
+  },
 ]
-const DATE_LINE_RE = /^\s*[-•*·]?\s*(?:일시|일자|날짜|행사일|개최일|기간|행사 기간|행사 일정|일정)\s*[:：]\s*(.+)$/m
-const HEADCOUNT_LINE_RE = /^\s*[-•*·]?\s*(?:예상 인원|참가 인원|참석 인원|인원|규모|참가자 수|참석자|참가자)\s*[:：]\s*(?:약|총)?\s*(\d[\d,]*)\s*(?:명|인|pax|persons?)?/im
+const DATE_LINE_RE = new RegExp(
+  String.raw`^\s*${BULLET}\s*(?:행사\s*일시|행사\s*일자|개최\s*일시|개최일|행사일|일시|일자|날짜|행사\s*기간|기간|행사\s*일정|일정|date)\s*[:：][ \t]*(.+)$`,
+  'mi',
+)
+const HEADCOUNT_LINE_RE = new RegExp(
+  String.raw`^\s*${BULLET}\s*(?:예상\s*인원|참가\s*인원|참석\s*인원|목표\s*인원|모객\s*인원|참가\s*예정|참석\s*예정|예상\s*참석|쇼업\s*목표|목표\s*쇼업|인원|규모|참가자\s*수|참석자|참가자)\s*[:：][ \t]*(?:약|총)?\s*(\d[\d,]*)\s*(?:명|인|pax|persons?)?`,
+  'im',
+)
 const HEADCOUNT_ANY_RE = /(?:약|총)?\s*(\d{1,3}(?:,\d{3})+|\d{2,6})\s*(?:명|pax)(?![a-z])/i
 const RECRUITING_RE = /모객|RSVP|참가\s*신청|사전\s*등록|초청\s*발송|리드\s*확보|참가자\s*모집/i
+/** 채우지 않은 칸의 자리표시(워크플로 봇 기본값 "MICE only" 포함) — 값이 아니다 */
+const PLACEHOLDER_RE = /^(?:mice only|미정|tbd|tba|n\/?a|-|—|–|없음|해당\s*없음|추후\s*확정|확인\s*필요|\?+)$/i
+/** 메모로 옮기는 참고 ID 줄 — 금액·연락처·담당자 줄은 어떤 칸에도 옮기지 않는다 */
+const NOTE_ID_RE = new RegExp(String.raw`^\s*${BULLET}\s*(아이템\s*ID|아이템\s*아이디|매관시\s*(?:계약\s*)?ID|계약\s*ID|집행\s*ID|재계약\s*ID)\s*[:：][ \t]*(.+)$`, 'gmi')
+
+/** 규칙을 돌리기 전 정리 — Slack mrkdwn(굵게 `*…*` · 링크 · 멘션 · 팀 멘션 · 이모지 코드)을 걷어낸 글 */
+export function normalizeForRules(text: string): string {
+  return text
+    .replace(/\r/g, '')
+    .replace(/<!subteam\^[^>]*>/g, ' ')
+    .replace(/<!(?:here|channel|everyone)(?:\|[^>]*)?>/g, ' ')
+    .replace(/<@[UW][A-Z0-9]+(?:\|[^>]*)?>/g, ' ')
+    .replace(/<#[CG][A-Z0-9]+\|([^>]*)>/g, '#$1')
+    .replace(/<(https?:\/\/[^|>]+)\|([^>]*)>/g, '$2 ($1)')
+    .replace(/<(https?:\/\/[^>]+)>/g, '$1')
+    .replace(/:[a-z][a-z0-9_+-]*:/g, ' ')
+    .replace(/\*/g, '')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+}
+
+// ── 영문 날짜(워크플로 봇 날짜 변수 — "November 4th, 2026 at 12:00 AM UTC") ─────────────
+const EN_MONTHS: Record<string, number> = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 }
+const EN_DATE_MDY_RE =
+  /\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?[ \t]+(\d{1,2})(?!\d)(?:st|nd|rd|th)?,?[ \t]*(20\d{2})?(?:[ \t]*(?:at|,)?[ \t]*(\d{1,2})(?::(\d{2}))?[ \t]*(am|pm)?[ \t]*(utc|gmt|kst)?)?/i
+const EN_DATE_DMY_RE = /\b(\d{1,2})(?:st|nd|rd|th)?[ \t]+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?,?[ \t]*(20\d{2})?/i
+
+export interface EnglishDateMatch {
+  start: string
+  /** KST HH:MM — UTC 자정(워크플로의 날짜만 있는 변수)이면 null */
+  time: string | null
+  index: number
+}
+
+/** 영문 날짜(+시각·시간대) → 날짜 YYYY-MM-DD와 KST 시각. UTC 표기는 KST(+9)로 옮기고, UTC 00:00은 '날짜만'으로 본다 */
+export function findEnglishDate(text: string, today: Date): EnglishDateMatch | null {
+  const m = EN_DATE_MDY_RE.exec(text)
+  let year: number | null
+  let month: number
+  let day: number
+  let hour: number | null = null
+  let minute = 0
+  let ampm: string | undefined
+  let zone: string | undefined
+  let index: number
+  if (m) {
+    month = EN_MONTHS[m[1].toLowerCase().slice(0, 3)]
+    day = Number(m[2])
+    year = m[3] ? Number(m[3]) : null
+    hour = m[4] ? Number(m[4]) : null
+    minute = m[5] ? Number(m[5]) : 0
+    ampm = m[6]
+    zone = m[7]
+    index = m.index ?? 0
+  } else {
+    const n = EN_DATE_DMY_RE.exec(text)
+    if (!n) return null
+    day = Number(n[1])
+    month = EN_MONTHS[n[2].toLowerCase().slice(0, 3)]
+    year = n[3] ? Number(n[3]) : null
+    index = n.index ?? 0
+  }
+  const y = year ?? resolveYear(month, day, today)
+  if (hour === null || minute > 59) {
+    const start = isoDate(y, month, day)
+    return start ? { start, time: null, index } : null
+  }
+  let hh = hour
+  if (ampm) {
+    const pm = /pm/i.test(ampm)
+    if (pm && hh < 12) hh += 12
+    if (!pm && hh === 12) hh = 0
+  }
+  if (hh > 23) {
+    const start = isoDate(y, month, day)
+    return start ? { start, time: null, index } : null
+  }
+  if (zone && /utc|gmt/i.test(zone)) {
+    const utcMidnight = hh === 0 && minute === 0
+    const kst = new Date(Date.UTC(y, month - 1, day, hh + 9, minute))
+    const start = isoDate(kst.getUTCFullYear(), kst.getUTCMonth() + 1, kst.getUTCDate())
+    if (!start) return null
+    return { start, time: utcMidnight ? null : `${pad2(kst.getUTCHours())}:${pad2(kst.getUTCMinutes())}`, index }
+  }
+  const start = isoDate(y, month, day)
+  return start ? { start, time: `${pad2(hh)}:${pad2(minute)}`, index } : null
+}
 
 function clean(s: string, max = 200): string | null {
   const v = s
@@ -222,33 +335,55 @@ export interface RuleExtraction {
   matched: BriefKey[]
 }
 
-/** 라벨이 붙은 줄만 읽는다. 날짜·인원은 라벨 줄이 없으면 글 전체에서 첫 번째 것 */
+/** 라벨이 붙은 줄만 읽는다. 날짜·인원은 라벨 줄이 없으면 글 전체에서 첫 번째 것. 자리표시("MICE only"·미정·TBD)는 빈 칸 */
 export function extractBriefByRules(text: string, today: Date = new Date()): RuleExtraction {
   const fields: EventBriefFields = { ...EMPTY_BRIEF }
   const matched: BriefKey[] = []
-  const src = text.replace(/\r/g, '')
+  const src = normalizeForRules(text)
+  const value = (raw: string): string | null => {
+    const v = clean(raw)
+    return v && !PLACEHOLDER_RE.test(v) ? v : null
+  }
   for (const { key, re } of LABELED) {
     const m = re.exec(src)
     if (!m) continue
-    const v = clean(m[1])
+    const v = value(m[1])
     if (v) {
       fields[key] = v
       matched.push(key)
     }
   }
+  // 워크플로 봇 양식은 '주제' 줄이 행사명이다 — 행사명 줄이 따로 없으면 주제를 행사명으로 옮긴다(가정 — 사람이 주황 칸에서 확인)
+  if (!fields.name && fields.theme) {
+    fields.name = fields.theme
+    fields.theme = null
+    matched.push('name')
+    matched.splice(matched.indexOf('theme'), 1)
+  }
   const dateLine = DATE_LINE_RE.exec(src)
-  const dates = findDates(dateLine ? dateLine[1] : src, today)
-  if (dates.length > 0) {
-    fields.event_date = dates[0].start
-    fields.event_end_date = dates[0].end
+  const scope = dateLine ? dateLine[1] : src
+  const en = findEnglishDate(scope, today)
+  if (en) {
+    fields.event_date = en.start
     matched.push('event_date')
-    if (dates[0].end) matched.push('event_end_date')
-    const times = findTimes(dateLine ? dateLine[1] : src)
-    if (times) {
-      fields.start_time = times.start
-      fields.end_time = times.end
+    if (en.time) {
+      fields.start_time = en.time
       matched.push('start_time')
-      if (times.end) matched.push('end_time')
+    }
+  } else {
+    const dates = findDates(scope, today)
+    if (dates.length > 0) {
+      fields.event_date = dates[0].start
+      fields.event_end_date = dates[0].end
+      matched.push('event_date')
+      if (dates[0].end) matched.push('event_end_date')
+      const times = findTimes(scope)
+      if (times) {
+        fields.start_time = times.start
+        fields.end_time = times.end
+        matched.push('start_time')
+        if (times.end) matched.push('end_time')
+      }
     }
   }
   const hc = HEADCOUNT_LINE_RE.exec(src) ?? HEADCOUNT_ANY_RE.exec(src)
@@ -262,6 +397,16 @@ export function extractBriefByRules(text: string, today: Date = new Date()): Rul
   if (RECRUITING_RE.test(src)) {
     fields.event_type = 'recruiting'
     matched.push('event_type')
+  }
+  // 참고 ID(아이템ID·매관시 계약 ID·집행 ID·재계약 ID)만 메모로 — 금액·계약서류·인입채널·담당자 줄은 옮기지 않는다
+  const ids: string[] = []
+  for (const m of src.matchAll(NOTE_ID_RE)) {
+    const v = value(m[2])
+    if (v) ids.push(`${m[1].replace(/\s+/g, '')} ${v}`)
+  }
+  if (ids.length > 0) {
+    fields.notes = ids.join(' · ').slice(0, 500)
+    matched.push('notes')
   }
   return { fields, matched }
 }
@@ -305,6 +450,7 @@ export function aiEventBriefSystem(today: Date): string {
     '- event_type: 참가 신청·모객·RSVP·사전 등록·초청 발송이 있으면 "recruiting", 그런 말이 없으면 null(general로 단정하지 않음).',
     '- notes: 위 칸에 들어가지 않은 요구사항(예: 동시통역, 케이터링, 생중계)을 두 문장 이내로. 금액·견적 액수·사람 이름은 넣지 않습니다. 없으면 null.',
     '- venue는 건물·홀 이름까지만(주소는 넣지 않음). name은 글에 적힌 행사명 그대로(따옴표·이모지 제거).',
+    '- Slack 워크플로 봇 양식("[MICE 계약완료]" · "MICE 견적문의")에서는 "주제" 줄이 행사명이고, "MICE only"·"미정"·빈 값은 적히지 않은 것으로 봅니다. "계약 매출"·"계약금" 같은 금액 줄은 어떤 칸에도 옮기지 않습니다.',
   ].join('\n')
 }
 
@@ -400,6 +546,7 @@ export function slackTextToPlain(text: string): string {
     .replace(/<@[UW][A-Z0-9]+(?:\|[^>]*)?>/g, '@담당자')
     .replace(/<#[CG][A-Z0-9]+\|([^>]*)>/g, '#$1')
     .replace(/<!(?:here|channel|everyone)>/g, '@채널')
+    .replace(/<!subteam\^[^|>]*(?:\|([^>]*))?>/g, (_m, n: string | undefined) => (n && n.trim() ? n.trim() : '@팀'))
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')

@@ -21,6 +21,7 @@ import {
   AI_EVENT_BRIEF_SCHEMA,
   aiEventBriefSystem,
   extractBriefByRules,
+  findEnglishDate,
   extractLinks,
   findDates,
   findTimes,
@@ -151,6 +152,59 @@ describe('DoD 84 · ② 라벨 규칙', () => {
     expect(links.map((l) => l.url)).toEqual(['https://docs.google.com/spreadsheets/d/x', 'https://example.com/brief.pdf', 'https://blog.example.com/post'])
     expect(links.map((l) => l.looks_like_quote)).toEqual([true, true, false])
     expect(links[0].label).toBe('견적 시트')
+  })
+
+  it('워크플로 봇 양식([MICE 계약완료]) — 굵은 라벨·불릿·팀 멘션 정리 · 고객사 · 주제 = 행사명 · 행사일시(영문 · UTC 자정 = 날짜만) · 행사장소 · "MICE only" 자리표시는 빈 칸 · 금액 줄은 어디에도 없음 · 아이템ID는 메모', () => {
+    const form = [
+      '*[MICE 계약완료] 가상고객/@담당자*:fire:',
+      '',
+      '• *고객사:* 가상 클라우드 코리아',
+      '    ◦ 산업 lv1: MICE only',
+      '    ◦ 산업 lv2: ',
+      '• *주제:* 가상 클라우드 서밋 2026',
+      '• *계약 매출(부가세 별도):* 43,250,000',
+      '    ◦ 계약금(부가세 별도): 21,625,000',
+      '• *행사일시:* November 4th, 2026 at 12:00 AM UTC',
+      '• *행사장소:* 가상 프리미어 코엑스',
+      '• *목표:* MICE only',
+      '• *타깃조건*: MICE only',
+      '    ◦ *사전 모수 파악 자료:* MICE only',
+      '• *재계약ID:* ',
+      '• *아이템ID:* 120111',
+      '• *계약서류:* 계약서 딜레이로 등록',
+      '• *인입채널:* 행사',
+      '• *운영요청:*  <!subteam^S0A6ZRZFZ63>',
+      'cc. <!subteam^S08U16SMA57>',
+    ].join('\n')
+    const { fields, matched } = extractBriefByRules(form, TODAY)
+    expect(fields).toMatchObject<Partial<EventBriefFields>>({
+      name: '가상 클라우드 서밋 2026',
+      organizer: '가상 클라우드 코리아',
+      event_date: '2026-11-04',
+      event_end_date: null,
+      start_time: null,
+      end_time: null,
+      venue: '가상 프리미어 코엑스',
+      theme: null,
+      target_audience: null,
+      expected_headcount: null,
+      event_type: null,
+      notes: '아이템ID 120111',
+    })
+    expect(matched).toEqual(expect.arrayContaining(['name', 'organizer', 'event_date', 'venue', 'notes']))
+    expect(matched).not.toContain('theme')
+    expect(JSON.stringify(fields)).not.toMatch(/43,250,000|21,625,000|계약서 딜레이|인입채널|운영요청/)
+    // 영문 날짜: 시각이 있으면 KST로(UTC 05:00 = 14:00) · 'Nov 4, 2026' · '4 November 2026' · 연도 없으면 올해 · 다음 줄 숫자를 시각으로 오해하지 않음
+    expect(findEnglishDate('November 4th, 2026 at 5:00 AM UTC', TODAY)).toMatchObject({ start: '2026-11-04', time: '14:00' })
+    expect(findEnglishDate('Nov 4, 2026', TODAY)).toMatchObject({ start: '2026-11-04', time: null })
+    expect(findEnglishDate('4 November 2026', TODAY)).toMatchObject({ start: '2026-11-04', time: null })
+    expect(findEnglishDate('Oct 15', TODAY)).toMatchObject({ start: '2026-10-15', time: null })
+    expect(findEnglishDate('Nov 4, 2026\n30명 참석', TODAY)).toMatchObject({ start: '2026-11-04', time: null })
+    expect(findEnglishDate('300명 참석', TODAY)).toBeNull()
+    // 자리표시·빈 값은 채우지 않는다 · 사람이 쓴 글의 '주제'는 행사명이 있으면 주제 그대로 · 팀 멘션은 표시에서 '@팀'
+    expect(extractBriefByRules('행사명: 미정\n장소: TBD\n고객사: -', TODAY).fields).toMatchObject({ name: null, venue: null, organizer: null })
+    expect(extractBriefByRules('행사명: 가상 포럼\n주제: AI 전환', TODAY).fields).toMatchObject({ name: '가상 포럼', theme: 'AI 전환' })
+    expect(slackTextToPlain('<!subteam^S0A6ZRZFZ63> 확인 <!subteam^S08U16SMA57|@디자인팀>')).toBe('@팀 확인 @디자인팀')
   })
 })
 
