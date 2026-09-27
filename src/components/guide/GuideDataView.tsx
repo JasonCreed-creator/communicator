@@ -1,6 +1,7 @@
 // 운영가이드 표 섹션 — 읽기 화면 (설계서 v2.13 §23.5 · 디자인지시서 §7-2.13). 섹션 종류마다 한 모양.
 // 인쇄에서도 이 화면이 그대로 나간다(접힘 없음). 금액·개인 연락처는 어떤 섹션에도 없다(R-O6).
 import type {
+  Deliverable,
   GuideChecklistsData,
   GuideDayplanData,
   GuideDayplanRow,
@@ -19,6 +20,7 @@ import type {
 } from '../../types/entities'
 import { estimateRegistration, guideDateLabel, staffingTotal } from '../../lib/guideStructured'
 import { GuideLinesView, GuideRowsView, type GuideColumn } from './GuideRows'
+import { FloorplanView, MessagingView, SurveyView } from './GuideSheetSections'
 
 export const SETUP_COLUMNS: GuideColumn<GuideSetupRow>[] = [
   { key: 'date', label: '날짜', short: true, width: '110px', placeholder: guideDateLabel(null, -1) },
@@ -308,8 +310,23 @@ function RegistrationView({ data, headcount }: { data: GuideRegistrationData; he
   )
 }
 
-export function GuideDataView({ data, headcount }: { data: GuideSectionData; headcount: number | null }) {
+export function GuideDataView({
+  data,
+  headcount,
+  linkables = [],
+}: {
+  data: GuideSectionData
+  headcount: number | null
+  /** v2.21 §27.2 — 설치 도면이 연결할 수 있는 이 행사의 항목(정형 문서 제외). 도면 카드의 항목 이름에 쓴다 */
+  linkables?: readonly Deliverable[]
+}) {
   switch (data.type) {
+    case 'survey':
+      return <SurveyView data={data} />
+    case 'floorplan':
+      return <FloorplanView data={data} linkables={linkables} />
+    case 'messaging':
+      return <MessagingView data={data} />
     case 'setup':
       return <SetupView data={data} />
     case 'staffing':

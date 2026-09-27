@@ -1,5 +1,5 @@
 // DoD 80 (Phase 3.24 PR-A · 설계서 v2.13 §23.5) — 운영가이드 현장 운영 섹션: 순수 함수(템플릿·계산·글 변환·뼈대 끼워 넣기)와
-// provider 계약(12섹션 시드 · data 저장 검사 · content는 data에서 · 운영계획서 ⑦이 새 비상 대응을 읽는다).
+// provider 계약(15섹션 시드(v2.21 §27.2 +3) · data 저장 검사 · content는 data에서 · 운영계획서 ⑦이 새 비상 대응을 읽는다).
 import { describe, expect, it } from 'vitest'
 import { PROJECT_ID } from '../fixtures/sampleProject'
 import { PROJECT_ID_HOST } from '../fixtures/hostFixtures'
@@ -117,18 +117,21 @@ describe('DoD 80 ① 순수 함수 — 날짜 · 계산 · 글 변환', () => {
 describe('DoD 80 ② 옛 문서에 뼈대 끼워 넣기 — 기존 섹션 순서·내용 불변', () => {
   const legacy = (kinds: GuideSectionKind[]) => kinds.map((kind, i) => ({ kind, id: `old-${i}` }))
 
-  it('옛 4섹션(zone·role·emergency·contacts)에는 9종이 빠져 있고, 정본 자리(존별 운영 앞)에 들어간다', () => {
+  it('옛 4섹션(zone·role·emergency·contacts)에는 12종(v2.21 +3 포함)이 빠져 있고, 정본 자리(존별 운영 앞)에 들어간다', () => {
     const old = legacy(['zone', 'role', 'emergency', 'contacts'])
     const missing = missingGuideKinds(old)
-    expect(missing).toEqual(['setup', 'staffing', 'radio', 'raci', 'dayplan', 'checklists', 'registration', 'vip', 'safety'])
+    expect(missing).toEqual(['survey', 'setup', 'floorplan', 'staffing', 'radio', 'raci', 'dayplan', 'checklists', 'messaging', 'registration', 'vip', 'safety'])
     const merged = mergeGuideSkeleton(old, missing.map((kind) => ({ kind, id: `new-${kind}` })))
     expect(merged.map((s) => s.kind)).toEqual([
+      'survey',
       'setup',
+      'floorplan',
       'staffing',
       'radio',
       'raci',
       'dayplan',
       'checklists',
+      'messaging',
       'registration',
       'vip',
       'safety',
@@ -147,8 +150,8 @@ describe('DoD 80 ② 옛 문서에 뼈대 끼워 넣기 — 기존 섹션 순서
   })
 })
 
-describe('DoD 80 ③ provider — 12섹션 시드 · 저장 검사 · content는 data에서', () => {
-  it('새 문서 시드: 정본 12섹션 · D-1 날짜 · 프로그램표 세션이 본행사 줄(session_id) · 인력 첫 줄 = 담당자 수', async () => {
+describe('DoD 80 ③ provider — 15섹션 시드 · 저장 검사 · content는 data에서', () => {
+  it('새 문서 시드: 정본 15섹션 · D-1 날짜 · 프로그램표 세션이 본행사 줄(session_id) · 인력 첫 줄 = 담당자 수', async () => {
     const p = new MockProvider()
     const fresh = await p.createDeliverable({ project_id: PROJECT_ID, area: 'ops', category: '운영가이드', title: '현장 가이드' })
     const sections = await p.seedGuideFromSources(fresh.id)

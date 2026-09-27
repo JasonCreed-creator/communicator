@@ -60,7 +60,7 @@ export interface EventRow {
   client_comment?: string | null
 }
 
-export type ReminderKind = 'approval_due' | 'milestone_due' | 'partner_due' | 'inbox_digest' | 'deliverable_due' | 'unacked'
+export type ReminderKind = 'approval_due' | 'milestone_due' | 'partner_due' | 'inbox_digest' | 'deliverable_due' | 'unacked' | 'messaging_due'
 
 /** notify_claim_reminders 한 행 */
 export interface ReminderRow {
@@ -86,7 +86,17 @@ export interface ReminderRow {
   channel_id?: string | null
   message_ts?: string | null
   thread_ts?: string | null
+  // v2.21 §27.2 — 참가자 안내 발송일 D-1(단계·발송일·채널만 — 원고·대상·연락처 없음)
+  section_id?: string | null
+  row_index?: number | null
+  stage?: string | null
+  send_on?: string | null
+  send_at?: string | null
+  channel?: string | null
 }
+
+/** 참가자 안내 채널 표시(서버) — 앱 `lib/guideStructured`의 라벨과 같다 */
+const MESSAGING_CHANNEL: Record<string, string> = { alimtalk: '알림톡', email: '이메일', sms: '문자', other: '기타' }
 
 /** notify_claim_manual 결과 */
 export interface ManualRow {
@@ -393,6 +403,19 @@ export function reminderUnits(rows: readonly ReminderRow[], base: string | null)
             ? withLink(`${head(r)} 미등록 파일 ${r.count}건 — 홈 인박스에서 항목에 연결하거나 무시하세요`, appLink(base, 'home', r.project_id), '홈')
             : null
         break
+      case 'messaging_due': {
+        // v2.21 §27.2 — 참가자 안내 발송일 D-1: 발송은 앱 밖(R-M5)이라 단계·시각·채널만 알리고 원고는 앱에서 연다. 늘 운영 스레드
+        forceOps = true
+        if (!r.stage) break
+        const when = r.send_at ? ` ${r.send_at}` : ''
+        const channel = r.channel ? ` · ${MESSAGING_CHANNEL[r.channel] ?? slackEscape(r.channel)}` : ''
+        line = withLink(
+          `${head(r)} ${TAG.wbs} 참가자 안내 '${slackEscape(r.stage)}' — 발송일 D-1${when}${channel}`,
+          r.deliverable_id ? appLink(base, `items/${r.deliverable_id}`, r.project_id) : null,
+          '원고 열기',
+        )
+        break
+      }
     }
     return { keys: [r.key], line, webhook: r.webhook, thread: routeThread(r, forceOps), project_id: r.project_id, mentions: line ? r.recipients ?? [] : [] }
   })

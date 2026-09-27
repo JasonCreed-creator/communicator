@@ -5,8 +5,10 @@ import type { ReactNode } from 'react'
 export interface GuideColumn<R> {
   key: keyof R & string
   label: string
-  /** number = 숫자 칸(오른쪽 정렬 · 빈 칸 null) */
-  kind?: 'text' | 'number'
+  /** number = 숫자 칸(오른쪽 정렬 · 빈 칸 null) · select = 고르는 칸(options) */
+  kind?: 'text' | 'number' | 'select'
+  /** select 칸의 선택지(값 · 표시) — 읽기 표는 표시 글자로 그린다 */
+  options?: ReadonlyArray<{ value: string; label: string }>
   /** 짧은 칸 — 줄바꿈 없이 */
   short?: boolean
   width?: string
@@ -51,7 +53,8 @@ export function GuideRowsView<R>({
             <tr key={i} className="border-b border-track">
               {columns.map((c) => {
                 const raw = (row as Record<string, unknown>)[c.key]
-                const content = c.render ? c.render(row) : cellText(raw) || <span className="text-ink-cap">—</span>
+                const shown = c.kind === 'select' ? (c.options?.find((o) => o.value === raw)?.label ?? cellText(raw)) : cellText(raw)
+                const content = c.render ? c.render(row) : shown || <span className="text-ink-cap">—</span>
                 return (
                   <td
                     key={c.key}
@@ -126,6 +129,24 @@ export function GuideRowsEditor<R>({
               <tr key={i} className="border-b border-track">
                 {columns.map((c) => {
                   const raw = (row as Record<string, unknown>)[c.key]
+                  if (c.kind === 'select') {
+                    return (
+                      <td key={c.key} className="px-2 py-1.5 align-top">
+                        <select
+                          value={cellText(raw)}
+                          onChange={(e) => set(i, c.key, e.target.value)}
+                          aria-label={`${name(row, i)} ${c.label}`}
+                          className="ui-input ui-select w-full text-sm"
+                        >
+                          {(c.options ?? []).map((o) => (
+                            <option key={o.value} value={o.value}>
+                              {o.label}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                    )
+                  }
                   return (
                     <td key={c.key} className="px-2 py-1.5 align-top">
                       <input

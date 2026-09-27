@@ -123,7 +123,7 @@ describe('v9 해피 패스 — 8메서드', () => {
     expect(savedZone.source_stale).toBe(false)
   })
 
-  it('seedGuideFromSources — 빈 문서에서 현장 운영 12섹션 초기 로드(v2.13 §23.5 — 존별 운영은 원본 연동)', async () => {
+  it('seedGuideFromSources — 빈 문서에서 현장 운영 15섹션 초기 로드(v2.13 §23.5 · v2.21 §27.2 +3 — 존별 운영은 원본 연동)', async () => {
     const fresh = await p.createDeliverable({
       project_id: RB27,
       area: 'ops',
@@ -132,7 +132,8 @@ describe('v9 해피 패스 — 8메서드', () => {
     })
     const built = await p.seedGuideFromSources(fresh.id)
     expect(built.map((s) => s.kind)).toEqual([
-      'setup', 'staffing', 'radio', 'raci', 'dayplan', 'checklists', 'registration', 'vip', 'safety', 'zone', 'emergency', 'contacts',
+      'survey', 'setup', 'floorplan', 'staffing', 'radio', 'raci', 'dayplan', 'checklists', 'messaging', 'registration', 'vip', 'safety',
+      'zone', 'emergency', 'contacts',
     ])
     const zone = built.find((s) => s.kind === 'zone')!
     expect(zone.source_ref).toBe('zone_items')

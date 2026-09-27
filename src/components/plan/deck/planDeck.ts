@@ -17,6 +17,7 @@ import type {
 import type { GuideSectionKind } from '../../../types/enums'
 import type { PlanData } from '../../../types/views'
 import { summaryLine } from '../../cue/cueFormValues'
+import { planFloorplanFigures, planMessagingLines, planSurveyFindings, type PlanFloorplanFigure } from '../planGuideExtras'
 
 // ── 장표 치수 — 컴포넌트와 쪽 나누기가 같은 값을 쓴다 ─────────────────────────
 
@@ -61,7 +62,7 @@ export const DECK_CHAPTERS: Record<DeckChapterKey, { number: string | null; titl
   space: {
     number: '03',
     title: '공간 · 설치',
-    empty: "운영가이드의 '설치·철거 일정'·'존별 운영'을 채우거나 존운영 항목을 쓰면 이 장이 만들어집니다.",
+    empty: "운영가이드의 '답사 체크리스트'·'설치·철거 일정'·'설치 도면'·'존별 운영'을 채우거나 존운영 항목을 쓰면 이 장이 만들어집니다.",
   },
   program: {
     number: '04',
@@ -71,7 +72,7 @@ export const DECK_CHAPTERS: Record<DeckChapterKey, { number: string | null; titl
   people: {
     number: '05',
     title: '참가자',
-    empty: "등록 명단이나 운영가이드의 '등록 운영'·'VIP 의전'을 채우면 이 장이 만들어집니다.",
+    empty: "등록 명단이나 운영가이드의 '참가자 안내'·'등록 운영'·'VIP 의전'을 채우면 이 장이 만들어집니다.",
   },
   org: {
     number: '06',
@@ -170,6 +171,8 @@ export type DeckSlide =
   | (SlideCommon & { kind: 'flow'; items: DeckFlowItem[]; tone: 'default' | 'emergency' })
   | (SlideCommon & { kind: 'registration'; stats: DeckTile[]; capacity: DeckTile[]; notes: string[]; caption: string | null })
   | (SlideCommon & { kind: 'checklists'; cards: DeckChecklistCard[] })
+  /** v2.21 §27.2 — 설치 도면(한 장에 2개) — 이미지면 그림, 아니면 파일 이름만 */
+  | (SlideCommon & { kind: 'figures'; figures: PlanFloorplanFigure[] })
   | (SlideCommon & { kind: 'empty'; message: string })
 
 export interface PlanDeck {
@@ -549,9 +552,46 @@ function productionChapter(plan: PlanData): ChapterResult {
   }
 }
 
+/** 설치 도면 — 한 장에 2개(가로 나란히). 도면이 없으면 장 없음(빈 뼈대는 싣지 않는다) */
+function figureSlides(chapter: DeckChapterKey, title: string, figures: PlanFloorplanFigure[]): DeckSlide[] {
+  const pages: PlanFloorplanFigure[][] = []
+  for (let i = 0; i < figures.length; i += 2) pages.push(figures.slice(i, i + 2))
+  return pages.map((page, i) => ({
+    kind: 'figures' as const,
+    id: slideId(chapter),
+    chapter,
+    title,
+    subtitle: null,
+    part: pages.length > 1 ? { index: i + 1, total: pages.length } : null,
+    figures: page,
+  }))
+}
+
 function spaceChapter(plan: PlanData): ChapterResult {
   const slides: DeckSlide[] = []
   const gaps: DeckGap[] = []
+
+  // v2.21 §27.2 — 답사 요약(확인내용이 있는 줄만)
+  const survey = planSurveyFindings(plan)
+  if (survey.rows.length) {
+    slides.push(
+      ...tableSlides({
+        chapter: 'space',
+        title: GUIDE_KIND_META.survey.title,
+        subtitle: survey.visited_on ? `답사일 ${survey.visited_on}` : null,
+        columns: [
+          { label: '구분', width: 0.08, nowrap: true },
+          { label: '항목', width: 0.14, strong: true },
+          { label: '체크사항', width: 0.28 },
+          { label: '확인내용', width: 0.36 },
+          { label: '담당', width: 0.14 },
+        ],
+        rows: survey.rows.map((r) => ({ cells: [r.scope_label, orDash(r.item), orDash(r.check), orDash(r.finding), orDash(r.owner)] })),
+      }),
+    )
+  } else {
+    gaps.push({ chapter: 'space', label: GUIDE_KIND_META.survey.title, where: '운영가이드(확인내용이 있는 줄만 싣습니다)' })
+  }
 
   const setup = guideData(plan, 'setup')
   const setupRows = setup ? setup.rows.filter((r) => filled([r.task, r.time, r.place, r.owner])) : []
@@ -574,6 +614,11 @@ function spaceChapter(plan: PlanData): ChapterResult {
   } else {
     gaps.push({ chapter: 'space', label: GUIDE_KIND_META.setup.title, where: '운영가이드' })
   }
+
+  // v2.21 §27.2 — 설치 도면(연결한 항목의 최신 버전 — 이미지면 그림, 아니면 파일 이름만)
+  const figures = planFloorplanFigures(plan)
+  if (figures.length) slides.push(...figureSlides('space', GUIDE_KIND_META.floorplan.title, figures))
+  else gaps.push({ chapter: 'space', label: GUIDE_KIND_META.floorplan.title, where: '운영가이드(항목 버전에 연결)' })
 
   // 존별 운영 — 운영가이드 존 섹션이 있으면 그것만(S9 04와 같은 규칙), 없으면 존운영 항목 본문
   const zoneContent = plan.guide_zone?.content?.trim()
@@ -823,6 +868,29 @@ function peopleChapter(plan: PlanData): ChapterResult {
     gaps.push({ chapter: 'people', label: '등록 통계 · 등록 운영', where: '등록 보드 · 운영가이드' })
   }
   if (!hasCapacity) gaps.push({ chapter: 'people', label: GUIDE_KIND_META.registration.title, where: '운영가이드' })
+
+  // v2.21 §27.2 — 참가자 안내 일정(단계·발송일·채널·대상·상태 — 원고 제외)
+  const messaging = planMessagingLines(plan)
+  if (messaging.length) {
+    slides.push(
+      ...tableSlides({
+        chapter: 'people',
+        title: GUIDE_KIND_META.messaging.title,
+        subtitle: `발송 완료 ${messaging.filter((m) => m.sent).length} / ${messaging.length}`,
+        columns: [
+          { label: '단계', width: 0.24, strong: true },
+          { label: '발송일', width: 0.18, nowrap: true },
+          { label: '채널', width: 0.12, nowrap: true },
+          { label: '대상', width: 0.28 },
+          { label: '상태', width: 0.18, nowrap: true },
+        ],
+        rows: messaging.map((m) => ({ cells: [m.stage, m.when, m.channel, m.audience, m.status] })),
+        notes: ['원고는 운영가이드에서 · 발송은 알림톡·이메일 도구에서(앱은 일정·상태까지)'],
+      }),
+    )
+  } else {
+    gaps.push({ chapter: 'people', label: GUIDE_KIND_META.messaging.title, where: '운영가이드' })
+  }
 
   const vip = guideData(plan, 'vip')
   const vipRows = vip ? vip.rows.filter((r) => filled([r.target, r.arrival, r.route, r.seat, r.owner])) : []

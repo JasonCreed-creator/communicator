@@ -221,6 +221,9 @@ export const GUIDE_KIND_LABELS: Record<GuideSectionKind, string> = {
   registration: '등록 운영',
   vip: 'VIP 의전',
   safety: '안전관리',
+  survey: '답사 체크리스트',
+  floorplan: '설치 도면',
+  messaging: '참가자 안내',
 }
 
 /** v2.5 §23 — 운영보드 홈 유형 카드 4종 라벨(정형 3종 + 기타 제작물) */
