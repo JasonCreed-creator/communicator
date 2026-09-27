@@ -31,6 +31,7 @@ import type {
   SheetConnectionState,
   SheetMappedField,
   WbsDirection,
+  WbsSource,
   WbsStatus,
 } from './enums'
 import type { ParsedQuoteDoc, SectionMapping } from '../modules/quote/import/types'
@@ -419,6 +420,12 @@ export interface WbsTask {
   partner_id: UUID | null
   note: string | null
   sort_order: number
+  /** v2.21 §27.4 — 사람 배정(그 행사 멤버만 · 배정 ≠ 권한 R-M6 — 표시·'내 차례' 판정용). 미배정 null */
+  assignee_id: UUID | null
+  /** v2.21 §27.4 — Lv2 묶음 이름(phase_name이 Lv1). 템플릿은 null, 행사마다 사람이 묶는다 */
+  group_name: string | null
+  /** v2.21 §27.4 — template(재전개가 되살림 · 삭제 불가) | custom(행사별 · 재전개 무접촉 · 삭제 가능) */
+  source: WbsSource
 }
 // 지연 = (미완료 and end_date < today), 임박은 lib/wbs.ts 정본 참조 (지연과 배타)
 
@@ -432,6 +439,16 @@ export interface RoleCharter {
   title: string
   /** 책임 불릿 배열 */
   items: string[]
+  /** v2.21 §27.4 — 이 역할을 맡은 사람(주소록 사람 + 표시 역할 자유 문구 — 영업·모객·총괄·Sub·현장 지원 등).
+   *  행사 멤버가 아니어도 된다(영업·모객 담당이 그렇다) · 권한 역할 4종(role)은 불변. 없으면 null */
+  people: RoleCharterPerson[] | null
+}
+
+/** v2.21 §27.4 — R&R 카드의 사람 한 명 */
+export interface RoleCharterPerson {
+  person_id: UUID
+  /** 표시 역할 — '영업'·'모객'·'총괄 PM'·'Sub PM'·'현장 지원' 같은 자유 문구(빈 문자열 허용) */
+  display_role: string
 }
 
 // §4-1b profiles (v2.0 — 전역 역할. 견적 메뉴 접근은 admin·sales)

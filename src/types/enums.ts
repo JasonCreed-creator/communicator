@@ -112,6 +112,10 @@ export type PartnerStatus = (typeof PARTNER_STATUSES)[number]
 export const WBS_DIRECTIONS = ['partner_submit', 'host_notice', 'internal'] as const
 export type WbsDirection = (typeof WBS_DIRECTIONS)[number]
 
+/** v2.21 §27.4 — 태스크 출처. template = 유형별 템플릿 전개(재전개가 되살린다 · 삭제 불가), custom = 행사별 태스크(사람이 추가 · 삭제 가능) */
+export const WBS_SOURCES = ['template', 'custom'] as const
+export type WbsSource = (typeof WBS_SOURCES)[number]
+
 // v2.4 §22: 견적서 임포트 — quotes.source
 export const QUOTE_SOURCES = ['engine', 'imported'] as const
 export type QuoteSource = (typeof QUOTE_SOURCES)[number]

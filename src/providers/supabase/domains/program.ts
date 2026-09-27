@@ -14,6 +14,7 @@ import { buildScenarioSeed } from '../../../lib/scenarioScript'
 import { FORMAT_PRESETS, presetCardOf } from '../../../fixtures/formatPresets'
 import { escapeHtml, fileUrlFor, rememberText } from '../files'
 import { notifyFor } from '../notify'
+import { sortCharters } from './wbs'
 import type {
   Approval,
   Cue,
@@ -21,6 +22,7 @@ import type {
   GuideSection,
   Milestone,
   ProgramSession,
+  RoleCharter,
   ScenarioBlock,
   UUID,
   Version,
@@ -805,6 +807,32 @@ export function programDomain(ctx: SupabaseCtx): Pick<DataProvider, ProgramMetho
           }
         : null
 
+      // v2.21 §27.4 — R&R 카드 + 사람(이름·표시 역할만 — 이메일·전화는 싣지 않는다)
+      const charters = sortCharters(
+        ctx.q(await ctx.sb.from('role_charters').select('*').eq('project_id', projectId)) as RoleCharter[],
+      )
+      const personIds = [...new Set(charters.flatMap((c) => (c.people ?? []).map((p) => p.person_id)))]
+      const personNames = new Map(
+        (personIds.length > 0
+          ? (ctx.q(await ctx.sb.from('profiles').select('id, display_name').in('id', personIds)) as {
+              id: UUID
+              display_name: string
+            }[])
+          : []
+        ).map((p) => [p.id, p.display_name]),
+      )
+      const role_charters = charters.map((c) => ({
+        id: c.id,
+        role: c.role,
+        origin_role: c.origin_role,
+        title: c.title,
+        items: [...c.items],
+        people: (c.people ?? []).flatMap((p) => {
+          const name = personNames.get(p.person_id)
+          return name ? [{ name, display_role: p.display_role }] : []
+        }),
+      }))
+
       // 3.17.1 T4 — 등록 수치가 시트에서 온 것이면 그 기준 시각을 지면에 밝힌다(§4-22 준용)
       const sheetRes = await ctx.sb
         .from('sheet_connections')
@@ -839,6 +867,7 @@ export function programDomain(ctx: SupabaseCtx): Pick<DataProvider, ProgramMetho
         guide_zone,
         emergency,
         guide,
+        role_charters,
         section_progress: [
           { key: 'overview', done: overviewSlots.filter(Boolean).length, total: overviewSlots.length },
           { key: 'program', done: sessions.filter((s) => s.start_time).length, total: sessions.length },

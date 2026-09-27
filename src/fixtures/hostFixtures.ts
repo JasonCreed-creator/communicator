@@ -246,6 +246,9 @@ export function seedHostFixtures(state: MockState): void {
         partner_id: partner?.id ?? null,
         note: null,
         sort_order: sortOrder++,
+        assignee_id: null,
+        group_name: null,
+        source: 'template',
       }
 
       if (direction === 'partner_submit' && partner) {
@@ -326,6 +329,7 @@ export function seedHostFixtures(state: MockState): void {
     origin_role: tpl.origin_role,
     title: tpl.title,
     items: [...tpl.items],
+    people: null,
   }))
   state.role_charters.push(...roleCharters)
 

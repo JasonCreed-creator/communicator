@@ -721,6 +721,9 @@ function buildWbs(projectId: string, prefix: string, eventDate: string): WbsTask
     note: null,
     track: null,
     sort_order: i + 1,
+    assignee_id: null,
+    group_name: null,
+    source: 'template' as const,
   }))
 }
 
@@ -732,6 +735,7 @@ function buildCharters(projectId: string, prefix: string): RoleCharter[] {
     origin_role: tpl.origin_role,
     title: tpl.title,
     items: [...tpl.items],
+    people: null,
   }))
 }
 

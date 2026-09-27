@@ -363,6 +363,14 @@
     color: var(--ink);
   }
 
+  /* 08b (v2.21 §27.4) Lv2 묶음 행 — 그룹 헤더행(08) 아래 한 단계: card 면 그대로 · 12/600 ink-sub · 들여쓰기 */
+  .ui-table > tbody > tr.ui-table-subgroup > td {
+    padding-left: 28px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--ink-sub);
+  }
+
   /* 09 합계·소계는 고정 하단행 + --border-strong 상단선 */
   .ui-table > tbody > tr.ui-table-total {
     background: var(--card);

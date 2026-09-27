@@ -8,6 +8,7 @@ import {
   isPreviewFileName,
 } from '../../lib/statusMachine'
 import { isDelayed, isImminent, offsetToDate, toIsoDate } from '../../lib/wbs'
+import { ISO_DATE_RE, dateOffset, nextCustomCode, normalizeGroupName, phaseNameFor } from '../../lib/wbsCustom'
 import { driveFileUrl, parseDriveLink, type DriveLinkParse } from '../../lib/driveLink'
 import { createFixtureState, type MockState } from '../../fixtures/sampleProject'
 import { COMPLIANCE_CARD_TEMPLATES, HOST_COMPLIANCE_CARD_TEMPLATES } from '../../fixtures/complianceTemplates'
@@ -78,7 +79,7 @@ import type {
   QuoteImportFormat,
   SheetInvalidReason,
 } from '../../types/enums'
-import { isStructuredDocCategory, SHEET_FIELD_LABELS, SHEET_REQUIRED_FIELDS } from '../../types/enums'
+import { isStructuredDocCategory, MEMBER_ROLES, SHEET_FIELD_LABELS, SHEET_REQUIRED_FIELDS } from '../../types/enums'
 import { canWriteArea, hasRole, primaryRole, rolesOf, sortRoles } from '../../lib/roles'
 
 /** 지금 보는 행사 — ProjectContext가 localStorage에 둔 선택값(없거나 못 읽으면 null). supabase ctx.currentProjectId()와 같은 키 */
@@ -162,6 +163,8 @@ import type {
   ScenarioBlockInput,
   UploadVersionInput,
   UserRef,
+  CreateWbsTaskInput,
+  RoleCharterPatch,
   WbsTaskFilter,
   WbsTaskPatch,
   SettlementBoardView,
@@ -853,6 +856,10 @@ export class MockProvider implements DataProvider {
       throw new ProviderError('conflict', '마지막 PM은 삭제할 수 없습니다 — 먼저 다른 PM을 지정하세요.')
     }
     this.state.members = this.state.members.filter((m) => !targets.includes(m))
+    // v2.21 §27.4 — 이 행사에서 역할이 하나도 남지 않으면 그 사람의 태스크 배정을 푼다(배정 대상은 그 행사 멤버만)
+    if (!this.state.members.some((m) => m.project_id === projectId && m.user_id === memberId)) {
+      for (const t of this.state.wbs_tasks) if (t.project_id === projectId && t.assignee_id === memberId) t.assignee_id = null
+    }
     this.log(projectId, `user:${user.id}`, 'member.removed', 'project', projectId, {
       user_id: memberId,
       ...(role ? { role } : {}),
@@ -2604,7 +2611,9 @@ export class MockProvider implements DataProvider {
     // v1.5: 다른 행사 태스크는 건드리지 않는다(프로젝트 단위 치환)
     const mine = this.state.wbs_tasks.filter((task) => task.project_id === projectId)
     const others = this.state.wbs_tasks.filter((task) => task.project_id !== projectId)
-    const prev = new Map(mine.map((task) => [task.code, task]))
+    // v2.21 §27.4 — 행사별(custom) 태스크는 재전개가 건드리지 않는다(날짜·상태·배정 불변)
+    const custom = mine.filter((task) => task.source === 'custom')
+    const prev = new Map(mine.filter((task) => task.source !== 'custom').map((task) => [task.code, task]))
     const expanded = template.map((tpl, i) => {
       const old = prev.get(tpl.code)
       return {
@@ -2629,14 +2638,18 @@ export class MockProvider implements DataProvider {
         note: old?.note ?? null,
         track: null,
         sort_order: i + 1,
+        // v2.21 §27.4 — 사람 배정·Lv2 묶음은 code 매칭으로 잇는다
+        assignee_id: old?.assignee_id ?? null,
+        group_name: old?.group_name ?? null,
+        source: 'template' as const,
       }
     })
-    this.state.wbs_tasks = [...others, ...expanded]
+    this.state.wbs_tasks = [...others, ...expanded, ...custom]
     this.log(projectId, `user:${user.id}`, 'wbs.expanded', 'project', projectId, {
       event_type: project.event_type,
       count: expanded.length,
     })
-    return [...expanded]
+    return [...expanded, ...custom]
   }
 
   /**
@@ -2657,8 +2670,12 @@ export class MockProvider implements DataProvider {
     )
     const mine = this.state.wbs_tasks.filter((task) => task.project_id === projectId)
     const others = this.state.wbs_tasks.filter((task) => task.project_id !== projectId)
+    // v2.21 §27.4 — 행사별(custom) 태스크는 재전개가 건드리지 않는다
+    const custom = mine.filter((task) => task.source === 'custom')
     // R-H5: code+partner_id 매칭으로 재전개 보존 ('' = partner_id 없음, host_notice·internal용)
-    const prevByKey = new Map(mine.map((task) => [`${task.code}:${task.partner_id ?? ''}`, task]))
+    const prevByKey = new Map(
+      mine.filter((task) => task.source !== 'custom').map((task) => [`${task.code}:${task.partner_id ?? ''}`, task]),
+    )
     const areaByRole: Record<MemberRole, DeliverableArea> = {
       design: 'design',
       ops: 'ops',
@@ -2699,6 +2716,9 @@ export class MockProvider implements DataProvider {
           partner_id: partner?.id ?? null,
           note: old?.note ?? null,
           sort_order: sortOrder++,
+          assignee_id: old?.assignee_id ?? null,
+          group_name: old?.group_name ?? null,
+          source: 'template',
         }
         expanded.push(task)
 
@@ -2734,7 +2754,7 @@ export class MockProvider implements DataProvider {
         }
       }
     }
-    this.state.wbs_tasks = [...others, ...expanded]
+    this.state.wbs_tasks = [...others, ...expanded, ...custom]
     // v2.4.1(3.15.1 폴리시 P4 백필 경로) — expandHostWbs는 completeOnboarding(신규 온보딩)과
     // S5 '템플릿 재전개' 버튼(기존 host 행사) 양쪽의 유일한 진입점이라, 새 provider 메서드를
     // 추가하지 않고 여기서 R&R·컴플라이언스 유무를 확인해 없을 때만 §15.3b·§15.3c 세트를
@@ -2749,7 +2769,7 @@ export class MockProvider implements DataProvider {
       count: expanded.length,
       partners: activePartners.length,
     })
-    return [...expanded]
+    return [...expanded, ...custom]
   }
 
   private seedRoleCharters(projectId: UUID): void {
@@ -2764,6 +2784,7 @@ export class MockProvider implements DataProvider {
       origin_role: tpl.origin_role,
       title: tpl.title,
       items: [...tpl.items],
+      people: null,
     }))
     this.state.role_charters = [...others, ...seeded]
   }
@@ -2813,12 +2834,137 @@ export class MockProvider implements DataProvider {
       if (patch.linked_deliverable_id) this.mustFindDeliverable(patch.linked_deliverable_id)
       task.linked_deliverable_id = patch.linked_deliverable_id
     }
+    // v2.21 §27.4 — 사람 배정(그 행사 멤버만 · 배정 ≠ 권한) · Lv2 묶음 · 소통 대상
+    if (patch.assignee_id !== undefined) {
+      this.assertWbsAssignee(task.project_id, patch.assignee_id)
+      task.assignee_id = patch.assignee_id
+    }
+    if (patch.group_name !== undefined) task.group_name = normalizeGroupName(patch.group_name)
+    if (patch.target !== undefined) task.target = patch.target?.trim() || null
     return task
+  }
+
+  /** v2.21 §27.4 R-M6 — 배정 대상은 그 행사 멤버만(주소록 사람이어도 멤버가 아니면 422) */
+  private assertWbsAssignee(projectId: UUID, assigneeId: UUID | null): void {
+    if (assigneeId === null) return
+    if (!this.state.members.some((m) => m.project_id === projectId && m.user_id === assigneeId)) {
+      throw new ProviderError('validation', '담당자는 이 행사 멤버여야 합니다.')
+    }
+  }
+
+  /**
+   * v2.21 §27.4(v17) — 행사별 태스크 추가(pm). code = `C-{n}`(그 행사의 custom 순번) · source 'custom' ·
+   * 오프셋은 행사일에서 계산 · 단계 이름은 전개된 태스크 → 템플릿 순 · 재전개는 이 행을 건드리지 않는다.
+   */
+  async createWbsTask(projectId: UUID, input: CreateWbsTaskInput): Promise<WbsTask> {
+    const user = this.assertPm()
+    const project = this.assertWritable(projectId)
+    if (!project.event_date) {
+      throw new ProviderError('validation', '행사일이 있어야 태스크를 추가할 수 있습니다.')
+    }
+    const title = input.title.trim()
+    if (!title) throw new ProviderError('validation', '태스크 제목은 필수입니다.')
+    if (!ISO_DATE_RE.test(input.start_date) || !ISO_DATE_RE.test(input.end_date)) {
+      throw new ProviderError('validation', '시작일·종료일을 입력하세요.')
+    }
+    if (input.end_date < input.start_date) {
+      throw new ProviderError('validation', '종료일은 시작일보다 앞설 수 없습니다.')
+    }
+    if (!MEMBER_ROLES.includes(input.role)) throw new ProviderError('validation', '담당 역할이 올바르지 않습니다.')
+    const mine = this.state.wbs_tasks.filter((t) => t.project_id === projectId)
+    const phaseName = phaseNameFor(project, mine, input.phase_no)
+    if (!phaseName) throw new ProviderError('validation', '단계를 찾을 수 없습니다.')
+    this.assertWbsAssignee(projectId, input.assignee_id ?? null)
+    const task: WbsTask = {
+      id: this.nextId('wbs'),
+      project_id: projectId,
+      phase_no: input.phase_no,
+      phase_name: phaseName,
+      code: nextCustomCode(mine),
+      title,
+      offset_start: dateOffset(input.start_date, project.event_date),
+      offset_end: dateOffset(input.end_date, project.event_date),
+      start_date: input.start_date,
+      end_date: input.end_date,
+      role: input.role,
+      origin_role: null,
+      status: 'todo',
+      done_at: null,
+      linked_deliverable_id: null,
+      target: input.target?.trim() || null,
+      direction: 'internal',
+      partner_id: null,
+      note: input.note?.trim() || null,
+      sort_order: mine.reduce((max, t) => Math.max(max, t.sort_order), 0) + 1,
+      assignee_id: input.assignee_id ?? null,
+      group_name: normalizeGroupName(input.group_name),
+      source: 'custom',
+    }
+    this.state.wbs_tasks.push(task)
+    this.log(projectId, `user:${user.id}`, 'wbs.task_created', 'wbs_task', task.id, { code: task.code, title: task.title })
+    return task
+  }
+
+  /** v2.21 §27.4(v17) — 행사별(custom) 태스크만 지운다(pm). 템플릿 태스크는 409 — 재전개가 되살리므로 완료 처리로 정리한다 */
+  async deleteWbsTask(taskId: UUID): Promise<void> {
+    const user = this.assertPm()
+    const task = this.state.wbs_tasks.find((t) => t.id === taskId)
+    if (!task) throw new ProviderError('not_found', 'WBS 태스크를 찾을 수 없습니다.')
+    this.assertWritable(task.project_id)
+    if (task.source !== 'custom') {
+      throw new ProviderError('conflict', '템플릿 태스크는 지울 수 없습니다 — 완료 처리로 정리하세요(재전개가 되살립니다).')
+    }
+    this.state.wbs_tasks = this.state.wbs_tasks.filter((t) => t.id !== taskId)
+    this.log(task.project_id, `user:${user.id}`, 'wbs.task_deleted', 'wbs_task', task.id, { code: task.code, title: task.title })
   }
 
   async listRoleCharters(projectId: UUID): Promise<RoleCharter[]> {
     this.mustFindProject(projectId)
     return this.state.role_charters.filter((c) => c.project_id === projectId)
+  }
+
+  /** v2.21 §27.4(v17) — R&R 카드 편집(pm): 제목·책임·사람(주소록 사람 + 표시 역할 — 행사 멤버가 아니어도 됨 · 권한 역할 불변) */
+  async updateRoleCharter(charterId: UUID, patch: RoleCharterPatch): Promise<RoleCharter> {
+    const user = this.assertPm()
+    const charter = this.state.role_charters.find((c) => c.id === charterId)
+    if (!charter) throw new ProviderError('not_found', 'R&R 카드를 찾을 수 없습니다.')
+    this.assertWritable(charter.project_id)
+    const changed: string[] = []
+    if (patch.title !== undefined) {
+      const title = patch.title.trim()
+      if (!title) throw new ProviderError('validation', 'R&R 카드 제목은 필수입니다.')
+      if (title !== charter.title) {
+        charter.title = title
+        changed.push('title')
+      }
+    }
+    if (patch.items !== undefined) {
+      charter.items = patch.items.map((x) => x.trim()).filter(Boolean)
+      changed.push('items')
+    }
+    if (patch.people !== undefined) {
+      charter.people = this.normalizeCharterPeople(patch.people)
+      changed.push('people')
+    }
+    if (changed.length > 0) {
+      this.log(charter.project_id, `user:${user.id}`, 'rr.updated', 'role_charter', charter.id, { role: charter.role, changed })
+    }
+    return charter
+  }
+
+  /** R&R 사람 목록 정리 — 주소록에 있는 사람만 · 같은 사람 두 번 금지 · 표시 역할은 공백 정리(빈 문구 허용) */
+  private normalizeCharterPeople(people: RoleCharterPatch['people']): RoleCharter['people'] {
+    if (people === null || people === undefined) return null
+    const seen = new Set<UUID>()
+    const out = people.map((p) => {
+      if (!this.state.users.some((u) => u.id === p.person_id)) {
+        throw new ProviderError('validation', '주소록에 없는 사람입니다.')
+      }
+      if (seen.has(p.person_id)) throw new ProviderError('validation', '같은 사람을 두 번 넣을 수 없습니다.')
+      seen.add(p.person_id)
+      return { person_id: p.person_id, display_role: (p.display_role ?? '').trim() }
+    })
+    return out
   }
 
   // ── v2.4 §21 주최형(파트너) — 등급·파트너·토큰 CRUD는 pm, 열람은 멤버 전원 ───
@@ -4041,6 +4187,20 @@ export class MockProvider implements DataProvider {
       guide_zone,
       emergency,
       guide,
+      // v2.21 §27.4 — R&R 카드 + 사람(이름·표시 역할만 — 연락처 0)
+      role_charters: this.state.role_charters
+        .filter((c) => c.project_id === projectId)
+        .map((c) => ({
+          id: c.id,
+          role: c.role,
+          origin_role: c.origin_role,
+          title: c.title,
+          items: [...c.items],
+          people: (c.people ?? []).flatMap((p) => {
+            const person = this.state.users.find((u) => u.id === p.person_id)
+            return person ? [{ name: person.name, display_role: p.display_role }] : []
+          }),
+        })),
       section_progress: [
         { key: 'overview', done: overviewSlots.filter(Boolean).length, total: overviewSlots.length },
         { key: 'program', done: sessions.filter((s) => s.start_time).length, total: sessions.length },
