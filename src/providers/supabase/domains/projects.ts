@@ -9,7 +9,7 @@ import { driveFor } from '../drive'
 import { mapPgError, type PgErrorLike } from '../errors'
 import { ProviderError } from '../../../lib/errors'
 import { normalizeSlackWebhook, SLACK_WEBHOOK_INVALID_MESSAGE } from '../../../lib/slackWebhook'
-import { normalizeSlackThreadLink, normalizeSlackUserId, SLACK_THREAD_INVALID_MESSAGE, SLACK_USER_ID_INVALID_MESSAGE } from '../../../lib/slackThread'
+import { sameSlackThread, SLACK_DESIGN_THREAD_SAME_MESSAGE, normalizeSlackThreadLink, normalizeSlackUserId, SLACK_THREAD_INVALID_MESSAGE, SLACK_USER_ID_INVALID_MESSAGE } from '../../../lib/slackThread'
 import { normalizeQuoteAttachment, QUOTE_ATTACHMENT_INVALID_MESSAGE } from '../../../lib/quoteAttachment'
 import { isDelayed, toIsoDate } from '../../../lib/wbs'
 import type { ClientContact, ClientToken, Project, UUID, WbsTask } from '../../../types/entities'
@@ -417,6 +417,14 @@ export function projectsDomain(ctx: SupabaseCtx): ProjectsDomain {
         const thread = normalizeSlackThreadLink(patch.slack_thread_url)
         if (thread === 'invalid') throw new ProviderError('validation', SLACK_THREAD_INVALID_MESSAGE)
         row.slack_thread_url = thread
+      }
+      // v15.7(Phase 6.3 [B2] §9) — 디자인 스레드. 운영 스레드(같은 패치의 새 값 우선)와 같은 스레드는 422
+      if (patch.design_thread_url !== undefined) {
+        const thread = normalizeSlackThreadLink(patch.design_thread_url)
+        if (thread === 'invalid') throw new ProviderError('validation', SLACK_THREAD_INVALID_MESSAGE)
+        const ops = row.slack_thread_url !== undefined ? (row.slack_thread_url as string | null) : (project.slack_thread_url ?? null)
+        if (thread && sameSlackThread(thread, ops)) throw new ProviderError('validation', SLACK_DESIGN_THREAD_SAME_MESSAGE)
+        row.design_thread_url = thread
       }
       // v15.6(Phase 6.2) — 인테이크 기록 · 견적서 첨부(https 주소 + kind만 — 그 밖은 422)
       if (patch.intake !== undefined) row.intake = patch.intake

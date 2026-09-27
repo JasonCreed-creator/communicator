@@ -1,7 +1,7 @@
 // Slack 봇 메시지 — 멘션 · 의뢰 카드(Block Kit) · 확인 표시 (설계서 v2.12 §9 · Phase 6.1). 순수 함수만 — 테스트가 네트워크 없이 본다.
 // 시안(2026-09-26 승인 — 채널·멘션 v2): 할 일이 생긴 사람만 멘션하고, 의뢰(제작 요청·검토 요청)는 카드 + '확인했어요' 버튼 하나.
 // 금액은 싣지 않는다(§19.7) — 카드 입력은 아래 타입의 필드뿐(제목·규격·가이드 앞부분·버전 메모·파일 이름·날짜·사람 이름).
-import { slackEscape } from './format.js'
+import { slackEscape, TAG } from './format.js'
 
 export interface Recipient {
   id: string
@@ -122,15 +122,17 @@ export function cardMessage(card: CardSpec, mentions: readonly Recipient[], card
   const lead = who ? `${who} ` : ''
   const head = `[${slackEscape(card.project_name || '행사')}]`
   const area = card.area ? AREA_LABEL[card.area] ?? null : null
+  const design = card.area === 'design'
   const blocks: unknown[] = []
 
   if (card.kind === 'work') {
+    const tag = design ? TAG.request : TAG.production
     const items = [...card.items].sort((a, b) => (a.due_date ?? '9999').localeCompare(b.due_date ?? '9999') || a.title.localeCompare(b.title, 'ko'))
     const by = card.requester ? ` · 요청 ${slackEscape(card.requester)}` : ''
     if (items.length === 1) {
       const it = items[0]
       const due = dueText(it.due_date, now)
-      blocks.push(section(`${lead}새 제작 요청이에요${by}`))
+      blocks.push(section(`${lead}${tag} 새 제작 요청이에요${by}`))
       const spec = [it.spec_size, it.spec_qty ? `${it.spec_qty}개` : null].filter(Boolean).join(' · ')
       const fields = [
         due ? `*마감*\n${due}` : null,
@@ -151,9 +153,9 @@ export function cardMessage(card: CardSpec, mentions: readonly Recipient[], card
           ...(it.url ? [{ type: 'button', action_id: 'open', text: plain('앱에서 열기'), url: it.url }] : []),
         ],
       })
-      return { text: `${lead}${head} 새 제작 요청 — ${slackEscape(it.title)}${due ? ` · 마감 ${dayLabel(it.due_date)}` : ''}`, blocks }
+      return { text: `${lead}${head} ${tag} ${slackEscape(it.title)} — 제작 요청${due ? ` · 마감 ${dayLabel(it.due_date)}` : ''}`, blocks }
     }
-    blocks.push(section(`${lead}새 제작 요청 ${items.length}건이에요${by}`))
+    blocks.push(section(`${lead}${tag} 새 제작 요청 ${items.length}건이에요${by}`))
     const shown = items.slice(0, 15)
     const lines = shown.map((it) => {
       const d = dayLabel(it.due_date)
@@ -170,16 +172,17 @@ export function cardMessage(card: CardSpec, mentions: readonly Recipient[], card
         ...(card.board_url ? [{ type: 'button', action_id: 'open', text: plain(`${area ?? ''} 보드 열기`.trim()), url: card.board_url }] : []),
       ],
     })
-    return { text: `${lead}${head} 새 제작 요청 ${items.length}건 — ${items.slice(0, 3).map((i) => slackEscape(i.title)).join(', ')}${items.length > 3 ? ` 외 ${items.length - 3}건` : ''}`, blocks }
+    return { text: `${lead}${head} ${tag} 제작 요청 ${items.length}건 — ${items.slice(0, 3).map((i) => slackEscape(i.title)).join(', ')}${items.length > 3 ? ` 외 ${items.length - 3}건` : ''}`, blocks }
   }
 
-  // 검토 요청(내부검토) · 파트너 제출 → PM
+  // 검토 요청(내부검토) · 파트너 제출 → PM. 태그: 디자인 항목 = [검토요청] · 그 밖·파트너 = [제작]
+  const tag = design && !card.partner ? TAG.review : TAG.production
   const v = card.version_no ? ` *v${card.version_no}*` : ''
   blocks.push(
     section(
       card.partner
-        ? `${lead}파트너 제출물이 왔어요 · ${slackEscape(card.partner)}`
-        : `${lead}검토 요청이에요${card.sender ? ` · 보낸 사람 ${slackEscape(card.sender)}` : ''}`,
+        ? `${lead}${tag} 파트너 제출물이 왔어요 · ${slackEscape(card.partner)}`
+        : `${lead}${tag} 검토 요청이에요${card.sender ? ` · 보낸 사람 ${slackEscape(card.sender)}` : ''}`,
     ),
   )
   blocks.push(section(`*${link(card.url, card.title)}*${v}${area && !card.partner ? ` · ${area}` : ''}`))
@@ -201,7 +204,7 @@ export function cardMessage(card: CardSpec, mentions: readonly Recipient[], card
   })
   const label = card.partner ? '파트너 제출' : '검토 요청'
   const tail = card.partner ? ` · ${slackEscape(card.partner)}` : card.sender ? ` · ${slackEscape(card.sender)}` : ''
-  return { text: `${lead}${head} ${label} — ${slackEscape(card.title)}${card.version_no ? ` v${card.version_no}` : ''}${tail}`, blocks }
+  return { text: `${lead}${head} ${tag} ${slackEscape(card.title)}${card.version_no ? ` v${card.version_no}` : ''} — ${label}${tail}`, blocks }
 }
 
 /** 'KST 9/26 오후 2:34' 모양의 시각 */

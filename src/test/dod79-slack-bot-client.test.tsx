@@ -118,7 +118,7 @@ describe('DoD 79 · ③ 실서버 — 봇 상태', () => {
     await waitFor(() => expect(within(box).getByRole('heading', { name: 'Slack 알림' }).parentElement!.textContent).toContain('행사 스레드'))
     await userEvent.click(within(card).getByRole('button', { name: '테스트 보내기' }))
     expect((await within(card).findByRole('status')).textContent).toBe('보냈습니다 — 이 행사 스레드를 확인하세요.')
-    expect(test).toHaveBeenCalledWith('prj-stc26')
+    expect(test).toHaveBeenCalledWith('prj-stc26', undefined)
   })
 })
 
@@ -198,5 +198,58 @@ describe('DoD 79 · ⑥ 확인 한 줄 — 항목 상세 · 디자인 보드', (
     expect(lines.length).toBeGreaterThan(0)
     expect(lines.every((l) => l.textContent === '✓ Slack 제작 요청 확인함 · 이디자 9/25')).toBe(true)
     expect(lines[0].className).toContain('text-positive')
+  })
+})
+
+const DESIGN_THREAD = 'https://acme.slack.com/archives/C0DESIGN1/p1727260000123456'
+
+describe('DoD 87 · 앱 — 디자인 스레드(Phase 6.3 [B2] · 설계서 v2.17.1 §9)', () => {
+  it('행사 설정 ③: 디자인 스레드 칸 — 운영 스레드와 같은 링크는 사유 + 등록 비활성 → 다른 링크 등록 → 채널 · 해제', async () => {
+    await mockProvider().updateProject('prj-stc26', { slack_thread_url: THREAD, design_thread_url: null })
+    renderRoute('/settings?tab=integration')
+    const card = await screen.findByTestId('slack-card')
+    expect(card.textContent).toContain('디자인 스레드 (디자인 채널 · 선택)')
+    expect(card.textContent).toContain('[키비주얼] 3줄')
+    const input = within(card).getByLabelText('디자인 스레드 링크')
+    await userEvent.type(input, THREAD)
+    expect(card.textContent).toContain('디자인 스레드는 행사(운영) 스레드와 다른 스레드여야 합니다')
+    expect((within(card).getByRole('button', { name: '디자인 스레드 등록' }) as HTMLButtonElement).disabled).toBe(true)
+    await userEvent.clear(input)
+    await userEvent.type(input, DESIGN_THREAD)
+    await userEvent.click(within(card).getByRole('button', { name: '디자인 스레드 등록' }))
+    const saved = await screen.findByTestId('slack-design-thread-saved')
+    expect(saved.textContent).toContain('C0DESIGN1')
+    expect((await mockProvider().getProject('prj-stc26')).design_thread_url).toBe(DESIGN_THREAD)
+    // 운영 스레드 칸은 그대로 · 데모 안내 · 테스트 버튼 없음
+    expect(screen.getByTestId('slack-thread-saved').textContent).toContain('C0PROJ001')
+    expect(within(screen.getByTestId('slack-card')).queryByRole('button', { name: '디자인 스레드 테스트' })).toBeNull()
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    await userEvent.click(within(screen.getByTestId('slack-card')).getByRole('button', { name: '디자인 스레드 해제' }))
+    await waitFor(async () => expect((await mockProvider().getProject('prj-stc26')).design_thread_url).toBeNull())
+    await mockProvider().updateProject('prj-stc26', { slack_thread_url: null })
+  })
+
+  it('provider: 운영 스레드와 같은 디자인 스레드 422 · 틀린 링크 422 · 빈 칸 = 해제 · 운영 스레드를 바꿔도 디자인 스레드는 남는다', async () => {
+    const p = mockProvider()
+    await p.updateProject('prj-stc26', { slack_thread_url: THREAD })
+    await expect(p.updateProject('prj-stc26', { design_thread_url: THREAD })).rejects.toMatchObject({ code: 'validation', message: expect.stringContaining('다른 스레드') })
+    await expect(p.updateProject('prj-stc26', { design_thread_url: 'https://acme.slack.com/archives/C0DESIGN1' })).rejects.toMatchObject({ code: 'validation' })
+    await expect(p.updateProject('prj-stc26', { design_thread_url: DESIGN_THREAD })).resolves.toMatchObject({ design_thread_url: DESIGN_THREAD })
+    await expect(p.updateProject('prj-stc26', { slack_thread_url: null })).resolves.toMatchObject({ slack_thread_url: null, design_thread_url: DESIGN_THREAD })
+    await expect(p.updateProject('prj-stc26', { design_thread_url: '' })).resolves.toMatchObject({ design_thread_url: null })
+  })
+
+  it('실서버: 디자인 스레드 + 봇 → 칩 "행사 스레드 · 디자인 스레드" · 디자인 스레드 테스트 → 디자인 문구', async () => {
+    await mockProvider().updateProject('prj-stc26', { slack_thread_url: THREAD, design_thread_url: DESIGN_THREAD })
+    const test = vi.fn(async (_p: string, target?: 'design') => ({ sent: true as const, channel: (target === 'design' ? 'design' : 'thread') as 'design' | 'thread' }))
+    setNotifyGateway({ mode: 'server', client: fakeClient({ test }) })
+    renderRoute('/settings?tab=integration')
+    const card = await screen.findByTestId('slack-card')
+    const box = card.closest('.ui-card') as HTMLElement
+    await waitFor(() => expect(within(box).getByRole('heading', { name: 'Slack 알림' }).parentElement!.textContent).toContain('행사 스레드 · 디자인 스레드'))
+    await userEvent.click(within(card).getByRole('button', { name: '디자인 스레드 테스트' }))
+    expect((await within(card).findByRole('status')).textContent).toBe('보냈습니다 — 디자인 스레드를 확인하세요.')
+    expect(test).toHaveBeenCalledWith('prj-stc26', 'design')
+    await mockProvider().updateProject('prj-stc26', { slack_thread_url: null, design_thread_url: null })
   })
 })

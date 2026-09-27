@@ -367,6 +367,11 @@ check(
   await driveCard.waitFor({ timeout: 10_000 })
   const driveText = await driveCard.innerText()
   check(/저장소\/연도\/행사 ID/.test(driveText) && driveText.includes('03_제작·키비주얼/{항목} · KV · 초청장 · 현장물 · 납품') && driveText.includes('06_결과보고·정산') && !driveText.includes('05_산출물'), 'Drive 카드 = 표준 폴더 트리(연도/행사 ID · 03 하위 4 · 옛 이름 0)')
+  // 스레드 2개(v2.17.1 [B2]) — Slack 카드에 운영 스레드 칸 + 디자인 스레드 칸(선택)이 함께 있고 태그 안내가 적혀 있다
+  const slackCard = tab.getByTestId('slack-card')
+  check((await slackCard.getByTestId('slack-thread-box').count()) === 1 && (await slackCard.getByTestId('slack-design-thread-box').count()) === 1, 'Slack 카드 = 운영 스레드 칸 + 디자인 스레드 칸')
+  const slackText = await slackCard.innerText()
+  check(slackText.includes('디자인 스레드 (디자인 채널 · 선택)') && slackText.includes('[키비주얼] 3줄') && slackText.includes('[의뢰] [시안] [확정] [납품]'), 'Slack 카드 = 디자인 스레드 안내 · 프로토콜 태그 안내')
   await tab.screenshot({ path: resolve(SHOTS, '03-drive-tree.png') })
   await tab.evaluate(() => {
     window.location.hash = '#/onboarding?project=prj-forum-h2'
@@ -467,12 +472,12 @@ check(
   const threadInput = card.getByLabel('Slack 스레드 링크')
   await threadInput.fill('https://acme.slack.com/archives/D0DMCHAN1/p1727251234567890')
   check(
-    (await card.getByRole('button', { name: '스레드 등록' }).isDisabled()) && /Slack 스레드 링크가 아닙니다/.test(await card.innerText()),
+    (await card.getByRole('button', { name: '스레드 등록', exact: true }).isDisabled()) && /Slack 스레드 링크가 아닙니다/.test(await card.innerText()),
     'DM 채널 링크 → 형식 문구 + 스레드 등록 비활성',
   )
   const THREAD = 'https://acme.slack.com/archives/C0DEMO001/p1727251234567890'
   await threadInput.fill(THREAD)
-  await card.getByRole('button', { name: '스레드 등록' }).click()
+  await card.getByRole('button', { name: '스레드 등록', exact: true }).click()
   const saved = tab.getByTestId('slack-thread-saved')
   await saved.waitFor({ timeout: 10_000 })
   const openLink = saved.getByRole('link', { name: 'Slack에서 열기' })
@@ -483,7 +488,7 @@ check(
   check((await card.getByRole('button', { name: '테스트 보내기' }).count()) === 0, 'mock: 테스트 보내기 없음')
   await tab.screenshot({ path: resolve(SHOTS, '03-slack-thread.png'), fullPage: true })
   tab.once('dialog', (d) => d.accept())
-  await card.getByRole('button', { name: '스레드 해제' }).click()
+  await card.getByRole('button', { name: '스레드 해제', exact: true }).click()
   await card.getByLabel('Slack 스레드 링크').waitFor({ timeout: 10_000 })
   check(true, "'스레드 해제' → 입력 칸으로 돌아감")
   await tab.evaluate(() => {

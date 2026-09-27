@@ -402,6 +402,7 @@ export default function SettingsPage() {
                   projectId={projectId}
                   webhook={project.data.slack_webhook_url}
                   thread={project.data.slack_thread_url ?? null}
+                  designThread={project.data.design_thread_url ?? null}
                   isPm={isPm}
                   onChanged={handleSaved}
                 />

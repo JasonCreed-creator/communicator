@@ -608,6 +608,38 @@ end $$;`)
   if exists (select 1 from request_acks where card_id = c) then raise exception 'ASSERT_FAILED: cascade'; end if;
 end $$;`)
 
+  // 5g-3. 스레드 2개 + 태그 (Phase 6.3 [B2] · 설계서 v2.17.1 §9) — design_thread 열 · 선점 결과에 design_thread·area · 납품(drive.snapshot_copied) 선점 · 확인 결과에 스레드·항목
+  scenario('Slack 스레드 2개: design_thread_url 열 · 처음 적용 표식 · 사건·리마인드·수동 선점 결과에 design_thread · 납품 사건 선점(최신 버전) · 리마인드 행에 area', `update projects set slack_thread_url = 'https://ws.slack.com/archives/C0TEST01/p1727251234567890', design_thread_url = 'https://ws.slack.com/archives/C0DESIGN1/p1727260000123456' where id = '${PRJ}';
+${assertSql(`exists (select 1 from notification_log where key = 'setup:design-thread')`)}
+${assertSql(`'drive.snapshot_copied' = any (app.notify_actions())`)}
+insert into versions (deliverable_id, version_no, drive_file_id, file_name, note) values ('${designItem}', 98, 'drv-sb-2', 'x_v98.pdf', '확정본');
+select app.write_log('${PRJ}', 'system', 'drive.snapshot_copied', 'deliverable', '${designItem}', '{"snapshot_file_id":"drv-x"}');
+do $$ declare r jsonb; e jsonb; begin
+  r := notify_claim_events(200);
+  select x into e from jsonb_array_elements(r) x where x->>'action' = 'drive.snapshot_copied' and x->>'deliverable_id' = '${designItem}';
+  if e is null then raise exception 'ASSERT_FAILED: snapshot_copied claimed %', r; end if;
+  if e->>'design_thread' <> 'https://ws.slack.com/archives/C0DESIGN1/p1727260000123456' or e->>'thread' is null then raise exception 'ASSERT_FAILED: threads %', e; end if;
+  if e->>'area' <> 'design' or (e->>'version_no')::int <> 98 then raise exception 'ASSERT_FAILED: area/version %', e; end if;
+  if jsonb_array_length(e->'recipients') <> 0 then raise exception 'ASSERT_FAILED: no mentions for delivery %', e; end if;
+  delete from notification_log where key like 'rem:%';
+  update deliverables set due_date = (now() at time zone 'Asia/Seoul')::date + 1, status = 'draft' where id = '${designItem}';
+  r := notify_claim_reminders();
+  select x into e from jsonb_array_elements(r) x where x->>'kind' = 'deliverable_due' and x->>'deliverable_id' = '${designItem}';
+  if e is null or e->>'area' <> 'design' or e->>'design_thread' is null then raise exception 'ASSERT_FAILED: reminder area/design_thread %', e; end if;
+  delete from notification_log where key like 'man:%';
+  e := notify_claim_manual('${PRJ}', 'delayed');
+  if e->>'design_thread' is null then raise exception 'ASSERT_FAILED: manual design_thread %', e; end if;
+end $$;`)
+  scenario('Slack 스레드 2개: 확인(ok) 결과에 행사 스레드 2개 · 카드 종류 · 항목(제목·영역·마감) — 운영 스레드 [키비주얼] 일정 합의 재료', `update projects set slack_thread_url = 'https://ws.slack.com/archives/C0TEST01/p1727251234567890', design_thread_url = 'https://ws.slack.com/archives/C0DESIGN1/p1727260000123456' where id = '${PRJ}';
+do $$ declare c uuid := gen_random_uuid(); r jsonb; begin
+  perform notify_record_card(c, '${PRJ}', jsonb_build_array(jsonb_build_object('deliverable_id', '${designItem}', 'kind', 'work', 'notify_key', 'kv1')), array[${designProfile}], 'C0DESIGN1', '1727.9000', '1727260000.123456');
+  r := notify_ack_card(c, ${designProfile});
+  if r->>'status' <> 'ok' or r->>'kind' <> 'work' then raise exception 'ASSERT_FAILED: ok/kind %', r; end if;
+  if r->>'design_thread' <> 'https://ws.slack.com/archives/C0DESIGN1/p1727260000123456' or r->>'thread' is null or r->>'project_name' is null then raise exception 'ASSERT_FAILED: threads %', r; end if;
+  if jsonb_array_length(r->'items') <> 1 or (r->'items'->0->>'area') <> 'design' or (r->'items'->0->>'deliverable_id') <> '${designItem}' or (r->'items'->0->>'due_date') is null then raise exception 'ASSERT_FAILED: items %', r; end if;
+  if r::text ~ 'total_amount|contract_amount|"email"|"phone"' then raise exception 'ASSERT_FAILED: money/pii'; end if;
+end $$;`)
+
   // 5h. 협력사 견적서 불러오기 (Phase 4.7 · 설계서 v2.11 §19.5) — 확정 RPC(금액은 저장된 제안에서) · 원본 보관 판정 · 인박스 대조
   const BOARD = seedUuid('brd-001')
   const VQ = seedUuid('chk-vendor-import')

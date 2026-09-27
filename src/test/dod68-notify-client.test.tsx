@@ -169,7 +169,7 @@ describe('DoD 68 · ③ 행사 설정 ③ Slack 카드', () => {
     await userEvent.click(within(card).getByRole('button', { name: '테스트 보내기' }))
     expect(await within(card).findByRole('status')).toBeTruthy()
     expect(within(card).getByRole('status').textContent).toBe('보냈습니다 — 공용 채널을 확인하세요.')
-    expect(test).toHaveBeenCalledWith('prj-stc26')
+    expect(test).toHaveBeenCalledWith('prj-stc26', undefined)
   })
 
   it('실서버: 채널이 하나도 없으면 꺼짐 · 테스트 버튼 없음', async () => {
