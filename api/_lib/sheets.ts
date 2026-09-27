@@ -70,24 +70,36 @@ export function parseBearer(header: string | null | undefined): string {
   return m[1].trim()
 }
 
-async function requireMember(env: SheetsEnv, accessToken: string, projectId: string): Promise<SupabaseClient> {
+/** 테스트 주입 — quoteRecalc와 같은 모양(실 Supabase 없이 권한 판정을 본다) */
+export interface SheetsDeps {
+  userClient?: (url: string, publishable: string) => SupabaseClient
+  adminClient?: (url: string, secret: string) => SupabaseClient
+}
+
+/**
+ * 행사 멤버 판정 — SQL 정본 `app.member_role()`과 같은 규칙을 서버 함수가 따른다:
+ * 전역 admin은 멤버가 아니어도 통과(Phase 6.5) · 한 사람이 여러 역할이면 행이 여러 개(Phase 6.6 — maybeSingle 금지).
+ * 실사용 2026-09-27: 관리자가 등록 보드 '시트 확인'에서 "프로젝트 멤버가 아닙니다."를 받았다(서버 함수만 옛 판정).
+ */
+async function requireMember(env: SheetsEnv, accessToken: string, projectId: string, deps: SheetsDeps = {}): Promise<SupabaseClient> {
   const url = env.SUPABASE_URL ?? env.VITE_SUPABASE_URL
   const secret = env.SUPABASE_SECRET_KEY
   const publishable = env.VITE_SUPABASE_PUBLISHABLE_KEY
   if (!url || !secret || !publishable) {
     throw new SheetsError(500, 'validation', '서버 자격증명이 설정되지 않았습니다 (SUPABASE_URL·SUPABASE_SECRET_KEY·VITE_SUPABASE_PUBLISHABLE_KEY).')
   }
-  const user = createClient(url, publishable, { auth: { persistSession: false, autoRefreshToken: false } })
+  const opts = { auth: { persistSession: false, autoRefreshToken: false } }
+  const user = deps.userClient ? deps.userClient(url, publishable) : createClient(url, publishable, opts)
   const { data, error } = await user.auth.getUser(accessToken)
   if (error || !data.user) throw new SheetsError(401, 'forbidden', '로그인이 필요합니다.')
-  const admin = createClient(url, secret, { auth: { persistSession: false, autoRefreshToken: false } })
-  const { data: member } = await admin
-    .from('project_members')
-    .select('role, profiles!inner(auth_user_id)')
-    .eq('project_id', projectId)
-    .eq('profiles.auth_user_id', data.user.id)
-    .maybeSingle()
-  if (!member) throw new SheetsError(403, 'forbidden', '프로젝트 멤버가 아닙니다.')
+  const admin = deps.adminClient ? deps.adminClient(url, secret) : createClient(url, secret, opts)
+  const { data: profile } = await admin.from('profiles').select('id, app_role').eq('auth_user_id', data.user.id).maybeSingle()
+  const me = profile as { id: string; app_role: 'admin' | 'sales' | 'staff' } | null
+  if (!me) throw new SheetsError(403, 'forbidden', '프로필이 없습니다 — 다시 로그인하세요.')
+  if (me.app_role !== 'admin') {
+    const { data: rows } = await admin.from('project_members').select('role').eq('project_id', projectId).eq('user_id', me.id).limit(1)
+    if (!rows || rows.length === 0) throw new SheetsError(403, 'forbidden', '프로젝트 멤버가 아닙니다.')
+  }
   return admin
 }
 
@@ -236,14 +248,20 @@ export function rowsFromValues(values: string[][], mapping: SheetColumnMapping[]
 }
 
 // ── 진입점 ──────────────────────────────────────────────────────────
-export async function handleSheets(body: SheetsRequest, accessToken: string, env: SheetsEnv, fetchImpl: typeof fetch = fetch): Promise<unknown> {
+export async function handleSheets(
+  body: SheetsRequest,
+  accessToken: string,
+  env: SheetsEnv,
+  fetchImpl: typeof fetch = fetch,
+  deps: SheetsDeps = {},
+): Promise<unknown> {
   if (!body?.op || !body.project_id || typeof body.url !== 'string') {
     throw new SheetsError(400, 'validation', '요청 형식이 올바르지 않습니다 (op·project_id·url).')
   }
   if (!/^https?:\/\/\S+$/.test(body.url.trim())) {
     throw new SheetsError(400, 'validation', '시트 URL을 확인해 주세요 — http로 시작하는 주소여야 합니다.')
   }
-  const admin = await requireMember(env, accessToken, body.project_id)
+  const admin = await requireMember(env, accessToken, body.project_id, deps)
   const { data: project } = await admin.from('projects').select('name').eq('id', body.project_id).maybeSingle()
   const sa = env.GOOGLE_SHEETS_SA_JSON ? (JSON.parse(env.GOOGLE_SHEETS_SA_JSON) as ServiceAccount) : null
 

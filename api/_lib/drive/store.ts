@@ -4,6 +4,7 @@
 // 토큰 경로(`/c`) 파일 목록·확정 마감처럼 사람 권한과 무관한 시스템 작업만 service 경로(secret 키)를 쓴다.
 // 테스트는 이 인터페이스의 메모리 구현으로 돈다(src/test/helpers/fakeDriveStore.ts).
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import { primaryRole } from '../../../src/lib/roles.js'
 import { DriveError, type DriveErrorCode } from './errors.js'
 
 export type AppRole = 'admin' | 'sales' | 'staff'
@@ -190,10 +191,11 @@ export function supabaseDriveStore(env: StoreEnv): DriveStore {
       } | null
     },
     async memberRole(profileId, projectId) {
-      const row = must(
-        await admin.from('project_members').select('role').eq('project_id', projectId).eq('user_id', profileId).maybeSingle(),
-      ) as { role: MemberRole } | null
-      return row?.role ?? null
+      // Phase 6.6 — 한 사람이 여러 역할을 가질 수 있다(키 = 행사·사람·역할). 대표 역할 = SQL app.member_role()과 같은 우선순위
+      const rows = (must(await admin.from('project_members').select('role').eq('project_id', projectId).eq('user_id', profileId)) ?? []) as {
+        role: MemberRole
+      }[]
+      return primaryRole(rows.map((r) => r.role))
     },
     async project(projectId) {
       return must(

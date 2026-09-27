@@ -2,6 +2,8 @@
 // 사건 선점·리마인드·결과 기록은 service 전용 SQL 함수(…20260925000200_notifications.sql)가, 사람 확인(로그인·행사 멤버·
 // 발주처/파트너 링크)은 표 조회가 한다. 테스트는 메모리 구현(src/test/helpers/fakeNotifyStore.ts)으로 돈다.
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import { primaryRole } from '../../../src/lib/roles.js'
+import type { MemberRole } from '../../../src/types/enums.js'
 import type { EventRow, ManualRow, ReminderRow } from './format.js'
 
 /** 봇이 올린 의뢰 카드 한 장의 기록(항목마다 한 행) */
@@ -42,8 +44,9 @@ export interface NotifyStore {
   claimReminders(today?: string): Promise<ReminderRow[]>
   claimManual(projectId: string, target: 'delayed' | 'approval'): Promise<ManualRow | null>
   mark(keys: string[], status: 'sent' | 'failed' | 'skipped', error?: string | null): Promise<void>
-  /** 로그인 세션 → 주소록 id(없으면 null) */
-  authProfile(jwt: string): Promise<string | null>
+  /** 로그인 세션 → 주소록 사람(id · 전역 권한 — 없으면 null). app_role은 admin = 모든 행사 pm 규칙(Phase 6.5)에 쓴다 */
+  authProfile(jwt: string): Promise<{ id: string; app_role: 'admin' | 'sales' | 'staff' } | null>
+  /** 행사 안 대표 역할(여러 역할이면 pm > design > ops > reg — Phase 6.6) · 멤버가 아니면 null */
   memberRole(profileId: string, projectId: string): Promise<string | null>
   /** 발주처(/c)·파트너(/p) 링크가 살아 있는가 — 그 화면의 결정·제출 직후 신호용 */
   tokenActive(token: string): Promise<boolean>
@@ -95,18 +98,16 @@ export function createSupabaseNotifyStore(env: NotifyStoreEnv): NotifyStore {
       if (!jwt) return null
       const { data, error } = await admin.auth.getUser(jwt)
       if (error || !data.user) return null
-      const { data: p } = await admin.from('profiles').select('id').eq('auth_user_id', data.user.id).maybeSingle()
-      return (p as { id: string } | null)?.id ?? null
+      const { data: p } = await admin.from('profiles').select('id, app_role').eq('auth_user_id', data.user.id).maybeSingle()
+      const row = p as { id: string; app_role: 'admin' | 'sales' | 'staff' } | null
+      return row ? { id: row.id, app_role: row.app_role } : null
     },
     async memberRole(profileId, projectId) {
       if (!UUID_RE.test(projectId)) return null
-      const { data } = await admin
-        .from('project_members')
-        .select('role')
-        .eq('project_id', projectId)
-        .eq('user_id', profileId)
-        .maybeSingle()
-      return (data as { role: string } | null)?.role ?? null
+      // Phase 6.6 — 한 사람이 여러 역할(행 여러 개)일 수 있다: maybeSingle은 500이 된다 → 전부 읽어 대표 역할
+      const { data } = await admin.from('project_members').select('role').eq('project_id', projectId).eq('user_id', profileId)
+      const roles = ((data as { role: string }[] | null) ?? []).map((r) => r.role as MemberRole)
+      return primaryRole(roles)
     },
     async tokenActive(token) {
       if (!UUID_RE.test(token)) return false

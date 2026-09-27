@@ -107,7 +107,7 @@ function fakeStore(opts: { events?: EventRow[]; reminders?: ReminderRow[]; proje
       marks.push({ keys, status, error })
     },
     async authProfile(jwt) {
-      return jwt === 'jwt-pm' ? 'p-pm' : null
+      return jwt === 'jwt-pm' ? { id: 'p-pm', app_role: 'sales' as const } : null
     },
     async memberRole(profileId) {
       return profileId === 'p-pm' ? 'pm' : null
