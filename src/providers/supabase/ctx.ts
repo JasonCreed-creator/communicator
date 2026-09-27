@@ -5,6 +5,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { ProviderError } from '../../lib/errors'
 import type { Deliverable, Project, UUID } from '../../types/entities'
 import type { AppRole, DeliverableArea, MemberRole } from '../../types/enums'
+import { canWriteArea, primaryRole, sortRoles } from '../../lib/roles'
 import type { CurrentUser } from '../../types/views'
 import { mapPgError, unwrap, type PgErrorLike } from './errors'
 import type { SupabaseEnv } from './client'
@@ -57,7 +58,8 @@ export function newId(): UUID {
 
 export class SupabaseCtx {
   private meCache: Me | null = null
-  private roleCache = new Map<UUID, MemberRole | null>()
+  /** 행사 → 역할 집합(v16.1 — 한 사람이 여러 역할). 대표 역할은 primaryRole()로 파생 */
+  private roleCache = new Map<UUID, MemberRole[]>()
 
   constructor(
     public readonly sb: SupabaseClient,
@@ -136,24 +138,31 @@ export class SupabaseCtx {
     }
   }
 
-  async roleIn(projectId: UUID): Promise<MemberRole | null> {
-    if (this.roleCache.has(projectId)) return this.roleCache.get(projectId) ?? null
+  /** 현재 사용자가 이 행사에서 가진 역할 전부(v16.1 — 중복 배정). 멤버가 아니면 빈 배열 */
+  async rolesIn(projectId: UUID): Promise<MemberRole[]> {
+    const cached = this.roleCache.get(projectId)
+    if (cached) return cached
     const me = await this.me()
     // 전역 admin은 어느 행사에서든 pm(멤버 아니어도) — SQL app.member_role과 같은 판정(설계서 v2.18.1 §6.1)
     if (me.app_role === 'admin') {
-      this.roleCache.set(projectId, 'pm')
-      return 'pm'
+      this.roleCache.set(projectId, ['pm'])
+      return ['pm']
     }
-    const { data, error } = await this.sb
-      .from('project_members')
-      .select('role')
-      .eq('project_id', projectId)
-      .eq('user_id', me.id)
-      .maybeSingle()
+    const { data, error } = await this.sb.from('project_members').select('role').eq('project_id', projectId).eq('user_id', me.id)
     if (error) throw mapPgError(error)
-    const role = (data?.role as MemberRole | undefined) ?? null
-    this.roleCache.set(projectId, role)
-    return role
+    const roles = sortRoles(((data ?? []) as { role: MemberRole }[]).map((r) => r.role))
+    this.roleCache.set(projectId, roles)
+    return roles
+  }
+
+  /** 대표 역할(pm > design > ops > reg) — 옛 단일 역할 호출자용. 권한 판정은 hasRoles()·assert*가 집합으로 한다 */
+  async roleIn(projectId: UUID): Promise<MemberRole | null> {
+    return primaryRole(await this.rolesIn(projectId))
+  }
+
+  async hasRoles(projectId: UUID, ...roles: MemberRole[]): Promise<boolean> {
+    const mine = await this.rolesIn(projectId)
+    return roles.some((r) => mine.includes(r))
   }
 
   /**
@@ -172,53 +181,60 @@ export class SupabaseCtx {
     const sorted = rows
       .map((r) => ({ project_id: r.project_id, role: r.role, created_at: (Array.isArray(r.projects) ? r.projects[0] : r.projects)?.created_at ?? '' }))
       .sort((a, b) => a.created_at.localeCompare(b.created_at))
-    for (const r of sorted) this.roleCache.set(r.project_id, r.role)
+    // 행사마다 역할 집합(v16.1 — 한 사람이 여러 역할)
+    const byProject = new Map<UUID, MemberRole[]>()
+    for (const r of sorted) byProject.set(r.project_id, [...(byProject.get(r.project_id) ?? []), r.role])
+    for (const [pid, roles] of byProject) this.roleCache.set(pid, sortRoles(roles))
     const preferred = this.currentProjectId()
     const pick = sorted.find((r) => r.project_id === preferred) ?? sorted[0]
+    const roles = me.app_role === 'admin' ? ['pm' as MemberRole] : sortRoles(pick ? byProject.get(pick.project_id) ?? [] : [])
     return {
       id: me.id,
       name: me.name,
       email: me.email,
       title: me.title,
       phone: me.phone,
-      role: me.app_role === 'admin' ? 'pm' : (pick?.role ?? 'reg'),
+      role: primaryRole(roles) ?? 'reg',
+      roles,
       project_id: pick?.project_id ?? '',
       app_role: me.app_role,
     }
   }
 
   // ── 권한 단언 (설계서 §6.1 — MockProvider와 같은 메시지) ──────────
+  /** 멤버 단언 — 대표 역할을 돌려준다(옛 호출자용). 집합이 필요하면 assertMemberRoles() */
   async assertMember(projectId: UUID): Promise<MemberRole> {
-    const role = await this.roleIn(projectId)
-    if (!role) throw new ProviderError('forbidden', '프로젝트 멤버가 아닙니다.')
-    return role
+    const role = primaryRole(await this.assertMemberRoles(projectId))
+    return role as MemberRole
+  }
+
+  async assertMemberRoles(projectId: UUID): Promise<MemberRole[]> {
+    const roles = await this.rolesIn(projectId)
+    if (roles.length === 0) throw new ProviderError('forbidden', '프로젝트 멤버가 아닙니다.')
+    return roles
   }
 
   async assertPm(projectId: UUID): Promise<Me> {
-    const role = await this.roleIn(projectId)
-    if (role !== 'pm') throw new ProviderError('forbidden', 'PM 전용 기능입니다.')
+    if (!(await this.hasRoles(projectId, 'pm'))) throw new ProviderError('forbidden', 'PM 전용 기능입니다.')
     return this.me()
   }
 
   async assertPmOps(projectId: UUID): Promise<Me> {
-    const role = await this.roleIn(projectId)
-    if (role !== 'pm' && role !== 'ops') {
+    if (!(await this.hasRoles(projectId, 'pm', 'ops'))) {
       throw new ProviderError('forbidden', '이 편집은 PM·운영 담당만 가능합니다.')
     }
     return this.me()
   }
 
   async assertReg(projectId: UUID): Promise<Me> {
-    const role = await this.roleIn(projectId)
-    if (role !== 'pm' && role !== 'reg') throw new ProviderError('forbidden', '등록 데이터 권한이 없습니다.')
+    if (!(await this.hasRoles(projectId, 'pm', 'reg'))) throw new ProviderError('forbidden', '등록 데이터 권한이 없습니다.')
     return this.me()
   }
 
-  /** §6.1 역할-영역 일치: pm=전 영역, design/ops=자기 영역, common=pm 전용, reg=쓰기 불가 */
+  /** §6.1 역할-영역 일치: pm=전 영역, design/ops=자기 영역, common=pm 전용, reg=쓰기 불가 — 역할 합집합(v16.1) */
   async assertAreaRole(projectId: UUID, area: DeliverableArea): Promise<Me> {
-    const role = await this.assertMember(projectId)
-    if (role === 'pm') return this.me()
-    if ((role === 'design' || role === 'ops') && area === role) return this.me()
+    const roles = await this.assertMemberRoles(projectId)
+    if (canWriteArea(roles, area)) return this.me()
     throw new ProviderError('forbidden', '해당 영역에 대한 쓰기 권한이 없습니다.')
   }
 

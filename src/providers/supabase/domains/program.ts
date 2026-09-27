@@ -453,8 +453,7 @@ export function programDomain(ctx: SupabaseCtx): Pick<DataProvider, ProgramMetho
     // ── 컨펌 발송 (pm 전용, §5) ──────────────────────────────────────
     async requestApproval(deliverableId, input) {
       const d = await ctx.deliverable(deliverableId)
-      const role = await ctx.roleIn(d.project_id)
-      if (role !== 'pm') {
+      if (!(await ctx.hasRoles(d.project_id, 'pm'))) {
         throw new ProviderError('forbidden', '컨펌 발송은 PM만 할 수 있습니다.')
       }
       const me = await ctx.me()

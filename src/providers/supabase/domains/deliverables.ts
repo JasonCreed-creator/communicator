@@ -13,6 +13,7 @@ import { notifyFor } from '../notify'
 import { looksLikeDriveFileId } from '../../../lib/driveLink'
 import { fileUrlFor, rememberUpload, sessionFileUrl } from '../files'
 import { ProviderError } from '../../../lib/errors'
+import { canWriteArea } from '../../../lib/roles'
 import { assertTransition, buildVersionFileName } from '../../../lib/statusMachine'
 import { UPLOADABLE_STATUSES, uploadBlockedMessage } from '../../../lib/uploadGate'
 import { isDelayed, isImminent, toIsoDate } from '../../../lib/wbs'
@@ -242,7 +243,7 @@ export function deliverablesDomain(ctx: SupabaseCtx): DeliverablesDomain {
     async createDeliverable(input) {
       await ctx.assertWritable(input.project_id)
       const me = await ctx.assertAreaRole(input.project_id, input.area)
-      const role = await ctx.roleIn(input.project_id)
+      const isPm = await ctx.hasRoles(input.project_id, 'pm')
       if (!input.title.trim() || !input.category.trim()) {
         throw new ProviderError('validation', '카테고리와 제목은 필수입니다.')
       }
@@ -254,7 +255,7 @@ export function deliverablesDomain(ctx: SupabaseCtx): DeliverablesDomain {
         input.spec_location !== undefined ||
         input.spec_type !== undefined
       if (isBriefIssue) {
-        if (role !== 'pm') {
+        if (!isPm) {
           throw new ProviderError('forbidden', '가이드 발행은 PM만 할 수 있습니다.')
         }
         if (!input.assignee_id) {
@@ -305,11 +306,11 @@ export function deliverablesDomain(ctx: SupabaseCtx): DeliverablesDomain {
       // mock과 같은 순서의 앱 계층 단언 → RPC(update_deliverable)가 같은 규칙을 재판정하고 보낸 키만 한 번에 고친다
       const d = await ctx.deliverable(deliverableId)
       await ctx.assertWritable(d.project_id)
-      const role = await ctx.roleIn(d.project_id)
-      if (!(role === 'pm' || ((role === 'design' || role === 'ops') && d.area === role))) {
+      const roles = await ctx.rolesIn(d.project_id)
+      if (!canWriteArea(roles, d.area)) {
         throw new ProviderError('forbidden', '이 항목을 고칠 권한이 없습니다(PM 또는 해당 영역 담당).')
       }
-      if (role !== 'pm' && PM_ONLY_KEYS.some((k) => patch[k] !== undefined)) {
+      if (!roles.includes('pm') && PM_ONLY_KEYS.some((k) => patch[k] !== undefined)) {
         throw new ProviderError('forbidden', '담당자·가이드는 PM만 고칠 수 있습니다.')
       }
       if (patch.title !== undefined && !patch.title.trim()) {
@@ -368,9 +369,9 @@ export function deliverablesDomain(ctx: SupabaseCtx): DeliverablesDomain {
       // 상태 갱신 + 반려 코멘트 insert + 로그는 RPC가 한 트랜잭션으로 수행한다(RPC도 같은 규칙을 재검사).
       const d = await ctx.deliverable(deliverableId)
       await ctx.assertWritable(d.project_id)
-      const role = await ctx.assertMember(d.project_id)
+      const roles = await ctx.assertMemberRoles(d.project_id)
       const rule = assertTransition(d.status, to, 'status_patch')
-      if (rule.roles && !rule.roles.includes(role)) {
+      if (rule.roles && !rule.roles.some((r) => roles.includes(r))) {
         throw new ProviderError('forbidden', '이 전이를 수행할 권한이 없습니다.')
       }
       // draft→internal_review는 '영역 담당 또는 PM' (§5)

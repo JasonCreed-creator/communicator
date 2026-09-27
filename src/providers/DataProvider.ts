@@ -145,7 +145,7 @@ import type {
   WbsTask,
   SheetConnection,
 } from '../types/entities'
-import type { DeliverableStatus } from '../types/enums'
+import type { DeliverableStatus, MemberRole } from '../types/enums'
 import type {
   AddCommentInput,
   AttendeeWithRsvp,
@@ -235,8 +235,10 @@ export interface DataProvider {
   listMembers(projectId: UUID): Promise<MemberWithProfile[]>
   /** v1.5 §8 POST /projects/{id}/members — 담당자 추가(mock은 즉시 멤버, Phase 4부터 초대 승격) */
   addMember(projectId: UUID, input: MemberInput): Promise<MemberWithProfile>
-  /** v1.5 §8 DELETE /projects/{id}/members/{id} — 제거. 마지막 PM이면 409 */
-  removeMember(projectId: UUID, memberId: UUID): Promise<void>
+  /** v1.5 §8 DELETE /projects/{id}/members/{id} — 제거. 마지막 PM이면 409.
+   *  v16.1(Phase 6.6 · 사용자 승인 2026-09-27): `role`을 주면 그 역할 하나만 뺀다(중복 배정 — 한 사람이 여러 역할).
+   *  주지 않으면 그 사람의 역할 전부(옛 동작). 메서드 수 132 불변 — 시그니처 확장만 */
+  removeMember(projectId: UUID, memberId: UUID, role?: MemberRole): Promise<void>
   /** v1.3 §8 PATCH /projects/{id} — 행사 유형·기본정보 수정 (pm). v1.5: 개요 전 필드 */
   updateProject(projectId: UUID, patch: ProjectPatch): Promise<Project>
 

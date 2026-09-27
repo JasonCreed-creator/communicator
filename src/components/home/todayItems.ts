@@ -63,7 +63,8 @@ export interface TodayInput {
   inbox: UnregisteredFile[]
   /** 받은 가이드(dashboard.my_requested — 이미 '내 것') */
   guides: Deliverable[]
-  myRole: MemberRole | null
+  /** v16.1 — 내 역할 전부(한 사람이 여러 역할 · 합집합으로 '내 차례' 판정). 비멤버는 [] */
+  myRoles: readonly MemberRole[]
   roleOf: (userId: string | null) => MemberRole | null
   nameOf: (userId: string | null) => string | null
   now?: Date
@@ -74,7 +75,7 @@ export function wbsTaskTo(task: WbsTask): string {
   return task.linked_deliverable_id ? `/items/${task.linked_deliverable_id}` : '/schedule'
 }
 
-function taskRow(task: WbsTask, kind: 'delayed' | 'imminent', myRole: MemberRole | null): TodayRow {
+function taskRow(task: WbsTask, kind: 'delayed' | 'imminent', myRoles: readonly MemberRole[]): TodayRow {
   return {
     key: `${kind}:${task.id}`,
     kind,
@@ -89,7 +90,7 @@ function taskRow(task: WbsTask, kind: 'delayed' | 'imminent', myRole: MemberRole
     owner: null,
     due: task.end_date,
     dueText: null,
-    mine: myRole !== null && task.role === myRole,
+    mine: myRoles.includes(task.role),
     to: wbsTaskTo(task),
     action: '열기',
     inboxId: null,
@@ -98,10 +99,10 @@ function taskRow(task: WbsTask, kind: 'delayed' | 'imminent', myRole: MemberRole
 
 export function buildTodayRows(input: TodayInput): TodayRow[] {
   const now = input.now ?? new Date()
-  const isPm = input.myRole === 'pm'
+  const isPm = input.myRoles.includes('pm')
   const rows: TodayRow[] = []
 
-  for (const t of input.delayed) rows.push(taskRow(t, 'delayed', input.myRole))
+  for (const t of input.delayed) rows.push(taskRow(t, 'delayed', input.myRoles))
 
   for (const m of input.lateMilestones) {
     const role: MemberRole | null = m.area === 'design' || m.area === 'ops' ? m.area : null
@@ -119,7 +120,7 @@ export function buildTodayRows(input: TodayInput): TodayRow[] {
       due: m.due_date,
       dueText: null,
       // 영역 마일스톤은 그 영역 담당, 전체 마일스톤은 pm이 챙긴다
-      mine: role ? input.myRole === role : isPm,
+      mine: role ? input.myRoles.includes(role) : isPm,
       to: '/schedule',
       action: '열기',
       inboxId: null,
@@ -232,7 +233,7 @@ export function buildTodayRows(input: TodayInput): TodayRow[] {
     })
   }
 
-  for (const t of input.imminent) rows.push(taskRow(t, 'imminent', input.myRole))
+  for (const t of input.imminent) rows.push(taskRow(t, 'imminent', input.myRoles))
 
   return rows.sort(
     (a, b) =>

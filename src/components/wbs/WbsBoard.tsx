@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { isPm as isPmUser } from '../../lib/roles'
 import Card from '../internal/Card'
 import DensityToggle from '../internal/DensityToggle'
 import EmptyState from '../internal/EmptyState'
@@ -47,7 +48,7 @@ export default function WbsBoard() {
   const roleCharters = useAsync(() => provider.listRoleCharters(projectId), [projectId])
   const deliverables = useAsync(() => provider.listDeliverables(projectId), [projectId])
   const currentUser = useAsync(() => provider.getCurrentUser(), [])
-  const isPm = currentUser.data?.role === 'pm'
+  const isPm = isPmUser(currentUser.data)
   const reexpand = useMutation(() => provider.expandWbs(projectId))
   // P6-② — 주최형만 방향 뱃지(▲▼■) 표기, 대행형은 미표기
   const isHost = project.data?.kind === 'host'

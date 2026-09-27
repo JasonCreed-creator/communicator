@@ -8,6 +8,7 @@ import { normalizeRow, nowIso, type SupabaseCtx } from '../ctx'
 import { driveFor } from '../drive'
 import { mapPgError, type PgErrorLike } from '../errors'
 import { ProviderError } from '../../../lib/errors'
+import { isPm } from '../../../lib/roles'
 import { normalizeSlackWebhook, SLACK_WEBHOOK_INVALID_MESSAGE } from '../../../lib/slackWebhook'
 import { sameSlackThread, SLACK_DESIGN_THREAD_SAME_MESSAGE, normalizeSlackThreadLink, normalizeSlackUserId, SLACK_THREAD_INVALID_MESSAGE, SLACK_USER_ID_INVALID_MESSAGE } from '../../../lib/slackThread'
 import { normalizeQuoteAttachment, QUOTE_ATTACHMENT_INVALID_MESSAGE } from '../../../lib/quoteAttachment'
@@ -138,7 +139,7 @@ export function projectsDomain(ctx: SupabaseCtx): ProjectsDomain {
    */
   async function assertPersonAdmin(): Promise<void> {
     const user = await ctx.currentUser()
-    if (user.role !== 'pm') throw new ProviderError('forbidden', 'PM 전용 기능입니다.')
+    if (!isPm(user)) throw new ProviderError('forbidden', 'PM 전용 기능입니다.')
   }
 
   /**
@@ -382,10 +383,11 @@ export function projectsDomain(ctx: SupabaseCtx): ProjectsDomain {
       }
     },
 
-    async removeMember(projectId, memberId) {
+    async removeMember(projectId, memberId, role) {
       await ctx.assertPm(projectId)
       await ctx.assertWritable(projectId)
-      await ctx.rpc<void>('remove_member', { p_project: projectId, p_member: memberId })
+      // v16.1 — 역할을 주면 그 역할 하나만(중복 배정), 없으면 그 사람의 역할 전부(RPC p_role null)
+      await ctx.rpc<void>('remove_member', { p_project: projectId, p_member: memberId, p_role: role ?? null })
       ctx.invalidateRoles(projectId)
     },
 

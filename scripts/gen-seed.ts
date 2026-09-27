@@ -114,7 +114,7 @@ export function buildSeedSql(): string {
         'target_audience','status','closed_at','guarantee_pax','kpi_show_rate','targeting','quote_id','drive_root_folder_id','slack_webhook_url',
         'event_type','format','psa_enabled','audience_model','theme','venue','mc_name','overview_items','onboarded_at',
         'partner_guide_url','partner_contact_email','created_by','created_at'] },
-    { table: 'project_members', rows: state.members as Row[], conflict: '(project_id, user_id)',
+    { table: 'project_members', rows: state.members as Row[], conflict: '(project_id, user_id, role)',
       columns: ['project_id','user_id','role'] },
     { table: 'partner_tiers', rows: state.partner_tiers as Row[], conflict: '(id)',
       columns: ['id','project_id','code','name','description','capacity','sort','session_slots','booth_included','staff_cap','price'] },
@@ -241,7 +241,7 @@ begin
   v_id := app.promote_admin(p_email);
   insert into project_members (project_id, user_id, role)
   select p.id, v_id, 'pm' from projects p where p.id in (${projectIds.map((id) => lit(id)).join(', ')})
-  on conflict (project_id, user_id) do nothing;
+  on conflict (project_id, user_id, role) do nothing;
   return v_id;
 end $$;
 commit;

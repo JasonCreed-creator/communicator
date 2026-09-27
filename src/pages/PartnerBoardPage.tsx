@@ -8,6 +8,7 @@
 // 확정 계약액 등 금액은 이 화면 어디에도 없다(§21.2 R-H3 — grep 가드 범위에 src/pages/Partner*·
 // src/components/partner 포함).
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { isPm } from '../lib/roles'
 import { useSearchParams } from 'react-router-dom'
 import Card from '../components/internal/Card'
 import EmptyState from '../components/internal/EmptyState'
@@ -401,7 +402,7 @@ export default function PartnerBoardPage() {
             {/* 명부에서 바뀐 것이 위 접수 표에도 바로 반영되게 편집기의 변경 콜백을 받는다 */}
             <PartnerRosterEditor
               projectId={projectId}
-              readOnly={me.data?.role !== 'pm'}
+              readOnly={!isPm(me.data)}
               onChanged={partners.reload}
             />
             <PartnerPortalLinks partners={partnerList} />

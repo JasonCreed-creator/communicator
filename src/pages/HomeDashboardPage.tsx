@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { rolesOf } from '../lib/roles'
 import Card from '../components/internal/Card'
 import EmptyState from '../components/internal/EmptyState'
 import ErrorAlert from '../components/internal/ErrorAlert'
@@ -97,7 +98,7 @@ export default function HomeDashboardPage() {
       overBudget,
       inbox: inbox.data ?? [],
       guides: dashboard.data?.my_requested ?? [],
-      myRole: me.data?.role ?? null,
+      myRoles: rolesOf(me.data),
       roleOf,
       nameOf,
     })

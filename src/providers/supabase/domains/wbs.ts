@@ -355,12 +355,12 @@ export function wbsDomain(ctx: SupabaseCtx): Pick<DataProvider, WbsMethods> {
         'WBS 태스크를 찾을 수 없습니다.',
       ) as WbsTask
       await ctx.assertWritable(task.project_id)
-      const role = await ctx.roleIn(task.project_id)
+      const roles = await ctx.rolesIn(task.project_id)
       const editKeys = Object.keys(patch).filter((k) => k !== 'status')
-      if (editKeys.length > 0 && role !== 'pm') {
+      if (editKeys.length > 0 && !roles.includes('pm')) {
         throw new ProviderError('forbidden', '태스크 편집은 PM만 할 수 있습니다.')
       }
-      if (patch.status !== undefined && role !== 'pm' && role !== task.role) {
+      if (patch.status !== undefined && !roles.includes('pm') && !roles.includes(task.role)) {
         throw new ProviderError('forbidden', '태스크 체크는 담당 역할과 PM만 할 수 있습니다.')
       }
       const row: Record<string, unknown> = {}
@@ -413,10 +413,10 @@ export function wbsDomain(ctx: SupabaseCtx): Pick<DataProvider, WbsMethods> {
         '컴플라이언스 카드를 찾을 수 없습니다.',
       ) as ComplianceCard
       await ctx.assertWritable(card.project_id)
-      const role = await ctx.roleIn(card.project_id)
+      const isPm = await ctx.hasRoles(card.project_id, 'pm')
       const row: Record<string, unknown> = {}
       if (patch.title !== undefined) {
-        if (role !== 'pm') {
+        if (!isPm) {
           throw new ProviderError('forbidden', '카드 편집은 PM만 할 수 있습니다.')
         }
         if (!patch.title.trim()) throw new ProviderError('validation', '카드 제목은 필수입니다.')

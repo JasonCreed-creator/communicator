@@ -2,6 +2,8 @@
 // Phase 3.22(2026-09-24, 사용자 지시 "미리 배치하지 말고 인물카드를 만들어서 클릭하거나 드래그앤드랍으로"):
 //   역할 칸 4개(PM·디자인·운영·등록) = 이 행사의 배정 현황, 주소록 인물 카드 = 배정 후보.
 //   배정은 ①카드를 눌러 역할 고르기 ②카드를 역할 칸으로 끌어놓기 — 저장은 addMember 하나(DataProvider 불변).
+//   v16.1(Phase 6.6 · 중복 배정): 한 사람을 여러 역할에 둘 수 있다 — 배정된 사람도 주소록 카드로 남고(가진 역할 칩),
+//   이미 가진 역할 버튼만 잠긴다. 칸의 '빼기'는 그 역할 하나만 뺀다(removeMember(projectId, id, role)).
 //   미리 배치하지 않는다 — 새 행사에는 만든 사람(PM)만 있다(설계서 §8).
 // addMember·removeMember는 pm 전용(서버 assertPm) — readOnly=true(비 pm)면 역할 칸만 읽기로 보여 준다.
 // 주소록에 없는 사람은 ②직접 입력 ③전자명함 붙여넣기로 넣는다(Phase 3.20) — 셋 다 addMember로 모인다
@@ -54,8 +56,8 @@ export default function MembersEditor({
   // 주소록(전역 담당자 마스터) — 배정 후보의 원천. 배정·빼기로 후보가 바뀌므로 멤버와 함께 재조회한다.
   const people = useAsync(() => provider.listPeople(), [])
   // removeMember는 void 반환 — useMutation 성공 판정(반환값 존재)을 위해 true로 감싼다
-  const remove = useMutation(async (memberId: UUID) => {
-    await provider.removeMember(projectId, memberId)
+  const remove = useMutation(async (memberId: UUID, role: MemberRole) => {
+    await provider.removeMember(projectId, memberId, role)
     return true
   })
   const assign = useMutation((person: PersonWithAssignments, role: MemberRole) =>
@@ -78,27 +80,29 @@ export default function MembersEditor({
     onChanged?.()
   }
 
-  const handleRemove = async (memberId: UUID, name: string) => {
-    if (!window.confirm(`${name} 님을 이 행사 담당에서 뺄까요? 담당자 목록(주소록)에는 그대로 남습니다.`)) return
+  const handleRemove = async (memberId: UUID, name: string, role: MemberRole) => {
+    if (!window.confirm(`${name} 님을 이 행사의 ${ROLE_LABELS[role]} 담당에서 뺄까요? 다른 역할과 담당자 목록(주소록)에는 그대로 남습니다.`)) return
     assign.setError(null)
-    const ok = await remove.run(memberId)
-    if (ok) reloadAll() // 뺀 사람은 다시 후보 카드가 된다
+    const ok = await remove.run(memberId, role)
+    if (ok) reloadAll()
   }
 
-  const assignedIds = new Set((members.data ?? []).map((m) => m.user_id))
-  const assignedEmails = new Set(
-    (members.data ?? [])
-      .map((m) => m.profile.email?.toLowerCase())
-      .filter((e): e is string => Boolean(e)),
-  )
-  // 이미 배정된 사람은 addMember가 409로 막는다 — 고를 수 없는 카드를 두지 않는다.
-  // 이메일이 없는 프로필도 뺀다: 이메일이 사람의 신원 키라 배정 자체가 성립하지 않는다.
-  const candidates = (people.data ?? []).filter(
-    (p) => Boolean(p.email) && !assignedIds.has(p.id) && !assignedEmails.has(p.email!.toLowerCase()),
-  )
+  // 사람마다 이 행사에서 이미 가진 역할(v16.1 — 여러 개일 수 있다). 주소록 id = 프로필 id = members.user_id
+  const heldRoles = new Map<UUID, MemberRole[]>()
+  for (const m of members.data ?? []) heldRoles.set(m.user_id, [...(heldRoles.get(m.user_id) ?? []), m.role])
+  const heldByEmail = new Map<string, MemberRole[]>()
+  for (const m of members.data ?? []) if (m.profile.email) heldByEmail.set(m.profile.email.toLowerCase(), heldRoles.get(m.user_id) ?? [])
+  const rolesHeld = (p: PersonWithAssignments): MemberRole[] => heldRoles.get(p.id) ?? (p.email ? heldByEmail.get(p.email.toLowerCase()) : undefined) ?? []
+  // 이메일이 없는 프로필은 뺀다: 이메일이 사람의 신원 키라 배정 자체가 성립하지 않는다.
+  // 배정된 사람도 카드로 남는다 — 다른 역할로 또 배정할 수 있다(가진 역할 버튼만 잠김)
+  const candidates = (people.data ?? []).filter((p) => Boolean(p.email))
 
   const handleAssign = async (person: PersonWithAssignments, role: MemberRole): Promise<boolean> => {
     remove.setError(null)
+    if (rolesHeld(person).includes(role)) {
+      assign.setError(`${person.name} 님은 이미 이 행사의 ${ROLE_LABELS[role]} 담당입니다.`)
+      return false
+    }
     const created = await assign.run(person, role)
     if (created) reloadAll()
     return Boolean(created)
@@ -107,9 +111,9 @@ export default function MembersEditor({
   const handleDropPerson = (personId: string, role: MemberRole) => {
     setDraggingId(null)
     const person = candidates.find((p) => p.id === personId)
-    // 이미 배정됐거나(다른 탭에서 먼저 배정) 주소록에서 사라진 카드 — 조용히 무시하지 않고 사실을 알린다
+    // 주소록에서 사라진 카드(다른 탭에서 지움) — 조용히 무시하지 않고 사실을 알린다
     if (!person) {
-      assign.setError('그 담당자는 이미 배정됐거나 주소록에 없습니다. 목록을 새로 확인하세요.')
+      assign.setError('그 담당자는 주소록에 없습니다. 목록을 새로 확인하세요.')
       reloadAll()
       return
     }
@@ -142,6 +146,7 @@ export default function MembersEditor({
           {members.data && people.data && (
             <PeoplePool
               candidates={candidates}
+              rolesHeld={rolesHeld}
               directoryEmpty={people.data.length === 0}
               busy={busy}
               onAssign={handleAssign}
@@ -155,8 +160,8 @@ export default function MembersEditor({
       )}
 
       <p className="text-xs text-ink-cap">
-        PM은 최소 1명 필수. 같은 사람이 여러 행사에 다른 역할로 참여할 수 있습니다(행사별 역할). Phase
-        4에서 이메일 초대로 전환.
+        PM은 최소 1명 필수. 같은 사람을 한 행사에서 여러 역할에 둘 수 있고(권한은 합쳐집니다), 행사마다 역할이 달라도
+        됩니다. Phase 4에서 이메일 초대로 전환.
       </p>
     </div>
   )
@@ -182,7 +187,7 @@ function RoleLanes({
   dragging: boolean
   busy: boolean
   onDropPerson: (personId: string, role: MemberRole) => void
-  onRemove: (memberId: UUID, name: string) => void
+  onRemove: (memberId: UUID, name: string, role: MemberRole) => void
 }) {
   const [overRole, setOverRole] = useState<MemberRole | null>(null)
   const accepts = (e: DragEvent) => !readOnly && !busy && carriesPerson(e)
@@ -238,8 +243,9 @@ function RoleLanes({
               <ul className="mt-2 space-y-2">
                 {laneMembers.map((m) => (
                   <li
-                    key={m.user_id}
+                    key={`${m.user_id}:${m.role}`}
                     data-member-card={m.user_id}
+                    data-member-role={m.role}
                     className={`rounded-md border border-l-4 border-border ${ROLE_BORDER_CLASSES[role]} bg-card px-2.5 py-2 shadow-card`}
                   >
                     <div className="flex items-start justify-between gap-2">
@@ -266,9 +272,9 @@ function RoleLanes({
                       {!readOnly && (
                         <button
                           type="button"
-                          onClick={() => onRemove(m.user_id, m.profile.name)}
+                          onClick={() => onRemove(m.user_id, m.profile.name, m.role)}
                           disabled={busy}
-                          aria-label={`${m.profile.name} 빼기`}
+                          aria-label={`${m.profile.name} ${ROLE_LABELS[role]}에서 빼기`}
                           className="shrink-0 whitespace-nowrap text-xs text-negative underline"
                         >
                           빼기
@@ -299,6 +305,7 @@ function RoleLanes({
  */
 function PeoplePool({
   candidates,
+  rolesHeld,
   directoryEmpty,
   busy,
   onAssign,
@@ -306,7 +313,9 @@ function PeoplePool({
   onDragEnd,
 }: {
   candidates: PersonWithAssignments[]
-  /** 후보 0명의 두 사정을 가른다: 주소록 자체가 빈 것 vs 이 행사에 전원 배정된 것 */
+  /** 이 행사에서 이미 가진 역할(v16.1 — 카드에 칩으로 보이고, 그 역할 버튼은 잠긴다) */
+  rolesHeld: (person: PersonWithAssignments) => MemberRole[]
+  /** 후보 0명의 두 사정을 가른다: 주소록 자체가 빈 것 vs 이메일 있는 사람이 없는 것 */
   directoryEmpty: boolean
   busy: boolean
   onAssign: (person: PersonWithAssignments, role: MemberRole) => Promise<boolean>
@@ -323,7 +332,7 @@ function PeoplePool({
           message={
             directoryEmpty
               ? '등록된 담당자가 없습니다 — 담당자 화면에서 먼저 등록하면 다음부터 카드로 골라서 배정할 수 있습니다.'
-              : '주소록의 모든 담당자가 이 행사에 배정됐습니다.'
+              : '주소록에 이메일이 있는 담당자가 없습니다 — 담당자 화면에서 이메일을 채우면 배정할 수 있습니다.'
           }
           action={
             <Link to="/people" className="btn btn-ghost btn-sm">
@@ -339,7 +348,7 @@ function PeoplePool({
     <div className="space-y-2 border-t border-border pt-3">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <p className="t-caption text-ink-sub">
-          주소록 {candidates.length}명 — 카드를 눌러 역할을 고르거나, 위의 역할 칸으로 끌어놓으세요.
+          주소록 {candidates.length}명 — 카드를 눌러 역할을 고르거나, 위의 역할 칸으로 끌어놓으세요. 같은 사람을 여러 역할에 둘 수 있습니다.
         </p>
         <Link to="/people" className="t-caption text-ink-cap underline">
           담당자 목록 관리
@@ -350,6 +359,7 @@ function PeoplePool({
           <PersonCard
             key={person.id}
             person={person}
+            held={rolesHeld(person)}
             open={openId === person.id}
             busy={busy}
             onToggle={() => setOpenId((id) => (id === person.id ? null : person.id))}
@@ -370,6 +380,7 @@ function PeoplePool({
 
 function PersonCard({
   person,
+  held,
   open,
   busy,
   onToggle,
@@ -378,6 +389,8 @@ function PersonCard({
   onDragEnd,
 }: {
   person: PersonWithAssignments
+  /** 이 행사에서 이미 가진 역할 — 칩으로 보이고 그 역할 버튼은 잠긴다 */
+  held: MemberRole[]
   open: boolean
   busy: boolean
   onToggle: () => void
@@ -431,6 +444,17 @@ function PersonCard({
         <span className="min-w-0">
           <span className="block truncate text-sm font-medium text-ink">{person.name}</span>
           <span className="block truncate text-xs text-ink-sub">{person.title || person.email}</span>
+          {held.length > 0 && (
+            <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-ink-cap" data-testid={`person-held-${person.id}`}>
+              <span>이 행사:</span>
+              {held.map((r) => (
+                <span key={r} className="inline-flex items-center gap-1 whitespace-nowrap">
+                  <RoleDot role={r} />
+                  {ROLE_LABELS[r]}
+                </span>
+              ))}
+            </span>
+          )}
         </span>
       </div>
       {open && (
@@ -440,7 +464,8 @@ function PersonCard({
               key={role}
               type="button"
               onClick={() => onAssign(role)}
-              disabled={busy}
+              disabled={busy || held.includes(role)}
+              title={held.includes(role) ? `이미 ${ROLE_LABELS[role]} 담당입니다` : undefined}
               aria-label={`${person.name} ${ROLE_LABELS[role]}으로 배정`}
               className="btn btn-ghost btn-sm gap-1.5"
             >

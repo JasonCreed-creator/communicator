@@ -209,7 +209,7 @@ export function landingDomain(ctx: SupabaseCtx): LandingMethods {
       await ctx.me()
       const landing = await mustFindLanding(landingId)
       await ctx.assertWritable(landing.project_id)
-      if ((await ctx.roleIn(landing.project_id)) !== 'pm') {
+      if (!(await ctx.hasRoles(landing.project_id, 'pm'))) {
         throw new ProviderError('forbidden', '랜딩 삭제는 PM만 할 수 있습니다.')
       }
       // landing_daily_metrics는 on delete cascade — 지표도 함께 사라진다(mock의 delete landing_metrics[id])

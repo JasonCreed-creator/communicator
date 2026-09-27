@@ -65,7 +65,10 @@ export interface UserRef {
 }
 
 export interface CurrentUser extends UserRef {
+  /** 대표 역할(pm > design > ops > reg) — 옛 단일 역할 소비자용. 정본은 `roles`(v16.1 · Phase 6.6) */
   role: MemberRole
+  /** v16.1 — 현재 행사에서 가진 역할 전부(한 사람이 여러 역할 가능). 권한 = 합집합(`lib/roles`) */
+  roles?: MemberRole[]
   project_id: UUID
   /** v2.0 — 전역 역할 (profiles.app_role): 견적 메뉴·API 게이트 (admin·sales) */
   app_role: AppRole

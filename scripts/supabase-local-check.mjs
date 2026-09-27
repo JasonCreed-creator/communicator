@@ -176,8 +176,28 @@ ${assertSql(`(select app_role from profiles where email='new@example.com') = 'st
   scenario('RPC add_member: pm이 새 담당자 배정 → 프로필 생성 + 멤버 + 초대 이력', `select add_member('${PRJ}', '신규담당', 'newbie@example.com', 'design', '대리', '010-1');
 ${`do $$ begin if not exists (select 1 from project_members m join profiles p on p.id=m.user_id where m.project_id='${PRJ}' and lower(p.email)='newbie@example.com' and m.role='design') then raise exception 'ASSERT_FAILED: member'; end if; if not exists (select 1 from project_invites where project_id='${PRJ}' and lower(email)='newbie@example.com') then raise exception 'ASSERT_FAILED: invite'; end if; end $$;`}`,
     { role: 'authenticated', sub: authId.pm })
-  scenario('RPC add_member: 같은 사람 중복 배정 409', `select add_member('${PRJ}', '김기획', 'pm@example.com', 'design');`,
-    { role: 'authenticated', sub: authId.pm, expect: 'error', match: '이미 이 행사의 담당자' })
+  // Phase 6.6 — 중복 배정: 키 (행사·사람·역할) · 같은 역할만 409 · 역할 하나만 빼기 · 권한 합집합
+  const PM_PROFILE = `(select id from profiles where email='pm@example.com')`
+  scenario('RPC add_member: 같은 사람 같은 역할 409(v2.19 — 역할 이름이 든 문구)', `select add_member('${PRJ}', '김기획', 'pm@example.com', 'pm');`,
+    { role: 'authenticated', sub: authId.pm, expect: 'error', match: '이미 이 행사의 PM 담당자' })
+  scenario('RPC add_member: 같은 사람 다른 역할 = 중복 배정 허용(v2.19)', `select add_member('${PRJ}', '김기획', 'pm@example.com', 'design');
+${assertSql(`(select count(*) from project_members where project_id='${PRJ}' and user_id=${PM_PROFILE}) = 2`)}`,
+    { role: 'authenticated', sub: authId.pm })
+  scenario('RPC remove_member(p_role): 그 역할 하나만 뺀다', `select add_member('${PRJ}', '김기획', 'pm@example.com', 'design');
+select remove_member('${PRJ}', ${PM_PROFILE}, 'design');
+${assertSql(`(select array_agg(role::text) from project_members where project_id='${PRJ}' and user_id=${PM_PROFILE}) = array['pm']`)}`,
+    { role: 'authenticated', sub: authId.pm })
+  scenario('RPC remove_member(p_role): 마지막 PM의 pm 역할은 다른 역할이 있어도 409', `select add_member('${PRJ}', '김기획', 'pm@example.com', 'design');
+select remove_member('${PRJ}', ${PM_PROFILE}, 'pm');`,
+    { role: 'authenticated', sub: authId.pm, expect: 'error', match: '마지막 PM' })
+  scenario('PK = (행사·사람·역할)', assertSql(`exists (select 1 from pg_constraint c join pg_class t on t.oid=c.conrelid where t.relname='project_members' and c.contype='p' and array_length(c.conkey,1)=3)`))
+  scenario('app.member_roles 합집합: design + ops → 두 영역 쓰기 · 대표 역할 design · has_role ops', `reset role;
+insert into project_members (project_id, user_id, role) values ('${PRJ}', (select id from profiles where email='design@example.com'), 'ops');
+set local role authenticated;
+${assertSql(`app.member_roles('${PRJ}') = array['design','ops']::member_role[] and app.member_role('${PRJ}') = 'design' and app.can_write_area('${PRJ}','ops') and app.can_write_area('${PRJ}','design') and app.has_role('${PRJ}','ops') and not app.is_pm('${PRJ}')`)}`,
+    { role: 'authenticated', sub: authId.design })
+  scenario('app.notify_role_people: 두 역할이어도 한 번만 실린다', `insert into project_members (project_id, user_id, role) values ('${PRJ}', (select id from profiles where email='design@example.com'), 'ops');
+${assertSql(`jsonb_array_length(app.notify_role_people('${PRJ}', array['design','ops']::member_role[])) = (select count(distinct user_id) from project_members where project_id='${PRJ}' and role in ('design','ops'))`)}`)
   scenario('RPC add_member: design은 403', `select add_member('${PRJ}', 'x', 'x@example.com', 'reg');`,
     { role: 'authenticated', sub: authId.design, expect: 'error', match: 'PM 전용' })
   scenario('RPC remove_member: 마지막 PM 삭제 409', `select remove_member('${PRJ}', (select id from profiles where email='pm@example.com'));`,
