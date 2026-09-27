@@ -74,7 +74,7 @@ export default function VendorQuoteHistory({
     <section className="ui-card p-5" data-testid="vendor-quote-import" aria-label="불러온 협력사 견적서">
       <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
         <h2 className="t-card-title">불러온 협력사 견적서</h2>
-        <span className="t-caption">확정한 건만 발주 항목이 됩니다 · 원본은 행사 Drive 폴더(02_견적·정산)에 보관</span>
+        <span className="t-caption">확정한 건만 발주 항목이 됩니다 · 원본은 행사 Drive 폴더(06_결과보고·정산)에 보관</span>
       </div>
       <ul className="mt-3 divide-y divide-border rounded-md border border-border" aria-label="불러온 견적서">
         {imports.map((x) => (
@@ -257,7 +257,7 @@ export function VendorQuoteDialog({
                 : `서식 ${view.parsed.format}형`}{' '}
               · 행 {view.parsed.rows.length}개
               {view.parsed.header.manager ? ` · 견적 담당 ${view.parsed.header.manager}` : ''}
-              {view.drive_file_id ? ' · 원본은 Drive(02_견적·정산/협력사 견적서)에 보관했습니다' : ''}
+              {view.drive_file_id ? ' · 원본은 Drive(06_결과보고·정산/협력사 견적서)에 보관했습니다' : ''}
             </p>
 
             <fieldset className="mt-4 rounded-md border border-border p-3" data-testid="vendor-quote-vat">

@@ -1,17 +1,23 @@
-// 표준 폴더 트리 — 설계서 §7.1(jc-workspace-ops 표준 준용, 새 트리 발명 금지) + v2.9 §7.1b 루트 규약.
+// 표준 폴더 트리 — 설계서 §7.1(v2.17 — 운영 커뮤니케이션 프로토콜 v1.0 표준 폴더 정합, Phase 6.3 [B1]) + v2.9 §7.1b 루트 규약.
 //
-//   {DRIVE_ROOT}/                      사용자 지정 저장소 루트(2026-09-24 "MICE Communicator")
+//   {DRIVE_ROOT}/                      사용자 지정 저장소 루트(2026-09-24 "MICE Communicator" = 프로토콜의 MICE/)
 //   ├ 00_견적서/                       견적 스프레드시트(Phase 4.2 — GOOGLE_QUOTE_FOLDER_ID가 없을 때 기본)
-//   ├ {YYMMDD}_{고객사}_{행사명}/       행사 루트 = projects.drive_root_folder_id (행사 ID — 운영 프로토콜 v1.0 · src/lib/projectLabel)
-//   │  ├ 01_기획 · 02_견적·정산 · 03_회의록
-//   │  ├ 04_운영/{항목명}/              ops 영역
-//   │  ├ 05_산출물/디자인/{항목명}/      design 영역
-//   │  ├ 06_발주처공유                   final 스냅숏 전용(앱만 기록 §7.5)
-//   │  └ 99_archive
+//   ├ {YYYY}/                          연도 = 행사일 연도(없으면 '연도 미정' — 행사일이 정해지면 그 연도로 옮긴다)
+//   │  └ {YYMMDD}_{고객사}_{행사명}/    행사 루트 = projects.drive_root_folder_id (행사 ID — src/lib/projectLabel)
+//   │     ├ 01_견적                      견적서 첨부(Phase 6.2) · 공통 견적 문서
+//   │     ├ 02_계약                      공통 계약 문서
+//   │     ├ 03_제작·키비주얼/{항목명}/    design 영역 항목 폴더 + 프로토콜 하위 KV · 초청장 · 현장물 · 납품(= final 스냅숏 전용 §7.5)
+//   │     ├ 04_WBS·운영계획/{항목명}/     ops 영역 항목 폴더 + 회의록·기획 공통 문서(바로)
+//   │     ├ 05_현장                      현장 자료(사람이 올림 — 인박스가 잡는다)
+//   │     ├ 06_결과보고·정산/            협력사 견적서(Phase 4.7) · 정산·예산·결과보고 공통 문서
+//   │     └ 99_archive                   지운 항목 폴더 보관(§7.8)
 //   └ 99_archive/                      삭제된 행사 폴더 보관(v2.9 — Phase 4.1 이탈 2 해소)
 //
 // 멱등: 폴더는 "있으면 쓰고 없으면 만든다". 행사·항목 폴더는 appProperties(앱 전용 표식)로 다시 찾으므로 DB 기록 전에
 // 끊겨도 두 번째 실행이 같은 폴더를 채택한다(중복 0). 파트 폴더는 표준 이름으로 찾는다 — 사람이 미리 만든 폴더도 그대로 쓴다.
+// 옛 트리(v2.9~v2.16 — 01_기획 · 02_견적·정산 · 03_회의록 · 04_운영 · 05_산출물/디자인 · 06_발주처공유)로 만든 행사 폴더는
+// **이름과 연도 자리만** 새 규칙으로 맞추고(syncProjectRootPlacement) 하위 폴더·파일은 건드리지 않는다(사용자 선택 2026-09-27).
+// 그 안의 항목은 기록된 항목 폴더(deliverables.drive_folder_id)를 그대로 쓰고, 새 항목·새 파트만 새 이름으로 생긴다.
 import { DriveError } from './errors.js'
 import { FOLDER_MIME, qEscape, type DriveApi, type DriveFile } from './googleDrive.js'
 import { projectLabel } from '../../../src/lib/projectLabel.js'
@@ -19,18 +25,28 @@ import type { DeliverableRow, DriveStore, ProjectRow } from './store.js'
 
 export const QUOTE_FOLDER = '00_견적서'
 export const ARCHIVE_FOLDER = '99_archive'
+/** 행사 폴더 파트 6종 + 보관함 — 운영 커뮤니케이션 프로토콜 v1.0 표준 폴더(설계서 v2.17 §7.1 · §26.2) */
 export const PART = {
-  plan: '01_기획',
-  money: '02_견적·정산',
-  minutes: '03_회의록',
-  ops: '04_운영',
-  output: '05_산출물',
-  share: '06_발주처공유',
+  quote: '01_견적',
+  contract: '02_계약',
+  production: '03_제작·키비주얼',
+  plan: '04_WBS·운영계획',
+  onsite: '05_현장',
+  report: '06_결과보고·정산',
   archive: '99_archive',
 } as const
-export const DESIGN_SUBFOLDER = '디자인'
-/** 행사 트리에서 스캔(인박스)하지 않는 파트 — 앱이 쓰는 발주처 공유본과 보관함 */
-export const SCAN_EXCLUDED_PARTS: readonly string[] = [PART.share, PART.archive]
+/** 03_제작·키비주얼 아래 프로토콜 하위 4종 — 사람이 쓰는 칸(앱의 design 항목 폴더는 03 바로 아래) · 납품 = final 스냅숏 전용 */
+export const PRODUCTION_SUBFOLDERS = ['KV', '초청장', '현장물', '납품'] as const
+export const DELIVERY_SUBFOLDER = '납품'
+/** §7.5 확정 사본이 놓이는 경로(행사 루트 기준) */
+export const DELIVERY_PATH: readonly string[] = [PART.production, DELIVERY_SUBFOLDER]
+/** 옛 트리(v2.9~v2.16)의 발주처 공유본 폴더 — 기존 행사 폴더에 남아 있으므로 스캔에서 계속 뺀다 */
+export const LEGACY_SHARE_FOLDER = '06_발주처공유'
+/** 행사 트리에서 스캔(인박스)하지 않는 경로(행사 루트 기준) — 앱이 쓰는 납품 사본 · 보관함 · 옛 발주처공유 */
+export const SCAN_EXCLUDED_PATHS: readonly string[] = [PART.archive, DELIVERY_PATH.join('/'), LEGACY_SHARE_FOLDER]
+/** 행사일이 없는 행사의 연도 폴더 이름 */
+export const YEAR_UNKNOWN_FOLDER = '연도 미정'
+const YEAR_FOLDER_RE = /^(19|20)\d{2}$/
 
 export const APP_PROJECT_KEY = 'communicator_project_id'
 export const APP_DELIVERABLE_KEY = 'communicator_deliverable_id'
@@ -53,16 +69,28 @@ export function projectFolderName(p: Pick<ProjectRow, 'name' | 'organizer' | 'ev
   return projectLabel(p)
 }
 
+/** 연도 폴더 이름 = 행사일의 연도(YYYY) · 행사일이 없으면 '연도 미정' */
+export function projectYearFolderName(p: Pick<ProjectRow, 'event_date'>): string {
+  const m = /^(\d{4})-\d{2}-\d{2}/.exec(p.event_date ?? '')
+  return m ? m[1] : YEAR_UNKNOWN_FOLDER
+}
+
+/** 저장소 루트 바로 아래 연도 폴더인가(2026 · 연도 미정) — 행사 폴더로 지정할 수 없고, 행사 폴더를 옮길 때 '연도 자리'로 본다 */
+export function isYearFolderName(name: string): boolean {
+  return YEAR_FOLDER_RE.test(name) || name === YEAR_UNKNOWN_FOLDER
+}
+
 /**
  * 항목 → 폴더 경로(§7.1 영역 매핑). leaf=null이면 항목 전용 하위 폴더 없이 파트 폴더에 바로 둔다(공통 문서).
- * design → 05_산출물/디자인/{항목} · ops → 04_운영/{항목} · common: 회의록 → 03_회의록 · 견적·정산·계약·예산 → 02 · 그 외 01_기획
+ * design → 03_제작·키비주얼/{항목} · ops → 04_WBS·운영계획/{항목} · common: 견적 → 01 · 계약 → 02 · 정산·예산·결과보고 → 06 · 그 외(회의록·기획) → 04
  */
 export function itemFolderPlan(d: Pick<DeliverableRow, 'area' | 'category' | 'title'>): { path: string[]; leaf: string | null } {
-  if (d.area === 'design') return { path: [PART.output, DESIGN_SUBFOLDER], leaf: sanitizeName(d.title) }
-  if (d.area === 'ops') return { path: [PART.ops], leaf: sanitizeName(d.title) }
+  if (d.area === 'design') return { path: [PART.production], leaf: sanitizeName(d.title) }
+  if (d.area === 'ops') return { path: [PART.plan], leaf: sanitizeName(d.title) }
   const c = d.category ?? ''
-  if (c.includes('회의록')) return { path: [PART.minutes], leaf: null }
-  if (/견적|정산|계약|예산/.test(c)) return { path: [PART.money], leaf: null }
+  if (c.includes('견적')) return { path: [PART.quote], leaf: null }
+  if (c.includes('계약')) return { path: [PART.contract], leaf: null }
+  if (/정산|예산|결과보고/.test(c)) return { path: [PART.report], leaf: null }
   return { path: [PART.plan], leaf: null }
 }
 
@@ -102,24 +130,74 @@ export async function ensureRootFolders(api: DriveApi, driveRoot: string): Promi
   }
 }
 
-/** 행사 루트 폴더의 파트 7종 + 05_산출물/디자인 — 있으면 쓰고 없으면 만든다(사람이 지운 파트 폴더도 복구) */
+/** 행사 루트 폴더의 파트 6종 + 99_archive + 03_제작·키비주얼 하위 4종 — 있으면 쓰고 없으면 만든다(사람이 지운 파트 폴더도 복구) */
 export async function ensureParts(api: DriveApi, rootId: string): Promise<Record<string, string>> {
   const parts: Record<string, string> = {}
   for (const name of Object.values(PART)) parts[name] = await ensureChildFolder(api, rootId, name)
-  parts[`${PART.output}/${DESIGN_SUBFOLDER}`] = await ensureChildFolder(api, parts[PART.output], DESIGN_SUBFOLDER)
+  for (const sub of PRODUCTION_SUBFOLDERS) parts[`${PART.production}/${sub}`] = await ensureChildFolder(api, parts[PART.production], sub)
   return parts
 }
 
-/** 행사 루트 아래 파트 경로 하나만(예: ['05_산출물','디자인']) — 업로드마다 7종을 다 확인하지 않는다 */
+/** 행사 루트 아래 파트 경로 하나만(예: ['03_제작·키비주얼','납품']) — 업로드마다 파트 전부를 다 확인하지 않는다 */
 export async function ensurePartPath(api: DriveApi, rootId: string, path: readonly string[]): Promise<string> {
   let id = rootId
   for (const seg of path) id = await ensureChildFolder(api, id, seg)
   return id
 }
 
+/** 행사 표식(appProperties)이 붙은 폴더를 저장소 안에서 찾는다 — 루트 바로 아래(옛 트리)든 연도 폴더 아래든 */
+async function findTaggedProjectRoot(api: DriveApi, driveRoot: string, projectId: string): Promise<DriveFile | null> {
+  const tagged = await api.list(
+    `appProperties has { key='${APP_PROJECT_KEY}' and value='${qEscape(projectId)}' } and mimeType = '${FOLDER_MIME}' and trashed = false`,
+    undefined,
+    10,
+  )
+  for (const f of tagged.files ?? []) {
+    if (f.id !== driveRoot && (await ancestorIds(api, f, driveRoot)).has(driveRoot)) return f
+  }
+  return null
+}
+
 /**
- * 행사 루트를 보장한다. 순서: DB에 적힌 폴더(살아 있으면) → appProperties로 찾기 → 새로 만들기. 바뀌면 DB에 기록.
+ * 있는 행사 폴더를 규약 자리에 맞춘다(v2.17 [B1] — 사용자 선택 "기존 폴더는 이름만 새 규칙으로, 하위 폴더 그대로").
+ * 이름 = 행사 ID · 부모 = 저장소 루트/{연도}. 옮기는 경우는 부모가 저장소 루트 자체(옛 트리)이거나 다른 연도 폴더일 때만 —
+ * 사람이 루트 안 다른 곳(예: 고객사 폴더)에 두고 지정한 폴더는 자리를 존중한다(이름만 맞춘다). 하위 폴더·파일은 건드리지 않는다.
+ * 바뀐 것이 있을 때만 PATCH 1회 + 로그(drive.tree_placed).
+ */
+export async function syncProjectRootPlacement(
+  api: DriveApi,
+  store: Pick<DriveStore, 'log'>,
+  driveRoot: string,
+  project: ProjectRow,
+  root: DriveFile,
+): Promise<{ renamed: boolean; moved: boolean }> {
+  const wantName = projectFolderName(project)
+  const renamed = root.name !== wantName
+  const parentId = root.parents?.[0]
+  let moveTo: string | null = null
+  if (parentId) {
+    const wantYear = projectYearFolderName(project)
+    if (parentId === driveRoot) {
+      moveTo = await ensureChildFolder(api, driveRoot, wantYear)
+    } else {
+      const parent = await api.getFile(parentId, 'id,name,parents')
+      if (parent && isYearFolderName(parent.name) && (parent.parents ?? []).includes(driveRoot) && parent.name !== wantYear) {
+        moveTo = await ensureChildFolder(api, driveRoot, wantYear)
+      }
+    }
+  }
+  if (!renamed && !moveTo) return { renamed: false, moved: false }
+  await api.update(root.id, renamed ? { name: wantName } : {}, moveTo ? { addParents: moveTo, removeParents: parentId } : {})
+  root.name = wantName
+  if (moveTo) root.parents = [moveTo]
+  await store.log(project.id, 'drive.tree_placed', 'project', project.id, { folder_id: root.id, renamed, moved: !!moveTo, name: wantName })
+  return { renamed, moved: !!moveTo }
+}
+
+/**
+ * 행사 루트를 보장한다. 순서: DB에 적힌 폴더(살아 있으면) → appProperties로 찾기 → 새로 만들기(저장소 루트/{연도}/ 아래). 바뀌면 DB에 기록.
  * 새로 만든 경우에만 파트 폴더 전체를 함께 만든다 — 사람이 Drive에서 처음 볼 때 표준 구조가 다 보이도록.
+ * 이미 있는 폴더는 이름·연도 자리를 규약에 맞춘다(syncProjectRootPlacement — 행사일·고객사·행사명이 바뀌면 여기서 따라간다).
  */
 export async function ensureProjectRoot(
   api: DriveApi,
@@ -129,14 +207,14 @@ export async function ensureProjectRoot(
 ): Promise<{ rootId: string; created: boolean }> {
   let root = await usableFolder(api, project.drive_root_folder_id)
   let created = false
+  if (!root) root = await findTaggedProjectRoot(api, driveRoot, project.id)
   if (!root) {
-    const tagged = await api.list(appPropQuery(driveRoot, APP_PROJECT_KEY, project.id), undefined, 5)
-    root = tagged.files?.find((f) => f.mimeType === FOLDER_MIME) ?? null
-  }
-  if (!root) {
-    root = await api.createFolder(projectFolderName(project), driveRoot, { [APP_PROJECT_KEY]: project.id })
+    const yearId = await ensureChildFolder(api, driveRoot, projectYearFolderName(project))
+    root = await api.createFolder(projectFolderName(project), yearId, { [APP_PROJECT_KEY]: project.id })
     created = true
     await ensureParts(api, root.id)
+  } else {
+    await syncProjectRootPlacement(api, store, driveRoot, project, root)
   }
   if (root.id !== project.drive_root_folder_id) {
     await store.setProjectRoot(project.id, root.id)

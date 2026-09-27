@@ -5,14 +5,14 @@
 //   DRIVE_ROOT_FOLDER_ID · GOOGLE_OAUTH_CLIENT_ID · GOOGLE_OAUTH_CLIENT_SECRET
 //   + 갱신 토큰: GOOGLE_DRIVE_REFRESH_TOKEN 또는 (앱의 'Drive 연결하기'로 Vault에 넣었다면) VITE_SUPABASE_URL · SUPABASE_SECRET_KEY
 //   (서비스 계정 경로: DRIVE_AUTH=service_account · GOOGLE_SHEETS_SA_JSON — 공유 드라이브 폴더일 때만)
-// 5단계: ① 토큰 교환 → ② 저장소 루트 쓰기 권한 → ③ 표준 트리 생성(임시 행사 폴더) → ④ 5MB 조각 업로드 → ⑤ 06 복사 + 스트림 대조.
+// 5단계: ① 토큰 교환 → ② 저장소 루트 쓰기 권한 → ③ 표준 트리 생성(임시 행사 폴더) → ④ 5MB 조각 업로드 → ⑤ 납품 폴더 복사 + 스트림 대조.
 // 실제 행사·DB 행은 건드리지 않는다 — 저장소 루트 아래 `_smoke_…` 임시 폴더 하나만 만들고 지운다.
 import { createClient } from '@supabase/supabase-js'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { driveAccessToken, driveAuthMode, driveConfigured, type DriveAuthEnv } from '../api/_lib/drive/auth'
 import { DriveApi } from '../api/_lib/drive/googleDrive'
-import { ensureParts, PART, DESIGN_SUBFOLDER } from '../api/_lib/drive/tree'
+import { DELIVERY_PATH, ensureParts, PART } from '../api/_lib/drive/tree'
 
 const KEEP = process.argv.includes('--keep')
 
@@ -103,7 +103,7 @@ async function main(): Promise<void> {
   const size = 5 * 1024 * 1024
   const data = new Uint8Array(size)
   for (let i = 0; i < size; i++) data[i] = (i * 31 + 7) % 251
-  const target = parts[`${PART.output}/${DESIGN_SUBFOLDER}`]
+  const target = parts[PART.production]
   let fileId = ''
   try {
     const session = await api.startResumable({ name: '스모크_업로드.bin', parents: [target] }, { mimeType: 'application/octet-stream', size })
@@ -124,14 +124,14 @@ async function main(): Promise<void> {
   ok('④ 조각 업로드', '5MB · 2조각')
 
   // ⑤ 복사 + 스트림 대조
-  const copy = await api.copy(fileId, { name: '스모크_사본.bin', parents: [parts[PART.share]] }).catch((e) => fail('⑤ 06 복사', String(e), '폴더 쓰기 권한'))
+  const copy = await api.copy(fileId, { name: '스모크_사본.bin', parents: [parts[DELIVERY_PATH.join('/')]] }).catch((e) => fail('⑤ 납품 복사', String(e), '폴더 쓰기 권한'))
   const res = await api.media(copy.id, 'bytes=4194300-4194309')
   const part = new Uint8Array(await res.arrayBuffer())
   const expected = data.subarray(4194300, 4194310)
   if (res.status !== 206 || part.length !== 10 || part.some((b, i) => b !== expected[i])) {
     fail('⑤ 스트림', `부분 응답이 원본과 다릅니다(status ${res.status})`, 'Range 전달 · 파일 손상 여부')
   }
-  ok('⑤ 06 복사 + 스트림', '사본 생성 · Range 206 · 바이트 일치')
+  ok('⑤ 납품 복사 + 스트림', '사본 생성 · Range 206 · 바이트 일치')
 
   if (!KEEP) {
     await api.update(smoke.id, { trashed: true }).catch(() => undefined)

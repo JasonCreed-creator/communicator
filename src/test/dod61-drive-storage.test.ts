@@ -1,6 +1,6 @@
 // DoD 61 (Phase 5 · 설계서 v2.9 §7) — Drive 저장소 서버 계약. 실계정 없이 가짜 Drive·가짜 DB로 돈다(CLAUDE.md Phase 5 원칙).
 // 클라이언트(lib/drive/driveClient)를 서버 핸들러(api/_lib/drive/handler)에 직결해 브라우저 → 함수 → Drive 경로를 끝까지 본다.
-//   ① 트리 멱등(두 번 실행 중복 0) · 이름 규약 · 기존 폴더 채택 ② 조각 업로드(5MB+) → 규약 파일명으로 항목 폴더 → 버전 등록 ·
+//   ① 트리 멱등(두 번 실행 중복 0) · 이름 규약(저장소/연도/행사 ID — v2.17 표준 폴더) · 기존 폴더 채택 ② 조각 업로드(5MB+) → 규약 파일명으로 항목 폴더 → 버전 등록 ·
 //   재시도 · 권한은 바이트 전에 ③ 링크 3분기(행사 폴더 안 참조 · 루트 안 복사 · 루트 밖 403) ④ 서명 스트림(인라인/내려받기 ·
 //   100MB · 만료·위조 · Range · 구글 문서 PDF) ⑤ §7.5 복사 성공 후에만 final · 실패 시 approved 유지 ⑥ 인박스 스캔
 //   ⑦ OAuth 연결 ⑧ 행사 폴더 지정·보관 ⑨ 견적 시트 00_견적서 ⑩ 공유 권한 호출 0건(anyone 링크 금지)
@@ -75,21 +75,24 @@ describe('DoD 61 · ① 표준 트리 — 멱등·이름 규약·기존 폴더 �
     expect(await r2.json()).toEqual({ configured: false })
   })
 
-  it('행사 폴더 = 행사 ID(YYMMDD_고객사_행사명) + 파트 7종 + 05_산출물/디자인, 두 번 실행해도 폴더 수 불변', async () => {
+  it('행사 폴더 = 저장소/{연도}/행사 ID(YYMMDD_고객사_행사명) + 파트 6종·99_archive + 03_제작·키비주얼 하위 4종, 두 번 실행해도 폴더 수 불변', async () => {
     const s = setup()
     const before = s.drive.folderCount()
     const r = await s.clientAs('jwt-pm').ensureTree('prj-1')
     expect(r.created).toBe(true)
     const root = s.drive.files.get(r.folder_id)!
     expect(root.name).toBe('261020_가상고객_가상 컨퍼런스')
-    expect(root.parents).toEqual([s.drive.rootId])
+    const year = s.drive.files.get(root.parents[0])!
+    expect(year.name).toBe('2026')
+    expect(year.parents).toEqual([s.drive.rootId])
     expect(s.drive.childrenOf(root.id).map((f) => f.name).sort()).toEqual(
-      ['01_기획', '02_견적·정산', '03_회의록', '04_운영', '05_산출물', '06_발주처공유', '99_archive'].sort(),
+      ['01_견적', '02_계약', '03_제작·키비주얼', '04_WBS·운영계획', '05_현장', '06_결과보고·정산', '99_archive'].sort(),
     )
-    expect(s.drive.childNamed(s.drive.childNamed(root.id, '05_산출물')!.id, '디자인')).toBeTruthy()
+    const production = s.drive.childNamed(root.id, '03_제작·키비주얼')!
+    expect(s.drive.childrenOf(production.id).map((f) => f.name).sort()).toEqual(['KV', '납품', '초청장', '현장물'].sort())
     expect(s.db.projects.get('prj-1')!.drive_root_folder_id).toBe(root.id)
     const after1 = s.drive.folderCount()
-    expect(after1 - before).toBe(9)
+    expect(after1 - before).toBe(13)
     const again = await s.clientAs('jwt-pm').ensureTree('prj-1')
     expect(again).toMatchObject({ folder_id: root.id, created: false })
     expect(s.drive.folderCount()).toBe(after1)
@@ -100,11 +103,12 @@ describe('DoD 61 · ① 표준 트리 — 멱등·이름 규약·기존 폴더 �
     const s = setup()
     const first = await s.clientAs('jwt-pm').ensureTree('prj-1')
     s.db.projects.get('prj-1')!.drive_root_folder_id = null // 기록 유실 흉내
-    const share = s.drive.childNamed(first.folder_id, '06_발주처공유')!
-    share.trashed = true
+    const onsite = s.drive.childNamed(first.folder_id, '05_현장')!
+    onsite.trashed = true
     const second = await s.clientAs('jwt-pm').ensureTree('prj-1')
     expect(second.folder_id).toBe(first.folder_id)
-    expect(s.drive.childNamed(first.folder_id, '06_발주처공유')).toBeTruthy()
+    expect(s.drive.childNamed(first.folder_id, '05_현장')).toBeTruthy()
+    expect(s.drive.files.get(first.folder_id)!.parents).toEqual([s.drive.childNamed(s.drive.rootId, '2026')!.id])
   })
 
   it('비멤버는 403, 로그인 없으면 401', async () => {
@@ -123,7 +127,7 @@ describe('DoD 61 · ① 표준 트리 — 멱등·이름 규약·기존 폴더 �
 })
 
 describe('DoD 61 · ② 조각 업로드 — 5MB+ · 규약 파일명 · 항목 폴더 · 권한은 바이트 전에', () => {
-  it('6MB 파일이 4MB+2MB 조각으로 올라가 05_산출물/디자인/{항목}에 규약 이름으로 저장되고 버전이 등록된다', async () => {
+  it('6MB 파일이 4MB+2MB 조각으로 올라가 03_제작·키비주얼/{항목}에 규약 이름으로 저장되고 버전이 등록된다', async () => {
     const s = setup()
     const data = bytes(6 * 1024 * 1024)
     const progress: [number, number][] = []
@@ -141,9 +145,9 @@ describe('DoD 61 · ② 조각 업로드 — 5MB+ · 규약 파일명 · 항목 
     expect(stored.content[5_000_001]).toBe(data[5_000_001])
     const itemFolder = s.drive.files.get(stored.parents[0])!
     expect(itemFolder.name).toBe('메인 키비주얼')
-    const design = s.drive.files.get(itemFolder.parents[0])!
-    expect(design.name).toBe('디자인')
-    expect(s.drive.files.get(design.parents[0])!.name).toBe('05_산출물')
+    const production = s.drive.files.get(itemFolder.parents[0])!
+    expect(production.name).toBe('03_제작·키비주얼')
+    expect(s.drive.files.get(production.parents[0])!.name).toBe('261020_가상고객_가상 컨퍼런스')
     expect(v).toMatchObject({ deliverable_id: 'dlv-kv', version_no: 1, note: '1차 시안', file_name: stored.name })
     expect(s.db.deliverables.get('dlv-kv')!.drive_folder_id).toBe(itemFolder.id)
     expect(progress[0]).toEqual([0, data.length])
@@ -151,13 +155,15 @@ describe('DoD 61 · ② 조각 업로드 — 5MB+ · 규약 파일명 · 항목 
     expect(progress.some(([a]) => a === 4 * 1024 * 1024)).toBe(true)
   })
 
-  it('ops 항목은 04_운영/{항목}, 공통 회의록은 03_회의록에 바로 · 첫 업로드가 requested → draft', async () => {
+  it('ops 항목은 04_WBS·운영계획/{항목}, 공통 회의록은 04_WBS·운영계획에 바로 · 첫 업로드가 requested → draft', async () => {
     const s = setup()
     const v1 = await s.clientAs('jwt-pm').upload({ deliverableId: 'dlv-ops', file: new Blob([bytes(10)]), fileName: 'ops.pdf', originalFileName: 'ops.pdf' })
-    expect(s.drive.files.get(s.drive.files.get(v1.drive_file_id)!.parents[0])!.name).toBe('현장 매뉴얼')
+    const opsItem = s.drive.files.get(s.drive.files.get(v1.drive_file_id)!.parents[0])!
+    expect(opsItem.name).toBe('현장 매뉴얼')
+    expect(s.drive.files.get(opsItem.parents[0])!.name).toBe('04_WBS·운영계획')
     expect(s.db.deliverables.get('dlv-ops')!.status).toBe('draft')
     const v2 = await s.clientAs('jwt-pm').upload({ deliverableId: 'dlv-min', file: new Blob([bytes(10)]), fileName: 'min.docx', originalFileName: 'min.docx' })
-    expect(s.drive.files.get(s.drive.files.get(v2.drive_file_id)!.parents[0])!.name).toBe('03_회의록')
+    expect(s.drive.files.get(s.drive.files.get(v2.drive_file_id)!.parents[0])!.name).toBe('04_WBS·운영계획')
   })
 
   it('빈 파일(0바이트)도 올라간다', async () => {
@@ -244,9 +250,9 @@ describe('DoD 61 · ③ 링크 등록 3분기 (§7.2b)', () => {
   it('행사 폴더 안 파일 → 복사 없이 그대로 참조 · 파일명은 Drive 이름 · 인박스에 있던 것은 연결 처리', async () => {
     const s = setup()
     const tree = await s.clientAs('jwt-pm').ensureTree('prj-1')
-    const ops = s.drive.childNamed(tree.folder_id, '04_운영')!
+    const ops = s.drive.childNamed(tree.folder_id, '04_WBS·운영계획')!
     const f = s.drive.add({ name: '현장배치도.pdf', parents: [ops.id], mimeType: 'application/pdf', content: bytes(20) })
-    s.db.inbox.push({ id: 'inb-x', project_id: 'prj-1', drive_file_id: f.id, file_name: f.name, detected_folder: '04_운영', linked: null, dismissed: false })
+    s.db.inbox.push({ id: 'inb-x', project_id: 'prj-1', drive_file_id: f.id, file_name: f.name, detected_folder: '04_WBS·운영계획', linked: null, dismissed: false })
     const before = s.drive.files.size
     const v = await s.clientAs('jwt-pm').link('dlv-kv', `https://drive.google.com/file/d/${f.id}/view?usp=sharing`)
     expect(v.drive_file_id).toBe(f.id)
@@ -374,7 +380,7 @@ describe('DoD 61 · ④ 서명 스트림 (§7.4)', () => {
   })
 })
 
-describe('DoD 61 · ⑤ §7.5 확정 복사 — 06_발주처공유 복사 성공 후에만 final', () => {
+describe('DoD 61 · ⑤ §7.5 확정 복사 — 03_제작·키비주얼/납품 복사 성공 후에만 final', () => {
   async function approved(s: ReturnType<typeof setup>) {
     const v = await s.clientAs('jwt-design').upload({ deliverableId: 'dlv-kv', file: new Blob([bytes(64)]), fileName: '확정본.pdf', originalFileName: '확정본.pdf' })
     s.db.deliverables.get('dlv-kv')!.status = 'approved'
@@ -384,14 +390,14 @@ describe('DoD 61 · ⑤ §7.5 확정 복사 — 06_발주처공유 복사 성공
     return { v, token }
   }
 
-  it('복사 → 마감 순서 · 복사본은 06에 · 다시 불러도 사본 1개(멱등)', async () => {
+  it('복사 → 마감 순서 · 복사본은 03_제작·키비주얼/납품에 · 다시 불러도 사본 1개(멱등)', async () => {
     const s = setup()
     const { v, token } = await approved(s)
     const r = await s.clientAs(null).clientFinalize(token, 'apr-1')
     expect(r.status).toBe('final')
     expect(s.db.deliverables.get('dlv-kv')!.status).toBe('final')
     const root = s.db.projects.get('prj-1')!.drive_root_folder_id!
-    const share = s.drive.childNamed(root, '06_발주처공유')!
+    const share = s.drive.childNamed(s.drive.childNamed(root, '03_제작·키비주얼')!.id, '납품')!
     const copies = s.drive.childrenOf(share.id)
     expect(copies).toHaveLength(1)
     expect(copies[0]).toMatchObject({ name: '확정본.pdf' })
@@ -425,20 +431,22 @@ describe('DoD 61 · ⑤ §7.5 확정 복사 — 06_발주처공유 복사 성공
 })
 
 describe('DoD 61 · ⑥ 인박스 스캔 (§7.3 — 행사 폴더 목록 비교)', () => {
-  it('직접 올린 파일만 인박스로 — 등록된 버전·06·99·진행 중 업로드 제외 · 경로 표기 · 사라진 파일 정리', async () => {
+  it('직접 올린 파일만 인박스로 — 등록된 버전·납품·99·옛 06·진행 중 업로드 제외 · 경로 표기 · 사라진 파일 정리', async () => {
     const s = setup()
     const tree = await s.clientAs('jwt-pm').ensureTree('prj-1')
     const registered = await s.clientAs('jwt-design').upload({ deliverableId: 'dlv-kv', file: new Blob([bytes(5)]), fileName: 'r.pdf', originalFileName: 'r.pdf' })
     const itemFolder = s.drive.files.get(registered.drive_file_id)!.parents[0]
     const direct = s.drive.add({ name: '직접올림_시안B.pdf', parents: [itemFolder], mimeType: 'application/pdf' })
-    s.drive.add({ name: '사본.pdf', parents: [s.drive.childNamed(tree.folder_id, '06_발주처공유')!.id] })
+    s.drive.add({ name: '사본.pdf', parents: [s.drive.childNamed(s.drive.childNamed(tree.folder_id, '03_제작·키비주얼')!.id, '납품')!.id] })
     s.drive.add({ name: '옛것.pdf', parents: [s.drive.childNamed(tree.folder_id, '99_archive')!.id] })
+    const legacyShare = s.drive.add({ name: '06_발주처공유', parents: [tree.folder_id], mimeType: FOLDER })
+    s.drive.add({ name: '옛사본.pdf', parents: [legacyShare.id] })
     s.drive.add({ name: '올리는중.pdf', parents: [itemFolder], appProperties: { communicator_upload: 'n1' } })
     s.db.inbox.push({ id: 'inb-gone', project_id: 'prj-1', drive_file_id: 'DELETED_FILE_ID_000000000000001', file_name: 'x', detected_folder: 'x', linked: null, dismissed: false })
     const r = await s.clientAs('jwt-pm').scan('prj-1')
     expect(r).toMatchObject({ added: 1, removed: 1 })
     const row = s.db.inbox.find((x) => x.drive_file_id === direct.id)!
-    expect(row.detected_folder).toBe('05_산출물/디자인/메인 키비주얼')
+    expect(row.detected_folder).toBe('03_제작·키비주얼/메인 키비주얼')
     expect(s.db.inbox.find((x) => x.id === 'inb-gone')!.dismissed).toBe(true)
     // 두 번째 스캔은 중복 없이 0건
     expect((await s.clientAs('jwt-pm').scan('prj-1')).added).toBe(0)
@@ -517,7 +525,7 @@ describe('DoD 61 · ⑦ OAuth 연결 (관리자 · 갱신 토큰은 Vault)', () 
 })
 
 describe('DoD 61 · ⑧ 행사 폴더 지정·보관', () => {
-  it('pm이 루트 안 기존 폴더를 지정 → 표식·파트 폴더 채움 · 다른 행사 폴더 409 · 루트/예약/루트 밖 거부', async () => {
+  it('pm이 루트 안 기존 폴더를 지정 → 표식·이름·연도 자리·파트 폴더 채움 · 다른 행사 폴더 409 · 루트/예약/연도/루트 밖 거부', async () => {
     const s = setup()
     const manual = s.drive.add({ name: '가상컨퍼런스(수동)', parents: [s.drive.rootId], mimeType: FOLDER })
     const url = `https://drive.google.com/drive/folders/${manual.id}`
@@ -525,13 +533,21 @@ describe('DoD 61 · ⑧ 행사 폴더 지정·보관', () => {
     const r = await s.clientAs('jwt-pm').adoptFolder('prj-1', url)
     expect(r.folder_id).toBe(manual.id)
     expect(manual.appProperties.communicator_project_id).toBe('prj-1')
-    expect(s.drive.childNamed(manual.id, '05_산출물')).toBeTruthy()
+    expect(s.drive.childNamed(manual.id, '03_제작·키비주얼')).toBeTruthy()
+    // 지정한 폴더도 규약 자리로: 이름 = 행사 ID · 루트 바로 아래였으니 연도 폴더로
+    expect(manual.name).toBe('261020_가상고객_가상 컨퍼런스')
+    expect(s.drive.files.get(manual.parents[0])!.name).toBe('2026')
+    expect(s.db.logs.some((l) => l.action === 'drive.tree_placed')).toBe(true)
     s.db.addProject({ id: 'prj-2', code: 'B', name: 'B', event_date: null, status: 'active', drive_root_folder_id: null })
     s.db.addMember('p-pm', 'prj-2', 'pm')
     expect((await s.post({ action: 'adopt-folder', project_id: 'prj-2', url }, 'jwt-pm')).status).toBe(409)
     expect((await s.post({ action: 'adopt-folder', project_id: 'prj-2', url: `https://drive.google.com/drive/folders/${s.drive.rootId}` }, 'jwt-pm')).status).toBe(422)
     const quote = s.drive.add({ name: '00_견적서', parents: [s.drive.rootId], mimeType: FOLDER })
     expect((await s.post({ action: 'adopt-folder', project_id: 'prj-2', url: `https://drive.google.com/drive/folders/${quote.id}` }, 'jwt-pm')).status).toBe(422)
+    const yearFolder = s.drive.childNamed(s.drive.rootId, '2026')!
+    const y = await s.post({ action: 'adopt-folder', project_id: 'prj-2', url: `https://drive.google.com/drive/folders/${yearFolder.id}` }, 'jwt-pm')
+    expect(y.status).toBe(422)
+    expect((await y.json()).error.message).toContain('연도 폴더')
     const out = s.drive.add({ name: '밖', parents: [s.drive.outsideId], mimeType: FOLDER })
     expect((await s.post({ action: 'adopt-folder', project_id: 'prj-2', url: `https://drive.google.com/drive/folders/${out.id}` }, 'jwt-pm')).status).toBe(403)
   })
@@ -570,6 +586,102 @@ describe('DoD 61 · ⑨ 견적 시트는 저장소 00_견적서로 (Phase 4.2 �
     expect(s.drive.files.get(r.spreadsheet_id)!.parents).toEqual([quoteFolder.id])
     expect(s.drive.files.get(r.spreadsheet_id)!.mimeType).toBe('application/vnd.google-apps.spreadsheet')
     expect(r.shared_with).toBeNull()
+  })
+})
+
+describe('DoD 86 · 표준 폴더 트리 v2.17 (운영 프로토콜 v1.0 — 저장소/연도/행사 ID · 기존 폴더는 이름·자리만)', () => {
+  it('행사일이 없으면 "연도 미정" 아래 · 행사일이 정해지면 다음 보장 때 연도 폴더로 옮기고 이름도 따라간다 · 하위 폴더 그대로', async () => {
+    const s = setup()
+    s.db.addProject({ id: 'prj-nd', code: 'ND', name: '날짜 미정 포럼', organizer: '가상고객', event_date: null, status: 'active', drive_root_folder_id: null })
+    s.db.addMember('p-pm', 'prj-nd', 'pm')
+    const first = await s.clientAs('jwt-pm').ensureTree('prj-nd')
+    const root = s.drive.files.get(first.folder_id)!
+    expect(root.name).toBe('가상고객_날짜 미정 포럼')
+    expect(s.drive.files.get(root.parents[0])!.name).toBe('연도 미정')
+    const extra = s.drive.add({ name: '사람이 만든 폴더', parents: [root.id], mimeType: FOLDER })
+    const childrenBefore = s.drive.childrenOf(root.id).map((f) => f.id).sort()
+    s.db.projects.get('prj-nd')!.event_date = '2027-03-05'
+    const again = await s.clientAs('jwt-pm').ensureTree('prj-nd')
+    expect(again.folder_id).toBe(root.id)
+    expect(root.name).toBe('270305_가상고객_날짜 미정 포럼')
+    expect(s.drive.files.get(root.parents[0])!.name).toBe('2027')
+    expect(s.drive.files.get(root.parents[0])!.parents).toEqual([s.drive.rootId])
+    expect(s.drive.childrenOf(root.id).map((f) => f.id).sort()).toEqual(childrenBefore)
+    expect(s.drive.files.get(extra.id)!.parents).toEqual([root.id])
+    expect(s.db.logs.filter((l) => l.action === 'drive.tree_placed' && l.projectId === 'prj-nd')).toHaveLength(1)
+    // 바뀐 것이 없으면 PATCH 0
+    const patches = () => s.drive.calls.filter((c) => c.method === 'PATCH').length
+    const before = patches()
+    await s.clientAs('jwt-pm').ensureTree('prj-nd')
+    expect(patches()).toBe(before)
+  })
+
+  it('옛 트리(루트 바로 아래 · 01_기획…06_발주처공유)로 만든 행사 폴더는 이름·연도 자리만 바뀌고 옛 하위 폴더는 그대로 · 기록된 항목 폴더도 그대로 쓴다', async () => {
+    const s = setup()
+    const legacy = s.drive.add({ name: '261020_STC26_가상 컨퍼런스', parents: [s.drive.rootId], mimeType: FOLDER, appProperties: { communicator_project_id: 'prj-1' } })
+    const oldParts = ['01_기획', '02_견적·정산', '03_회의록', '04_운영', '05_산출물', '06_발주처공유', '99_archive'].map((n) =>
+      s.drive.add({ name: n, parents: [legacy.id], mimeType: FOLDER }),
+    )
+    const design = s.drive.add({ name: '디자인', parents: [oldParts[4].id], mimeType: FOLDER })
+    const kvFolder = s.drive.add({ name: '메인 키비주얼', parents: [design.id], mimeType: FOLDER, appProperties: { communicator_deliverable_id: 'dlv-kv' } })
+    s.db.projects.get('prj-1')!.drive_root_folder_id = legacy.id
+    s.db.deliverables.get('dlv-kv')!.drive_folder_id = kvFolder.id
+    const folderCount = s.drive.folderCount()
+
+    // 새 항목(운영) 업로드 → 행사 루트 보장 → 이름·자리 동기화 + 필요한 파트(04_WBS·운영계획)만 새로
+    const v1 = await s.clientAs('jwt-pm').upload({ deliverableId: 'dlv-ops', file: new Blob([bytes(10)]), fileName: 'ops.pdf', originalFileName: 'ops.pdf' })
+    expect(legacy.name).toBe('261020_가상고객_가상 컨퍼런스')
+    expect(s.drive.files.get(legacy.parents[0])!.name).toBe('2026')
+    const opsItem = s.drive.files.get(s.drive.files.get(v1.drive_file_id)!.parents[0])!
+    expect(s.drive.files.get(opsItem.parents[0])!.name).toBe('04_WBS·운영계획')
+    for (const p of oldParts) expect(s.drive.files.get(p.id)!.parents).toEqual([legacy.id])
+    expect(s.drive.folderCount()).toBe(folderCount + 1 /* 2026 */ + 1 /* 04_WBS·운영계획 */ + 1 /* 현장 매뉴얼 */)
+
+    // 기록된 항목 폴더(옛 05_산출물/디자인/…)는 그대로 쓴다 — 옮기지 않는다
+    const v2 = await s.clientAs('jwt-design').upload({ deliverableId: 'dlv-kv', file: new Blob([bytes(10)]), fileName: 'kv.pdf', originalFileName: 'kv.pdf' })
+    expect(s.drive.files.get(v2.drive_file_id)!.parents).toEqual([kvFolder.id])
+    expect(s.drive.files.get(kvFolder.parents[0])!.name).toBe('디자인')
+
+    // 확정 사본은 새 규약 자리(03_제작·키비주얼/납품)에 — 옛 06_발주처공유는 건드리지 않는다
+    s.db.deliverables.get('dlv-kv')!.status = 'approved'
+    s.db.approvals.set('apr-l', { id: 'apr-l', deliverable_id: 'dlv-kv', version_id: v2.id, decision: 'approved' })
+    const token = '11111111-2222-3333-4444-555555555555'
+    s.db.clientTokens.set(token, 'prj-1')
+    expect((await s.clientAs(null).clientFinalize(token, 'apr-l')).status).toBe('final')
+    const delivery = s.drive.childNamed(s.drive.childNamed(legacy.id, '03_제작·키비주얼')!.id, '납품')!
+    expect(s.drive.childrenOf(delivery.id)).toHaveLength(1)
+    expect(s.drive.childrenOf(oldParts[5].id)).toHaveLength(0)
+    // 스캔은 옛 06도 계속 뺀다
+    s.drive.add({ name: '옛사본.pdf', parents: [oldParts[5].id] })
+    expect((await s.clientAs('jwt-pm').scan('prj-1')).added).toBe(0)
+  })
+
+  it('사람이 루트 안 다른 폴더(예: 고객사 폴더)에 두고 지정한 행사 폴더는 이름만 맞추고 자리는 존중한다', async () => {
+    const s = setup()
+    const client = s.drive.add({ name: '가상고객', parents: [s.drive.rootId], mimeType: FOLDER })
+    const manual = s.drive.add({ name: '컨퍼런스 자료', parents: [client.id], mimeType: FOLDER })
+    await s.clientAs('jwt-pm').adoptFolder('prj-1', `https://drive.google.com/drive/folders/${manual.id}`)
+    expect(manual.name).toBe('261020_가상고객_가상 컨퍼런스')
+    expect(manual.parents).toEqual([client.id])
+    expect(s.drive.childNamed(s.drive.rootId, '2026')).toBeUndefined()
+  })
+
+  it('공통 문서는 종류로 파트를 고른다 — 견적 → 01 · 계약 → 02 · 정산·예산·결과보고 → 06 · 회의록·기획·그 외 → 04', async () => {
+    const { itemFolderPlan } = await import('../../api/_lib/drive/tree')
+    const plan = (category: string) => itemFolderPlan({ area: 'common', category, title: 't' })
+    expect(plan('견적서')).toEqual({ path: ['01_견적'], leaf: null })
+    expect(plan('계약서')).toEqual({ path: ['02_계약'], leaf: null })
+    expect(plan('정산')).toEqual({ path: ['06_결과보고·정산'], leaf: null })
+    expect(plan('예산안')).toEqual({ path: ['06_결과보고·정산'], leaf: null })
+    expect(plan('결과보고서')).toEqual({ path: ['06_결과보고·정산'], leaf: null })
+    expect(plan('회의록')).toEqual({ path: ['04_WBS·운영계획'], leaf: null })
+    expect(plan('기획서')).toEqual({ path: ['04_WBS·운영계획'], leaf: null })
+    expect(itemFolderPlan({ area: 'design', category: '키비주얼', title: 'KV/메인' })).toEqual({ path: ['03_제작·키비주얼'], leaf: 'KV 메인' })
+    expect(itemFolderPlan({ area: 'ops', category: '큐시트', title: '큐시트' })).toEqual({ path: ['04_WBS·운영계획'], leaf: '큐시트' })
+    const s = setup()
+    s.db.addDeliverable({ id: 'dlv-ctr', project_id: 'prj-1', area: 'common', category: '계약서', title: '용역 계약서', status: 'draft', drive_folder_id: null })
+    const v = await s.clientAs('jwt-pm').upload({ deliverableId: 'dlv-ctr', file: new Blob([bytes(10)]), fileName: 'c.pdf', originalFileName: 'c.pdf' })
+    expect(s.drive.files.get(s.drive.files.get(v.drive_file_id)!.parents[0])!.name).toBe('02_계약')
   })
 })
 

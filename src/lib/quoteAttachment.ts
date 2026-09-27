@@ -1,5 +1,5 @@
 // 견적서 첨부(projects.quote_attachment) 판정 — mock·실서버 공급자가 같은 규칙(Phase 6.2 · 설계서 v2.15 §10 S0·S6①).
-// 파일은 Drive 행사 폴더 02_견적·정산/견적서에 서버가 올리고(drive) · 링크는 https 주소만 적어 둔다(link). 행사 하나에 하나.
+// 파일은 Drive 행사 폴더 01_견적에 서버가 올리고(drive) · 링크는 https 주소만 적어 둔다(link). 행사 하나에 하나.
 import type { QuoteAttachment } from '../types/entities'
 
 export const QUOTE_ATTACHMENT_INVALID_MESSAGE = '견적서 링크는 https 주소여야 합니다(구글 시트·Drive·사내 문서 링크).'

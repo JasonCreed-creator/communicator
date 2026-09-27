@@ -2,7 +2,7 @@
 //
 //   GET                              → { slack, ai, daily_limit } — 봇 토큰·AI 키가 설정됐는가(값은 내보내지 않는다)
 //   POST ?action=read + 로그인 세션   → { link } 또는 { text } (+ project_id) → Slack 글(봇으로 읽음) + 행사 기본 정보 제안 + 첨부·링크 목록
-//   POST ?action=slack-file + 세션    → { project_id, file_id } → Slack 첨부 파일을 봇으로 내려받아 행사 폴더 02_견적·정산/견적서에(4MB 이하)
+//   POST ?action=slack-file + 세션    → { project_id, file_id } → Slack 첨부 파일을 봇으로 내려받아 행사 폴더 01_견적에(4MB 이하)
 //
 // 원칙: 읽기만 한다 — 저장은 앱이 사람 확인 뒤 updateProject로. 글 원문은 어디에도 저장하지 않는다(응답으로 한 번 돌려줄 뿐).
 // 정보 추출 = 라벨 규칙(항상) → AI(Claude, feature 'project_intake' — 키가 있고 한도가 남았을 때만)로 빈 칸 채우기. AI가 실패해도

@@ -401,7 +401,7 @@ set local role authenticated;
 select upload_version('${designItem}', 'dup.pdf', null, 'dup.pdf', '${DRV}');`,
     { role: 'authenticated', sub: authId.design, expect: 'error', match: '이미 이 항목에 등록된 파일' })
   scenario('Drive upload_version: 인박스에 있던 파일을 등록하면 인박스는 연결 처리(중복 표시 없음)', `reset role;
-insert into unregistered_files (project_id, drive_file_id, file_name, detected_folder) values ('${PRJ}', '${DRV}', 'a.pdf', '05_산출물/디자인');
+insert into unregistered_files (project_id, drive_file_id, file_name, detected_folder) values ('${PRJ}', '${DRV}', 'a.pdf', '03_제작·키비주얼');
 set local role authenticated;
 select upload_version('${designItem}', 'a.pdf', null, 'a.pdf', '${DRV}');
 reset role;
