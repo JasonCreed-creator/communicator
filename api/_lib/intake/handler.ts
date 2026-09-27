@@ -175,7 +175,8 @@ async function readSlackMessage(link: string, slack: SlackApi) {
   if (!r.ok || !r.message) throw slackFailure(r.error)
   const msg = r.message
   const raw = String(msg.text ?? '')
-  const postedBy = msg.user ? await slack.userName(msg.user) : null
+  // 사람 글은 표시 이름, 워크플로·봇 글은 봇 이름(워크플로 게시는 user가 없다 — 2026-09-27 실측)
+  const postedBy = msg.user ? await slack.userName(msg.user) : msg.bot_profile?.name?.trim() || msg.username?.trim() || null
   const posted = /^\d{10}/.test(msg.ts) ? new Date(Number(msg.ts.slice(0, 10)) * 1000).toISOString() : null
   const files: IntakeFile[] = (msg.files ?? [])
     .filter((f) => f && typeof f.id === 'string')

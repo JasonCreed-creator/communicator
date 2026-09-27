@@ -127,6 +127,9 @@ export interface SlackMessage {
   text?: string
   user?: string
   bot_id?: string
+  /** 워크플로·봇 글의 표시 이름(사람 글에는 없다) */
+  username?: string
+  bot_profile?: { name?: string }
   thread_ts?: string
   files?: SlackFile[]
 }
