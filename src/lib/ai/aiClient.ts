@@ -5,6 +5,14 @@
 import { defaultApiBase as apiBaseFor } from '../basePath'
 import { ProviderError, type ErrorCode } from '../errors'
 import type { AiMediaType, VendorQuoteSourceDoc } from '../vendorQuoteAi'
+import type { ParsedQuoteDoc } from '../../modules/quote/import/types'
+
+/** (v2.18 §22.5) 견적서 가져오기 — AI가 읽은 ParsedQuoteDoc(format 'ai') */
+export interface AiQuoteImportRead {
+  doc: ParsedQuoteDoc
+  model: string
+  usage: { used: number; limit: number }
+}
 
 export interface AiVendorQuoteRead {
   doc: VendorQuoteSourceDoc
@@ -60,6 +68,32 @@ export function createAiClient(opts: AiClientOptions) {
       }
       const ok = body as AiVendorQuoteRead | null
       if (!ok || !ok.doc || !Array.isArray(ok.doc.sections)) throw new ProviderError('validation', 'AI 응답을 해석하지 못했습니다 — 다시 시도하세요.')
+      return ok
+    },
+
+    /** (v2.18 §22.5) 우리 견적서 PDF·사진 → 견적서 가져오기 확인 큐 입력. 행사 없음 · 권한 = 영업·관리자(서버 SQL이 본다) */
+    async readQuoteImport(input: { file_name: string; media_type: AiMediaType; data_base64: string }): Promise<AiQuoteImportRead> {
+      const token = await opts.accessToken()
+      if (!token) throw new ProviderError('forbidden', '로그인이 필요합니다.')
+      let res: Response
+      try {
+        res = await fetchImpl(`${apiBase}/ai?action=quote-import`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+          body: JSON.stringify(input),
+        })
+      } catch {
+        throw new ProviderError('validation', 'AI 서버에 연결할 수 없습니다 — 잠시 후 다시 시도하세요.')
+      }
+      const body = (await res.json().catch(() => null)) as (AiQuoteImportRead & { error?: undefined }) | { error?: { code?: string; message?: string } } | null
+      if (!res.ok) {
+        const err = body && typeof body === 'object' && 'error' in body ? body.error : undefined
+        throw new ProviderError(codeFor(res.status, err?.code), err?.message || `AI 읽기에 실패했습니다 (${res.status}).`)
+      }
+      const ok = body as AiQuoteImportRead | null
+      if (!ok || !ok.doc || !Array.isArray(ok.doc.sections) || ok.doc.format !== 'ai') {
+        throw new ProviderError('validation', 'AI 응답을 해석하지 못했습니다 — 다시 시도하세요.')
+      }
       return ok
     },
   }

@@ -808,6 +808,21 @@ ${assertSql(`(select (r->>'used')::int = 1 and (r->>'limit')::int = 30 and (r->>
     { role: 'authenticated', sub: authId.design, expect: 'error', match: 'PM 전용' })
   scenario('AI 한도: 종료 행사 선점 거부', `select ai_usage_claim('${PRJ_CLOSED}', 'vendor_quote', 30);`,
     { role: 'authenticated', sub: authId.pm, expect: 'error', match: '종료된 행사' })
+  // v2.18 §22.5 — quote_import(견적서 PDF·사진 AI 읽기): 행사 없음(null) · 권한 = 영업·관리자
+  scenario('AI 한도: quote_import — sales가 행사 없이(null) 선점 → used 1 · 기록 feature quote_import', `
+${assertSql(`(select (r->>'used')::int = 1 and (r->>'id') is not null from (select ai_usage_claim(null, 'quote_import', 30) r) x)`)}`, { role: 'authenticated', sub: authId.pm })
+  scenario('AI 한도: quote_import 기록 = feature quote_import · 행사 null(서비스 경로 조회)', `
+select ai_usage_claim(null, 'quote_import', 30);
+${assertSql(`(select feature = 'quote_import' and project_id is null from ai_usage order by created_at desc limit 1)`)}`, { sub: authId.pm })
+  scenario('AI 한도: quote_import — staff(design)는 403(영업·관리자)', `select ai_usage_claim(null, 'quote_import', 30);`,
+    { role: 'authenticated', sub: authId.design, expect: 'error', match: '영업·관리자' })
+  scenario('AI 한도: quote_import와 vendor_quote는 한 사람 하루 한도를 같이 쓴다(한도 2 → 셋째 거부)', `
+select ai_usage_claim(null, 'quote_import', 2);
+select ai_usage_claim('${PRJ}', 'vendor_quote', 2);
+select ai_usage_claim(null, 'quote_import', 2);`, { role: 'authenticated', sub: authId.pm, expect: 'error', match: 'LIMIT' })
+  scenario('quote_imports.format: ai 허용 · 그 밖은 거부', `
+insert into quote_imports (file_name, format, parsed) values ('x.pdf', 'ai', '{}');
+insert into quote_imports (file_name, format, parsed) values ('x.xlsx', 'D', '{}');`, { expect: 'error', match: 'quote_imports_format_check' })
   scenario('AI 한도: 모르는 기능 거부', `select ai_usage_claim('${PRJ}', 'plan_review', 30);`,
     { role: 'authenticated', sub: authId.pm, expect: 'error', match: '알 수 없는 AI 기능' })
   scenario('AI 한도: 로그인 없음 거부', `select ai_usage_claim('${PRJ}', 'vendor_quote', 30);`,

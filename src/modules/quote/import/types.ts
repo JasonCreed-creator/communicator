@@ -58,9 +58,19 @@ export interface ParsedQuoteCheck {
   ok: boolean
 }
 
+import type { QuoteImportFormat } from '../../../types/enums'
+
+/** 견적서 서식 — A·B·C = 엑셀 파서 판정(§22.1) · 'ai' = PDF·사진을 AI가 읽음(v2.18 §22.5 — 서식 판정 없음). 정본 = types/enums QUOTE_IMPORT_FORMATS */
+export type { QuoteImportFormat }
+
+/** 화면·메모용 서식 이름 — 'A형' · 'AI 읽음' */
+export function quoteImportFormatLabel(format: QuoteImportFormat): string {
+  return format === 'ai' ? 'AI 읽음' : `${format}형`
+}
+
 /** 파서(parseQuoteWorkbook) 산출 — quote_imports.parsed에 원본 스냅숏으로 그대로 저장된다(R-Q2) */
 export interface ParsedQuoteDoc {
-  format: 'A' | 'B' | 'C'
+  format: QuoteImportFormat
   header: ParsedQuoteHeader
   sections: ParsedQuoteSection[]
   totals: ParsedQuoteTotals

@@ -3,6 +3,8 @@
 //   GET                                   → { enabled, model, daily_limit } — 키·저장소가 설정됐는가(값은 내보내지 않는다)
 //   POST ?action=vendor-quote + 로그인 세션 → 협력사 견적서 PDF·사진을 Claude로 읽어 확인 큐 입력(doc)을 돌려준다
 //       본문 { project_id, file_name, media_type, data_base64 }
+//   POST ?action=quote-import + 로그인 세션 → (v2.18 §22.5) 우리 견적서(국문·영문) PDF·사진을 읽어 견적서 가져오기 확인 큐 입력(ParsedQuoteDoc · format 'ai')
+//       본문 { file_name, media_type, data_base64 } — 행사 없음(feature 'quote_import' · 권한 = 영업·관리자)
 //
 // 순서: ① 키 확인(없으면 503 — 흉내 내지 않는다) ② 파일 형식·크기·내용 서명 ③ ai_usage_claim(사용자 JWT — pm·종료 안 된 행사·
 // 1인 하루 한도, 넘으면 429) ④ Claude 읽기 ⑤ 결과 검사 → docFromAiVendorQuote(검산은 우리 코드) ⑥ ai_usage_finish(service).
@@ -19,7 +21,13 @@ import {
   type AiMediaType,
   type VendorQuoteSourceDoc,
 } from '../../../src/lib/vendorQuoteAi.js'
-import { AiUpstreamError, createClaudeReader, DEFAULT_AI_MODEL, type VendorQuoteReader } from './claude.js'
+import {
+  AiQuoteImportShapeError,
+  docFromAiQuoteImport,
+  validateAiQuoteImport,
+} from '../../../src/lib/quoteImportAi.js'
+import type { ParsedQuoteDoc } from '../../../src/modules/quote/import/types.js'
+import { AiUpstreamError, createClaudeReader, createQuoteImportReader, DEFAULT_AI_MODEL, type VendorQuoteReader } from './claude.js'
 
 export interface AiEnv {
   ANTHROPIC_API_KEY?: string
@@ -32,8 +40,8 @@ export interface AiEnv {
 }
 
 export type AiUsageStatus = 'ok' | 'unreadable' | 'failed'
-/** AI 기능(ai_usage.feature CHECK와 같은 목록) — vendor_quote(Phase 4.8) · project_intake(Phase 6.2, 행사 없이도 부른다) */
-export type AiFeature = 'vendor_quote' | 'project_intake'
+/** AI 기능(ai_usage.feature CHECK와 같은 목록) — vendor_quote(Phase 4.8) · project_intake(Phase 6.2, 행사 없이도 부른다) · quote_import(v2.18 §22.5, 행사 없음) */
+export type AiFeature = 'vendor_quote' | 'project_intake' | 'quote_import'
 
 export interface AiUsageStore {
   /** 사용자 JWT로 선점 — 권한·한도 판정은 SQL(ai_usage_claim). 실패는 AiError로 던진다. projectId null = 행사 없음(project_intake만) */
@@ -45,6 +53,14 @@ export interface AiUsageStore {
 export interface AiDeps {
   store?: AiUsageStore
   reader?: VendorQuoteReader
+  /** 견적서 가져오기(quote-import) 읽기 함수 — 테스트 주입 */
+  quoteReader?: VendorQuoteReader
+}
+
+export interface AiQuoteImportResponse {
+  doc: ParsedQuoteDoc
+  model: string
+  usage: { used: number; limit: number }
 }
 
 export interface AiVendorQuoteResponse {
@@ -195,18 +211,8 @@ function upstreamMessage(e: AiUpstreamError): AiError {
   }
 }
 
-export async function readVendorQuote(
-  body: VendorQuoteBody,
-  accessToken: string,
-  env: AiEnv,
-  deps: AiDeps = {},
-): Promise<AiVendorQuoteResponse> {
-  const key = env.ANTHROPIC_API_KEY?.trim()
-  if (!key) throw new AiError(503, 'unavailable', AI_NOT_READY_MESSAGE)
-
-  // ② 형식·크기·내용 — Claude를 부르기 전에(한도도 쓰기 전에) 거른다
-  const projectId = typeof body.project_id === 'string' ? body.project_id : ''
-  if (!UUID_RE.test(projectId)) throw new AiError(400, 'validation', '행사 id 형식이 올바르지 않습니다.')
+/** 형식·크기·내용 서명 검사(두 동작 공용) — 통과하면 media_type을 돌려준다. 한도를 쓰기 전에 거른다 */
+export function checkedAiFile(body: { media_type?: unknown; data_base64?: unknown }): AiMediaType {
   const media = body.media_type as AiMediaType
   if (!MEDIA_TYPES.includes(media)) {
     throw new AiError(400, 'validation', 'AI로 읽을 수 있는 파일은 PDF·JPG·PNG·WEBP입니다.')
@@ -219,6 +225,22 @@ export async function readVendorQuote(
   if (!matchesSignature(media, bytes)) {
     throw new AiError(400, 'validation', `파일 내용이 ${MEDIA_LABEL[media]}이(가) 아닙니다 — 원본 파일을 다시 골라 주세요.`)
   }
+  return media
+}
+
+export async function readVendorQuote(
+  body: VendorQuoteBody,
+  accessToken: string,
+  env: AiEnv,
+  deps: AiDeps = {},
+): Promise<AiVendorQuoteResponse> {
+  const key = env.ANTHROPIC_API_KEY?.trim()
+  if (!key) throw new AiError(503, 'unavailable', AI_NOT_READY_MESSAGE)
+
+  // ② 형식·크기·내용 — Claude를 부르기 전에(한도도 쓰기 전에) 거른다
+  const projectId = typeof body.project_id === 'string' ? body.project_id : ''
+  if (!UUID_RE.test(projectId)) throw new AiError(400, 'validation', '행사 id 형식이 올바르지 않습니다.')
+  const media = checkedAiFile(body)
 
   // ③ 권한·한도(SQL)
   const store = deps.store ?? createSupabaseAiUsageStore(env)
@@ -233,7 +255,7 @@ export async function readVendorQuote(
   // ④ 읽기
   let out: Awaited<ReturnType<VendorQuoteReader>>
   try {
-    out = await reader({ media_type: media, data_base64: body.data_base64 })
+    out = await reader({ media_type: media, data_base64: body.data_base64 as string })
   } catch (e) {
     const up = e instanceof AiUpstreamError ? e : new AiUpstreamError('other', null, e instanceof Error ? e.message : 'unknown')
     console.warn(`[ai] vendor-quote upstream ${up.kind}${up.upstreamStatus ? ` (${up.upstreamStatus})` : ''}`)
@@ -276,6 +298,79 @@ export async function readVendorQuote(
   return { doc: docFromAiVendorQuote(result), model: out.model, usage: { used: claim.used, limit: claim.limit } }
 }
 
+interface QuoteImportBody {
+  file_name?: unknown
+  media_type?: unknown
+  data_base64?: unknown
+}
+
+/**
+ * (v2.18 §22.5) 우리 견적서 PDF·사진 → 견적서 가져오기 확인 큐 입력. 순서는 readVendorQuote와 같다:
+ * 키 → 형식·크기·서명 → ai_usage_claim(null 행사 · 'quote_import' — 영업·관리자) → 읽기 → 검사 → docFromAiQuoteImport(검산은 우리 코드) → finish.
+ * **저장하지 않는다** — 앱이 받은 doc으로 quote_imports(detected)를 만들고 기존 확인 큐·확정·분배를 그대로 탄다(R-Q1).
+ */
+export async function readQuoteImport(
+  body: QuoteImportBody,
+  accessToken: string,
+  env: AiEnv,
+  deps: AiDeps = {},
+): Promise<AiQuoteImportResponse> {
+  const key = env.ANTHROPIC_API_KEY?.trim()
+  if (!key) throw new AiError(503, 'unavailable', AI_NOT_READY_MESSAGE)
+  const media = checkedAiFile(body)
+
+  const store = deps.store ?? createSupabaseAiUsageStore(env)
+  const claim = await store.claim(accessToken, null, 'quote_import', aiDailyLimit(env))
+  const model = aiModel(env)
+  const reader = deps.quoteReader ?? createQuoteImportReader(key, model)
+  const finish = (status: AiUsageStatus, m: string | null, i: number, o: number, error: string | null) =>
+    store.finish(claim.id, status, m, i, o, error).catch((e: unknown) => {
+      console.warn('[ai] usage finish failed:', e instanceof Error ? e.message : e)
+    })
+
+  let out: Awaited<ReturnType<VendorQuoteReader>>
+  try {
+    out = await reader({ media_type: media, data_base64: body.data_base64 as string })
+  } catch (e) {
+    const up = e instanceof AiUpstreamError ? e : new AiUpstreamError('other', null, e instanceof Error ? e.message : 'unknown')
+    console.warn(`[ai] quote-import upstream ${up.kind}${up.upstreamStatus ? ` (${up.upstreamStatus})` : ''}`)
+    await finish('failed', model, 0, 0, `${up.kind}${up.upstreamStatus ? ` ${up.upstreamStatus}` : ''}`)
+    throw upstreamMessage(up)
+  }
+  const tokens = [out.input_tokens, out.output_tokens] as const
+  if (out.stop_reason === 'refusal') {
+    await finish('unreadable', out.model, ...tokens, 'refusal')
+    throw new AiError(422, 'validation', 'AI가 이 파일을 읽지 않았습니다 — 견적서가 맞는지 확인하세요.')
+  }
+  if (out.stop_reason === 'max_tokens') {
+    await finish('unreadable', out.model, ...tokens, 'max_tokens')
+    throw new AiError(422, 'validation', '견적서가 길어 한 번에 다 읽지 못했습니다 — PDF를 몇 쪽씩 나눠 올려 주세요.')
+  }
+  let result
+  try {
+    result = validateAiQuoteImport(out.json)
+  } catch (e) {
+    const why = e instanceof AiQuoteImportShapeError ? e.message : 'invalid json'
+    console.warn('[ai] quote-import shape:', why.slice(0, 120))
+    await finish('failed', out.model, ...tokens, `shape: ${why}`)
+    throw new AiError(502, 'unavailable', 'AI 응답을 해석하지 못했습니다 — 다시 시도하세요. 이번 시도는 오늘 횟수에 세지 않습니다.')
+  }
+  if (!result.readable) {
+    await finish('unreadable', out.model, ...tokens, 'not a quote')
+    throw new AiError(
+      422,
+      'validation',
+      `견적서로 읽지 못했습니다${result.unreadable_reason ? ` — ${result.unreadable_reason}` : ''}. 흐리거나 잘린 사진이면 다시 찍어 올려 주세요.`,
+    )
+  }
+  if (!result.sections.some((s) => s.items.length > 0)) {
+    await finish('unreadable', out.model, ...tokens, 'no items')
+    throw new AiError(422, 'validation', '견적서에서 항목 줄을 찾지 못했습니다 — 표가 보이게 다시 찍거나 PDF로 올려 주세요.')
+  }
+  await finish('ok', out.model, ...tokens, null)
+  return { doc: docFromAiQuoteImport(result), model: out.model, usage: { used: claim.used, limit: claim.limit } }
+}
+
 function json(status: number, payload: unknown): Response {
   return new Response(JSON.stringify(payload), { status, headers: { 'content-type': 'application/json; charset=utf-8' } })
 }
@@ -288,11 +383,12 @@ export async function handleAiRequest(request: Request, env: AiEnv, deps: AiDeps
   if (request.method !== 'POST') return json(405, { error: { code: 'validation', message: 'GET·POST만 허용됩니다.' } })
   try {
     const action = new URL(request.url).searchParams.get('action')
-    if (action !== 'vendor-quote') throw new AiError(400, 'validation', '알 수 없는 동작입니다.')
+    if (action !== 'vendor-quote' && action !== 'quote-import') throw new AiError(400, 'validation', '알 수 없는 동작입니다.')
     if (!env.ANTHROPIC_API_KEY?.trim()) throw new AiError(503, 'unavailable', AI_NOT_READY_MESSAGE)
     const accessToken = parseBearer(request.headers.get('authorization'))
     const body = (await request.json().catch(() => null)) as VendorQuoteBody | null
     if (!body || typeof body !== 'object') throw new AiError(400, 'validation', 'JSON 본문이 필요합니다.')
+    if (action === 'quote-import') return json(200, await readQuoteImport(body, accessToken, env, deps))
     return json(200, await readVendorQuote(body, accessToken, env, deps))
   } catch (e) {
     if (e instanceof AiError) return json(e.status, { error: { code: e.code, message: e.message } })

@@ -31,6 +31,10 @@ import { exportEstimate } from '../../../modules/quote/export/exportEstimate'
 import { quoteToProjectDraft } from '../../../modules/quote/handoff'
 import { parseQuoteWorkbook } from '../../../modules/quote/import/parser'
 import { mapSectionsToBuckets } from '../../../modules/quote/import/buckets'
+import { quoteImportFormatLabel } from '../../../modules/quote/import/types'
+import { aiMediaTypeFor } from '../../../lib/vendorQuoteAi'
+import { prepareAiFile } from '../../../lib/ai/prepareAiFile'
+import { aiFor } from '../ai'
 import type { ParsedQuoteDoc, SectionMapping } from '../../../modules/quote/import/types'
 import { createSettlementBoardCore } from './settlement'
 
@@ -284,7 +288,7 @@ function buildImportedQuoteInput(imp: QuoteImport): QuoteInput {
     client_company: header.client?.trim() || null,
     contact: null,
     manager: header.manager?.trim() || null,
-    notes: `임포트(${imp.format}형) — ${imp.file_name}`,
+    notes: `임포트(${quoteImportFormatLabel(imp.format)}) — ${imp.file_name}`,
     adjustments: [],
   }
 }
@@ -423,10 +427,21 @@ export function quotesDomain(ctx: SupabaseCtx): QuotesDomain {
 
     // ── §22 견적서 임포트 (R-Q1~R-Q4) ────────────────────────────────
 
-    /** 파싱·서식 감지 결과를 quote_imports에 저장한다. **quotes는 만들지 않는다**(R-Q1) */
+    /**
+     * 파싱·서식 감지 결과를 quote_imports에 저장한다. **quotes는 만들지 않는다**(R-Q1).
+     * 엑셀 = 파서(§22.2) · PDF·사진 = 서버가 AI로 읽는다(v2.18 §22.5 — 권한·하루 한도는 서버 SQL이 다시 본다). 어느 쪽이든 같은 확인 큐로 간다.
+     */
     async importQuoteFile(fileName: string, data: ArrayBuffer): Promise<QuoteImport> {
       const me = await ctx.assertQuoteRole()
-      const parsed = parseQuoteWorkbook(data, fileName)
+      let parsed: ParsedQuoteDoc
+      const aiMedia = aiMediaTypeFor(fileName)
+      if (aiMedia) {
+        const file = await prepareAiFile(fileName, data)
+        const read = await aiFor(ctx).readQuoteImport({ file_name: fileName, media_type: file.media_type, data_base64: file.data_base64 })
+        parsed = read.doc
+      } else {
+        parsed = parseQuoteWorkbook(data, fileName)
+      }
       return ctx.q(
         await ctx.sb
           .from('quote_imports')

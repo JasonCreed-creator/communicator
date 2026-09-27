@@ -12,6 +12,8 @@ import { fmtWon } from '../components/quote/quoteFormState'
 import { useProject } from '../context/ProjectContext'
 import { IMPORT_STEP_HELP } from '../lib/helpTexts'
 import { QUOTE_IMPORT_BUCKETS, bucketLabel } from '../modules/quote/import/buckets'
+import { quoteImportFormatLabel } from '../modules/quote/import/types'
+import { aiMediaTypeFor } from '../lib/vendorQuoteAi'
 import { getDataProvider } from '../providers'
 import type { Quote, QuoteImport } from '../types/entities'
 import type { SectionMapping } from '../modules/quote/import/types'
@@ -24,7 +26,11 @@ const FORMAT_GUIDE = [
   { code: 'A형', desc: '단가·수량·일수 열이 있는 세부 산출내역서' },
   { code: 'B형', desc: 'ITEM·금액 단식 + 섹션별 total 행' },
   { code: 'C형', desc: 'UNIT PRICE·QTY·AMOUNT(·SELECT) 패키지 견적서' },
+  { code: 'PDF·사진', desc: 'AI(Claude)가 옮겨 적음 — 국문·영문 · 실서버에서만 · 한 사람 하루 횟수 제한' },
 ]
+
+/** 위저드 ①이 받는 파일 — 엑셀(파서) + PDF·사진(AI, v2.18 §22.5) */
+const ACCEPT = '.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,.pdf,application/pdf,.jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp'
 
 const HEADER_FIELDS: { key: 'event_name' | 'client' | 'date_range' | 'venue' | 'quoted_at' | 'manager'; label: string }[] = [
   { key: 'event_name', label: '행사명' },
@@ -206,22 +212,28 @@ function WizardBody() {
       {step === 1 && (
         <section className="ui-card max-w-2xl p-5">
           <p className="t-card-title inline-flex items-center gap-1.5">
-            엑셀 견적서 올리기
+            견적서 올리기
             <InfoTip text={IMPORT_STEP_HELP.upload} />
           </p>
           <p className="mt-1 text-sm text-ink-sub">
-            파일을 읽어 서식·섹션·항목·검산 결과만 보여 줍니다. 이 단계에서는 아무것도 저장되지 않습니다.
+            엑셀은 파서가, PDF·사진은 AI가 읽어 서식·섹션·항목·검산 결과만 보여 줍니다. 이 단계에서는 아무것도 저장되지 않습니다.
           </p>
           <label className="mt-4 block">
-            <span className="t-caption">견적서 파일 (.xlsx)</span>
+            <span className="t-caption">견적서 파일 (.xlsx · .pdf · 사진)</span>
             <input
               type="file"
-              accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              accept={ACCEPT}
               aria-label="견적서 파일"
               className="ui-input mt-1 block w-full"
               onChange={(e) => setFile(e.target.files?.[0] ?? null)}
             />
           </label>
+          {file && aiMediaTypeFor(file.name) && (
+            <p className="mt-2 rounded-md bg-accent-tint px-3 py-2 text-sm text-accent-deep" data-testid="import-ai-notice">
+              PDF·사진은 AI(Claude)가 표를 옮겨 적습니다 — 국문·영문 모두 · 한 사람이 하루에 쓸 수 있는 횟수가 정해져 있고, 읽은 결과는 확인 화면에서
+              원본과 대조한 뒤 확정합니다. 사람 이름은 읽지 않습니다.
+            </p>
+          )}
           <dl className="mt-4 space-y-1 rounded-md bg-track px-3 py-2 text-sm">
             <dt className="t-caption">지원 서식</dt>
             {FORMAT_GUIDE.map((f) => (
@@ -232,7 +244,7 @@ function WizardBody() {
           </dl>
           <div className="mt-4 flex gap-2">
             <button type="button" className="btn btn-accent" disabled={!file || busy} onClick={() => void handleUpload()}>
-              {busy ? '인식 중…' : '인식 시작'}
+              {busy ? (file && aiMediaTypeFor(file.name) ? 'AI가 읽는 중…' : '인식 중…') : file && aiMediaTypeFor(file.name) ? 'AI로 읽기' : '인식 시작'}
             </button>
           </div>
         </section>
@@ -259,7 +271,7 @@ function WizardBody() {
                 <InfoTip text={IMPORT_STEP_HELP.confirm} />
               </p>
               <span className="rounded-full bg-steel-tint px-2.5 py-0.5 text-xs font-medium text-steel">
-                {parsed.format}형 · {imp?.file_name}
+                {quoteImportFormatLabel(parsed.format)} · {imp?.file_name}
               </span>
             </div>
             <dl className="mt-3 grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
