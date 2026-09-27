@@ -12,6 +12,7 @@
 //   · 버킷 표(원가 없는 버킷은 그룹행 아래) · 불러온 견적서 이력(있을 때만)
 // **마진 식은 lib/settlement 정본 그대로다 — 표시만 바꾼다.**
 import { useMemo, useState } from 'react'
+import { isPm as isPmUser } from '../lib/roles'
 import EmptyState from '../components/internal/EmptyState'
 import ErrorAlert from '../components/internal/ErrorAlert'
 import { LevelBadge } from '../components/internal/StatusBadge'
@@ -122,7 +123,7 @@ export default function SettlementPage() {
     [canQuotes],
   )
 
-  const isPm = me.data?.role === 'pm'
+  const isPm = isPmUser(me.data)
   const canEdit = isPm && !readOnly
   const finalQuotes = useMemo(
     () => (quotes.data ?? []).filter((q) => q.is_final && (q.project_id === projectId || q.project_id === null)),

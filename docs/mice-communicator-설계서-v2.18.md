@@ -193,13 +193,19 @@ create table profiles (                      -- (v2.7) 앱의 '사람' 정본 = 
 -- 신규 가입은 auth 트리거로 profiles 자동 생성 또는 기존 프로필 연결(app_role 보존), 승격은 service role SQL(app.promote_admin)만
 -- 아래 DDL의 `references auth.users`는 전부 (v2.7) `references profiles(id)`로 읽는다
 
--- 2. 멤버·역할
+-- 2. 멤버·역할 — (v2.19 · Phase 6.6) 키 = (행사·사람·역할): 한 사람이 한 행사에서 여러 역할 가능
 create table project_members (
   project_id uuid references projects on delete cascade,
   user_id uuid references auth.users,
   role member_role not null,
-  primary key (project_id, user_id)
+  primary key (project_id, user_id, role)   -- v2.19: (project_id, user_id) → 역할 포함(SQL 32번째 multi_role)
 );
+-- (v2.19) 권한은 역할 **합집합** — app.member_roles(project) = 그 사람의 역할 배열이 판정 정본이고, is_pm·has_role·
+-- can_write_area·require_roles·RLS·RPC가 전부 여기서 파생된다. app.member_role() = 대표 역할(pm > design > ops > reg)로
+-- 옛 단일 역할 호출자용. add_member는 같은 역할만 409('이미 이 행사의 {역할} 담당자'), remove_member(p_project, p_member,
+-- p_role default null)은 역할 하나(또는 null = 전부)를 뺀다 — 마지막 PM 규칙은 pm 역할을 뺄 때 그대로. 앱: CurrentUser.roles(정본) +
+-- role(대표) · lib/roles(hasRole·canWriteArea) · removeMember(projectId, memberId, role?)(DataProvider v16.1 — 시그니처 확장, 132 불변).
+-- 계기: 2026-09-27 실사용 온보딩 ② "담당자를 중복배치할 수 있게" · 버튼 승인 "지금 착수".
 -- v1.5 담당자 '입력': 행사 설정 ②에서 이름·이메일·역할을 직접 추가한다. Phase 4 전(mock)은 추가 즉시 멤버로 취급,
 -- Phase 4부터는 초대 레코드 → 가입·수락 시 project_members로 승격. 같은 사람이 행사마다 다른 역할 가능(역할은 행사 단위).
 create table project_invites (
@@ -667,6 +673,7 @@ draft ──(담당/PM)──> internal_review ──(PM만)──> pending_appr
 |---|---|---|---|---|---|
 | 자기 영역 deliverable 생성·업로드 | ● | ●(design) | ●(ops) | — | — |
 | 지시 발행(requested 생성) (v1.2) | ● | — | — | — | — |
+| **(v2.19) 여러 역할을 가진 사람** | 표의 각 행은 역할 **합집합**으로 판정한다 — 디자인+운영이면 두 영역 열, pm+무엇이든 pm 열(SQL `app.member_roles` · 앱 `lib/roles`) | | | | |
 | 항목 고치기 — 제목·카테고리·마감 (v2.10) | ● | ●(design) | ●(ops) | — | — |
 | 항목 고치기 — 담당·제작 가이드 (v2.10) | ● | — | — | — | — |
 | 항목 지우기 — 모든 상태, 항목 이름 입력 확인 (v2.10) | ● | — | — | — | — |
@@ -825,7 +832,7 @@ draft ──(담당/PM)──> internal_review ──(PM만)──> pending_appr
 | POST /projects | 로그인(생성자=pm 자동) | 프로젝트 생성(v1.5: 개요 필드 일괄 수신 — S0 ① 저장 시 호출, onboarded_at은 null) + Drive 표준 트리 생성 + 세션 2파일 템플릿 복사 |
 | POST /projects/{id}/close · reopen | pm | status=closed/active 토글 (v1.5). closed면 쓰기 API 전부 409 |
 | DELETE /projects/{id} | **app_role=admin** | 행사 하드 삭제 (v2.8 §4-1c). 행사 스코프 데이터 전부 cascade, `quotes`·`quote_imports`는 `project_id`만 null로 분리(행 보존), 주소록(`profiles`)·협력사(`vendors`)는 무관. **종료 행사도 삭제 가능**(`require_writable` 미경유). 비관리자 P0403 · 없는 행사 P0404. 구현 = `security definer` RPC `public.delete_project` |
-| POST /projects/{id}/members | pm | 담당자 추가(이름·이메일·역할 — v1.5 project_invites 생성, mock은 즉시 멤버) / DELETE /projects/{id}/members/{id} = 제거(마지막 pm이면 409) |
+| POST /projects/{id}/members | pm | 담당자 추가(이름·이메일·역할 — v1.5 project_invites 생성, mock은 즉시 멤버). **(v2.19) 같은 사람을 다른 역할로 또 추가할 수 있다(같은 역할만 409)** / DELETE /projects/{id}/members/{id}?role= = 제거(**role을 주면 그 역할만**, 없으면 전부 · 마지막 pm이면 409) — 구현 = RPC `remove_member(p_project, p_member, p_role default null)` |
 | POST /projects/{id}/client-tokens | pm | 토큰 발급 (연락처·만료) / DELETE = 회수 |
 | GET /projects/{id}/dashboard | 멤버 | 홈 데이터(미결 컨펌·D-day·인박스 수·영역 진행률·최근 활동) |
 | GET /projects/{id}/landings | 멤버 | 그 행사의 랜딩 목록(최신 수정순) — **projectId 필수, §4-21 R-L1** (v2.1) |

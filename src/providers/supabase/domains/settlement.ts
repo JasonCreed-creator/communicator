@@ -218,8 +218,7 @@ function assertCostAllowed(
 
 /** 금액 입력 권한 — pm 또는 그 항목의 담당자 본인 (§6.1). RLS(settlement_items_update)와 같은 규칙 */
 async function assertItemWritable(ctx: SupabaseCtx, projectId: UUID, item: SettlementItem): Promise<void> {
-  const role = await ctx.roleIn(projectId)
-  if (role === 'pm') return
+  if (await ctx.hasRoles(projectId, 'pm')) return
   const me = await ctx.me()
   if (item.assignee_id && item.assignee_id === me.id) return
   throw new ProviderError('forbidden', '본인이 담당한 발주 항목만 입력할 수 있습니다.')

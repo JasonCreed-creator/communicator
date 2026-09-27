@@ -21,6 +21,7 @@
 //  다른 편집은 전부 이 행사의 pm이 하지만 삭제만 **전역 app_role='admin'**이다. admin이 아니어도
 //  카드는 그대로 보이고 버튼만 잠긴다 — 무엇이 없어서 막혔는지 그 자리에서 읽혀야 한다(§10 진입점 원칙).
 import { useEffect, useState } from 'react'
+import { isPm as isPmUser } from '../lib/roles'
 import { useLocation, useNavigate } from 'react-router-dom'
 import Card from '../components/internal/Card'
 import EmptyState from '../components/internal/EmptyState'
@@ -139,7 +140,7 @@ export default function SettingsPage() {
   const currentUser = useAsync(() => provider.getCurrentUser(), [])
   const members = useAsync(() => provider.listMembers(projectId), [projectId])
   const contacts = useAsync(() => provider.listClientContacts(projectId), [projectId])
-  const isPm = currentUser.data?.role === 'pm'
+  const isPm = isPmUser(currentUser.data)
   // 삭제만 전역 축이다 — 같은 currentUser 조회를 재사용한다(중복 getCurrentUser 금지)
   const canDelete = !!currentUser.data && canDeleteProject(currentUser.data)
   // 토큰 조회는 pm 전용(provider assertPm) — 아니면 호출 자체를 하지 않는다(무의미한 오류 방지)

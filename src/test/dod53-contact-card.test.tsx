@@ -62,11 +62,13 @@ describe('DoD-53 (a) 전자명함 임포트 — 직함·전화가 저장된다',
     renderRoute('/settings')
     await screen.findByRole('heading', { name: '행사 설정' })
     await userEvent.click(await screen.findByRole('button', { name: '담당자' }))
-    await screen.findByText('김기획')
+    // v16.1 — 배정된 사람도 주소록 카드로 남으므로 이름이 두 곳에 보인다: 역할 칸 안에서 찾는다
+    const pmLane = () => screen.getByRole('region', { name: 'PM 담당' })
+    await within(pmLane()).findByText('김기획')
 
     // 대조군: 기존 담당자 카드도 직함·전화를 보여 준다(픽스처가 실제로 값을 싣고 있다)
     // Phase 3.22 — 배정 현황은 표가 아니라 역할 칸의 카드다
-    const pmCard = screen.getByText('김기획').closest('[data-member-card]') as HTMLElement
+    const pmCard = within(pmLane()).getByText('김기획').closest('[data-member-card]') as HTMLElement
     expect(within(pmCard).getByText('기획팀 팀장')).toBeTruthy()
     expect(within(pmCard).getByText('010-0000-1001')).toBeTruthy()
 

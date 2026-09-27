@@ -7,6 +7,7 @@
 // Phase 3.23 PR-4(디자인지시서 v1.4 §7-2.7) — 여는 자리는 본문 카드('항목 관리')에서 머리의 ⋯ 메뉴(ItemMenu)로 옮겼다.
 // 이 파일은 권한 판정 · 편집 폼(고치기를 고르면 본문 맨 위에 카드로 열린다) · 지운 뒤 돌아갈 자리만 가진다.
 import { useState, type FormEvent } from 'react'
+import { canWriteArea } from '../../lib/roles'
 import Card from '../internal/Card'
 import ErrorAlert from '../internal/ErrorAlert'
 import { CategoryPicker } from '../board/DeliverableAddForm'
@@ -28,10 +29,11 @@ export function boardPathFor(area: DeliverableDetail['area']): { path: string; l
 /** 고치기 = PM·해당 영역 담당 / 지우기 = PM만 (권한이 없으면 메뉴 자체를 그리지 않는다) */
 export function itemManageRights(
   d: Pick<DeliverableDetail, 'area'>,
-  role: MemberRole | undefined,
+  roles: readonly MemberRole[],
 ): { canEdit: boolean; canDelete: boolean; isPm: boolean } {
-  const isPm = role === 'pm'
-  const canEdit = isPm || ((role === 'design' || role === 'ops') && d.area === role)
+  // v16.1 — 역할 합집합(한 사람이 여러 역할): pm이면 전부, 아니면 자기 영역만 고치기
+  const isPm = roles.includes('pm')
+  const canEdit = canWriteArea(roles, d.area)
   return { canEdit, canDelete: isPm, isPm }
 }
 

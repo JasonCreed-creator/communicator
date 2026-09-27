@@ -14,6 +14,7 @@
 // "금액 식별자가 있어서는 안 되는 경로"로 본다(§21.2 R-H3). 이 화면은 반대로 매출을 다루는 게
 // 목적인 내부 도구라 그 디렉터리에 두면 가드의 의미가 흐려진다 — 그래서 components/sales/에 둔다.
 import { useMemo, useState } from 'react'
+import { isPm } from '../../lib/roles'
 import Card from '../internal/Card'
 import EmptyState from '../internal/EmptyState'
 import ErrorAlert from '../internal/ErrorAlert'
@@ -87,7 +88,7 @@ export default function SalesPlanner({ project }: { project: Project }) {
               loading={tiers.loading}
               onSaved={tiers.reload}
               projectId={projectId}
-              readOnly={me.data?.role !== 'pm'}
+              readOnly={!isPm(me.data)}
             />
           )}
           {step === 2 && <SimulationStep plan={plan} slotDemand={slotDemand} />}

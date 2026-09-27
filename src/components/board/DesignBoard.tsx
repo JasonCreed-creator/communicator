@@ -3,6 +3,7 @@
 // 급한 순 한 표(카테고리 묶음 대신 카테고리는 제목 아래 한 줄), 목록 ↔ 갤러리(최신 시안 썸네일 — 사용자 결정 2026-09-25).
 // 운영 보드는 v2.5 유형 우선 구조(유형 카드 + 인라인 빌더)를 그대로 둔다 — 이 파일은 디자인 영역만 그린다.
 import { useEffect, useMemo, useState } from 'react'
+import { canWriteArea, rolesOf } from '../../lib/roles'
 import EmptyState from '../internal/EmptyState'
 import ErrorAlert from '../internal/ErrorAlert'
 import FilterChip from '../internal/FilterChip'
@@ -83,9 +84,10 @@ export default function DesignBoard() {
     return details.map(toDesignRow)
   }, [projectId])
 
-  const role = currentUser.data?.role ?? null
-  const canWrite = !isClosed && (role === 'pm' || role === 'design')
-  const isPm = !isClosed && role === 'pm'
+  // v16.1 — 역할 합집합: 디자인 역할이 있으면(다른 역할과 겹쳐도) 쓸 수 있다
+  const roles = rolesOf(currentUser.data)
+  const canWrite = !isClosed && canWriteArea(roles, 'design')
+  const isPm = !isClosed && roles.includes('pm')
 
   // 발주처 링크(재전달용) — 대행형 PM에게만 필요하다. 권한이 없어 조회가 실패하면 버튼을 그리지 않는다(추측 금지)
   const clientLink = useClientLinkTarget(projectId, isPm && !isHost)

@@ -9,6 +9,7 @@
 //   · 가로 단계 줄(① 행사 개요 — ② 담당자 — ③ 유형·확인) + 오른쪽 'n단계 중 k단계 · 필수 4개 중 m개 입력' + 막대
 //   · 1단계 = ProjectOverviewForm layout='onboarding'(넓은 2열 · 선택 항목 접기 · '다음: 담당자')
 import { Fragment, useCallback, useState } from 'react'
+import { isPm as isPmUser } from '../lib/roles'
 import { Link, useNavigate } from 'react-router-dom'
 import BrandLogo from '../components/BrandLogo'
 import ErrorAlert from '../components/internal/ErrorAlert'
@@ -89,7 +90,7 @@ export default function OnboardingPage() {
   const currentUser = useAsync(() => provider.getCurrentUser(), [])
   const members = useAsync(() => provider.listMembers(projectId), [projectId])
   const navigate = useNavigate()
-  const isPm = currentUser.data?.role === 'pm'
+  const isPm = isPmUser(currentUser.data)
 
   const complete = useMutation(async () => {
     await provider.completeOnboarding(projectId)

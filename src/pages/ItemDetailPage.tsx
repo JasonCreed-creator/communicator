@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
+import { canWriteArea as canWriteAreaWith, hasRole, isPm as isPmUser, rolesOf } from '../lib/roles'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import CuesheetEditor from '../components/cue/CuesheetEditor'
 import GuideBuilder from '../components/guide/GuideBuilder'
@@ -101,7 +102,7 @@ function ItemDetail({ itemId }: { itemId: string }) {
   // 컨펌대기 항목의 발주처 링크 재전달(대행형 PM) — 이메일은 아직 가지 않는다(Phase 6b)
   const clientLink = useClientLinkTarget(
     projectId,
-    currentUser.data?.role === 'pm' && project.data?.kind !== 'host' && detail.data?.status === 'pending_approval',
+    isPmUser(currentUser.data) && project.data?.kind !== 'host' && detail.data?.status === 'pending_approval',
   )
   // v2.4 §10.1 — 주최형에서는 발주처 컨펌 발송 UI를 숨긴다(파트너 항목이든 아니든, DoD 31)
   const isHost = project.data?.kind === 'host'
@@ -134,9 +135,10 @@ function ItemDetail({ itemId }: { itemId: string }) {
   }
 
   const d = detail.data
-  const role = currentUser.data?.role
-  const canWriteArea = !!role && (role === 'pm' || role === d.area)
-  const isPm = role === 'pm'
+  // v16.1 — 역할 합집합(한 사람이 여러 역할): pm이면 전 영역, 아니면 자기 영역
+  const roles = rolesOf(currentUser.data)
+  const canWriteArea = canWriteAreaWith(roles, d.area)
+  const isPm = roles.includes('pm')
   // v1.3 큐시트: category='큐시트' 항목은 파일 대신 정형 표 에디터 — 편집은 pm·ops 전용(§6.1)
   const isCuesheet = d.category === '큐시트'
   // v2.5 §23 — 시나리오·운영가이드 빌더 모드(위 builderRows 주석의 판정 기준)
@@ -147,7 +149,7 @@ function ItemDetail({ itemId }: { itemId: string }) {
   // 정형 문서 공통 레이아웃(1단 전폭 + 메타 스트립) — 큐시트(3.9.1 P1)와 동일 취급
   const isStructuredPanel = isCuesheet || isBuilderDoc
   // 큐시트·빌더 편집 권한은 동일하게 pm·ops(§6.1·§8.2)
-  const canEditCue = role === 'pm' || role === 'ops'
+  const canEditCue = hasRole(currentUser.data, 'pm', 'ops')
 
   // 판정 재료(builderRows)가 오기 전에 파일 폼을 잠깐 그렸다가 빌더로 바꾸면 화면이 튄다 —
   // 정형 2종 카테고리에서만 로딩을 기다린다(그 외 카테고리는 판정과 무관).
@@ -176,7 +178,7 @@ function ItemDetail({ itemId }: { itemId: string }) {
     .find((a) => a.decision === 'changes_requested')
   let openApproval: (typeof d.approvals)[number] | null = null
   for (const a of d.approvals) if (a.decided_at === null) openApproval = a
-  const rights = itemManageRights(d, role)
+  const rights = itemManageRights(d, roles)
   const closed = project.data?.status === 'closed'
   const leave = boardPathFor(d.area)
   const shownVersionId = selectedVersionId && d.versions.some((v) => v.id === selectedVersionId) ? selectedVersionId : latestVersion?.id ?? null

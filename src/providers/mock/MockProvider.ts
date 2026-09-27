@@ -78,6 +78,16 @@ import type {
   SheetInvalidReason,
 } from '../../types/enums'
 import { isStructuredDocCategory, SHEET_FIELD_LABELS, SHEET_REQUIRED_FIELDS } from '../../types/enums'
+import { canWriteArea, hasRole, primaryRole, rolesOf, sortRoles } from '../../lib/roles'
+
+/** 지금 보는 행사 — ProjectContext가 localStorage에 둔 선택값(없거나 못 읽으면 null). supabase ctx.currentProjectId()와 같은 키 */
+function readCurrentProjectId(): string | null {
+  try {
+    return typeof localStorage !== 'undefined' ? localStorage.getItem('communicator.currentProjectId') : null
+  } catch {
+    return null
+  }
+}
 import {
   buildColumnPreviews,
   buildProbe,
@@ -176,7 +186,7 @@ import {
 import { buildGuideSeedSections } from '../../lib/guideAssembly'
 import { guideDataProblem, withDerivedContent } from '../../lib/guideStructured'
 import { buildCuesFromScenario, scenarioCueCandidates } from '../../lib/scenario'
-import { SCENARIO_KIND_LABELS } from '../../lib/labels'
+import { SCENARIO_KIND_LABELS, ROLE_LABELS } from '../../lib/labels'
 import { buildScenarioSeed } from '../../lib/scenarioScript'
 import { UPLOADABLE_STATUSES, uploadBlockedMessage } from '../../lib/uploadGate'
 import { normalizeSlackWebhook, SLACK_WEBHOOK_INVALID_MESSAGE } from '../../lib/slackWebhook'
@@ -326,12 +336,20 @@ export class MockProvider implements DataProvider {
    */
   private currentUser(): CurrentUser {
     const user = this.mustFindUser(this.state.current_user_id)
-    const membership = this.state.members.find((m) => m.user_id === user.id)
+    // 지금 보는 행사(localStorage — ProjectContext·supabase ctx와 같은 키)의 멤버십을 먼저, 없으면 첫 멤버십
+    const mine = this.state.members.filter((m) => m.user_id === user.id)
+    const preferred = readCurrentProjectId()
+    const membership = mine.find((m) => m.project_id === preferred) ?? mine[0]
     const appRole = this.appRoleOf(user.id)
+    // v16.1 — 같은 행사에서 가진 역할 전부(한 사람이 여러 역할). 대표 역할은 pm > design > ops > reg
+    const roles: MemberRole[] =
+      appRole === 'admin'
+        ? ['pm'] // 전역 admin은 어느 행사에서든 pm(멤버 아니어도) — supabase ctx·SQL app.member_role과 같은 판정(설계서 v2.18.1 §6.1)
+        : sortRoles(mine.filter((m) => m.project_id === membership?.project_id).map((m) => m.role))
     return {
       ...user,
-      // 전역 admin은 어느 행사에서든 pm(멤버 아니어도) — supabase ctx.roleIn·SQL app.member_role과 같은 판정(설계서 v2.18.1 §6.1)
-      role: appRole === 'admin' ? 'pm' : (membership?.role ?? 'reg'),
+      role: primaryRole(roles) ?? 'reg',
+      roles,
       project_id: membership?.project_id ?? '',
       app_role: appRole,
     }
@@ -371,10 +389,18 @@ export class MockProvider implements DataProvider {
   }
 
   /** §6.1 역할-영역 일치: pm=전 영역, design/ops=자기 영역, common=pm 전용, reg=쓰기 불가 */
-  private assertAreaRole(area: DeliverableArea, role: MemberRole): void {
-    if (role === 'pm') return
-    if ((role === 'design' || role === 'ops') && area === role) return
+  /** §6.1 역할-영역 일치 — 역할 합집합(v16.1 · Phase 6.6): pm = 전 영역 · design/ops = 자기 영역 · reg·common 쓰기 불가 */
+  private assertAreaRole(area: DeliverableArea, user: CurrentUser): void {
+    if (canWriteArea(rolesOf(user), area)) return
     throw new ProviderError('forbidden', '해당 영역에 대한 쓰기 권한이 없습니다.')
+  }
+
+  private hasRole(user: CurrentUser, ...roles: MemberRole[]): boolean {
+    return hasRole(user, ...roles)
+  }
+
+  private isPm(user: CurrentUser): boolean {
+    return hasRole(user, 'pm')
   }
 
   /**
@@ -686,8 +712,9 @@ export class MockProvider implements DataProvider {
     const title = input.title?.trim() || null
     const phone = input.phone?.trim() || null
     let profile = this.state.users.find((u) => u.email?.toLowerCase() === email)
-    if (profile && this.state.members.some((m) => m.project_id === projectId && m.user_id === profile!.id)) {
-      throw new ProviderError('conflict', '이미 이 행사의 담당자입니다.')
+    // v16.1 — 같은 사람을 다른 역할로 또 배정할 수 있다(중복 배정). 같은 역할만 409
+    if (profile && this.state.members.some((m) => m.project_id === projectId && m.user_id === profile!.id && m.role === input.role)) {
+      throw new ProviderError('conflict', `이미 이 행사의 ${ROLE_LABELS[input.role]} 담당자입니다.`)
     }
     if (!profile) {
       profile = { id: this.nextId('usr'), name, email: input.email.trim(), title, phone }
@@ -809,24 +836,25 @@ export class MockProvider implements DataProvider {
     if (p >= 0) this.state.profiles.splice(p, 1)
   }
 
-  async removeMember(projectId: UUID, memberId: UUID): Promise<void> {
+  async removeMember(projectId: UUID, memberId: UUID, role?: MemberRole): Promise<void> {
     const user = this.assertPm()
     this.assertWritable(projectId)
-    const idx = this.state.members.findIndex(
-      (m) => m.project_id === projectId && m.user_id === memberId,
+    // v16.1 — role을 주면 그 역할 하나만, 없으면 그 사람의 역할 전부(옛 동작)
+    const targets = this.state.members.filter(
+      (m) => m.project_id === projectId && m.user_id === memberId && (role === undefined || m.role === role),
     )
-    if (idx < 0) throw new ProviderError('not_found', '담당자를 찾을 수 없습니다.')
+    if (targets.length === 0) throw new ProviderError('not_found', '담당자를 찾을 수 없습니다.')
     // §4-2 앱 레벨 제약: 행사당 pm 최소 1명 — 마지막 PM 삭제 거부
-    const target = this.state.members[idx]
     if (
-      target.role === 'pm' &&
+      targets.some((m) => m.role === 'pm') &&
       this.state.members.filter((m) => m.project_id === projectId && m.role === 'pm').length <= 1
     ) {
       throw new ProviderError('conflict', '마지막 PM은 삭제할 수 없습니다 — 먼저 다른 PM을 지정하세요.')
     }
-    this.state.members.splice(idx, 1)
+    this.state.members = this.state.members.filter((m) => !targets.includes(m))
     this.log(projectId, `user:${user.id}`, 'member.removed', 'project', projectId, {
       user_id: memberId,
+      ...(role ? { role } : {}),
     })
   }
 
@@ -916,7 +944,7 @@ export class MockProvider implements DataProvider {
   async createDeliverable(input: CreateDeliverableInput): Promise<Deliverable> {
     const user = this.currentUser()
     this.assertWritable(input.project_id)
-    this.assertAreaRole(input.area, user.role)
+    this.assertAreaRole(input.area, user)
     if (!input.title.trim() || !input.category.trim()) {
       throw new ProviderError('validation', '카테고리와 제목은 필수입니다.')
     }
@@ -928,7 +956,7 @@ export class MockProvider implements DataProvider {
       input.spec_location !== undefined ||
       input.spec_type !== undefined
     if (isBriefIssue) {
-      if (user.role !== 'pm') {
+      if (!this.isPm(user)) {
         throw new ProviderError('forbidden', '가이드 발행은 PM만 할 수 있습니다.')
       }
       if (!input.assignee_id) {
@@ -984,13 +1012,13 @@ export class MockProvider implements DataProvider {
     const user = this.currentUser()
     const d = this.mustFindDeliverable(deliverableId)
     this.assertWritable(d.project_id)
-    if (!(user.role === 'pm' || ((user.role === 'design' || user.role === 'ops') && d.area === user.role))) {
+    if (!canWriteArea(rolesOf(user), d.area)) {
       throw new ProviderError('forbidden', '이 항목을 고칠 권한이 없습니다(PM 또는 해당 영역 담당).')
     }
     const pmOnly = (['assignee_id', 'brief', 'brief_refs', 'spec_size', 'spec_qty', 'spec_location', 'spec_type'] as const).filter(
       (k) => patch[k] !== undefined,
     )
-    if (pmOnly.length > 0 && user.role !== 'pm') {
+    if (pmOnly.length > 0 && !this.isPm(user)) {
       throw new ProviderError('forbidden', '담당자·가이드는 PM만 고칠 수 있습니다.')
     }
     const changed: string[] = []
@@ -1066,7 +1094,7 @@ export class MockProvider implements DataProvider {
   async deleteDeliverable(deliverableId: UUID): Promise<DeleteDeliverableResult> {
     const user = this.currentUser()
     const d = this.mustFindDeliverable(deliverableId)
-    if (user.role !== 'pm') throw new ProviderError('forbidden', 'PM 전용 기능입니다.')
+    if (!this.isPm(user)) throw new ProviderError('forbidden', 'PM 전용 기능입니다.')
     this.assertWritable(d.project_id)
     const id = d.id
     this.state.versions = this.state.versions.filter((v) => v.deliverable_id !== id)
@@ -1117,11 +1145,11 @@ export class MockProvider implements DataProvider {
     const d = this.mustFindDeliverable(deliverableId)
     this.assertWritable(d.project_id)
     const rule = assertTransition(d.status, to, 'status_patch')
-    if (rule.roles && !rule.roles.includes(user.role)) {
+    if (rule.roles && !this.hasRole(user, ...rule.roles)) {
       throw new ProviderError('forbidden', '이 전이를 수행할 권한이 없습니다.')
     }
     // draft→internal_review는 '영역 담당 또는 PM' (§5)
-    if (rule.from === 'draft') this.assertAreaRole(d.area, user.role)
+    if (rule.from === 'draft') this.assertAreaRole(d.area, user)
     if (rule.requires_comment) {
       if (!opts?.comment?.trim()) {
         throw new ProviderError('validation', '반려 사유 코멘트가 필요합니다.')
@@ -1138,7 +1166,7 @@ export class MockProvider implements DataProvider {
     const user = this.currentUser()
     const d = this.mustFindDeliverable(deliverableId)
     this.assertWritable(d.project_id)
-    this.assertAreaRole(d.area, user.role)
+    this.assertAreaRole(d.area, user)
     if (!UPLOADABLE_STATUSES.includes(d.status)) {
       throw new ProviderError('conflict', uploadBlockedMessage(d.status, { hasPartner: d.partner_id !== null }))
     }
@@ -1222,7 +1250,7 @@ export class MockProvider implements DataProvider {
 
   async requestApproval(deliverableId: UUID, input: RequestApprovalInput): Promise<Approval> {
     const user = this.currentUser()
-    if (user.role !== 'pm') {
+    if (!this.isPm(user)) {
       throw new ProviderError('forbidden', '컨펌 발송은 PM만 할 수 있습니다.')
     }
     const d = this.mustFindDeliverable(deliverableId)
@@ -1355,7 +1383,7 @@ export class MockProvider implements DataProvider {
   // ── 등록 (pm·reg — §6.1 등록 데이터 CRUD) ─────────────────────────
   private assertRegRole(): CurrentUser {
     const user = this.currentUser()
-    if (user.role !== 'pm' && user.role !== 'reg') {
+    if (!this.hasRole(user, 'pm', 'reg')) {
       throw new ProviderError('forbidden', '등록 데이터 권한이 없습니다.')
     }
     return user
@@ -1868,7 +1896,7 @@ export class MockProvider implements DataProvider {
   // ── 설정 (pm 전용 — §6.1) ─────────────────────────────────────────
   private assertPm(): CurrentUser {
     const user = this.currentUser()
-    if (user.role !== 'pm') throw new ProviderError('forbidden', 'PM 전용 기능입니다.')
+    if (!this.isPm(user)) throw new ProviderError('forbidden', 'PM 전용 기능입니다.')
     return user
   }
 
@@ -1964,7 +1992,7 @@ export class MockProvider implements DataProvider {
     }
     const d = this.mustFindDeliverable(deliverableId)
     this.assertWritable(d.project_id)
-    this.assertAreaRole(d.area, user.role)
+    this.assertAreaRole(d.area, user)
     if (!UPLOADABLE_STATUSES.includes(d.status)) {
       throw new ProviderError('conflict', uploadBlockedMessage(d.status, { hasPartner: d.partner_id !== null }))
     }
@@ -2007,7 +2035,7 @@ export class MockProvider implements DataProvider {
   /** §6.1: 행사개요·프로그램표·큐시트 편집은 pm·ops만 */
   private assertPmOps(): CurrentUser {
     const user = this.currentUser()
-    if (user.role !== 'pm' && user.role !== 'ops') {
+    if (!this.hasRole(user, 'pm', 'ops')) {
       throw new ProviderError('forbidden', '이 편집은 PM·운영 담당만 가능합니다.')
     }
     return user
@@ -2759,10 +2787,10 @@ export class MockProvider implements DataProvider {
     this.assertWritable(task.project_id)
     // §6.1·S5: status 체크 = 담당 역할+pm / 그 외 필드 편집 = pm 전용
     const editKeys = Object.keys(patch).filter((k) => k !== 'status')
-    if (editKeys.length > 0 && user.role !== 'pm') {
+    if (editKeys.length > 0 && !this.isPm(user)) {
       throw new ProviderError('forbidden', '태스크 편집은 PM만 할 수 있습니다.')
     }
-    if (patch.status !== undefined && user.role !== 'pm' && user.role !== task.role) {
+    if (patch.status !== undefined && !this.hasRole(user, 'pm', task.role)) {
       throw new ProviderError('forbidden', '태스크 체크는 담당 역할과 PM만 할 수 있습니다.')
     }
     if (patch.status !== undefined && patch.status !== task.status) {
@@ -3198,7 +3226,7 @@ export class MockProvider implements DataProvider {
     }
     this.assertWritable(d.project_id)
     // §8.1 "pm·담당" — 기존 역할-영역 일치 원칙 재사용(pm은 항상, design·ops는 자기 영역만, reg 제외)
-    this.assertAreaRole(d.area, user.role)
+    this.assertAreaRole(d.area, user)
 
     if (input.decision === 'approved') {
       assertTransition(d.status, 'approved', 'partner_review')
@@ -3447,7 +3475,7 @@ export class MockProvider implements DataProvider {
   async linkQuoteToProject(quoteId: UUID, projectId: UUID): Promise<Quote> {
     const user = this.currentUser()
     const isQuoteUser = user.app_role === 'admin' || user.app_role === 'sales'
-    if (!isQuoteUser && user.role !== 'pm') {
+    if (!isQuoteUser && !this.isPm(user)) {
       throw new ProviderError('forbidden', '견적 연결은 영업·관리자 또는 그 행사의 PM만 할 수 있습니다.')
     }
     const project = this.assertWritable(projectId)
@@ -3834,7 +3862,7 @@ export class MockProvider implements DataProvider {
     if (!card) throw new ProviderError('not_found', '컴플라이언스 카드를 찾을 수 없습니다.')
     this.assertWritable(card.project_id)
     if (patch.title !== undefined) {
-      if (user.role !== 'pm') {
+      if (!this.isPm(user)) {
         throw new ProviderError('forbidden', '카드 편집은 PM만 할 수 있습니다.')
       }
       if (!patch.title.trim()) throw new ProviderError('validation', '카드 제목은 필수입니다.')
@@ -4164,7 +4192,7 @@ export class MockProvider implements DataProvider {
     const user = this.currentUser()
     const landing = this.mustFindLanding(landingId)
     this.assertWritable(landing.project_id)
-    if (user.role !== 'pm') {
+    if (!this.isPm(user)) {
       throw new ProviderError('forbidden', '랜딩 삭제는 PM만 할 수 있습니다.')
     }
     this.state.landing_pages = this.state.landing_pages.filter((l) => l.id !== landingId)
@@ -4522,7 +4550,7 @@ export class MockProvider implements DataProvider {
   /** 금액 입력 권한 — pm 또는 그 항목의 담당자 본인 (§6.1) */
   private assertItemWritable(item: SettlementItem): void {
     const user = this.currentUser()
-    if (user.role === 'pm') return
+    if (this.isPm(user)) return
     if (item.assignee_id && item.assignee_id === user.id) return
     throw new ProviderError('forbidden', '본인이 담당한 발주 항목만 입력할 수 있습니다.')
   }

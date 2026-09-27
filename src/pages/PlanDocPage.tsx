@@ -3,6 +3,7 @@
 // 섹션 8종(01~08)은 planSections.ts가 정본 순서·번호를 갖고, 쪽 배치는 planDocMeta.PLAN_PAGES가 갖는다.
 // 종이 메타포: 캔버스 위 white 시트(.plan-doc) + 상단 오렌지 헤어라인 + 쪽마다 러닝 헤더/푸터.
 import { useMemo, useState } from 'react'
+import { hasRole } from '../lib/roles'
 import ErrorAlert from '../components/internal/ErrorAlert'
 import CuesheetSection from '../components/plan/CuesheetSection'
 import EmergencySection from '../components/plan/EmergencySection'
@@ -47,7 +48,7 @@ export default function PlanDocPage() {
   // 출력일시는 이 화면을 연 시각으로 고정한다(리렌더마다 흔들리면 표지·푸터 값이 어긋난다)
   const printedAt = useMemo(() => formatPrintedAt(new Date()), [])
 
-  const canEdit = user.data?.role === 'pm' || user.data?.role === 'ops'
+  const canEdit = hasRole(user.data, 'pm', 'ops')
   const authorLabel = user.data
     ? `${user.data.name} · ${ROLE_LABELS[user.data.role]}`
     : '—'

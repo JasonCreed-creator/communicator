@@ -77,7 +77,7 @@ describe('DoD-63 ① 미리 배치하지 않는다', () => {
 })
 
 describe('DoD-63 ②·③ 카드를 누르거나 끌어놓아 배정한다', () => {
-  it('누르기: 카드 → 역할 버튼 → 운영 칸에 배정, 주소록 카드에서는 사라진다', async () => {
+  it('누르기: 카드 → 역할 버튼 → 운영 칸에 배정, 주소록 카드에는 남고 "이 행사: 운영" 칩이 붙는다(v16.1 중복 배정)', async () => {
     localStorage.setItem('communicator.currentProjectId', projectId)
     renderRoute('/settings')
     await userEvent.click(await screen.findByRole('button', { name: '담당자' }))
@@ -94,7 +94,13 @@ describe('DoD-63 ②·③ 카드를 누르거나 끌어놓아 배정한다', () 
     // 주소록의 직함·전화가 그대로 따라온다(재입력 없음)
     expect(within(opsCard).getByText('운영팀 과장')).toBeTruthy()
     expect(within(opsCard).getByText('010-0000-1003')).toBeTruthy()
-    await waitFor(() => expect(within(pool()).queryByText('박운영')).toBeNull())
+    // v16.1 — 배정된 사람도 카드로 남는다(다른 역할로 또 배정할 수 있게). 가진 역할은 칩으로, 그 역할 버튼은 잠긴다
+    const heldChip = await within(pool()).findByTestId('person-held-usr-ops')
+    expect(heldChip.textContent).toContain('운영')
+    await userEvent.click(within(pool()).getByRole('button', { name: '박운영 역할 고르기' })) // 배정 뒤 닫힌 역할 버튼을 다시 연다
+    const opsBtn = within(screen.getByRole('group', { name: '박운영 역할' })).getByRole('button', { name: '박운영 운영으로 배정' })
+    expect((opsBtn as HTMLButtonElement).disabled).toBe(true)
+    expect((within(screen.getByRole('group', { name: '박운영 역할' })).getByRole('button', { name: '박운영 등록으로 배정' }) as HTMLButtonElement).disabled).toBe(false)
 
     const saved = await mockProvider().listMembers(projectId)
     expect(saved.find((m) => m.profile.name === '박운영')?.role).toBe('ops')
@@ -136,7 +142,8 @@ describe('DoD-63 ②·③ 카드를 누르거나 끌어놓아 배정한다', () 
     fireEvent.drop(target, { dataTransfer: dt })
     fireEvent.dragEnd(cardItem, { dataTransfer: dt })
     expect(await within(lane('디자인')).findByText('이디자')).toBeTruthy()
-    await waitFor(() => expect(within(pool()).queryByText('이디자')).toBeNull())
+    // v16.1 — 카드는 남고 '이 행사: 디자인' 칩이 붙는다
+    await waitFor(() => expect(within(pool()).getByTestId('person-held-usr-design').textContent).toContain('디자인'))
     const saved = await mockProvider().listMembers(projectId)
     expect(saved.find((m) => m.profile.name === '이디자')?.role).toBe('design')
   })
@@ -161,21 +168,22 @@ describe('DoD-63 ②·③ 카드를 누르거나 끌어놓아 배정한다', () 
 })
 
 describe('DoD-63 ④ 빼기', () => {
-  it('빼면 역할 칸에서 사라지고 주소록 카드로 돌아간다 · 마지막 PM은 409로 남는다', async () => {
+  it('빼면 그 역할 칸에서 사라지고 주소록 카드의 칩도 사라진다 · 마지막 PM은 409로 남는다', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     localStorage.setItem('communicator.currentProjectId', projectId)
     renderRoute('/settings')
     await userEvent.click(await screen.findByRole('button', { name: '담당자' }))
 
     const opsCard = (await within(lane('운영')).findByText('박운영')).closest('[data-member-card]') as HTMLElement
-    await userEvent.click(within(opsCard).getByRole('button', { name: '박운영 빼기' }))
+    await userEvent.click(within(opsCard).getByRole('button', { name: '박운영 운영에서 빼기' }))
     await waitFor(() => expect(within(lane('운영')).queryByText('박운영')).toBeNull())
     expect(await within(pool()).findByRole('button', { name: '박운영 역할 고르기' })).toBeTruthy()
+    await waitFor(() => expect(within(pool()).queryByTestId('person-held-usr-ops')).toBeNull())
     // 확인 문구가 '주소록에는 남는다'를 말한다 — 사람을 지우는 동작이 아니다
     expect(vi.mocked(window.confirm).mock.calls[0][0]).toMatch(/주소록\)에는 그대로 남습니다/)
 
     const pmCard = within(lane('PM')).getByText('김기획').closest('[data-member-card]') as HTMLElement
-    await userEvent.click(within(pmCard).getByRole('button', { name: '김기획 빼기' }))
+    await userEvent.click(within(pmCard).getByRole('button', { name: '김기획 PM에서 빼기' }))
     expect(await screen.findByText(/마지막 PM은 삭제할 수 없습니다/)).toBeTruthy()
     expect(within(lane('PM')).getByText('김기획')).toBeTruthy()
   })

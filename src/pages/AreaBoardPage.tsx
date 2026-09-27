@@ -1,4 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react'
+import { canWriteArea, hasRole, isPm as isPmUser, rolesOf } from '../lib/roles'
 import { useParams } from 'react-router-dom'
 import Card from '../components/internal/Card'
 import EmptyState from '../components/internal/EmptyState'
@@ -106,11 +107,10 @@ function AreaBoard({ area }: { area: DeliverableArea }) {
   // v1.5 §8: 종료 행사는 읽기 전용 — provider가 쓰기 API를 409로 막으므로 생성 폼도 내린다.
   // (폼이 남아 있으면 지난 행사를 참고 자료로 열람할 때 아직 쓸 수 있는 것처럼 읽힌다.)
   const isClosed = summaries.find((s) => s.id === projectId)?.status === 'closed'
-  const canWrite =
-    !isClosed && currentUser.data && (currentUser.data.role === 'pm' || currentUser.data.role === area)
-  const isPm = !isClosed && currentUser.data?.role === 'pm'
+  const canWrite = !isClosed && currentUser.data && canWriteArea(rolesOf(currentUser.data), area)
+  const isPm = !isClosed && isPmUser(currentUser.data)
   // ItemDetailPage와 동일 기준(§6.1) — 정형 문서 편집은 pm·ops만
-  const canEditCue = currentUser.data?.role === 'pm' || currentUser.data?.role === 'ops'
+  const canEditCue = hasRole(currentUser.data, 'pm', 'ops')
 
   const visibleRows = useMemo(() => {
     const q = titleQuery.trim().toLowerCase()

@@ -7,6 +7,7 @@
 // 사용자 결정 2건(3.20): ① 별도 화면 + 행사 설정엔 피커 · ② 삭제는 차단하고 어디에 배정됐는지 보여준다.
 // 삭제 차단 사유(어느 행사인지)는 provider의 409 메시지에 그대로 담겨 오므로 화면은 삼키지 않고 그대로 띄운다.
 import { useState, type FormEvent } from 'react'
+import { isPm as isPmUser } from '../lib/roles'
 import { isSlackUserId, SLACK_USER_ID_INVALID_MESSAGE } from '../lib/slackThread'
 import Card from '../components/internal/Card'
 import EmptyState from '../components/internal/EmptyState'
@@ -74,7 +75,7 @@ const EMPTY_DRAFT: EditDraft = { name: '', email: '', title: '', phone: '', slac
 export default function PeoplePage() {
   const people = useAsync(() => provider.listPeople(), [])
   const currentUser = useAsync(() => provider.getCurrentUser(), [])
-  const isPm = currentUser.data?.role === 'pm'
+  const isPm = isPmUser(currentUser.data)
 
   const [editingId, setEditingId] = useState<UUID | null>(null)
   const [draft, setDraft] = useState<EditDraft>(EMPTY_DRAFT)

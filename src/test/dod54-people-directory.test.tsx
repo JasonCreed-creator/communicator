@@ -137,12 +137,14 @@ describe('DoD 54-C 배정은 재입력이 아니라 선택이다', () => {
     expect(added.profile.title).toBe('운영팀 매니저')
     expect(added.profile.phone).toBe('010-0000-3001')
 
-    // 같은 사람을 또 배정하면 409 — 피커는 이런 후보를 애초에 보여주지 않는다
+    // 같은 사람을 같은 역할로 또 배정하면 409 — v16.1(Phase 6.6): 다른 역할로는 또 배정할 수 있다(중복 배정)
     await expect(
-      provider.addMember(SAMPLE, { display_name: person.name, email: person.email!, role: 'reg' }),
+      provider.addMember(SAMPLE, { display_name: person.name, email: person.email!, role: 'ops' }),
     ).rejects.toMatchObject({ code: 'conflict' })
+    await provider.addMember(SAMPLE, { display_name: person.name, email: person.email!, role: 'reg' })
+    expect((await provider.listMembers(SAMPLE)).filter((m) => m.profile.email === 'c@example.com').map((m) => m.role).sort()).toEqual(['ops', 'reg'])
 
-    await provider.removeMember(SAMPLE, person.id)
+    await provider.removeMember(SAMPLE, person.id) // 역할 없이 = 전부
     await provider.removePerson(person.id)
   })
 
