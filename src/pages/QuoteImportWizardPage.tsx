@@ -26,6 +26,7 @@ const provider = getDataProvider()
 
 const STEPS = ['업로드', '인식 결과 확인', '분배 선택'] as const
 const FORMAT_GUIDE = [
+  { code: '리멤버 견적서', desc: '이 시스템(견적 컨피규레이터)이 내보낸 견적서 — 섹션·총액·모객(RSVP/쇼업)까지 그대로 읽힘' },
   { code: 'A형', desc: '단가·수량·일수 열이 있는 세부 산출내역서' },
   { code: 'B형', desc: 'ITEM·금액 단식 + 섹션별 total 행' },
   { code: 'C형', desc: 'UNIT PRICE·QTY·AMOUNT(·SELECT) 패키지 견적서' },

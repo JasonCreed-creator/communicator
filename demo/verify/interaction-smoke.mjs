@@ -1359,6 +1359,8 @@ await tab.screenshot({ path: resolve(SHOTS, '03f-editor-step4-export.png'), full
   check(cardText.includes('온보딩에서 첨부한 견적서') && cardText.includes('구글 시트') && cardText.includes('내려받은 뒤 올려'), '위저드 ① 첨부 카드(링크 = 내려받아 올리기 안내)', cardText)
   check((await card.getByRole('link', { name: '링크 열기' }).count()) === 1 && (await card.getByRole('button', { name: '이 파일로 읽기' }).count()) === 0, "링크 첨부 = '링크 열기'만 · '이 파일로 읽기' 0")
   check((await tab.getByText('또는 견적서 파일 올리기 (.xlsx · .pdf · 사진)').count()) === 1, "파일 칸 이름 = '또는 견적서 파일 올리기'")
+  // Phase 6.9(2026-09-27) — 서식 안내 첫 줄 = 리멤버 견적서(우리 견적 컨피규레이터 내보내기가 그대로 읽힌다)
+  check((await tab.getByText('이 시스템(견적 컨피규레이터)이 내보낸 견적서', { exact: false }).count()) === 1, "위저드 ① 서식 안내 첫 줄 = 리멤버 견적서(Phase 6.9)")
   await tab.screenshot({ path: resolve(SHOTS, '03h-quote-import-attachment-card.png'), fullPage: true })
   // mock 상태 복원 — 설정 ①에서 첨부 빼기
   await tab.evaluate(() => {

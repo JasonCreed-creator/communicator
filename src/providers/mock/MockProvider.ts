@@ -27,6 +27,7 @@ import { exportEstimate } from '../../modules/quote/export/exportEstimate'
 import { quoteToProjectDraft } from '../../modules/quote/handoff'
 import { parseQuoteWorkbook } from '../../modules/quote/import/parser'
 import { mapSectionsToBuckets } from '../../modules/quote/import/buckets'
+import { splitRecruit } from '../../modules/quote/import/recruitSplit'
 import { quoteImportFormatLabel } from '../../modules/quote/import/types'
 import { QUOTE_IMPORT_AI_MOCK_MESSAGE } from '../../lib/quoteImportAi'
 import type { ParsedQuoteDoc, SectionMapping } from '../../modules/quote/import/types'
@@ -3616,6 +3617,12 @@ export class MockProvider implements DataProvider {
       total: subtotal + vat,
       custom_sections: [...customByCode.values()],
     }
+    // v2.20.2 — 모객 섹션을 rc·ld로 나눠 기록(정산보드 스냅숏이 엔진 값 대신 쓴다)
+    const split = splitRecruit(parsed, mapping)
+    if (split) {
+      breakdown.recruit_rsvp = split.rsvp
+      breakdown.recruit_showup = split.showup
+    }
     return { breakdown, total_amount: subtotal }
   }
 
@@ -4287,14 +4294,25 @@ export class MockProvider implements DataProvider {
   }
 
   /**
+   * v2.20.2 — 가져온 견적인데 모객 분할이 기록되기 전(옛 임포트)이면 가져오기 기록에서 다시 나눈다(값을 지어내지 않는다).
+   * 기록이 없으면 breakdown 그대로(엔진 값 0 — 화면에서 버킷 견적 금액을 손으로 고칠 수 있다 §19.2).
+   */
+  private breakdownForSnapshot(quote: Quote): QuoteBreakdown {
+    if (quote.source !== 'imported' || quote.breakdown.recruit_rsvp !== undefined || !quote.breakdown.recruit) return quote.breakdown
+    const imp = this.state.quote_imports.find((x) => x.quote_id === quote.id)
+    const split = imp ? splitRecruit(imp.parsed, imp.mapping) : null
+    return split ? { ...quote.breakdown, recruit_rsvp: split.rsvp, recruit_showup: split.showup } : quote.breakdown
+  }
+
+  /**
    * 확정 견적 breakdown → 버킷 9종 스냅숏 (§19.2).
    * `recruit`를 rc/ld로 쪼개는 것이 유일한 비자명 매핑이며, 값은 견적 input에서
-   * 재유도하지 않고 **엔진 산출값(rsvpPkg·showup)을 그대로** 쓴다.
+   * 재유도하지 않고 **엔진 산출값(rsvpPkg·showup)을 그대로** 쓴다(가져온 견적은 기록된 분할 — breakdownForSnapshot).
    */
   private snapshotBuckets(boardId: UUID, quote: Quote): SettlementBucket[] {
     const engine = computeQuoteOutputs(quote.input).result
     const now = nowIso()
-    return quoteBucketSpec(quote.breakdown, engine).map((row, i) => ({
+    return quoteBucketSpec(this.breakdownForSnapshot(quote), engine).map((row, i) => ({
       id: this.nextId('bkt'),
       board_id: boardId,
       code: row.code,

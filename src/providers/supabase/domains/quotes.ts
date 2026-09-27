@@ -31,6 +31,7 @@ import { exportEstimate } from '../../../modules/quote/export/exportEstimate'
 import { quoteToProjectDraft } from '../../../modules/quote/handoff'
 import { parseQuoteWorkbook } from '../../../modules/quote/import/parser'
 import { mapSectionsToBuckets } from '../../../modules/quote/import/buckets'
+import { splitRecruit } from '../../../modules/quote/import/recruitSplit'
 import { quoteImportFormatLabel } from '../../../modules/quote/import/types'
 import { aiMediaTypeFor } from '../../../lib/vendorQuoteAi'
 import { prepareAiFile } from '../../../lib/ai/prepareAiFile'
@@ -260,6 +261,12 @@ function buildImportedBreakdown(
     vat,
     total: subtotal + vat,
     custom_sections: [...customByCode.values()],
+  }
+  // v2.20.2 — 모객 섹션을 rc·ld로 나눠 기록(정산보드 스냅숏이 엔진 값 대신 쓴다)
+  const split = splitRecruit(parsed, mapping)
+  if (split) {
+    breakdown.recruit_rsvp = split.rsvp
+    breakdown.recruit_showup = split.showup
   }
   return { breakdown, total_amount: subtotal }
 }

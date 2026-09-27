@@ -8,6 +8,7 @@ import { SupabaseCtx, nowIso } from '../ctx'
 import { ProviderError } from '../../../lib/errors'
 import type {
   Quote,
+  QuoteBreakdown,
   SettlementBoard,
   SettlementBucket,
   SettlementImport,
@@ -41,6 +42,8 @@ import {
   toVatExcluded,
 } from '../../../lib/settlement'
 import { computeQuoteOutputs } from '../../../modules/quote/engine/quoteInput'
+import { splitRecruit } from '../../../modules/quote/import/recruitSplit'
+import type { ParsedQuoteDoc, SectionMapping } from '../../../modules/quote/import/types'
 
 type SettlementDomain = Pick<
   DataProvider,
@@ -136,9 +139,25 @@ async function itemsOfBucket(ctx: SupabaseCtx, bucketId: UUID): Promise<Settleme
  * `recruit`를 rc/ld로 쪼개는 것이 유일한 비자명 매핑이며, 값은 견적 input에서
  * 재유도하지 않고 **엔진 산출값(rsvpPkg·showup)을 그대로** 쓴다.
  */
-function snapshotBuckets(boardId: UUID, quote: Quote): BucketInsert[] {
+/**
+ * v2.20.2 — 가져온 견적인데 모객 분할이 기록되기 전(옛 임포트)이면 가져오기 기록(quote_imports)에서 다시 나눈다.
+ * 기록이 없거나 보이지 않으면 breakdown 그대로(엔진 값 0 — 화면에서 버킷 견적 금액을 손으로 고칠 수 있다 §19.2).
+ */
+async function breakdownForSnapshot(ctx: SupabaseCtx, quote: Quote): Promise<QuoteBreakdown> {
+  if (quote.source !== 'imported' || quote.breakdown.recruit_rsvp !== undefined || !quote.breakdown.recruit) return quote.breakdown
+  try {
+    const res = await ctx.sb.from('quote_imports').select('parsed, mapping').eq('quote_id', quote.id).maybeSingle()
+    const imp = (res.data ?? null) as { parsed: ParsedQuoteDoc; mapping: SectionMapping[] } | null
+    const split = imp ? splitRecruit(imp.parsed, imp.mapping) : null
+    return split ? { ...quote.breakdown, recruit_rsvp: split.rsvp, recruit_showup: split.showup } : quote.breakdown
+  } catch {
+    return quote.breakdown
+  }
+}
+
+async function snapshotBuckets(ctx: SupabaseCtx, boardId: UUID, quote: Quote): Promise<BucketInsert[]> {
   const engine = computeQuoteOutputs(quote.input).result
-  return quoteBucketSpec(quote.breakdown, engine).map((row, i) => ({
+  return quoteBucketSpec(await breakdownForSnapshot(ctx, quote), engine).map((row, i) => ({
     board_id: boardId,
     code: row.code,
     label: row.label,
@@ -264,7 +283,7 @@ export async function createSettlementBoardCore(
       .select('*')
       .single(),
   ) as SettlementBoard
-  ctx.q(await ctx.sb.from('settlement_buckets').insert(snapshotBuckets(board.id, quote)).select('id'))
+  ctx.q(await ctx.sb.from('settlement_buckets').insert(await snapshotBuckets(ctx, board.id, quote)).select('id'))
   await ctx.log(projectId, 'settlement.baselined', 'settlement', board.id, { quote_version: quote.version })
   return buildBoardView(ctx, board)
 }
@@ -327,7 +346,7 @@ export function settlementDomain(ctx: SupabaseCtx): SettlementDomain {
       await ctx.assertPm(projectId)
       const board = await mustFindBoard(ctx, projectId)
       const quote = await mustFindFinalQuote(ctx, quoteId)
-      const fresh = snapshotBuckets(board.id, quote)
+      const fresh = await snapshotBuckets(ctx, board.id, quote)
       const [current, items] = await Promise.all([bucketsOfBoard(ctx, board.id), itemsOfBoard(ctx, board.id)])
 
       // 스냅숏은 code마다 has_cost를 고정값으로 되돌린다. 원가를 켜 두고 금액을 입력한 버킷이

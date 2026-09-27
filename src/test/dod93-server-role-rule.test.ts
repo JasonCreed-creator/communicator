@@ -113,13 +113,13 @@ describe('DoD 93 ② sheets 서버 — 프로필 권한 + 여러 역할', () => 
   }
 
   it('admin(멤버 행 0) → 판정 통과 · staff(멤버 행 0) → 403 · staff 여러 역할(행 2개) → 통과 · 프로필 없음 → 403', async () => {
-    const { handleSheets, SheetsError } = await import('../../api/_lib/sheets')
+    const { handleSheets } = await import('../../api/_lib/sheets')
     const admin = await handleSheets(body, 'tok', env, fetch, clients({ id: 'p-admin', app_role: 'admin' }, []))
     expect(admin).toMatchObject({ demo: true })
     await expect(handleSheets(body, 'tok', env, fetch, clients({ id: 'p-out', app_role: 'staff' }, []))).rejects.toMatchObject({
       status: 403,
       message: '프로젝트 멤버가 아닙니다.',
-    } satisfies Partial<SheetsError>)
+    })
     const multi = await handleSheets(body, 'tok', env, fetch, clients({ id: 'p-two', app_role: 'staff' }, [{ role: 'design' }, { role: 'ops' }]))
     expect(multi).toMatchObject({ demo: true })
     await expect(handleSheets(body, 'tok', env, fetch, clients(null, []))).rejects.toMatchObject({ status: 403 })
