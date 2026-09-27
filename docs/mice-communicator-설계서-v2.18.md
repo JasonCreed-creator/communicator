@@ -947,7 +947,7 @@ SQL(`…20260925000200_notifications.sql`): 표 `notification_log`(선점 키 ·
 
 SQL(`…20260925000300_vendor_quote_import.sql`): `confirm_vendor_quote_import`·`drive_settlement_file_check`(authenticated) · service 전용 `settlement_import_set_file` · `drive_known_file_ids` 재정의(정산 원본 포함). 표·RLS는 v2.2 그대로(스키마 불변).
 
-### 8.6 (v2.14) AI 읽기 API (Phase 4.8, §19.5b)
+### 8.6 (v2.14) AI 읽기 API (Phase 4.8, §19.5b) — (v2.18) `?action=quote-import` 추가(§22.5: 우리 견적서 PDF·사진 → ParsedQuoteDoc · 행사 없음 · 영업·관리자)
 
 | Method·Path | 권한 | 동작 |
 |---|---|---|
@@ -1129,6 +1129,7 @@ UI 공통: 한국어, 데스크톱 우선 + 반응형(발주처 화면은 모바
 
 ## 14. 개정 이력
 
+- **v2.18 PR-2** (2026-09-27): **PDF·사진 견적서 AI 읽기**(Phase 6.4 PR-2 — §22.5 신설 · §8.6 `quote-import` · SQL 30번째 `ai_quote_import`(format 'ai' · feature quote_import · claim 재정의) · DataProvider 132 불변). 운영은 Vercel `ANTHROPIC_API_KEY`가 있어야 동작.
 - **v2.18** (2026-09-27): **견적 ↔ 기존 행사 연결 + 영문 견적서 인식**(Phase 6.4 PR-1 — 운영 실측 "견적리스트에서 견적서를 선택하면 새로 행사를 만들어버림" + "정산보드에 견적이 안 붙음" → 원인 = 위저드 ③ 프리필 강제 · §16.4 신설 · §22.4 '기존 행사에 연결' 행 · §22.2 규칙 0 국/영문 · §19.2 정산 시작 연결 · §8 API 2행). SQL 29번째 `quote_link`(RPC 1 · 스키마 변경 0) · **DataProvider v16 = 132메서드**(사용자 승인 · `linkQuoteToProject`). PR-2 = PDF 견적서 AI 인식(사용자 결정 "AI로 읽기 — 키는 Vercel에").
 - **v2.17.1** (2026-09-27): **운영/디자인 스레드 2개 + 댓글 태그 — 운영 커뮤니케이션 프로토콜 v1.0 정합 [B2]**(Phase 6.3 — §9 v2.17.1 블록 · §8.4 `test` target · §4 projects.design_thread_url · §26.2 두 행 완료). SQL 28번째 `design_thread`(열 1 · 함수 재정의 5 · 알릴 사건 += 납품) · DataProvider v15.7(필드만 — 131 불변).
 - **v2.17** (2026-09-27): **표준 폴더 트리 — 운영 커뮤니케이션 프로토콜 v1.0 정합 [B1]**(Phase 6.3 — §7.1 전면 개정(저장소/{연도}/행사 ID/01_견적 · 02_계약 · 03_제작·키비주얼(KV·초청장·현장물·납품) · 04_WBS·운영계획 · 05_현장 · 06_결과보고·정산 · 99_archive) · §7.1b 연도 폴더 거부 + 지정 폴더 동기화 · §7.5 납품 · §7.8 · §8 API 표 2행 · §19.5a 원본 폴더 · §26.2 [B1] 완료 · §26.3 금지). 기존 행사 폴더는 이름·연도 자리만(사용자 선택) · SQL 0 · DataProvider 131 불변. [B2](스레드 2개 · 태그)는 다음.
@@ -1876,6 +1877,24 @@ PDF 서식은 2차(xlsx 우선). 같은 행사의 복수 안(예: TAAS GBR/PLZ �
 | 정산보드 기준 견적 | 확정(finalize) 후 §19 버킷 스냅숏 — 매핑 확정본이 버킷 배정 근거 | 확정 견적만 |
 | 보드 항목 시드 | 디자인·운영 성격 항목을 해당 보드에 시드 — **금액 제외, 품목·규격·수량만** | 선택(기본 꺼짐) |
 
+
+### 22.5 PDF·사진 견적서 AI 읽기 (v2.18 · Phase 6.4 PR-2 — 사용자 결정 2026-09-27 "엑셀 말고 PDF도" · "AI로 읽기 — 키는 내가 Vercel에")
+
+엑셀이 아닌 견적서(PDF · JPG · PNG · WEBP — 국문·영문)는 **서버 함수 `api/ai?action=quote-import`가 Claude로 옮겨 적어** 같은 확인 큐 입력(`ParsedQuoteDoc` · `format='ai'`)을 돌려준다. §19.5b 협력사 견적서 읽기와 같은 뼈대 — 규칙·스키마·검사·변환은 `src/lib/quoteImportAi.ts`(순수 함수).
+
+| 항목 | 규칙 |
+|---|---|
+| 권한·한도 | `ai_usage_claim(null, 'quote_import')` — **영업·관리자**(견적 메뉴와 같다 §6.1) · 행사 없음(null) · 1인 하루 한도는 협력사 견적서·인테이크와 **같이** 센다(`AI_DAILY_LIMIT` 기본 30 · KST) · Claude 오류는 세지 않음 |
+| 스키마 | header(event_name · client · date_range · venue · quoted_at · total_amount · vat_mode) · language(ko/en/other) · currency(ISO · 표기 없으면 null) · sections[{name · subtotal · items[{title · spec · unit_price · qty · days · amount · note · in_total}]}] · totals(items_sum · agency_fee · agency_fee_rate · rounding · vat · grand_total). **담당자 칸 없음**(사람 이름은 읽지 않는다 — 확인 큐에서 입력) |
+| 검산 | 우리 코드(`docFromAiQuoteImport`): 섹션 소계 · 항목 합계 · 대행료 비율 · 부가세 10%(**원화만** — 외화는 세율이 달라 총액 체인만) · 총액 체인. 어긋나면 경고, 막지 않음(§22.2-5) · 적혀 있지 않은 합계는 검산하지 않음 |
+| 통화 | 원화 아니면 `header.currency` + 경고(환산 없음 — §22.2 규칙 0과 같다) |
+| 저장 | 서버는 저장하지 않는다 — 앱(`importQuoteFile`)이 받은 doc으로 `quote_imports`(detected · format 'ai')를 만들고 확인 큐 → 확정(R-Q1) → 분배를 그대로 탄다 |
+| 화면 | 위저드 ① 파일 칸 = .xlsx · .pdf · 사진 · 고르면 AI 안내 + 버튼 'AI로 읽기' · ② 배지 'AI 읽음' + 경고(원본 대조 · 담당자 미인식) · mock은 사실 안내(흉내 없음) |
+| 파일 | 3MB · 사진은 앱이 긴 변 2000px JPEG로 줄임(§19.5b와 같은 `prepareAiFile`) · 내용 서명 검사 |
+| 운영 조건 | Vercel `ANTHROPIC_API_KEY`(기획자님 몫) — 없으면 503 + 엑셀 안내 |
+| 금지 | AI 결과 자동 커밋(확인 큐 우회) · Claude가 계산한 합계를 검산 근거로 · 사람 이름·연락처 칸 · 외화 환산 · 새 AI 기능을 `ai_usage.feature` CHECK·`ai_usage_claim` 개정 없이 추가 |
+
+SQL 30번째 `20260927000400_ai_quote_import.sql`: `quote_imports.format` CHECK += 'ai' · `ai_usage.feature` CHECK += 'quote_import' · `ai_usage_claim` 재정의(quote_import 분기). DataProvider 132 불변(`importQuoteFile` 시그니처 그대로 — 파일 종류로 갈린다).
 
 ---
 

@@ -10,6 +10,7 @@ import {
   AI_VENDOR_QUOTE_SYSTEM,
   type AiMediaType,
 } from '../../../src/lib/vendorQuoteAi.js'
+import { AI_QUOTE_IMPORT_INSTRUCTION, AI_QUOTE_IMPORT_SCHEMA, AI_QUOTE_IMPORT_SYSTEM } from '../../../src/lib/quoteImportAi.js'
 
 export const DEFAULT_AI_MODEL = 'claude-sonnet-5'
 /** 표가 긴 견적서도 한 번에 옮길 만큼 — 넘치면 'max_tokens'로 알려 쪽을 나눠 올리게 한다 */
@@ -133,4 +134,21 @@ export function createClaudeJsonReader(apiKey: string, model: string, spec: Json
 export function createClaudeReader(apiKey: string, model: string, clientOptions: Partial<ClientOptions> = {}): VendorQuoteReader {
   const read = createClaudeJsonReader(apiKey, model, VENDOR_QUOTE_SPEC, clientOptions)
   return (input) => read([contentFor(input), { type: 'text', text: AI_VENDOR_QUOTE_INSTRUCTION }])
+}
+
+/** (v2.18 §22.5) 우리 견적서(국문·영문) PDF·사진 읽기 — 헤더·섹션·항목·합계. 규칙·스키마 = src/lib/quoteImportAi */
+export const QUOTE_IMPORT_SPEC: JsonReadSpec = {
+  system: AI_QUOTE_IMPORT_SYSTEM,
+  schema: AI_QUOTE_IMPORT_SCHEMA as unknown as Record<string, unknown>,
+  maxTokens: AI_MAX_TOKENS,
+  effort: 'medium',
+}
+
+export function quoteImportRequest(model: string, input: AiReadInput): Anthropic.MessageCreateParamsNonStreaming {
+  return jsonRequest(model, QUOTE_IMPORT_SPEC, [contentFor(input), { type: 'text', text: AI_QUOTE_IMPORT_INSTRUCTION }])
+}
+
+export function createQuoteImportReader(apiKey: string, model: string, clientOptions: Partial<ClientOptions> = {}): VendorQuoteReader {
+  const read = createClaudeJsonReader(apiKey, model, QUOTE_IMPORT_SPEC, clientOptions)
+  return (input) => read([contentFor(input), { type: 'text', text: AI_QUOTE_IMPORT_INSTRUCTION }])
 }

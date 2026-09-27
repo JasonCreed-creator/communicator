@@ -27,6 +27,8 @@ import { exportEstimate } from '../../modules/quote/export/exportEstimate'
 import { quoteToProjectDraft } from '../../modules/quote/handoff'
 import { parseQuoteWorkbook } from '../../modules/quote/import/parser'
 import { mapSectionsToBuckets } from '../../modules/quote/import/buckets'
+import { quoteImportFormatLabel } from '../../modules/quote/import/types'
+import { QUOTE_IMPORT_AI_MOCK_MESSAGE } from '../../lib/quoteImportAi'
 import type { ParsedQuoteDoc, SectionMapping } from '../../modules/quote/import/types'
 import type {
   ActivityLogEntry,
@@ -191,7 +193,7 @@ import {
   type VendorQuoteParsed,
   type VendorQuoteQuestion,
 } from '../../lib/vendorQuote'
-import { isAiVendorQuoteFile } from '../../lib/vendorQuoteAi'
+import { aiMediaTypeFor, isAiVendorQuoteFile } from '../../lib/vendorQuoteAi'
 
 /** 3.18.1 §2 — 발주처 담당자 블록의 스태프 정렬(PM을 맨 위로). 표시 순서일 뿐 권한과 무관하다. */
 const CLIENT_STAFF_ROLE_ORDER: readonly MemberRole[] = ['pm', 'design', 'ops', 'reg']
@@ -3510,8 +3512,8 @@ export class MockProvider implements DataProvider {
 
   async importQuoteFile(fileName: string, data: ArrayBuffer): Promise<QuoteImport> {
     const user = this.assertQuoteRole()
-    // 서식 감지·파싱은 3.15d(에이전트 AD) 담당 — 지금은 스텁이 항상 던진다(R-Q4, 의도된 동작).
-    // 배선(호출 자체)은 여기서 갖추고, 실제 파싱이 열리면 아래 로직이 그대로 작동한다.
+    // v2.18 §22.5 — PDF·사진은 실서버의 AI가 읽는다. mock에는 AI 서버가 없어 흉내 내지 않고 사실대로 알린다
+    if (aiMediaTypeFor(fileName)) throw new ProviderError('validation', QUOTE_IMPORT_AI_MOCK_MESSAGE)
     const parsed = parseQuoteWorkbook(data, fileName)
     const imp: QuoteImport = {
       id: this.nextId('qim'),
@@ -3611,7 +3613,7 @@ export class MockProvider implements DataProvider {
       client_company: header.client?.trim() || null,
       contact: null,
       manager: header.manager?.trim() || null,
-      notes: `임포트(${imp.format}형) — ${imp.file_name}`,
+      notes: `임포트(${quoteImportFormatLabel(imp.format)}) — ${imp.file_name}`,
       adjustments: [],
     }
   }

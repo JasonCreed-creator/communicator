@@ -20,7 +20,7 @@
 //             PR-6 견적 목록(고른 견적 옆 동작·구버전 고치기 막힘)·옵션(체크 카드·막힌 이유·고른 옵션 요약) ·
 //             PR-7 정산보드(머리 불러오기·할 일 알림·KPI 검산 배지·원가 없는 그룹행·발주 항목 ⋯ 메뉴) ·
 //             PR-8 행사 설정(번호 없는 탭·섹션 목록·고정 저장 바·변경 취소)·온보딩(진행 줄·2열·나중에 하기 확인) ·
-//       6.4: 견적 ↔ 기존 행사 연결 — 견적 목록 '기존 행사에 연결'(진행 중 행사만) → 그 행사 묶음으로 · 새 행사 0 ·
+//       6.4: 견적 ↔ 기존 행사 연결 — 견적 목록 '기존 행사에 연결'(진행 중 행사만) → 그 행사 묶음으로 · 새 행사 0 · PDF 견적서 'AI로 읽기' → mock 사실 안내 ·
 //       6.1: Slack 봇 — 행사 설정 ③ 스레드 링크(DM 링크 거부 → 등록 → 채널·Slack에서 열기 → 웹훅 예비 접힘 → 해제) · 담당자 Slack 칸 ·
 //       3.24 PR-A: 운영가이드 — 옛 문서 뼈대 추가 → 섹션 목록 · 등록 운영 대기 계산 · 목록 링크 = 스크롤만(해시 불변) ·
 //       3.24 PR-B: 운영 보드 유형별 표·카드 요약 → 시나리오 원고(뼈대 · 멘트 쓰기 · 연사 확인 · 비상 멘트) · 큐시트 칸 순서 ·
@@ -1287,6 +1287,38 @@ await tab.screenshot({ path: resolve(SHOTS, '03f-editor-step4-export.png'), full
   )
 }
 
+
+// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — **Phase 6.4 PR-2 PDF·사진 견적서 AI 읽기(2026-09-27)**.
+//     견적서 가져오기 ① → 파일 칸이 .pdf·사진을 받는다 → 가상 PDF(이 자리에서 만든 최소 바이트 — 실견적서 커밋 금지) 고르기 → AI 안내 +
+//     버튼 'AI로 읽기' → 누르기 → 데모(mock)는 AI를 흉내 내지 않고 사실대로 안내 · 1단계 유지 · /api 요청 0 · 전체 리로드 0.
+{
+  const docBefore = docRequests.length
+  const apiCalls = []
+  const onReq = (req) => {
+    if (/\/api\//.test(req.url())) apiCalls.push(req.url())
+  }
+  tab.on('request', onReq)
+  await tab.evaluate(() => {
+    window.location.hash = '#/quotes/import'
+  })
+  await tab.getByRole('heading', { name: '견적서 가져오기' }).waitFor({ timeout: 10_000 })
+  const fileInput = tab.getByLabel('견적서 파일')
+  const accept = (await fileInput.getAttribute('accept')) ?? ''
+  check(accept.includes('.pdf') && accept.includes('.xlsx') && accept.includes('image/png'), '견적서 파일 칸 = .xlsx · .pdf · 사진', accept)
+  await fileInput.setInputFiles({ name: '가상견적서.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.7\n%%EOF\n') })
+  await tab.getByTestId('import-ai-notice').waitFor({ timeout: 10_000 })
+  check((await tab.getByTestId('import-ai-notice').innerText()).includes('AI(Claude)'), 'PDF를 고르면 AI 안내 한 줄')
+  const readBtn = tab.getByRole('button', { name: 'AI로 읽기' })
+  check((await readBtn.count()) === 1, "버튼 이름 'AI로 읽기'")
+  await readBtn.click()
+  await tab.getByRole('alert').waitFor({ timeout: 10_000 })
+  check(/실서버\(로그인\) 모드에서 AI가 읽습니다/.test(await tab.getByRole('alert').innerText()), '데모(mock)는 AI를 흉내 내지 않고 사실 안내')
+  check((await tab.getByLabel('견적서 파일').count()) === 1, '1단계 유지(확인 큐 없음)')
+  tab.off('request', onReq)
+  check(apiCalls.length === 0, '데모에서 /api 요청 0', apiCalls.join(', '))
+  check(docRequests.length === docBefore, 'PDF 읽기 시도에 전체 리로드 0', `${docBefore} → ${docRequests.length}`)
+  await tab.screenshot({ path: resolve(SHOTS, '03g-quote-import-pdf-mock.png'), fullPage: true })
+}
 
 await browser.close()
 server.close()

@@ -121,7 +121,7 @@ export const QUOTE_IMPORT_STATUSES = ['detected', 'confirmed', 'distributed'] as
 export type QuoteImportStatus = (typeof QUOTE_IMPORT_STATUSES)[number]
 
 /** §22.1 지원 서식 3형 — A 단가·수량형 / B 금액 단식 / C 패키지형 */
-export const QUOTE_IMPORT_FORMATS = ['A', 'B', 'C'] as const
+export const QUOTE_IMPORT_FORMATS = ['A', 'B', 'C', 'ai'] as const // v2.18 §22.5 — 'ai' = PDF·사진을 AI가 읽음
 export type QuoteImportFormat = (typeof QUOTE_IMPORT_FORMATS)[number]
 
 // v2.5 §23: 운영보드 재구성 — scenario_blocks.kind

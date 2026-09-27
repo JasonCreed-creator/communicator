@@ -180,6 +180,28 @@ describe('읽지 못하는 파일', () => {
   })
 })
 
+describe('PDF·사진 (v2.18 §22.5 — DoD 89 화면 계약)', () => {
+  it('파일 칸이 .pdf·사진을 받고, 고르면 AI 안내 + 버튼 이름 "AI로 읽기" · mock은 사실 안내(저장 0)', async () => {
+    const before = await provider.listQuotes()
+    renderAt('/quotes/import')
+    const user = userEvent.setup()
+    const input = (await screen.findByLabelText('견적서 파일')) as HTMLInputElement
+    expect(input.accept).toContain('.pdf')
+    expect(input.accept).toContain('.xlsx')
+    expect(input.accept).toContain('image/png')
+    expect(screen.getAllByText(/PDF·사진/).length).toBeGreaterThan(0) // 지원 서식 안내
+    expect(screen.queryByTestId('import-ai-notice')).toBeNull()
+    await user.upload(input, new File([new Uint8Array([0x25, 0x50, 0x44, 0x46])], '견적서.pdf', { type: 'application/pdf' }))
+    expect(screen.getByTestId('import-ai-notice').textContent).toContain('AI(Claude)')
+    const btn = screen.getByRole('button', { name: 'AI로 읽기' })
+    await user.click(btn)
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toContain('실서버(로그인) 모드에서 AI가 읽습니다')
+    expect(screen.getByLabelText('견적서 파일')).toBeTruthy() // 1단계 유지
+    expect((await provider.listQuotes()).length).toBe(before.length)
+  })
+})
+
 describe('접근 권한 (§10 · DoD 25 관례 재사용)', () => {
   it('staff는 위저드에서도 403 화면을 본다', async () => {
     provider.setAppRole('staff')
