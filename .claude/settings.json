@@ -10,7 +10,15 @@
       "mcp__Supabase__query_logs",
       "mcp__Supabase__search_docs",
       "mcp__Supabase__execute_sql",
-      "mcp__Supabase__apply_migration"
+      "mcp__Supabase__apply_migration",
+      "Bash(curl https://www.rmb-mice.com/*)",
+      "Bash(curl -sS https://www.rmb-mice.com/*)",
+      "Bash(curl -sS -m 20 https://www.rmb-mice.com/*)",
+      "Bash(curl -sS -m 30 https://www.rmb-mice.com/*)",
+      "Bash(npm *)",
+      "Bash(npx *)",
+      "Bash(node *)",
+      "Bash(git *)"
     ]
   }
 }
