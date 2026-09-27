@@ -4,6 +4,7 @@
 //   GET  ?action=stream&t=…       → 서명 URL 파일 스트림(§7.4)
 //   PUT  ?action=upload-chunk     → 조각 중계(헤더 x-upload-ticket · content-range, 본문 = 바이트 ≤ 4MB)
 //   PUT  ?action=settlement-file  → v15 협력사 견적서 원본 보관(Bearer · import_id · name, 본문 = 바이트 ≤ 4MB)
+//   PUT  ?action=project-file     → Phase 6.2 견적서 첨부(Bearer · project_id · name, 본문 = 바이트 ≤ 4MB → 행사 폴더 02_견적·정산/견적서)
 //   POST {action, …}              → JSON 액션(로그인 필요한 것은 Authorization: Bearer <Supabase 액세스 토큰>)
 import { driveConfigured } from './auth.js'
 import { DriveError, errorResponse, json } from './errors.js'
@@ -20,6 +21,7 @@ import {
   linkOp,
   oauthCallback,
   oauthStart,
+  projectFileOp,
   requireUser,
   scanOp,
   settlementFileOp,
@@ -46,7 +48,8 @@ function bearer(request: Request): string {
   return m[1].trim()
 }
 
-function makeCtx(env: DriveEnv, deps: DriveDeps): DriveCtx {
+/** Drive 작업 문맥 — api/drive와 Phase 6.2 인테이크(api/intake의 Slack 첨부 → 행사 폴더)가 같은 것을 쓴다 */
+export function makeCtx(env: DriveEnv, deps: DriveDeps): DriveCtx {
   let store = deps.store ?? null
   return {
     env,
@@ -86,6 +89,23 @@ export async function handleDriveRequest(request: Request, env: DriveEnv, deps: 
             ctx,
             jwt,
             url.searchParams.get('import_id') ?? '',
+            url.searchParams.get('name') ?? '',
+            request.headers.get('content-type') ?? 'application/octet-stream',
+            bytes,
+          ),
+        )
+      }
+      if (action === 'project-file') {
+        // Phase 6.2 — 견적서 첨부: 로그인 세션 + 쿼리(project_id·name), 본문 = 파일 바이트(4MB 이하)
+        const jwt = bearer(request)
+        await requireUser(ctx, jwt)
+        const bytes = new Uint8Array(await request.arrayBuffer())
+        return json(
+          200,
+          await projectFileOp(
+            ctx,
+            jwt,
+            url.searchParams.get('project_id') ?? '',
             url.searchParams.get('name') ?? '',
             request.headers.get('content-type') ?? 'application/octet-stream',
             bytes,

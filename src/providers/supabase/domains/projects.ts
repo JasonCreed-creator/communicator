@@ -10,6 +10,7 @@ import { mapPgError, type PgErrorLike } from '../errors'
 import { ProviderError } from '../../../lib/errors'
 import { normalizeSlackWebhook, SLACK_WEBHOOK_INVALID_MESSAGE } from '../../../lib/slackWebhook'
 import { normalizeSlackThreadLink, normalizeSlackUserId, SLACK_THREAD_INVALID_MESSAGE, SLACK_USER_ID_INVALID_MESSAGE } from '../../../lib/slackThread'
+import { normalizeQuoteAttachment, QUOTE_ATTACHMENT_INVALID_MESSAGE } from '../../../lib/quoteAttachment'
 import { isDelayed, toIsoDate } from '../../../lib/wbs'
 import type { ClientContact, ClientToken, Project, UUID, WbsTask } from '../../../types/entities'
 import type { MemberRole } from '../../../types/enums'
@@ -416,6 +417,13 @@ export function projectsDomain(ctx: SupabaseCtx): ProjectsDomain {
         const thread = normalizeSlackThreadLink(patch.slack_thread_url)
         if (thread === 'invalid') throw new ProviderError('validation', SLACK_THREAD_INVALID_MESSAGE)
         row.slack_thread_url = thread
+      }
+      // v15.6(Phase 6.2) — 인테이크 기록 · 견적서 첨부(https 주소 + kind만 — 그 밖은 422)
+      if (patch.intake !== undefined) row.intake = patch.intake
+      if (patch.quote_attachment !== undefined) {
+        const att = normalizeQuoteAttachment(patch.quote_attachment)
+        if (att === 'invalid') throw new ProviderError('validation', QUOTE_ATTACHMENT_INVALID_MESSAGE)
+        row.quote_attachment = att
       }
       // v2.0 — "견적 연결" 액션: app_role admin·sales 전용 (§6.1·§10), 상호 링크 동기화
       if (patch.quote_id !== undefined) {

@@ -178,6 +178,7 @@ import { buildScenarioSeed } from '../../lib/scenarioScript'
 import { UPLOADABLE_STATUSES, uploadBlockedMessage } from '../../lib/uploadGate'
 import { normalizeSlackWebhook, SLACK_WEBHOOK_INVALID_MESSAGE } from '../../lib/slackWebhook'
 import { normalizeSlackThreadLink, normalizeSlackUserId, SLACK_THREAD_INVALID_MESSAGE, SLACK_USER_ID_INVALID_MESSAGE } from '../../lib/slackThread'
+import { normalizeQuoteAttachment, QUOTE_ATTACHMENT_INVALID_MESSAGE } from '../../lib/quoteAttachment'
 import {
   buildVendorQuote,
   isVendorQuoteFile,
@@ -524,6 +525,8 @@ export class MockProvider implements DataProvider {
       quote_id: null,
       drive_root_folder_id: null, // Drive 표준 트리 생성은 Phase 5
       slack_webhook_url: null,
+      intake: null,
+      quote_attachment: null,
       event_type: input.event_type ?? 'general',
       theme: input.theme ?? null,
       venue: input.venue ?? null,
@@ -2136,6 +2139,13 @@ export class MockProvider implements DataProvider {
       const thread = normalizeSlackThreadLink(patch.slack_thread_url)
       if (thread === 'invalid') throw new ProviderError('validation', SLACK_THREAD_INVALID_MESSAGE)
       project.slack_thread_url = thread
+    }
+    // v15.6(Phase 6.2) — 인테이크 기록 · 견적서 첨부(https 주소 + kind만)
+    if (patch.intake !== undefined) project.intake = patch.intake
+    if (patch.quote_attachment !== undefined) {
+      const att = normalizeQuoteAttachment(patch.quote_attachment)
+      if (att === 'invalid') throw new ProviderError('validation', QUOTE_ATTACHMENT_INVALID_MESSAGE)
+      project.quote_attachment = att
     }
     // v2.0 — 행사 설정 ① 모객형 전용 그룹 (일반형이면 UI 숨김·데이터 보존)
     if (patch.guarantee_pax !== undefined) project.guarantee_pax = patch.guarantee_pax

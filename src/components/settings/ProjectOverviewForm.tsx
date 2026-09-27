@@ -15,6 +15,10 @@ import Field from '../internal/Field'
 import { canUseQuotes } from '../quote/QuoteGate'
 import { useAsync, useMutation } from '../../hooks/useAsync'
 import { EVENT_TYPE_LABELS, formatDateWeekday } from '../../lib/labels'
+import { isPlaceholderCode, suggestProjectCode } from '../../lib/projectCode'
+import type { BriefLink } from '../../lib/intake/eventBrief'
+import type { IntakeFileInfo } from '../../lib/intake/intakeClient'
+import QuoteAttachmentCard from './QuoteAttachmentCard'
 import {
   COMPANY_SIZE,
   INDUSTRY,
@@ -68,6 +72,20 @@ interface FormValues {
 
 type FieldKey = keyof FormValues
 type SectionId = 'basic' | 'schedule' | 'content' | 'recruiting'
+
+/** 밖에서 채워 넣을 수 있는 칸(Slack 메시지 인테이크 — Phase 6.2). items는 기존 기타 항목 뒤에 덧붙인다 */
+export type OverviewPrefillValues = Partial<
+  Pick<
+    FormValues,
+    'name' | 'eventDate' | 'eventEndDate' | 'startTime' | 'endTime' | 'venue' | 'expectedHeadcount' | 'organizer' | 'theme' | 'targetAudience' | 'eventType' | 'items'
+  >
+>
+
+/** 인테이크 결과 — id가 바뀔 때마다 한 번 적용한다(같은 결과를 다시 덮어쓰지 않게) */
+export interface OverviewPrefill {
+  id: string
+  values: OverviewPrefillValues
+}
 
 /** 칸 이름(저장 바의 '바뀐 칸' 목록)과 소속 섹션 */
 const FIELD_META: Record<FieldKey, { label: string; section: SectionId }> = {
@@ -164,6 +182,10 @@ interface ProjectOverviewFormProps {
   nextHint?: string
   /** 필수 4개 중 입력된 수 — 온보딩 진행 줄이 저장 전 입력을 따라간다 */
   onRequiredFilledChange?: (filled: number) => void
+  /** Phase 6.2 — Slack 메시지에서 읽은 값을 칸에 채운다(주황 표시 · 고칠 수 있음). 온보딩 배치 전용 */
+  prefill?: OverviewPrefill | null
+  /** Phase 6.2 — Slack 글에서 온 첨부 파일·링크(견적서 칸이 골라 붙인다). 온보딩 배치 전용 */
+  intakeExtras?: { files: IntakeFileInfo[]; links: BriefLink[] } | null
 }
 
 export default function ProjectOverviewForm({
@@ -175,9 +197,25 @@ export default function ProjectOverviewForm({
   onDirtyChange,
   nextHint,
   onRequiredFilledChange,
+  prefill = null,
+  intakeExtras = null,
 }: ProjectOverviewFormProps) {
   const project = useAsync(() => provider.getProject(projectId), [projectId])
   const [values, setValues] = useState<FormValues | null>(null)
+  // Phase 6.2 — 행사 코드 자동(온보딩 · 자리표시 코드일 때만). 사람이 코드 칸을 고치면 꺼진다
+  const [codeAuto, setCodeAuto] = useState(false)
+  // 인테이크가 채운 칸(주황 표시) · 적용한 인테이크 id
+  const [prefilledKeys, setPrefilledKeys] = useState<Set<FieldKey>>(() => new Set())
+  const [appliedPrefillId, setAppliedPrefillId] = useState<string | null>(null)
+  // 자동 코드가 다른 행사와 겹치지 않게 — 온보딩에서만 읽는다
+  const otherCodes = useAsync<string[]>(
+    () =>
+      layout === 'onboarding'
+        ? provider.listProjects().then((list) => list.filter((p) => p.id !== projectId).map((p) => p.code))
+        : Promise.resolve([]),
+    [layout, projectId],
+  )
+  const takenCodes = otherCodes.data ?? []
   // 저장된 기준 — 바뀐 칸 판정·변경 취소·'원래 …' 표기가 이 값을 본다. 저장에 성공하면 그 값이 새 기준
   const [baseline, setBaseline] = useState<FormValues | null>(null)
   // §10-C — 필수 미입력은 그 줄에서 말한다. 블록 경고(ErrorAlert)는 저장 실패(서버·권한) 몫으로 비워 둔다.
@@ -201,8 +239,39 @@ export default function ProjectOverviewForm({
     const loaded = valuesFrom(project.data as Project)
     setValues((prev) => prev ?? loaded)
     setBaseline((prev) => prev ?? loaded)
+    // 새 행사(세팅 전 · createProject({})의 EVT-… 자리표시)만 자동 — 정해진 코드는 덮어쓰지 않는다(폴더·파일 이름에 이미 쓰였을 수 있다)
+    setCodeAuto((prev) => prev || (layout === 'onboarding' && !project.data!.onboarded_at && isPlaceholderCode(loaded.code)))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project.data])
+
+  /** 코드 자동 — 행사명·행사일이 바뀌면 다시 만든다(다른 행사 코드와 겹치면 -2, -3…) */
+  const autoCode = (name: string, eventDate: string): string | null =>
+    suggestProjectCode(name, { eventDate: eventDate || null, taken: takenCodes })
+
+  // Phase 6.2 — 인테이크 결과 적용(id마다 한 번). 채운 칸은 주황 표시, 선택 항목을 채웠으면 접힌 칸을 펼친다
+  useEffect(() => {
+    if (!prefill || prefill.id === appliedPrefillId || !values) return
+    const keys = (Object.keys(prefill.values) as FieldKey[]).filter((k) => {
+      const v = prefill.values[k as keyof OverviewPrefillValues]
+      return Array.isArray(v) ? v.length > 0 : typeof v === 'string' && v.trim() !== ''
+    })
+    setValues((prev) => {
+      if (!prev) return prev
+      const { items: extraItems, ...rest } = prefill.values
+      const next = { ...prev, ...(rest as Partial<FormValues>) }
+      // 기타 항목은 덧붙인다(같은 이름이 이미 있으면 그대로) — 사람이 적어 둔 항목을 지우지 않는다
+      if (extraItems && extraItems.length > 0) {
+        const have = new Set(prev.items.map((it) => it.label.trim()))
+        next.items = [...prev.items, ...extraItems.filter((it) => !have.has(it.label.trim()))]
+      }
+      if (codeAuto && keys.includes('name')) next.code = autoCode(next.name, next.eventDate) ?? ''
+      return next
+    })
+    setPrefilledKeys(new Set(keys))
+    if (keys.some((k) => OPTIONAL_KEYS.includes(k))) setOptionalOpen(true)
+    setAppliedPrefillId(prefill.id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefill, appliedPrefillId, values, codeAuto])
 
   const changed = useMemo<FieldKey[]>(() => {
     if (!values || !baseline) return []
@@ -233,7 +302,21 @@ export default function ProjectOverviewForm({
   }
 
   const set = <K extends keyof FormValues>(key: K, v: FormValues[K]) => {
-    setValues((prev) => (prev ? { ...prev, [key]: v } : prev))
+    setValues((prev) => {
+      if (!prev) return prev
+      const next = { ...prev, [key]: v }
+      // 코드가 자동일 때 행사명·행사일을 고치면 코드도 따라간다(연도 두 자리는 행사일에서)
+      if (codeAuto && (key === 'name' || key === 'eventDate')) next.code = autoCode(next.name, next.eventDate) ?? ''
+      return next
+    })
+    if (key === 'code') setCodeAuto(false)
+    if (prefilledKeys.has(key)) {
+      setPrefilledKeys((prev) => {
+        const nextKeys = new Set(prev)
+        nextKeys.delete(key)
+        return nextKeys
+      })
+    }
     // 입력을 고치는 순간 그 줄의 오류는 낡는다 — 저장까지 붉게 남겨 두지 않는다
     const touched: RequiredKey | null =
       key === 'eventDate' ? 'eventDate' : key === 'venue' ? 'venue' : null
@@ -265,6 +348,9 @@ export default function ProjectOverviewForm({
   const prefillFromQuote = !!project.data?.quote_id && !project.data?.onboarded_at
   const initial = project.data ? valuesFrom(project.data) : null
   const tintClass = (key: keyof FormValues): string => {
+    // Phase 6.2 — 인테이크가 채운 칸 · 자동으로 만든 코드도 같은 주황(채워 둔 값 — 확인하라는 뜻)
+    if (prefilledKeys.has(key)) return ' bg-accent-tint'
+    if (key === 'code' && codeAuto && values.code.trim() && !isPlaceholderCode(values.code)) return ' bg-accent-tint'
     if (!prefillFromQuote || !initial) return ''
     const v = initial[key]
     const filled = Array.isArray(v) ? v.length > 0 : typeof v === 'string' ? v.trim() !== '' : false
@@ -352,8 +438,31 @@ export default function ProjectOverviewForm({
   const today = new Date()
   const yymmdd = `${String(today.getFullYear()).slice(2)}${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}`
   const codeHint = `파일 이름 앞에 붙습니다 — 예: ${yymmdd}_${values.code.trim() || 'CODE'}_…`
+  // Phase 6.2 — 온보딩에서는 행사명에서 자동으로 만든다. 사람이 고치면 자동이 꺼지고, '행사명에서 다시 만들기'로 되돌릴 수 있다
+  const codeAutoHint: ReactNode =
+    layout === 'onboarding' && !readOnly ? (
+      codeAuto ? (
+        <span data-testid="code-auto-hint">행사명에서 자동으로 만들었어요 — 고칠 수 있어요 · {codeHint}</span>
+      ) : (
+        <span>
+          {codeHint}{' '}
+          <button
+            type="button"
+            className="underline"
+            onClick={() => {
+              setCodeAuto(true)
+              setValues((prev) => (prev ? { ...prev, code: autoCode(prev.name, prev.eventDate) ?? prev.code } : prev))
+            }}
+          >
+            행사명에서 다시 만들기
+          </button>
+        </span>
+      )
+    ) : (
+      changedHint('code', codeHint)
+    )
   const codeField = () => (
-    <Field id="ov-code" label="행사 코드" required hint={changedHint('code', codeHint)}>
+    <Field id="ov-code" label="행사 코드" required hint={codeAutoHint}>
       <input
         id="ov-code"
         value={values.code}
@@ -627,6 +736,25 @@ export default function ProjectOverviewForm({
     >
       확정 견적에서 채워 둔 값입니다(주황 표시) — 전부 고칠 수 있습니다. 행사 코드는 자동 제안이니 확인해 주세요.
     </p>
+  ) : prefilledKeys.size > 0 ? (
+    <p
+      data-testid="intake-prefill-banner"
+      className="rounded-md border border-accent/30 bg-accent-tint px-3 py-2 text-xs text-accent-deep"
+    >
+      Slack 메시지에서 읽어 채운 칸 {prefilledKeys.size}개(주황 표시) — 전부 고칠 수 있습니다. 저장하기 전에 원문과 대조해 주세요.
+    </p>
+  ) : null
+
+  // Phase 6.2 — 견적서 첨부(파일·링크 · Slack 글의 첨부) — 온보딩은 선택 항목 아래, 설정은 기본 정보 섹션 끝
+  const quoteAttachment = project.data ? (
+    <QuoteAttachmentCard
+      projectId={projectId}
+      project={project.data as Project}
+      readOnly={readOnly}
+      onChanged={() => project.reload()}
+      slackFiles={intakeExtras?.files}
+      slackLinks={intakeExtras?.links}
+    />
   ) : null
 
   // ── 온보딩 배치 — 넓은 2열 + 선택 항목 접기 ─────────────────────────────
@@ -694,6 +822,8 @@ export default function ProjectOverviewForm({
           )}
         </div>
 
+        {quoteAttachment}
+
         {errorAndReadOnly}
 
         {!readOnly && (
@@ -721,6 +851,7 @@ export default function ProjectOverviewForm({
           {eventTypeField('바꿔도 등록 데이터는 지워지지 않고 화면에서만 숨겨집니다. 일정(WBS) 다시 펼치기는 일정 화면에서 합니다.')}
           {formatRow()}
           {dmsGroup()}
+          <div className="sm:col-span-2">{quoteAttachment}</div>
         </div>
       ),
     },

@@ -186,6 +186,23 @@ export function createDriveClient(opts: DriveClientOptions) {
     },
     scan: (projectId: string) => post<DriveScanResult>({ action: 'scan', project_id: projectId }),
 
+    /**
+     * Phase 6.2 — 행사 폴더에 파일 하나(견적서 첨부 · 4MB 이하)를 한 번에 올린다 → 02_견적·정산/견적서.
+     * 권한(그 행사 pm · 종료 안 된 행사)은 서버가 사용자 세션으로 SQL(drive_project_file_check)에 묻는다
+     */
+    async projectFile(projectId: string, fileName: string, data: ArrayBuffer, mimeType = 'application/octet-stream'): Promise<{ file_id: string; file_name: string; url: string }> {
+      const token = await opts.accessToken()
+      if (!token) throw new ProviderError('forbidden', '로그인이 필요합니다.')
+      const q = new URLSearchParams({ action: 'project-file', project_id: projectId, name: fileName })
+      const res = await send({
+        url: `${endpoint}?${q.toString()}`,
+        method: 'PUT',
+        headers: { authorization: `Bearer ${token}`, 'content-type': mimeType },
+        body: new Blob([data]),
+      })
+      return parse<{ file_id: string; file_name: string; url: string }>(res)
+    },
+
     async fileUrls(versionIds: string[]): Promise<Record<string, string | null>> {
       if (versionIds.length === 0) return {}
       const r = await post<{ tokens: Record<string, string | null> }>({ action: 'file-urls', version_ids: versionIds })

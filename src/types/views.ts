@@ -20,6 +20,8 @@ import type {
   Partner,
   PartnerTier,
   PartnerToken,
+  ProjectIntake,
+  QuoteAttachment,
   ProgramSession,
   Project,
   ScenarioBlock,
@@ -448,6 +450,12 @@ export interface ProjectPatch {
    * Slack 메시지 링크(`https://….slack.com/archives/{C|G…}/p…`)만 받는다(그 밖은 422 — src/lib/slackThread). pm 전용
    */
   slack_thread_url?: string | null
+  /**
+   * v15.6(Phase 6.2) — 인테이크 기록 · 견적서 첨부. null = 지움. pm 전용(updateProject 권한 그대로).
+   * quote_attachment는 https 주소 + kind(drive|link)만 받는다(그 밖은 422 — src/lib/quoteAttachment)
+   */
+  intake?: ProjectIntake | null
+  quote_attachment?: QuoteAttachment | null
 }
 
 /** v1.5 — POST /projects 입력(§8): S0 ① 저장 시 개요 필드 일괄 수신, onboarded_at은 null.

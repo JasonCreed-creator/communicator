@@ -72,6 +72,15 @@ export function createFakeDriveStore() {
     async setSettlementImportFile(importId, fileId) {
       settlementImports.get(importId)!.drive_file_id = fileId
     },
+    async projectFileCheck(jwt, projectId) {
+      const u = userByJwt(jwt)
+      const p = projects.get(projectId)
+      if (!p) throw new DriveError(404, 'not_found', '프로젝트를 찾을 수 없습니다.')
+      const role = u ? members.get(`${u.profileId}:${projectId}`) : undefined
+      if (role !== 'pm') throw new DriveError(403, 'forbidden', 'PM 전용 기능입니다.')
+      if (p.status === 'closed') throw new DriveError(409, 'conflict', '종료된 행사입니다 — 재개(pm) 후 수정할 수 있습니다.')
+      return { ...p }
+    },
     async deliverableExists(deliverableId) {
       return deliverables.has(deliverableId)
     },

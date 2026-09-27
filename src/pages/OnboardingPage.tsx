@@ -18,7 +18,10 @@ import FormatStep from '../components/onboarding/FormatStep'
 import { REQUIRED_FIELDS, filledRequired } from '../components/settings/requiredFields'
 import ClientContactsEditor from '../components/settings/ClientContactsEditor'
 import MembersEditor from '../components/settings/MembersEditor'
-import ProjectOverviewForm from '../components/settings/ProjectOverviewForm'
+import ProjectOverviewForm, { type OverviewPrefill } from '../components/settings/ProjectOverviewForm'
+import SlackIntakeCard from '../components/onboarding/SlackIntakeCard'
+import { briefToPrefill } from '../lib/intake/briefPrefill'
+import type { IntakeReadResult } from '../lib/intake/intakeClient'
 import { useProject } from '../context/ProjectContext'
 import { useAsync, useMutation } from '../hooks/useAsync'
 import { EVENT_TYPE_LABELS, ROLE_LABELS, formatDate } from '../lib/labels'
@@ -79,6 +82,9 @@ export default function OnboardingPage() {
   const [overviewDirty, setOverviewDirty] = useState(false)
   // 1단계에서는 저장 전 입력으로 센다 — 칸을 채우는 대로 '필수 4개 중 m개'가 올라간다
   const [liveFilled, setLiveFilled] = useState<number | null>(null)
+  // Phase 6.2 — Slack 메시지에서 불러온 결과(폼 프리필 · 견적서 칸의 첨부 후보)
+  const [intake, setIntake] = useState<IntakeReadResult | null>(null)
+  const [prefill, setPrefill] = useState<OverviewPrefill | null>(null)
   const project = useAsync(() => provider.getProject(projectId), [projectId])
   const currentUser = useAsync(() => provider.getCurrentUser(), [])
   const members = useAsync(() => provider.listMembers(projectId), [projectId])
@@ -177,18 +183,33 @@ export default function OnboardingPage() {
             </div>
 
             {step === 1 && (
-              <ProjectOverviewForm
-                projectId={projectId}
-                layout="onboarding"
-                submitLabel="다음: 담당자"
-                nextHint="다음 단계: 담당자 — 주소록 인물 카드를 역할 칸에 넣습니다"
-                onDirtyChange={onDirtyChange}
-                onRequiredFilledChange={onRequiredFilledChange}
-                onSaved={() => {
-                  project.reload()
-                  setStep(2)
-                }}
-              />
+              <>
+                {project.data && (
+                  <SlackIntakeCard
+                    projectId={projectId}
+                    project={project.data}
+                    readOnly={!currentUser.loading && !isPm}
+                    onApplied={(r) => {
+                      setIntake(r)
+                      setPrefill({ id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, values: briefToPrefill(r.fields) })
+                    }}
+                  />
+                )}
+                <ProjectOverviewForm
+                  projectId={projectId}
+                  layout="onboarding"
+                  submitLabel="다음: 담당자"
+                  nextHint="다음 단계: 담당자 — 주소록 인물 카드를 역할 칸에 넣습니다"
+                  onDirtyChange={onDirtyChange}
+                  onRequiredFilledChange={onRequiredFilledChange}
+                  prefill={prefill}
+                  intakeExtras={intake ? { files: intake.files, links: intake.links } : null}
+                  onSaved={() => {
+                    project.reload()
+                    setStep(2)
+                  }}
+                />
+              </>
             )}
 
             {step === 2 && (

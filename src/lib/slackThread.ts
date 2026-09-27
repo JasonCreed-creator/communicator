@@ -53,6 +53,44 @@ export function parseSlackThreadLink(value: string | null | undefined): SlackThr
   return null
 }
 
+/** Phase 6.2 인테이크 — 메시지 링크 한 개(글 자체의 ts · 스레드 답글이면 thread_ts). 스레드 링크와 같은 모양을 받는다 */
+export interface SlackMessageRef {
+  channel: string
+  /** 그 글의 ts */
+  ts: string
+  /** 스레드 답글이면 스레드 첫 글의 ts, 아니면 null */
+  thread_ts: string | null
+}
+
+export function parseSlackMessageLink(value: string | null | undefined): SlackMessageRef | null {
+  const raw = (value ?? '').trim()
+  if (!raw) return null
+  let url: URL
+  try {
+    url = new URL(raw)
+  } catch {
+    return null
+  }
+  if (url.protocol !== 'https:') return null
+  const host = url.hostname.toLowerCase()
+  if (host !== 'slack.com' && !host.endsWith('.slack.com')) return null
+  const parts = url.pathname.split('/').filter(Boolean)
+  if (parts[0] === 'archives' && parts.length >= 3) {
+    const channel = parts[1]
+    if (!CHANNEL_RE.test(channel)) return null
+    const ts = tsFromP(parts[2])
+    if (!ts) return null
+    const threadTs = url.searchParams.get('thread_ts')
+    return { channel, ts, thread_ts: threadTs && TS_RE.test(threadTs) && threadTs !== ts ? threadTs : null }
+  }
+  const i = parts.indexOf('thread')
+  if (parts[0] === 'client' && i >= 0 && parts[i + 1]) {
+    const m = /^([CG][A-Z0-9]{6,})-(\d{10}\.\d{6})$/.exec(parts[i + 1])
+    return m ? { channel: m[1], ts: m[2], thread_ts: null } : null
+  }
+  return null
+}
+
 export function isSlackThreadLink(value: string | null | undefined): value is string {
   return parseSlackThreadLink(value) !== null
 }

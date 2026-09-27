@@ -1,6 +1,7 @@
 // 견적 → 행사 핸드오프 매핑 — 설계서 부록 §16의 정본 구현.
 // POST /quotes/{id}/create-project 가 수행하는 projects ← quotes.input 매핑.
 // **금액·섹션 산출(breakdown·total_amount)은 어떤 키로도 넘기지 않는다** (#RULE-NO-PRICE-TO-CLIENT).
+import { suggestProjectCode as suggestCode } from '../../lib/projectCode'
 import type { OverviewItem, Quote, Targeting } from '../../types/entities'
 import type { EventType } from '../../types/enums'
 import { venueDisplayName } from './engine/quoteInput'
@@ -26,16 +27,9 @@ export interface QuoteProjectDraft {
   overview_items: OverviewItem[] | null
 }
 
-/** 행사 코드 자동 제안: 행사명 단어 이니셜(영문·숫자만)+연도 2자리. 비ASCII뿐이면 'EVT' 폴백 */
+/** 행사 코드 자동 제안 — Phase 6.2부터 공용 규칙(src/lib/projectCode: 영문·한글 초성 이니셜 + 연도 2자리). 글자를 못 얻으면 'EVT'+연도 */
 export function suggestProjectCode(name: string, eventDate: string | null): string {
-  const initials = name
-    .split(/\s+/)
-    .map((w) => w.charAt(0))
-    .filter((ch) => /[A-Za-z]/.test(ch))
-    .join('')
-    .toUpperCase()
-  const year = eventDate ? eventDate.slice(2, 4) : ''
-  return `${initials || 'EVT'}${year}`
+  return suggestCode(name, { eventDate }) ?? `EVT${(eventDate ?? '').slice(2, 4)}`
 }
 
 /** targeting 5축 → 요약 문장 (§16 target_audience 소스) */

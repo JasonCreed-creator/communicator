@@ -33,6 +33,17 @@ export interface AiReadOutput {
 
 export type VendorQuoteReader = (input: AiReadInput) => Promise<AiReadOutput>
 
+/** 구조화 JSON 읽기 한 종류 — 시스템 규칙 · 출력 스키마 · 출력 상한. 협력사 견적서 · 행사 인테이크가 각자 하나씩 갖는다 */
+export interface JsonReadSpec {
+  system: string
+  schema: Record<string, unknown>
+  maxTokens?: number
+  effort?: 'low' | 'medium' | 'high'
+}
+
+/** 내용 블록(문서·그림·글)을 주면 구조화 JSON을 돌려주는 읽기 함수 */
+export type JsonReader = (content: Anthropic.ContentBlockParam[]) => Promise<AiReadOutput>
+
 /** Claude API 쪽 오류(키 틀림·한도·과부하·연결) — 핸들러가 사람 말로 바꾼다 */
 export class AiUpstreamError extends Error {
   constructor(
@@ -51,18 +62,30 @@ function contentFor(input: AiReadInput): Anthropic.ContentBlockParam {
   return { type: 'image', source: { type: 'base64', media_type: input.media_type, data: input.data_base64 } }
 }
 
-/** SDK 요청 본문 — 테스트가 모양(문서가 글보다 먼저 · 스키마 · 모델)을 확인한다 */
-export function vendorQuoteRequest(model: string, input: AiReadInput): Anthropic.MessageCreateParamsNonStreaming {
+/** 구조화 JSON 요청 본문(공용) */
+export function jsonRequest(model: string, spec: JsonReadSpec, content: Anthropic.ContentBlockParam[]): Anthropic.MessageCreateParamsNonStreaming {
   return {
     model,
-    max_tokens: AI_MAX_TOKENS,
-    system: AI_VENDOR_QUOTE_SYSTEM,
-    messages: [{ role: 'user', content: [contentFor(input), { type: 'text', text: AI_VENDOR_QUOTE_INSTRUCTION }] }],
+    max_tokens: spec.maxTokens ?? AI_MAX_TOKENS,
+    system: spec.system,
+    messages: [{ role: 'user', content }],
     output_config: {
-      effort: 'medium',
-      format: { type: 'json_schema', schema: AI_VENDOR_QUOTE_SCHEMA as unknown as Record<string, unknown> },
+      effort: spec.effort ?? 'medium',
+      format: { type: 'json_schema', schema: spec.schema },
     },
   }
+}
+
+export const VENDOR_QUOTE_SPEC: JsonReadSpec = {
+  system: AI_VENDOR_QUOTE_SYSTEM,
+  schema: AI_VENDOR_QUOTE_SCHEMA as unknown as Record<string, unknown>,
+  maxTokens: AI_MAX_TOKENS,
+  effort: 'medium',
+}
+
+/** SDK 요청 본문 — 테스트가 모양(문서가 글보다 먼저 · 스키마 · 모델)을 확인한다 */
+export function vendorQuoteRequest(model: string, input: AiReadInput): Anthropic.MessageCreateParamsNonStreaming {
+  return jsonRequest(model, VENDOR_QUOTE_SPEC, [contentFor(input), { type: 'text', text: AI_VENDOR_QUOTE_INSTRUCTION }])
 }
 
 function upstream(e: unknown): AiUpstreamError {
@@ -78,13 +101,13 @@ function upstream(e: unknown): AiUpstreamError {
   return new AiUpstreamError('other', null, e instanceof Error ? e.message.slice(0, 200) : 'unknown')
 }
 
-/** clientOptions = 테스트 주입(가짜 fetch · 재시도 0) — 운영은 기본값 */
-export function createClaudeReader(apiKey: string, model: string, clientOptions: Partial<ClientOptions> = {}): VendorQuoteReader {
+/** 구조화 JSON 읽기(공용) — clientOptions = 테스트 주입(가짜 fetch · 재시도 0), 운영은 기본값 */
+export function createClaudeJsonReader(apiKey: string, model: string, spec: JsonReadSpec, clientOptions: Partial<ClientOptions> = {}): JsonReader {
   const client = new Anthropic({ apiKey, timeout: AI_TIMEOUT_MS, maxRetries: 1, ...clientOptions })
-  return async (input) => {
+  return async (content) => {
     let message: Anthropic.Message
     try {
-      message = await client.messages.stream(vendorQuoteRequest(model, input)).finalMessage()
+      message = await client.messages.stream(jsonRequest(model, spec, content)).finalMessage()
     } catch (e) {
       throw upstream(e)
     }
@@ -104,4 +127,10 @@ export function createClaudeReader(apiKey: string, model: string, clientOptions:
     }
     return { json, stop_reason: message.stop_reason, model: message.model, ...usage }
   }
+}
+
+/** 협력사 견적서 읽기 = 공용 읽기 + 견적서 규칙·스키마 */
+export function createClaudeReader(apiKey: string, model: string, clientOptions: Partial<ClientOptions> = {}): VendorQuoteReader {
+  const read = createClaudeJsonReader(apiKey, model, VENDOR_QUOTE_SPEC, clientOptions)
+  return (input) => read([contentFor(input), { type: 'text', text: AI_VENDOR_QUOTE_INSTRUCTION }])
 }

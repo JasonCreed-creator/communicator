@@ -83,6 +83,8 @@ export interface DriveStore {
   settlementFileCheck(jwt: string, importId: string): Promise<{ import_id: string; file_name: string; project: ProjectRow }>
   /** v15 — 원본 파일 id 기록(service) */
   setSettlementImportFile(importId: string, fileId: string): Promise<void>
+  /** Phase 6.2 — 사용자 JWT로 `drive_project_file_check`: 행사 폴더에 파일을 올릴 수 있는가(pm · 종료 안 된 행사) + 행사 정보 */
+  projectFileCheck(jwt: string, projectId: string): Promise<ProjectRow>
   /** 항목이 아직 DB에 있는가 — 항목 폴더 보관(archive-item)은 지워진 항목에만 허용한다 */
   deliverableExists(deliverableId: string): Promise<boolean>
   /** 사용자 JWT로 `drive_upload_check` — upload_version과 같은 판정(404·403·409)을 바이트 전송 전에 */
@@ -203,6 +205,12 @@ export function supabaseDriveStore(env: StoreEnv): DriveStore {
     },
     async setSettlementImportFile(importId, fileId) {
       must(await admin.rpc('settlement_import_set_file', { p_import: importId, p_file: fileId }))
+    },
+    async projectFileCheck(jwt, projectId) {
+      const res = await asUser(jwt).rpc('drive_project_file_check', { p_project: projectId })
+      const data = must(res as Res<ProjectRow>)
+      if (!data) throw new DriveError(404, 'not_found', '행사를 찾을 수 없습니다.')
+      return data
     },
     async deliverableExists(deliverableId) {
       return Boolean(must(await admin.from('deliverables').select('id').eq('id', deliverableId).maybeSingle()))

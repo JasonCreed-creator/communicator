@@ -84,7 +84,62 @@ export function createSlackApi(token: string, fetchImpl: typeof fetch = fetch) {
       const user = r.ok ? (r.user as { profile?: { email?: string } } | undefined) : undefined
       return user?.profile?.email ?? null
     },
+    /** Phase 6.2 인테이크 — 멤버 ID → 표시 이름(이메일은 읽지 않는다) */
+    async userName(userId: string): Promise<string | null> {
+      const r = await call('users.info', { user: userId }, true)
+      const user = r.ok ? (r.user as { real_name?: string; profile?: { display_name?: string; real_name?: string } } | undefined) : undefined
+      return user?.profile?.display_name || user?.profile?.real_name || user?.real_name || null
+    },
+    /**
+     * Phase 6.2 인테이크 — 링크가 가리키는 글 한 개(글·보낸 사람·첨부 파일). 스레드 답글은 conversations.replies,
+     * 채널 글은 conversations.history(latest=oldest=ts · inclusive). 필요한 권한: channels:history · groups:history
+     */
+    async message(channel: string, ts: string, threadTs: string | null): Promise<SlackResult & { message?: SlackMessage }> {
+      const pick = (list: unknown): SlackMessage | undefined =>
+        (Array.isArray(list) ? (list as SlackMessage[]) : []).find((m) => m && m.ts === ts)
+      if (threadTs) {
+        const r = await call('conversations.replies', { channel, ts, limit: 1, inclusive: true }, true)
+        if (!r.ok) return r
+        const found = pick(r.messages)
+        return found ? { ok: true, message: found } : { ok: false, error: 'message_not_found' }
+      }
+      const r = await call('conversations.history', { channel, latest: ts, oldest: ts, inclusive: true, limit: 1 }, true)
+      if (!r.ok) return r
+      const found = pick(r.messages)
+      if (found) return { ok: true, message: found }
+      // 스레드 답글 링크에 thread_ts가 빠져 있으면 history에 없다 — replies로 한 번 더
+      const again = await call('conversations.replies', { channel, ts, limit: 1, inclusive: true }, true)
+      if (!again.ok) return again.error === 'thread_not_found' ? { ok: false, error: 'message_not_found' } : again
+      const reply = pick(again.messages)
+      return reply ? { ok: true, message: reply } : { ok: false, error: 'message_not_found' }
+    },
+    /** Phase 6.2 인테이크 — 첨부 파일 정보(내려받기 주소 포함). 필요한 권한: files:read */
+    async fileInfo(fileId: string): Promise<SlackResult & { file?: SlackFile }> {
+      const r = await call('files.info', { file: fileId }, true)
+      return r.ok ? { ok: true, file: r.file as SlackFile } : r
+    },
   }
+}
+
+/** conversations.* 가 돌려주는 글(필요한 칸만) */
+export interface SlackMessage {
+  ts: string
+  text?: string
+  user?: string
+  bot_id?: string
+  thread_ts?: string
+  files?: SlackFile[]
+}
+
+export interface SlackFile {
+  id: string
+  name?: string
+  title?: string
+  mimetype?: string
+  filetype?: string
+  size?: number
+  url_private?: string
+  url_private_download?: string
 }
 
 export type SlackApi = ReturnType<typeof createSlackApi>
