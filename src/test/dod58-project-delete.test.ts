@@ -349,7 +349,9 @@ describe('DoD-58 ⑧ 전부 지운 자리에서 다시 시작한다 (이 파일�
     const me = await p.getCurrentUser()
     expect(me.id).toBe('usr-pm')
     expect(me.project_id).toBe('') // 매달릴 행사가 없다
-    expect(me.role).toBe('reg') // 행사 역할은 최소 권한으로 떨어진다
+    // 전역 admin은 어느 행사에서든 pm 권한이다(2026-09-27 사용자 지시 "PM이 아니어도 이진철은 전체 어드민 권한") — 행사가 0건이어도 'pm'.
+    // admin이 아닌 사람은 멤버십 0건이면 최소 권한(reg)으로 떨어진다(아래 ⑨)
+    expect(me.role).toBe('pm')
     expect(me.app_role).toBe('admin') // 전역 권한은 그대로다(행사에 매인 값이 아니므로)
 
     // ③ 빈 상태에서 첫 행사를 만들 수 있다 = 도입 첫날과 같은 자리

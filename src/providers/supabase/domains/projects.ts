@@ -128,6 +128,9 @@ function generateProjectCode(): string {
   return `EVT-${Date.now().toString(36).toUpperCase()}`
 }
 
+/** 행사 ID(`projectLabel`)를 이루는 칸 — 바뀌면 Drive 행사 폴더 이름·연도 자리를 다시 맞춘다 */
+const LABEL_KEYS = ['name', 'event_date', 'organizer'] as const
+
 export function projectsDomain(ctx: SupabaseCtx): ProjectsDomain {
   /**
    * mock의 assertPm() = **현재 행사**의 pm. 주소록(담당자 마스터)은 행사 스코프가 없어 대상 행사가 없으므로
@@ -463,6 +466,10 @@ export function projectsDomain(ctx: SupabaseCtx): ProjectsDomain {
       }
       // 행사일·유형 변경 후 WBS 날짜/구성 갱신은 명시적 재전개(expandWbs)로 수행 — S5 pm 배너·버튼
       await ctx.log(projectId, 'project.updated', 'project', projectId)
+      // 행사 ID(행사일·고객사·행사명)가 바뀌면 Drive 행사 폴더의 이름·연도 자리를 다시 맞춘다(서버 ensure-tree =
+      // syncProjectRootPlacement · 기다리지 않음). 행사는 만들자마자 폴더가 생기므로(createProject) 온보딩 ①을 저장하기
+      // 전엔 '연도 미정/새 행사'로 있다 — 2026-09-27 실사용에서 그대로 남아 있던 결함
+      if (LABEL_KEYS.some((k) => k in row)) driveFor(ctx).ensureTreeQuietly(projectId)
       return updated
     },
 
@@ -483,6 +490,7 @@ export function projectsDomain(ctx: SupabaseCtx): ProjectsDomain {
         ) as Project
       }
       await ctx.log(projectId, 'project.overview_updated', 'project', projectId)
+      if ('event_date' in row) driveFor(ctx).ensureTreeQuietly(projectId) // 행사일 = 행사 ID·연도 폴더
       return updated
     },
 

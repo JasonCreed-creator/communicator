@@ -121,7 +121,8 @@ describe('S-10 버킷 표 — 표 정본', () => {
     for (const row of [s5, ld]) {
       expect(rows.indexOf(row)).toBeGreaterThan(rows.indexOf(group))
       expect(row.getAttribute('data-muted')).toBe('true')
-      expect(within(row).queryByRole('button')).toBeNull()
+      // 펼침 단추만 없다 — 견적 칸의 '견적 금액 고치기'(DoD 90 ① · PM)는 원가 없는 버킷에도 있다
+      expect(within(row).queryAllByRole('button').filter((b) => !/견적 금액 고치기$/.test(b.getAttribute('aria-label') ?? ''))).toHaveLength(0)
     }
     // has_cost=false 버킷은 발주·실비 칸 자체가 없다(422 + UI 부재 유지)
     expect(within(s5).getAllByText('—').length).toBeGreaterThan(0)

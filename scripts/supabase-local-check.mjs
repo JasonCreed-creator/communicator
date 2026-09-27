@@ -300,6 +300,20 @@ ${`do $$ begin if (select snapshot_version from sheet_connections where project_
   authId.admin = psql(['-c', `insert into auth.users (email) values ('admin@example.com') returning id`]).out
   record('delete_project 전제: admin 프로필 승격 + auth 연결',
     psql(['-c', `select app_role from profiles where auth_user_id='${authId.admin}'`]).out === 'admin')
+  // Phase 6.5 ④ — 전역 admin = 모든 행사에서 pm 권한(멤버가 아니어도). admin@example.com은 어느 시드 행사의 멤버도 아니다
+  const totalProjects = psql(['-c', 'select count(*) from projects']).out
+  scenario('admin(비멤버): 행사 전부를 본다(RLS projects_select = is_member ← member_role = pm)', `${assertSql(`(select count(*) from projects) = ${totalProjects}`)}`,
+    { role: 'authenticated', sub: authId.admin })
+  scenario('admin(비멤버): 다른 행사의 담당자 배정(add_member — pm 전용 RPC) 통과', `select add_member('${PRJ}', '관리자가배정', 'adm-added@example.com', 'ops');
+${assertSql(`exists (select 1 from project_members m join profiles p on p.id=m.user_id where m.project_id='${PRJ}' and lower(p.email)='adm-added@example.com' and m.role='ops')`)}`,
+    { role: 'authenticated', sub: authId.admin })
+  scenario('admin(비멤버): 영역 항목 업로드(can_write_area = pm) 통과', `select upload_version((select id from deliverables where project_id='${PRJ}' and status='draft' and area='design' limit 1), 'adm.pdf');`,
+    { role: 'authenticated', sub: authId.admin })
+  scenario('admin(비멤버): 행사 개요 수정(projects_update = is_pm) 통과', `update projects set venue='관리자 수정' where id='${PRJ}';
+${assertSql(`(select venue from projects where id='${PRJ}') = '관리자 수정'`)}`,
+    { role: 'authenticated', sub: authId.admin })
+  scenario('staff(비멤버 design)는 여전히 다른 행사의 add_member 403 — admin만 열린다', `select add_member('${PRJ_CLOSED}', 'x', 'nm3@example.com', 'reg');`,
+    { role: 'authenticated', sub: authId.design, expect: 'error', match: 'PM 전용' })
   const del = {
     vendors: psql(['-c', `select count(*) from vendors`]).out,
     profiles: psql(['-c', `select count(*) from profiles`]).out,

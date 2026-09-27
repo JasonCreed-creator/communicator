@@ -34,7 +34,8 @@ function TreePreview() {
       <p className="mb-1.5 text-xs font-medium text-ink-sub">행사 폴더 표준 구조(자동 생성) — 저장소/연도/행사 ID/</p>
       <ul className="grid grid-cols-1 gap-x-4 gap-y-0.5 text-xs text-ink-sub sm:grid-cols-2">
         {STANDARD_TREE.map((p) => (
-          <li key={p} className="whitespace-nowrap">
+          // 하위 폴더까지 적은 줄(03)은 두 열 폭을 다 쓴다 — nowrap 두 열에서 옆 칸 위로 겹쳤다(2026-09-27 실사용 지적)
+          <li key={p} className={p.includes(' · ') ? 'sm:col-span-2' : undefined}>
             {p}
           </li>
         ))}
