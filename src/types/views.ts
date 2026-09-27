@@ -905,6 +905,11 @@ export interface QuoteImportConfirmInput {
 export interface QuoteImportDistributeInput {
   /** §16 매핑 재사용 — 새 행사 생성+상호 링크(임포트 견적은 is_final 불요) */
   project_prefill?: boolean
+  /**
+   * v16 §16.4 — **이미 있는 행사**에 연결(상호 링크). project_prefill보다 우선한다.
+   * 견적이 이미 다른 행사에 연결돼 있으면 409(provider linkQuoteToProject와 같은 규칙).
+   */
+  link_project_id?: UUID | null
   /** 확정 견적만 가능 — 아니면 validation */
   settlement_base?: boolean
   /** s2·s3·s4 매핑 항목을 design·ops 보드에 시드(금액 키 없음) */
@@ -915,6 +920,8 @@ export interface QuoteImportDistributeResult {
   quote_id: UUID
   /** project_prefill을 켜지 않았고 이미 연결된 행사도 없으면 null */
   project_id: UUID | null
+  /** v16 — 이번 분배가 새 행사를 만들었는가(false면 기존 행사에 연결했거나 이미 연결돼 있었다) */
+  project_created: boolean
   settlement_created: boolean
   deliverables_seeded: number
 }

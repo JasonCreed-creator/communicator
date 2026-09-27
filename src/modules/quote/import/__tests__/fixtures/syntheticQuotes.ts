@@ -262,3 +262,63 @@ export function syntheticQuoteC(): Promise<ArrayBuffer> {
   }
   return build('가상 견적 C형', sheet)
 }
+
+// ── D형(v2.18 영문 — 해외 인바운드): 영문 라벨 전부 + USD 표기 + Subtotal/Agency Fee/VAT/Grand Total 블록 + Optional add-on ──
+// 서식 판정은 C형(UNIT PRICE·QTY·AMOUNT — 일수·SELECT 없음)이지만 라벨은 전부 영문이다. 금액은 검산이 떨어지도록 설계한 값.
+export const D_EXPECTED = {
+  itemsSum: 100_000,
+  agencyFee: 15_000,
+  vat: 11_500,
+  grandTotal: 126_500,
+  sections: 5,
+  items: 8,
+}
+
+const D_COLS = ['ITEM', 'DESCRIPTION', 'UNIT PRICE', 'QTY', 'AMOUNT', 'REMARKS']
+
+export function syntheticQuoteD(): Promise<ArrayBuffer> {
+  const sheet: Sheet = {
+    1: ['QUOTATION'],
+    3: ['Event', 'Virtual Global Tech Summit 2027', null, null, 'Supplier', 'Virtual Events Co.'],
+    4: ['Client', 'Virtual Overseas Corp.'],
+    5: ['Event Date', '10-11 March 2027'],
+    6: ['Venue', 'Virtual Convention Center, Hall B'],
+    7: ['Quote Date', '15 January 2027', null, null, 'Contact', 'Jane Planner'],
+    8: ['Currency', 'USD'],
+    10: ['Sub Total', null, null, null, null, 100_000],
+    11: ['Agency Fee (15%)', null, null, null, null, 15_000],
+    12: ['VAT (10%)', null, null, null, null, 11_500],
+    13: ['Grand Total (VAT included)', null, null, null, null, 126_500],
+
+    15: ['1. Venue Rental'],
+    16: D_COLS,
+    17: ['Hall B rental', 'Main hall, 2 days', 22_500, 2, 45_000],
+    18: ['Subtotal', null, null, null, 45_000],
+
+    20: ['2. Stage & AV'],
+    21: D_COLS,
+    22: ['LED screen', '12m x 4m', 15_000, 1, 15_000],
+    23: ['Sound system', 'Main + delay', 10_000, 1, 10_000],
+    24: ['Subtotal', null, null, null, 25_000],
+
+    26: ['3. Design & Signage'],
+    27: D_COLS,
+    28: ['Key visual design', 'KV + adaptations', 8_000, 1, 8_000],
+    29: ['Signage production', 'Entrance, wayfinding', 7_000, 1, 7_000],
+    30: ['Subtotal', null, null, null, 15_000],
+
+    32: ['4. Operation Staff & Insurance'],
+    33: D_COLS,
+    34: ['Registration staff', '10 pax x 2 days', 500, 20, 10_000],
+    35: ['Event insurance', null, 5_000, 1, 5_000],
+    36: ['Subtotal', null, null, null, 15_000],
+
+    38: ['5. Optional Add-ons (not included in total)'],
+    39: D_COLS,
+    40: ['Gobo lighting', 'Logo projection', 2_000, 1, 2_000, 'Optional - not included'],
+    41: ['Subtotal', null, null, null, 0],
+
+    43: ['* Prices are in USD. VAT 10% applies.'],
+  }
+  return build('Quotation', sheet)
+}

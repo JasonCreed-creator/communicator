@@ -8,14 +8,27 @@ import type { ParsedQuoteDoc, SectionMapping } from './types'
 
 /** 매핑 규칙 — 위에서부터 검사하되 "복수 규칙 매칭"은 저신뢰로 떨어뜨린다(§22.2-6 말미) */
 export const SECTION_BUCKET_RULES: { bucket: string; keywords: string[] }[] = [
-  { bucket: 's1', keywords: ['베뉴', '대관', '장소'] },
-  { bucket: 's2', keywords: ['무대', '시스템', 'av', 'led', '음향', '조명', '중계', '전기', '부스'] },
-  { bucket: 's3', keywords: ['디자인', '브랜딩', '콘텐츠', '사인'] },
-  { bucket: 's4', keywords: ['인력', '운영', '보험', 'mc'] },
-  { bucket: 's5', keywords: ['대행료', '기획료'] },
-  { bucket: 'recruit', keywords: ['등록', 'rsvp', '모객'] },
-  { bucket: 'custom', keywords: ['기념품', '경품', 'f&b', '웰컴', '애드온'] },
+  // v2.18 — 영문 키워드(해외 인바운드 견적서)는 **단어 단위**로 맞춘다('av'가 'travel'을 삼키지 않게 — matchesKeyword)
+  { bucket: 's1', keywords: ['베뉴', '대관', '장소', 'venue', 'rental', 'hall'] },
+  {
+    bucket: 's2',
+    keywords: ['무대', '시스템', 'av', 'led', '음향', '조명', '중계', '전기', '부스',
+      'stage', 'system', 'sound', 'audio', 'lighting', 'screen', 'streaming', 'broadcast', 'electric', 'booth', 'equipment'],
+  },
+  { bucket: 's3', keywords: ['디자인', '브랜딩', '콘텐츠', '사인', 'design', 'branding', 'content', 'signage', 'graphic', 'creative'] },
+  { bucket: 's4', keywords: ['인력', '운영', '보험', 'mc', 'staff', 'staffing', 'operation', 'operations', 'insurance', 'manpower', 'personnel', 'security'] },
+  { bucket: 's5', keywords: ['대행료', '기획료', 'agency fee', 'management fee', 'service fee', 'pco', 'coordination'] },
+  { bucket: 'recruit', keywords: ['등록', 'rsvp', '모객', 'registration', 'recruit', 'lead', 'leads', 'marketing', 'promotion'] },
+  { bucket: 'custom', keywords: ['기념품', '경품', 'f&b', '웰컴', '애드온', 'gift', 'souvenir', 'giveaway', 'catering', 'welcome', 'add-on', 'add-ons', 'addon', 'addons', 'option', 'options', 'optional'] },
 ]
+
+/** 키워드 매칭 — 국문은 부분 일치, 영문(ASCII)은 단어 단위 */
+export function matchesKeyword(lowerName: string, keyword: string): boolean {
+  const k = keyword.toLowerCase()
+  if (!/^[a-z0-9&' -]+$/.test(k)) return lowerName.includes(k)
+  const escaped = k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`).test(lowerName)
+}
 
 /** 확인 큐 드롭다운 선택지 — 값은 견적 breakdown의 engine-shape 키(§22.4·MockProvider 합산 규약) */
 export const QUOTE_IMPORT_BUCKETS: { code: string; label: string }[] = [
@@ -37,7 +50,7 @@ export function bucketLabel(code: string): string {
 /** 섹션명 하나를 버킷으로 — 무매칭·복수매칭은 custom + 저신뢰 */
 export function mapSectionName(name: string): { bucket: string; confidence: 'high' | 'low' } {
   const lower = name.toLowerCase()
-  const matched = SECTION_BUCKET_RULES.filter((r) => r.keywords.some((k) => lower.includes(k.toLowerCase())))
+  const matched = SECTION_BUCKET_RULES.filter((r) => r.keywords.some((k) => matchesKeyword(lower, k)))
   if (matched.length === 1) return { bucket: matched[0].bucket, confidence: 'high' }
   return { bucket: 'custom', confidence: 'low' }
 }

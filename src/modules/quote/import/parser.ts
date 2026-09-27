@@ -1,6 +1,9 @@
 // 견적서 임포트 파서 (설계서 v2.4 §22.2 정본) — xlsx 바이너리 → ParsedQuoteDoc.
 //
 // 규칙 요약(§22.2):
+//  0) (v2.18) 라벨 사전은 **국문·영문 둘 다** — 해외 인바운드 행사의 영문 견적서(Subtotal · VAT · Grand Total · Qty · Unit Price ·
+//     Amount · Event/Client/Venue/Quote Date …)도 같은 규칙으로 읽는다. 영문 키는 단어 단위(정확히 일치하거나 뒤에 글자가 아닌 것이
+//     올 때만)로 맞춘다 — 'event'가 'eventdate'를 삼키지 않게. 통화 표기가 원화가 아니면 header.currency에 적고 경고만 남긴다(환산 없음).
 //  1) 헤더는 라벨 사전 매칭. 실패 필드는 빈 값으로 두고 확인 큐가 사람에게 넘긴다(추정 금지).
 //  2) 서식은 항목 표 헤더 행의 열 라벨로 판별한다 — A형(단가·수량·일수) / B형(금액 단식) / C형(UNIT PRICE·QTY·AMOUNT).
 //  3) 섹션은 "N." 숫자 프리픽스 제목 행(5-1 같은 소수 번호·선행 공백 허용) + 소계/total 행.
@@ -96,14 +99,14 @@ type ColRole = 'group' | 'title' | 'spec' | 'unit_price' | 'qty' | 'days' | 'amo
 
 const COL_PATTERNS: { role: ColRole; keys: string[] }[] = [
   { role: 'select', keys: ['select', '선택여부'] },
-  { role: 'unit_price', keys: ['단가', 'unitprice', 'unit_price'] },
-  { role: 'qty', keys: ['수량', 'qty', 'quantity'] },
-  { role: 'days', keys: ['일수', 'days', 'day'] },
-  { role: 'amount', keys: ['금액', 'amount', '합계금액'] },
-  { role: 'note', keys: ['비고', 'remarks', 'remark', 'note'] },
-  { role: 'group', keys: ['구분', '분류', 'category'] },
-  { role: 'title', keys: ['항목', 'item', '품목', '내역'] },
-  { role: 'spec', keys: ['규격', '사양', 'description', 'spec', 'size', '내용'] },
+  { role: 'unit_price', keys: ['단가', 'unitprice', 'unit_price', 'price', 'rate'] },
+  { role: 'qty', keys: ['수량', 'qty', "q'ty", 'quantity'] },
+  { role: 'days', keys: ['일수', 'days', 'day', 'duration'] },
+  { role: 'amount', keys: ['금액', 'amount', '합계금액', 'linetotal', 'total'] },
+  { role: 'note', keys: ['비고', 'remarks', 'remark', 'note', 'comment'] },
+  { role: 'group', keys: ['구분', '분류', 'category', 'section'] },
+  { role: 'title', keys: ['항목', 'item', '품목', '내역', 'particulars', 'service', 'product'] },
+  { role: 'spec', keys: ['규격', '사양', 'description', 'spec', 'size', '내용', 'details', 'detail'] },
 ]
 
 interface ColumnMap {
@@ -126,7 +129,7 @@ function classifyHeaderRow(row: Row): ColumnMap | null {
     if (hit.role === 'amount') {
       if (amountCol >= 0) continue // 첫 금액 열만 채택
       amountCol = c
-      englishAmount = key.includes('amount')
+      englishAmount = /amount|total/.test(key)
     }
     roles.set(c, hit.role)
   }
@@ -161,7 +164,7 @@ function detectFormat(map: ColumnMap): 'A' | 'B' | 'C' {
 }
 
 // ── 행 종류 ────────────────────────────────────────────────────────────
-const SUBTOTAL_KEYS = ['소계', 'subtotal', 'total', '합계', '계']
+const SUBTOTAL_KEYS = ['소계', 'subtotal', 'sub-total', 'sectiontotal', 'total', '합계', '계']
 const NOTE_PREFIX = /^[※*＊·]/
 
 function isSubtotalRow(row: Row): boolean {
@@ -181,7 +184,11 @@ function sectionTitleOf(row: Row): { number: string; name: string } | null {
   return { number: m[1], name: raw }
 }
 
-const TOTALS_LABEL_KEYS = ['합계', '총계', '총액', '부가세', 'vat', '절사', '대행료', '기획료', '견적']
+const TOTALS_LABEL_KEYS = [
+  '합계', '총계', '총액', '부가세', 'vat', '절사', '대행료', '기획료', '견적',
+  // v2.18 영문 — 총액 블록 라벨
+  'total', 'subtotal', 'tax', 'fee', 'rounding', 'discount', 'quotation', 'estimate',
+]
 
 function looksLikeTotalsRow(row: Row): boolean {
   const first = firstFilled(row)
@@ -192,15 +199,55 @@ function looksLikeTotalsRow(row: Row): boolean {
 
 // ── 헤더 필드 사전 (§22.2-1) ───────────────────────────────────────────
 const HEADER_FIELDS: { field: keyof ParsedQuoteHeader; keys: string[] }[] = [
-  { field: 'event_name', keys: ['행사명', 'projecttitle', '프로젝트명', '행사제목', 'eventname', '사업명'] },
-  { field: 'client', keys: ['고객명', '고객사', '발주처', '수신처', 'client', 'customer'] },
-  { field: 'date_range', keys: ['일시', '행사기간', '기간', '행사일', 'eventdate'] },
-  { field: 'venue', keys: ['장소', 'venue', '행사장', '개최장소'] },
-  { field: 'quoted_at', keys: ['견적일시', '견적일', '견적일자', '제안일자', '작성일', 'quotedate'] },
-  { field: 'manager', keys: ['담당자', 'manager', '담당'] },
+  {
+    field: 'event_name',
+    keys: ['행사명', 'projecttitle', '프로젝트명', '행사제목', 'eventname', '사업명',
+      'event', 'eventtitle', 'project', 'projectname', 'subject', 'title'],
+  },
+  { field: 'client', keys: ['고객명', '고객사', '발주처', '수신처', 'client', 'customer', 'clientname', 'to', 'attn', 'attention', 'billto'] },
+  { field: 'date_range', keys: ['일시', '행사기간', '기간', '행사일', 'eventdate', 'eventdates', 'date', 'dates', 'period', 'schedule', 'eventperiod'] },
+  { field: 'venue', keys: ['장소', 'venue', '행사장', '개최장소', 'location', 'place'] },
+  {
+    field: 'quoted_at',
+    keys: ['견적일시', '견적일', '견적일자', '제안일자', '작성일', 'quotedate', 'quotationdate', 'dateofquote', 'issuedate', 'dateissued', 'issued'],
+  },
+  { field: 'manager', keys: ['담당자', 'manager', '담당', 'contact', 'contactperson', 'preparedby', 'pic', 'incharge'] },
 ]
 
-const TOTAL_LABEL_KEYS = ['견적금액', '총견적', '최종견적', '총금액', '견적총액', 'grandtotal', 'totalamount']
+/** 헤더 라벨 매칭 — 국문은 앞부분 일치(‘담당자명’), 영문은 단어 단위(‘event’가 ‘eventdate’를 삼키지 않게) */
+function headerKeyMatches(key: string, k: string): boolean {
+  if (key === k) return true
+  if (!key.startsWith(k)) return false
+  if (/^[a-z]/.test(k)) return !/[a-z]/.test(key[k.length] ?? '')
+  return true
+}
+
+const TOTAL_LABEL_KEYS = [
+  '견적금액', '총견적', '최종견적', '총금액', '견적총액', 'grandtotal', 'totalamount',
+  // v2.18 영문 — 'total' 한 단어는 총계(부가세 전)로 따로 본다(아래 parseTotalsBlock)
+  'totalquotation', 'quotationtotal', 'totalestimate', 'estimatetotal', 'totalprice', 'totalcost', 'nettotal', 'amountdue', 'totaldue',
+]
+
+// ── 통화 표기 (v2.18) — 원화가 아닐 때만 header.currency + 경고. 환산하지 않는다 ──
+const FOREIGN_CURRENCY: { code: string; pattern: RegExp }[] = [
+  { code: 'USD', pattern: /\bUSD\b|US\$|U\.S\.\s*dollars?/i },
+  { code: 'EUR', pattern: /\bEUR\b|€|\beuros?\b/i },
+  { code: 'JPY', pattern: /\bJPY\b|¥|\byen\b/i },
+  { code: 'GBP', pattern: /\bGBP\b|£|\bpounds?\s*sterling\b/i },
+  { code: 'SGD', pattern: /\bSGD\b|S\$/ },
+  { code: 'HKD', pattern: /\bHKD\b|HK\$/ },
+  { code: 'AUD', pattern: /\bAUD\b|A\$/ },
+  { code: 'CNY', pattern: /\bCNY\b|\bRMB\b/ },
+  { code: 'USD', pattern: /\$/ },
+]
+const KRW_PATTERN = /₩|￦|\bKRW\b|원/
+
+function detectCurrency(rows: Row[]): string | undefined {
+  const all = rows.map((row) => rowText(row ?? [])).join('\n')
+  if (KRW_PATTERN.test(all)) return undefined // 원화 표기가 있으면 원화 문서로 본다(혼재는 사람 몫)
+  for (const c of FOREIGN_CURRENCY) if (c.pattern.test(all)) return c.code
+  return undefined
+}
 
 /** 라벨 셀 오른쪽의 첫 비어 있지 않은 값 */
 function valueRightOf(row: Row, labelCol: number): CellValue {
@@ -249,7 +296,7 @@ interface ParsedBody {
   unitMismatchTitles: string[]
 }
 
-const EXCLUDE_HINT = /총액\s*미포함|합계\s*미포함|미포함|별도\s*견적|not\s*included/i
+const EXCLUDE_HINT = /총액\s*미포함|합계\s*미포함|미포함|별도\s*견적|not\s*included|not\s*incl\.?|excluded\s*from\s*total|optional/i
 
 function parseBody(rows: Row[], layout: BodyLayout): ParsedBody {
   let map = layout.map
@@ -415,11 +462,11 @@ function parseTotalsBlock(rows: Row[], bodyStart: number): TotalsBlock {
     const line = rowText(row)
 
     // 같은 이름의 라벨이 여러 번 나오면 **처음 것이 이긴다**(하단 안내 문구가 값을 덮지 않도록)
-    if (/항목합계|항목합|직접비합계|소계합계/.test(key)) {
+    if (/항목합계|항목합|직접비합계|소계합계|^sub-?total|itemstotal|itemtotal|directcost|totalofitems/.test(key)) {
       if (amount !== null && block.items_sum === undefined) block.items_sum = amount
       continue
     }
-    if (/대행료|기획료|pco/.test(key)) {
+    if (/대행료|기획료|pco|agencyfee|managementfee|servicefee|coordinationfee|handlingfee|professionalfee/.test(key)) {
       if (amount !== null && block.agency_fee === undefined) {
         block.agency_fee = amount
         const rates = rateCandidates(labelRaw, line)
@@ -427,20 +474,25 @@ function parseTotalsBlock(rows: Row[], bodyStart: number): TotalsBlock {
       }
       continue
     }
-    if (/절사|절삭|단수/.test(key)) {
+    if (/절사|절삭|단수|rounding|roundoff|^adjustment/.test(key)) {
       if (amount !== null && block.rounding === undefined) block.rounding = amount
       continue
     }
-    if (/부가세|vat|세액/.test(key)) {
-      // "총 금액 (부가세 포함)"·"Grand Total (VAT included)"은 총액이지 세액이 아니다
+    if (/부가세|vat|세액|\btax|^tax|salestax/.test(key)) {
+      // "총 금액 (부가세 포함)"·"Grand Total (VAT included)"은 총액이지 세액이 아니다.
+      // "Total (excl. VAT)"·"합계 (부가세 별도)"는 부가세 전 총계다(v2.18).
       if (/총금액|총액|합계|총계|total/.test(key)) {
-        if (amount !== null && block.vat_included_total === undefined) block.vat_included_total = amount
+        if (/별도|미포함|excl|exclusive|before|without|net|plus/.test(key)) {
+          if (amount !== null && block.pre_vat_total === undefined) block.pre_vat_total = amount
+        } else if (amount !== null && block.vat_included_total === undefined) {
+          block.vat_included_total = amount
+        }
       } else if (amount !== null && block.vat === undefined) {
         block.vat = amount
       }
       continue
     }
-    if (/총계/.test(key)) {
+    if (/총계/.test(key) || key === 'total' || /^total\(/.test(key)) {
       if (amount !== null && block.pre_vat_total === undefined) block.pre_vat_total = amount
       continue
     }
@@ -467,6 +519,11 @@ function detectVatMode(
       return 'excluded'
     }
     if (/(부가세|vat)[^가-힣a-z]*포함/i.test(s) || /포함[^가-힣a-z]*(부가세|vat)/i.test(s)) return 'included'
+    // v2.18 영문 — "VAT excluded"·"excl. VAT"·"plus VAT"·"VAT not included" / "VAT included"·"incl. VAT"·"inclusive of VAT"
+    if (/\b(vat|tax)\b[^a-z가-힣]*(excl\w*|not\s*incl\w*|exclusive|extra|additional)/i.test(s)) return 'excluded'
+    if (/\b(excl\w*|exclusive\s+of|plus|before|without|net\s+of|not\s+including)\s*(of\s+)?(vat|tax)\b/i.test(s)) return 'excluded'
+    if (/\b(vat|tax)\b[^a-z가-힣]*(incl\w*|inclusive)/i.test(s)) return 'included'
+    if (/\b(incl\w*|inclusive\s+of|including|with)\s*(of\s+)?(vat|tax)\b/i.test(s)) return 'included'
     return null
   }
   // ① 대표 금액이 인쇄된 행의 문구가 1순위
@@ -488,9 +545,9 @@ function detectVatMode(
 }
 
 /** 기획료 산정 기준(직접비) — 기획료 섹션·베뉴(s1)·옵션/식음/모객 섹션을 뺀 합 */
-const FEE_BASE_EXCLUDE = /옵션|식음|케이터링|모객|f&b|선택/i
-const VENUE_HINT = /베뉴|대관|장소|venue/i
-const FEE_HINT = /대행료|기획료|pco/i
+const FEE_BASE_EXCLUDE = /옵션|식음|케이터링|모객|f&b|선택|option|add-?on|catering|recruit|lead\s*gen/i
+const VENUE_HINT = /베뉴|대관|장소|venue|hall\s*rental|room\s*rental/i
+const FEE_HINT = /대행료|기획료|pco|agency\s*fee|management\s*fee|service\s*fee|coordination\s*fee/i
 
 function feeBaseOf(sections: ParsedQuoteSection[]): number {
   return sections.reduce((sum, s) => {
@@ -548,7 +605,7 @@ export function parseQuoteWorkbook(data: ArrayBuffer, fileName: string): ParsedQ
     for (let c = 0; c < row.length; c++) {
       const key = norm(row[c])
       if (!key) continue
-      const hit = HEADER_FIELDS.find((f) => f.keys.some((k) => key === k || key.startsWith(k)))
+      const hit = HEADER_FIELDS.find((f) => f.keys.some((k) => headerKeyMatches(key, k)))
       if (!hit || header[hit.field] !== undefined) continue
       const value = text(valueRightOf(row, c))
       if (value) (header as Record<string, unknown>)[hit.field] = value
@@ -623,6 +680,13 @@ export function parseQuoteWorkbook(data: ArrayBuffer, fileName: string): ParsedQ
 
   header.total_amount = block.headline ?? grandTotal
   header.vat_mode = vatMode
+  const currency = detectCurrency(rows)
+  if (currency) {
+    header.currency = currency
+    warnings.push(
+      `통화가 ${currency}로 표기돼 있습니다 — 금액은 적힌 숫자 그대로 읽었습니다(원화 환산 없음). 확인 큐와 견적 화면에서 확인하세요.`,
+    )
+  }
 
   // ── 검산 (§22.2-5: 기록만 하고 막지 않는다) ──
   const checks: ParsedQuoteCheck[] = []
@@ -639,13 +703,15 @@ export function parseQuoteWorkbook(data: ArrayBuffer, fileName: string): ParsedQ
   }
   checks.push({ name: '항목 합계 = Σ 섹션 소계', expected: itemsSum, actual: sectionSum, ok: near(itemsSum, sectionSum) })
   if (agencyFee !== undefined && agencyFeeRate !== undefined && feeBase > 0) {
-    const expected = truncateTo(feeBase * agencyFeeRate, 10_000)
+    // 만원 절사는 원화 규약 — 외화 문서(v2.18)는 반올림 기준으로만 대조한다
+    const foreign = header.currency !== undefined
+    const expected = foreign ? Math.round(feeBase * agencyFeeRate) : truncateTo(feeBase * agencyFeeRate, 10_000)
     const percent = agencyFeeRate * 100
     checks.push({
-      name: `${feeInsideItems ? '기획료' : '대행료'} ${percent.toFixed(Number.isInteger(percent) ? 0 : 1)}% (만원 절사 기준)`,
+      name: `${feeInsideItems ? '기획료' : '대행료'} ${percent.toFixed(Number.isInteger(percent) ? 0 : 1)}%${foreign ? '' : ' (만원 절사 기준)'}`,
       expected,
       actual: agencyFee,
-      ok: Math.abs(agencyFee - expected) < 10_000,
+      ok: foreign ? near(agencyFee, expected, 1) : Math.abs(agencyFee - expected) < 10_000,
     })
   }
   if (vat !== undefined) {

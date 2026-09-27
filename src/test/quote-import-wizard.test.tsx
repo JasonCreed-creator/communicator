@@ -88,12 +88,15 @@ describe('견적서 가져오기 위저드 — A형 전 흐름', () => {
 
     await user.click(screen.getByRole('button', { name: '이 매핑으로 확정' }))
 
-    // ③ 분배 — 보드 시드까지 켜고 실행
+    // ③ 분배 — 기본 = 지금 보는 행사(prj-stc26)에 연결(v16 §16.4) · 보드 시드까지 켜고 실행
     await screen.findByText('어디까지 반영할까요?')
+    expect((screen.getByRole('radio', { name: /기존 행사에 연결/ }) as HTMLInputElement).checked).toBe(true)
+    expect((screen.getByLabelText('연결할 행사') as HTMLSelectElement).value).toBe('prj-stc26')
     await user.click(screen.getByRole('checkbox', { name: /보드 항목 시드/ }))
     await user.click(screen.getByRole('button', { name: '분배 실행' }))
 
-    await screen.findByText('가져오기 완료')
+    const done = await screen.findByText('가져오기 완료')
+    expect(within(done.closest('section')!).getByText(/기존 행사에 연결됨 — /)).toBeTruthy()
     const quotes = await provider.listQuotes()
     expect(quotes.length).toBe(before.length + 1)
     const imported = quotes.find((q) => q.source === 'imported')!
@@ -101,7 +104,7 @@ describe('견적서 가져오기 위저드 — A형 전 흐름', () => {
     // 사람이 고친 매핑이 버킷 합산에 반영된다 (6. 현장 인력 4,500,000 + 8. 행사 기록 5,000,000)
     expect(imported.breakdown.s4).toBe(9_500_000)
     expect(imported.breakdown.s1).toBe(19_000_000)
-    expect(imported.project_id).not.toBeNull()
+    expect(imported.project_id).toBe('prj-stc26') // 새 행사가 생기지 않았다
 
     const seeded = (await provider.listDeliverables(imported.project_id!)).filter((d) => d.category === '견적 임포트')
     expect(seeded.length).toBeGreaterThan(0)
@@ -141,6 +144,8 @@ describe('정산 기준 분배 (C형) — 확정 동반', () => {
     await user.click(screen.getByRole('button', { name: '이 매핑으로 확정' }))
 
     await screen.findByText('어디까지 반영할까요?')
+    // v16 — 기본은 '기존 행사에 연결'(샘플 행사에는 이미 정산보드가 있다) → 옛 흐름대로 새 행사를 만들어 기준으로 삼는다
+    await user.click(screen.getByRole('radio', { name: /새 행사 만들기/ }))
     await user.click(screen.getByRole('checkbox', { name: /정산보드 기준 견적/ }))
     await user.click(screen.getByRole('button', { name: '분배 실행' }))
 

@@ -206,6 +206,37 @@ ${`do $$ begin if not exists (select 1 from deliverables where project_id='${PRJ
     { role: 'authenticated', sub: authId.pm })
   scenario('RPC finalize_quote: staff는 403', `select finalize_quote((select id from quotes limit 1));`,
     { role: 'authenticated', sub: authId.design, expect: 'error', match: '영업·관리자' })
+  // v2.18 §16.4 — 견적 ↔ 기존 행사 연결(link_quote_to_project)
+  scenario('RPC link_quote_to_project: 행사 없는 견적 → 연결 + projects.quote_id + quote.linked 로그(금액 0)', `
+    insert into quotes (id, project_id, title, version, status, is_final, input, breakdown, total_amount, source)
+      values ('${seedUuid('chk-q-link')}', null, '연결 시험', 1, 'draft', false, '{}', '{}', 12345, 'imported');
+    select link_quote_to_project('${seedUuid('chk-q-link')}', '${PRJ_DRAFT}');
+    select (select project_id from quotes where id='${seedUuid('chk-q-link')}') = '${PRJ_DRAFT}'::uuid,
+           (select quote_id from projects where id='${PRJ_DRAFT}') = '${seedUuid('chk-q-link')}'::uuid,
+           (select count(*) from activity_log where action='quote.linked' and target_id='${seedUuid('chk-q-link')}'),
+           (select count(*) from activity_log where action='quote.linked' and (meta::text like '%12345%' or meta::text like '%total_amount%'));`,
+    { role: 'authenticated', sub: authId.pm })
+  scenario('RPC link_quote_to_project: 이미 다른 행사의 견적 409', `select link_quote_to_project((select id from quotes where project_id is not null limit 1), '${PRJ_DRAFT}');`,
+    { role: 'authenticated', sub: authId.pm, expect: 'error', match: '이미 다른 행사' })
+  scenario('RPC link_quote_to_project: 종료 행사 409', `
+    insert into quotes (id, project_id, title, version, status, is_final, input, breakdown, total_amount) values ('${seedUuid('chk-q-link2')}', null, 'x', 1, 'draft', false, '{}', '{}', 0);
+    select link_quote_to_project('${seedUuid('chk-q-link2')}', '${PRJ_CLOSED}');`,
+    { role: 'authenticated', sub: authId.pm, expect: 'error', match: '종료된 행사' })
+  scenario('RPC link_quote_to_project: staff(비멤버)는 403 — 권한 판정이 견적 조회보다 먼저', `select link_quote_to_project('${seedUuid('quo-010')}', '${PRJ_CLOSED}');`,
+    { role: 'authenticated', sub: authId.design, expect: 'error', match: '영업·관리자 또는' })
+  // v2.18 보안 정정 — 비멤버의 역할 판정이 null이라 plpgsql `if not app.is_pm()`이 새던 것(로컬 실측)
+  const pmOut = scenario('보안: 비멤버(design)의 app.is_pm(종료 행사) 조회', `select app.is_pm('${PRJ_CLOSED}')::text;`, { role: 'authenticated', sub: authId.design })
+  record('보안: 비멤버 is_pm() = false(null 아님)', pmOut === 'false', pmOut)
+  scenario('보안: 비멤버(design)의 pm 전용 RPC(add_member — 다른 행사) 403이 종료 409보다 먼저', `select add_member('${PRJ_CLOSED}', 'x', 'nm2@example.com', 'reg');`,
+    { role: 'authenticated', sub: authId.design, expect: 'error', match: 'PM 전용' })
+  scenario('보안: 비멤버(design)의 역할 RPC(require_roles 경로 — save_guide_sections 대신 has_role) false', `select app.has_role('${PRJ_CLOSED}', 'pm', 'ops')::text;`,
+    { role: 'authenticated', sub: authId.design })
+  scenario('RPC link_quote_to_project: 같은 행사면 멱등(두 번 호출 = 로그 1)', `
+    insert into quotes (id, project_id, title, version, status, is_final, input, breakdown, total_amount) values ('${seedUuid('chk-q-link4')}', null, 'x', 1, 'draft', false, '{}', '{}', 0);
+    select link_quote_to_project('${seedUuid('chk-q-link4')}', '${PRJ_DRAFT}');
+    select link_quote_to_project('${seedUuid('chk-q-link4')}', '${PRJ_DRAFT}');
+    select count(*) from activity_log where action='quote.linked' and target_id='${seedUuid('chk-q-link4')}';`,
+    { role: 'authenticated', sub: authId.pm })
 
   // 5c. RPC — 토큰 경로(anon): 화이트리스트만, 금액 키 0건
   const queue = scenario('RPC client_queue(anon, 데모 토큰) → 큐·이력 JSON', `select client_queue('${DEMO_TOKEN}');`, { role: 'anon' })

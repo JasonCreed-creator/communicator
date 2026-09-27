@@ -26,6 +26,7 @@ import { calcEstimate } from '../../modules/quote/engine/calcEstimate'
 import { exportEstimate } from '../../modules/quote/export/exportEstimate'
 import { quoteToProjectDraft } from '../../modules/quote/handoff'
 import { parseQuoteWorkbook } from '../../modules/quote/import/parser'
+import { mapSectionsToBuckets } from '../../modules/quote/import/buckets'
 import type { ParsedQuoteDoc, SectionMapping } from '../../modules/quote/import/types'
 import type {
   ActivityLogEntry,
@@ -3434,6 +3435,42 @@ export class MockProvider implements DataProvider {
     return project
   }
 
+  /**
+   * v16 §16.4 — 견적을 **이미 있는 행사**에 연결(상호 링크). SQL RPC link_quote_to_project와 같은 순서:
+   * 권한(영업·관리자 또는 pm) → 행사(404·종료 409) → 견적(404) → 같은 행사면 멱등 → 다른 행사 409 → 옛 버전 409 →
+   * 확정본이면 같은 행사의 다른 확정본 archived → 링크 → projects.quote_id(확정본이거나 비어 있을 때) → 로그(금액 없음).
+   */
+  async linkQuoteToProject(quoteId: UUID, projectId: UUID): Promise<Quote> {
+    const user = this.currentUser()
+    const isQuoteUser = user.app_role === 'admin' || user.app_role === 'sales'
+    if (!isQuoteUser && user.role !== 'pm') {
+      throw new ProviderError('forbidden', '견적 연결은 영업·관리자 또는 그 행사의 PM만 할 수 있습니다.')
+    }
+    const project = this.assertWritable(projectId)
+    const quote = this.mustFindQuote(quoteId)
+    if (quote.project_id === projectId) return { ...quote }
+    if (quote.project_id) throw new ProviderError('conflict', '이미 다른 행사에 연결된 견적입니다.')
+    if (quote.superseded_by) {
+      throw new ProviderError('conflict', '새 버전이 있는 견적은 연결할 수 없습니다 — 최신 버전을 연결하세요.')
+    }
+    if (quote.is_final) {
+      for (const other of this.state.quotes) {
+        if (other.project_id === projectId && other.id !== quote.id && other.is_final) {
+          other.is_final = false
+          other.status = 'archived'
+        }
+      }
+    }
+    quote.project_id = projectId
+    if (quote.is_final || !project.quote_id) project.quote_id = quote.id
+    this.log(projectId, `user:${user.id}`, 'quote.linked', 'quote', quote.id, {
+      version: quote.version,
+      is_final: quote.is_final,
+      source: quote.source,
+    })
+    return { ...quote }
+  }
+
   async exportQuoteXlsx(quoteId: UUID, lang: 'ko' | 'en' = 'ko'): Promise<QuoteExportResult> {
     this.assertQuoteRole()
     const quote = this.mustFindQuote(quoteId)
@@ -3466,25 +3503,9 @@ export class MockProvider implements DataProvider {
    * `recruit`는 매핑 결과에서 곧바로 breakdown 필드명으로 쓴다(§22.2-6 원문의 'rc' 표기를
    * 여기서는 엔진 breakdown 키와 맞춘 것 — 설계 결정, 3.15a).
    */
+  /** §22.2-6 섹션 → 버킷 기본 매핑 — 정본은 modules/quote/import/buckets(v2.18부터 provider 복사본 없음 · 영문 키워드 포함) */
   private defaultSectionMapping(parsed: ParsedQuoteDoc): SectionMapping[] {
-    const RULES: { bucket: string; keywords: string[] }[] = [
-      { bucket: 's1', keywords: ['베뉴', '대관', '장소'] },
-      { bucket: 's2', keywords: ['무대', '시스템', 'av', 'led', '음향', '조명', '중계', '전기', '부스'] },
-      { bucket: 's3', keywords: ['디자인', '브랜딩', '콘텐츠', '사인'] },
-      { bucket: 's4', keywords: ['인력', '운영', '보험', 'mc'] },
-      { bucket: 's5', keywords: ['대행료', '기획료'] },
-      { bucket: 'recruit', keywords: ['등록', 'rsvp', '모객'] },
-      { bucket: 'custom', keywords: ['기념품', '경품', 'f&b', '웰컴', '애드온'] },
-    ]
-    return parsed.sections.map((section) => {
-      const name = section.name.toLowerCase()
-      const matched = RULES.filter((r) => r.keywords.some((k) => name.includes(k.toLowerCase())))
-      // 무매칭·복수매칭은 custom으로 잠정 배정 + 확인 필요(낮은 신뢰도) — §22.2-6 말미
-      if (matched.length === 1) {
-        return { section: section.name, bucket: matched[0].bucket, confidence: 'high' as const }
-      }
-      return { section: section.name, bucket: 'custom', confidence: 'low' as const }
-    })
+    return mapSectionsToBuckets(parsed)
   }
 
   async importQuoteFile(fileName: string, data: ArrayBuffer): Promise<QuoteImport> {
@@ -3648,9 +3669,16 @@ export class MockProvider implements DataProvider {
     let project: Project | undefined = quote.project_id
       ? this.mustFindProject(quote.project_id)
       : undefined
+    let created = false
 
-    if (input.project_prefill && !project) {
+    // v16 §16.4 — 기존 행사에 연결이 프리필보다 우선한다(운영 실측: 프리필 강제가 행사를 하나 더 만들었다)
+    if (input.link_project_id && !project) {
+      await this.linkQuoteToProject(quote.id, input.link_project_id)
+      project = this.mustFindProject(input.link_project_id)
+      imp.project_id = project.id
+    } else if (input.project_prefill && !project) {
       project = this.materializeProjectFromQuote(quote, user)
+      created = true
       imp.project_id = project.id
       this.log(project.id, `user:${user.id}`, 'project.created_from_quote_import', 'project', project.id, {
         quote_id: quote.id,
@@ -3697,6 +3725,7 @@ export class MockProvider implements DataProvider {
     return {
       quote_id: quote.id,
       project_id: project?.id ?? null,
+      project_created: created,
       settlement_created: settlementCreated,
       deliverables_seeded: seeded,
     }
@@ -4290,6 +4319,11 @@ export class MockProvider implements DataProvider {
     if (!quote.is_final) {
       throw new ProviderError('validation', '확정된 견적만 정산 기준으로 쓸 수 있습니다.')
     }
+    // v16 §16.4 — 이 행사의 견적이어야 한다. 아직 어느 행사에도 안 붙은 견적은 여기서 이 행사에 연결한다
+    if (quote.project_id && quote.project_id !== projectId) {
+      throw new ProviderError('validation', '다른 행사에 연결된 견적입니다 — 그 행사의 정산보드에서 쓰거나 견적 목록에서 연결을 확인하세요.')
+    }
+    if (!quote.project_id) await this.linkQuoteToProject(quote.id, projectId)
     const now = nowIso()
     const board: SettlementBoard = {
       id: this.nextId('brd'),

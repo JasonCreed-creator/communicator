@@ -32,6 +32,7 @@ import type { QuoteSpreadsheetResult } from '../modules/quote/export/createQuote
 import { saveQuoteFile } from '../modules/quote/export/saveQuoteFile'
 import { getDataProvider } from '../providers'
 import type { Quote } from '../types/entities'
+import type { ProjectSummary } from '../types/views'
 
 const provider = getDataProvider()
 
@@ -160,14 +161,17 @@ function QuoteGroupCard({
 function QuotesBody() {
   const t = QUOTE_STR.ko
   const navigate = useNavigate()
-  const { summaries, setProject } = useProject()
+  const { summaries, setProject, reloadSummaries } = useProject()
   const list = useAsync(() => provider.listQuotes(), [])
   const quotes = useMemo(() => list.data ?? [], [list.data])
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [downloading, setDownloading] = useState(false)
+  const [linking, setLinking] = useState(false)
   const gsheet = useQuoteSpreadsheet()
+  // v16 §16.4 — 행사 없는 견적을 이미 있는 행사에 붙인다(진행 중 행사만)
+  const activeProjects = useMemo(() => summaries.filter((s) => s.status === 'active'), [summaries])
 
   const selected: Quote | null = useMemo(() => {
     if (quotes.length === 0) return null
@@ -216,6 +220,22 @@ function QuotesBody() {
       await gsheet.create(selected.id, 'ko', t.gsheetMockNotice)
     } catch (err) {
       setActionError(err instanceof Error ? err.message : '구글 스프레드시트 생성에 실패했습니다.')
+    }
+  }
+
+  const handleLink = async (projectId: string) => {
+    if (!selected) return
+    setLinking(true)
+    setActionError(null)
+    try {
+      await provider.linkQuoteToProject(selected.id, projectId)
+      setSelectedId(selected.id)
+      list.reload()
+      reloadSummaries()
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : '행사 연결에 실패했습니다.')
+    } finally {
+      setLinking(false)
     }
   }
 
@@ -300,6 +320,9 @@ function QuotesBody() {
               onCreateSheet={() => void handleCreateSheet()}
               onEdit={() => navigate(`/quotes/${selected.id}/edit`)}
               onCreateProject={() => navigate(`/quotes/${selected.id}/edit?step=5`)}
+              projects={activeProjects}
+              linking={linking}
+              onLink={(projectId) => void handleLink(projectId)}
             />
           )}
         </div>
@@ -320,6 +343,9 @@ function QuoteSummaryPanel({
   onCreateSheet,
   onEdit,
   onCreateProject,
+  projects,
+  linking,
+  onLink,
 }: {
   quote: Quote
   quotes: Quote[]
@@ -332,8 +358,14 @@ function QuoteSummaryPanel({
   onCreateSheet: () => void
   onEdit: () => void
   onCreateProject: () => void
+  /** v16 §16.4 — 연결 후보(진행 중 행사) · 연결 실행 */
+  projects: ProjectSummary[]
+  linking: boolean
+  onLink: (projectId: string) => void
 }) {
   const b = quote.breakdown
+  const [pickedProject, setPickedProject] = useState('')
+  const linkTarget = projects.some((p) => p.id === pickedProject) ? pickedProject : (projects[0]?.id ?? '')
   const rows: [string, number][] = [
     ['베뉴 사용료', b.s1],
     ['시스템 구축', b.s2],
@@ -419,6 +451,39 @@ function QuoteSummaryPanel({
           <button type="button" className="btn btn-ghost" onClick={onCreateProject}>
             {t.s5CreateBtn} →
           </button>
+        )}
+        {/* v16 §16.4 — 행사 없는 견적(최신 버전)은 이미 있는 행사에 붙일 수 있다. 확정 여부 무관(임포트 프리필과 같은 규칙) */}
+        {!quote.project_id && !newer && (
+          <div className="rounded-md bg-track px-3 py-2.5 text-left" data-testid="quote-link-existing">
+            <p className="text-sm font-semibold text-ink">{t.listLinkExisting}</p>
+            {projects.length === 0 ? (
+              <p className="t-caption mt-1">{t.listLinkNoProjects}</p>
+            ) : (
+              <div className="mt-2 flex items-center gap-2">
+                <select
+                  aria-label={t.listLinkPick}
+                  className="ui-input ui-select min-w-0 flex-1"
+                  value={linkTarget}
+                  onChange={(e) => setPickedProject(e.target.value)}
+                >
+                  {projects.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm shrink-0"
+                  disabled={!linkTarget || linking}
+                  onClick={() => onLink(linkTarget)}
+                >
+                  {linking ? t.listLinking : t.listLinkBtn}
+                </button>
+              </div>
+            )}
+            <p className="t-caption mt-1.5">{t.listLinkNote}</p>
+          </div>
         )}
         <p className="t-caption text-center" data-testid="quote-edit-note">
           {note}

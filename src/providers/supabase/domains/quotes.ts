@@ -30,6 +30,7 @@ import { calcEstimate } from '../../../modules/quote/engine/calcEstimate'
 import { exportEstimate } from '../../../modules/quote/export/exportEstimate'
 import { quoteToProjectDraft } from '../../../modules/quote/handoff'
 import { parseQuoteWorkbook } from '../../../modules/quote/import/parser'
+import { mapSectionsToBuckets } from '../../../modules/quote/import/buckets'
 import type { ParsedQuoteDoc, SectionMapping } from '../../../modules/quote/import/types'
 import { createSettlementBoardCore } from './settlement'
 
@@ -41,6 +42,7 @@ type QuotesDomain = Pick<
   | 'saveQuoteVersion'
   | 'finalizeQuote'
   | 'createProjectFromQuote'
+  | 'linkQuoteToProject'
   | 'exportQuoteXlsx'
   | 'importQuoteFile'
   | 'confirmQuoteImport'
@@ -195,25 +197,9 @@ async function materializeProjectFromQuote(ctx: SupabaseCtx, quote: Quote, meId:
  * §22.2-6 기본 매핑표 — 신뢰도 낮은 항목(키워드 무매칭·복수매칭)만 확인 필요로 표시한다.
  * `recruit`는 매핑 결과에서 곧바로 breakdown 필드명으로 쓴다(mock과 같은 설계 결정, 3.15a).
  */
+/** §22.2-6 섹션 → 버킷 기본 매핑 — 정본은 modules/quote/import/buckets(v2.18부터 provider 복사본 없음 · 영문 키워드 포함) */
 function defaultSectionMapping(parsed: ParsedQuoteDoc): SectionMapping[] {
-  const RULES: { bucket: string; keywords: string[] }[] = [
-    { bucket: 's1', keywords: ['베뉴', '대관', '장소'] },
-    { bucket: 's2', keywords: ['무대', '시스템', 'av', 'led', '음향', '조명', '중계', '전기', '부스'] },
-    { bucket: 's3', keywords: ['디자인', '브랜딩', '콘텐츠', '사인'] },
-    { bucket: 's4', keywords: ['인력', '운영', '보험', 'mc'] },
-    { bucket: 's5', keywords: ['대행료', '기획료'] },
-    { bucket: 'recruit', keywords: ['등록', 'rsvp', '모객'] },
-    { bucket: 'custom', keywords: ['기념품', '경품', 'f&b', '웰컴', '애드온'] },
-  ]
-  return parsed.sections.map((section) => {
-    const name = section.name.toLowerCase()
-    const matched = RULES.filter((r) => r.keywords.some((k) => name.includes(k.toLowerCase())))
-    // 무매칭·복수매칭은 custom으로 잠정 배정 + 확인 필요(낮은 신뢰도) — §22.2-6 말미
-    if (matched.length === 1) {
-      return { section: section.name, bucket: matched[0].bucket, confidence: 'high' as const }
-    }
-    return { section: section.name, bucket: 'custom', confidence: 'low' as const }
-  })
+  return mapSectionsToBuckets(parsed)
 }
 
 /**
@@ -407,6 +393,14 @@ export function quotesDomain(ctx: SupabaseCtx): QuotesDomain {
       return project
     },
 
+    /**
+     * v16 §16.4 — 견적을 이미 있는 행사에 연결. 판정은 전부 RPC(link_quote_to_project):
+     * 권한(영업·관리자 또는 그 행사 pm) · 멱등 · 다른 행사 409 · 옛 버전 409 · 종료 행사 409 · 확정본이면 다른 확정본 archived.
+     */
+    async linkQuoteToProject(quoteId: UUID, projectId: UUID): Promise<Quote> {
+      return ctx.rpc<Quote>('link_quote_to_project', { p_quote: quoteId, p_project: projectId })
+    },
+
     async exportQuoteXlsx(quoteId: UUID, lang: 'ko' | 'en' = 'ko'): Promise<QuoteExportResult> {
       await ctx.assertQuoteRole()
       const quote = await mustFindQuote(ctx, quoteId)
@@ -508,12 +502,16 @@ export function quotesDomain(ctx: SupabaseCtx): QuotesDomain {
         throw new ProviderError('conflict', '확인 큐를 거쳐 확정된 임포트만 배포할 수 있습니다.')
       }
       if (!imp.quote_id) throw new ProviderError('not_found', '연결된 견적이 없습니다.')
-      const quote = await mustFindQuote(ctx, imp.quote_id)
+      let quote = await mustFindQuote(ctx, imp.quote_id)
 
       let project: Project | undefined = quote.project_id ? await ctx.project(quote.project_id) : undefined
       let prefilled = false
 
-      if (input.project_prefill && !project) {
+      // v16 §16.4 — 기존 행사에 연결이 프리필보다 우선한다(운영 실측: 프리필 강제가 행사를 하나 더 만들었다)
+      if (input.link_project_id && !project) {
+        quote = await ctx.rpc<Quote>('link_quote_to_project', { p_quote: quote.id, p_project: input.link_project_id })
+        project = await ctx.project(input.link_project_id)
+      } else if (input.project_prefill && !project) {
         project = await materializeProjectFromQuote(ctx, quote, me.id)
         prefilled = true
         await ctx.log(project.id, 'project.created_from_quote_import', 'project', project.id, {
@@ -554,7 +552,7 @@ export function quotesDomain(ctx: SupabaseCtx): QuotesDomain {
       ctx.ok(
         await ctx.sb
           .from('quote_imports')
-          .update(prefilled && project ? { status: 'distributed', project_id: project.id } : { status: 'distributed' })
+          .update(project ? { status: 'distributed', project_id: project.id } : { status: 'distributed' })
           .eq('id', imp.id),
       )
       if (project) {
@@ -566,6 +564,7 @@ export function quotesDomain(ctx: SupabaseCtx): QuotesDomain {
       return {
         quote_id: quote.id,
         project_id: project?.id ?? null,
+        project_created: prefilled,
         settlement_created: settlementCreated,
         deliverables_seeded: seeded,
       }
