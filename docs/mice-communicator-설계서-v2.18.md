@@ -165,6 +165,7 @@ create table projects (
   slack_thread_url text,              -- v2.12 행사 스레드 링크(운영 채널 — 봇이 답글로 알림)
   design_thread_url text,             -- v2.17.1 디자인 채널의 행사 스레드 링크(선택 — design 영역 알림이 이 스레드로 · 운영 스레드엔 [키비주얼] 3줄)
   intake jsonb,                       -- v2.15 Slack 인테이크 기록 {source, slack_permalink, posted_by, fetched_at, method, filled_keys} — 원문 없음
+  reference_links jsonb,              -- v2.21 §27.3 참고 문서 링크 [{kind kickoff|request|proposal|contract|other, title, url, added_at}] — https만 · 상한 20 · 발주처·파트너·랜딩 0 (Phase 6.11 PR-B)
   quote_attachment jsonb,             -- v2.15 견적서 첨부 {kind drive|link, url, file_name, drive_file_id, source upload|slack|link, added_at}
   -- v1.2 행사개요 (운영계획서 §행사개요 소스)
   event_type event_type not null default 'general',  -- v1.3 S0 온보딩에서 선택
@@ -407,6 +408,11 @@ create table wbs_tasks (
 -- 15b. WBS 소통 대상 (v2.0 — Configurator event_tasks.target 승계)
 alter table wbs_tasks add column target text;   -- 예: '고객사', '협력사', '내부' — 템플릿 시드에 포함
 
+-- 15c. (v2.21 §27.4 · Phase 6.11 PR-C) 사람 배정 · Lv2 그룹 · 행사별 태스크
+alter table wbs_tasks add column assignee_id uuid references profiles;   -- 그 행사 멤버만(RPC 422) · 배정 ≠ 권한(R-M6)
+alter table wbs_tasks add column group_name text;                        -- Lv2(phase_name = Lv1) — 템플릿은 null, 행사마다 사람이 묶는다
+alter table wbs_tasks add column source text not null default 'template' check (source in ('template','custom'));  -- custom = createWbsTask(pm) · 재전개 불변 · 삭제 가능(템플릿은 409)
+
 -- 16. 역할 헌장 R&R (v1.4 — 유형별 템플릿, 온보딩 담당자 지정 시 부여)
 create table role_charters (
   id uuid primary key default gen_random_uuid(),
@@ -416,6 +422,7 @@ create table role_charters (
   title text not null,                -- '총괄 PM' 등
   items jsonb not null                -- 책임 불릿 배열
 );
+alter table role_charters add column people jsonb;   -- v2.21 §27.4 [{person_id, display_role}] — 사람 연결 + 표시 역할(영업·모객·총괄·Sub·현장 지원 등 자유 문구) · 권한 역할 4종 불변 · updateRoleCharter(pm)
 
 -- 17. 컴플라이언스 카드 (v2.0 — Configurator SocDashboard 정적 상수 INTERNAL_COMPLIANCE·CLIENT_COMPLIANCE_RULES 승계, 온보딩 시 시드)
 create table compliance_cards (
@@ -532,6 +539,7 @@ create table vendors (
   created_at    timestamptz not null default now()
 );
 create unique index vendors_name_uniq on vendors (name) where archived_at is null;
+-- (v2.21 §27.6 F — 사용자 결정 2026-09-27 · 설계만 · 다음 묶음) alter table vendors add column contacts jsonb;  -- [{name, role, phone, email}] 협력사·베뉴 담당자 **업무** 연락처 — R-O6 개정 범위 · 발주처·파트너·랜딩·알림 0
 
 -- 정산 보드 (행사당 1개, 확정 견적 스냅숏 보유)
 create table settlement_boards (
@@ -872,6 +880,7 @@ draft ──(담당/PM)──> internal_review ──(PM만)──> pending_appr
 | POST /quotes/{id}/create-project | admin·sales | **핸드오프**: 확정 견적에서 projects 생성(§16 매핑으로 프리필, onboarded_at null) + quote.project_id·project.quote_id 상호 연결 → S0 진입 (v2.0) |
 | POST /quotes/{id}/link-project | admin·sales **또는 그 행사 pm** | (v2.18 §16.4) 견적을 **이미 있는 행사**에 연결 — SQL RPC `link_quote_to_project`(security definer). 같은 행사 멱등 · 다른 행사 409 · 옛 버전 409 · 종료 행사 409 · 확정본이면 다른 확정본 archived + projects.quote_id · 미확정이면 quote_id는 비어 있을 때만. 로그 `quote.linked`(금액 없음) |
 | GET /quotes/{id}/export.xlsx | admin·sales | ExcelJS 견적서 — 자동 외부 업로드 없음(Phase 5에서 Drive 저장은 명시 버튼) (v2.0) |
+| POST /api/master-sheet | 로그인 멤버 | **(v2.21 §27.5 · Phase 6.11 PR-G — 설계)** 앱 데이터를 표준 마스터 시트(탭 7 고정 — 개요·WBS·R&R·제작물·운영·등록 통계·견적·정산)로 **Google Sheets API 직접 생성**(xlsx 없음) → 행사 폴더 `04_WBS·운영계획/{행사ID}_마스터시트_{YYMMDD}` 새 파일 · 링크 반환. 사용자 JWT로 RLS 아래 읽기 · 견적·정산 탭은 pm·admin에게만 · 명단·개인 연락처 0 · 저장소 OAuth 미연결 503. 앱은 이 시트를 다시 읽지 않는다(R-M1). GET은 `{ready}`만 |
 | POST /api/quote-gsheet | admin·sales | **(v2.8.1, Vercel Function)** 견적서 xlsx(= export.xlsx와 같은 파일)를 받아 서비스 계정으로 Drive 폴더(`GOOGLE_QUOTE_FOLDER_ID`)에 **구글 스프레드시트로 변환 업로드**하고 링크 반환. 요청자 이메일에 편집자 공유(특정 사용자만 — "링크가 있는 모든 사용자" 금지). 자격증명 없으면 503(데모로 흉내 내지 않음). 사용자 명시 클릭에만 실행 — §12 ③ "자동 업로드 없음"과 무충돌. GET은 `{ready}`만 |
 | GET·PATCH /compliance-cards | 멤버(체크)·pm(편집) | 컴플라이언스 카드 (v2.0) |
 
@@ -992,6 +1001,7 @@ SQL(`…20260926000500_intake.sql`): `projects.intake`·`projects.quote_attachme
 | 승인 / 수정요청 | ● | — |
 | 컨펌 기한 D-1 미응답 | ● | ● 리마인드 |
 | 마일스톤 D-1 | ● | — |
+| (v2.21 §27.2) 참가자 안내 발송일 D-1 | ● 운영 스레드(PM·등록 담당 멘션 — 단계·발송일·채널만, 원고·연락처 0 · status sent 제외) | — |
 | 미등록 파일 감지 | ●(일 1회 묶음) | — |
 | (v2.4) 파트너 제출 도착 | ● | — |
 | (v2.4) 파트너 마감 D-1 미제출 | ● | ●(해당 파트너에게 리마인드 — Phase 6b 이메일 갖춘 후) |
@@ -1133,12 +1143,14 @@ UI 공통: 한국어, 데스크톱 우선 + 반응형(발주처 화면은 모바
 | (v2.4) 주최형: kind 축·파트너 등급·S-11 파트너 보드·`/p` 제출 뷰·검토 루프·주최형 WBS 템플릿 / 견적서 임포트(xlsx 3형·확인 큐·분배 4종) | (v2.4 2차) 임포트 PDF 서식·파트너 초대 이메일·파트너 다국어 / **Claude MCP 연동** — 원격 MCP 서버(Edge Function)로 Claude에서 현황 조회·검토 큐 처리·임포트 실행, DataProvider 비즈니스 계층 경유·내부 인증 필수(v2.5 설계 예정, 서버 가동 후) |
 | — | 현장사진 갤러리·결과보고서 조립 |
 | 등록 CSV 임포트·테이블·체크인 토글·통계 기초 | 통계 대시보드 고도화(mice-dashboard 연동) |
+| (v2.21) 마스터 시트 대체 — 운영가이드 3종(답사·도면·참가자 안내)·참고 링크·WBS 사람 배정·행사별 태스크·R&R 사람·마스터 시트 내보내기(Phase 6.11 · §27) | (v2.21 2차) 연사 후보·등록 확장 열·협력사 연락망(§27.6) · 참가자 안내 발송 자동화(6b 결정) |
 | Slack·이메일 알림 + D-1 리마인드 | 모바일 앱 수준 최적화, 다국어 |
 
 ---
 
 ## 14. 개정 이력
 
+- **v2.21** (2026-09-27 밤): **마스터 시트 대체 정본 — §27 신설**(Phase 6.11 · 구현 = 새 챗 · 계기 = 실행사 마스터 시트 2건(담당자 다름) 분석 "완전 대체" · "형식과 구성이 조금씩 다름" · 원칙 = 탭마다 앱에 정본 자리 하나 · 사용자 결정 5건 = 구현 묶음 A·C·B·G(D·E·F 설계만) · 범위 [C] 새 챗 · Phase 6.10 Drive 분류 폴더는 뒤에 재개(초안 `docs/drafts/phase-6.10-drive-category/`) · 연락망 = 협력사 마스터 업무 연락처 허용(R-O6 개정) · **DataProvider v17 = +3**(`createWbsTask`·`deleteWbsTask`·`updateRoleCharter` — 135) · 스키마 = guide_sections kind +3(survey·floorplan·messaging) · `projects.reference_links` · `wbs_tasks.assignee_id/group_name/source` · `role_charters.people` · `vendors.contacts`(F 설계) · API `POST /api/master-sheet`(Sheets API 직접 · 금액 탭은 pm·admin만) · §9 참가자 안내 D-1 · §13 · §23.1 · §23.2 R-O6 · §23.5 · §4. SQL은 새 챗 PR마다(33~35번째)).
 - **v2.20.2** (2026-09-27 밤): **견적서 인식률 — 리멤버 서식(R형)**(Phase 6.9 — 실사용 "인식률이 너무 떨어진다" · §22.1 R형 행 · §22.2 (0b) 안내 줄·라벨 둘인 총액 줄·대안 총액 줄·비율 후보·머리 라벨 + 규칙 6 우리 제목표·적중 차 판정 · §19.2 가져온 견적의 rc·ld 분할(`recruit_rsvp`·`recruit_showup` · 옛 임포트는 기준 견적 갱신이 다시 나눔) + **custom 섹션 = 행사별 버킷 스냅숏**(전에는 보드에서 사라짐) · §22.4 · AI 규칙 문장 힌트 · SQL 0 · DataProvider 132 불변 · DoD 94).
 - **v2.20.1** (2026-09-27 밤): **서버 함수 역할 규칙 정합**(Phase 6.8 — §6.1 행 추가 · sheets·Drive·알림 서버 함수가 SQL `app.member_role()`과 같은 규칙(admin → pm · 여러 역할 행 → 대표 역할) · 실사용 관리자 '시트 확인' 403 정정 · SQL 0 · DataProvider 132 불변).
 - **v2.20** (2026-09-27 밤): **첨부 견적서 → 견적 가져오기 다리**(Phase 6.7 — §22.6 신설 · §8 `project-file-url` · 실사용 "견적서를 온보딩 시점에서 올렸는데 적용이 안됨" · 서버 읽기 경로 1개 + 위저드 ① 첨부 카드 + 정산보드 빈 상태 안내 · SQL 0 · DataProvider 132 불변).
@@ -1952,6 +1964,7 @@ guide_sections (
   id uuid pk, deliverable_id fk deliverables,     -- category='운영가이드' 항목에만
   kind text not null,                             -- 'zone'|'role'|'emergency'|'contacts'|'custom'
                                                   -- v2.13 §23.5 +9: 'setup'|'staffing'|'radio'|'raci'|'dayplan'|'checklists'|'registration'|'vip'|'safety'
+                                                  -- v2.21 §27.2 +3: 'survey'|'floorplan'|'messaging'(표 섹션 · data 필수 — Phase 6.11 PR-A)
   title text, content text,                       -- content = 마크다운(§S9 초경량 렌더러 재사용) — 표 섹션은 data에서 만든 사본
   source_ref text null,                           -- 'zone_items'|'role_charters'|null — 연동 출처
   source_stale boolean default false,             -- 원본 변경 감지 표시(자동 덮어쓰기 금지)
@@ -1968,7 +1981,7 @@ guide_sections (
 | R-O3 | seed(프로그램표·존운영·R&R 초기 로드)는 빈 문서에서만 — 기존 블록·섹션이 있으면 409 (덮어쓰기 금지) |
 | R-O4 | 연동 섹션(source_ref)은 원본 변경 시 stale 표시 후 **사람이 차이를 확인하고 반영** — 자동 동기화 금지(기준 견적 갱신 패턴) |
 | R-O5 | exportScenarioToCues는 기존 큐를 보존하고 후미 삽입만 한다 — 큐시트를 재생성·대체하지 않는다 |
-| R-O6 | 개인 연락처는 화면·S9 조립 데이터에 포함하지 않는다 — 인쇄 스냅숏 포함은 명시 옵션(기본 꺼짐) |
+| R-O6 | 개인 연락처는 화면·S9 조립 데이터에 포함하지 않는다 — 인쇄 스냅숏 포함은 명시 옵션(기본 꺼짐). **(v2.21 개정 — 사용자 결정 2026-09-27)** '개인 연락처' = 참가자·개인 휴대폰. 협력사·베뉴 담당자의 **업무 연락처**는 협력사 마스터(`vendors.contacts`)에 저장할 수 있고 운영가이드 연락망은 그 목록에서 조립한다(§27.6 F) — 발주처·파트너·랜딩·알림·운영계획서 인쇄 기본값에는 여전히 0 |
 
 ### 23.3 시나리오 ↔ 큐시트 역할 분리 (정본)
 
@@ -2000,6 +2013,8 @@ RE:BUILD 27에 시나리오 1건(세션 3개 그룹·블록 8행, 프로그램�
 | 안전 · 공통 | zone | 존별 운영 | (마크다운) | 존운영 항목 연동(zone_items — R-O4 그대로) |
 | 안전 · 공통 | emergency | 비상 대응 | rows{situation,action,owner,channel} — **새 문서만**(옛 문서는 마크다운 그대로) | 영상 장애·발표자 지연·마이크 불량·환자 발생 템플릿 |
 | 안전 · 공통 | contacts | 연락망/비품 | (마크다운) | 기존 자리표시(R-O6 경고) |
+
+**(v2.21 §27.2) 섹션 15종** — 답사 체크리스트(`survey` · setup 앞) · 설치 도면(`floorplan` · setup 뒤) · 참가자 안내(`messaging` · registration 앞)가 표 섹션으로 더해진다. data 모양·뼈대·정본 순서는 §27.2(Phase 6.11 PR-A).
 
 포맷 운영 프리셋이 있으면 '진행 원칙'(custom)이 맨 앞에 하나 더 붙는다(§25.4 불변). 새 문서에는 R&R 연동 '역할별 체크리스트'(role)를 넣지 않는다 — 역할 분담 표가 대신한다(옛 문서의 role 섹션은 그대로 동작).
 
@@ -2371,3 +2386,93 @@ DMS 등록의 "신청 → 주최 승인 → 확정" 게이트를 **기존 RSVP �
 
 ### 26.3 금지
 - 행사 ID를 열로 저장하기(파생이 정본 — 행사일·고객사·행사명이 바뀌면 ID도 바뀐다) · `projects.code`를 다시 화면·이름에 쓰기 · 회사명·채널명 하드코딩 · 기존 행사 폴더의 옛 하위 폴더를 앱이 옮기거나 합치기(이름·연도 자리만 — 사용자 선택) · 카테고리로 KV/초청장/현장물을 추측해 나누기 · 연도 폴더를 행사 폴더로 지정.
+
+---
+
+## 27. 마스터 시트 대체 정본 (v2.21 — 2026-09-27 밤 · Phase 6.11 · 구현 = 새 챗)
+
+계기 — 기획자님이 실행사 마스터 시트 2건(담당자가 다른 두 시트 · 내부용)을 제시하며 "마스터시트를 커뮤니케이터로 완전 대체" · "다른 담당자가 관리하는 시트는 형식과 구성이 조금씩 다름 — 이런 문제를 커뮤니케이터로 해결". 두 시트는 목적이 같은데 탭 이름·열·있는 섹션이 다르다(시트 1 = 13탭 운영 문서형 · 시트 2 = 10탭, R&R을 WBS 탭 안에 · 디자인 스콥 · 외부연사 · 연락망 · 견적서 국/영문 사본에 '사전 발주 검토·사후 정산' 열). 공통 뼈대는 5묶음(① 일정·R&R ② 디자인·제작물 ③ 운영 ④ 예산 ⑤ 참고자료). **실명·연락처·고객사명·금액은 본 문서에 싣지 않는다**(R-Q4 · PII — 시트 원문은 세션에서만 읽었다).
+
+원칙 — **탭마다 앱에 정본 자리 하나.** 시트를 앱에 옮기는 것이 아니라, 담당자마다 달라지던 형식을 앱의 고정 섹션이 흡수하고 시트에만 있던 것은 표준 양식으로 들어온다. 시트가 아직 필요한 사람·외부 공유는 **내보내기(역방향 출구, §27.5)**로 대응한다 — 앱이 정본, 시트는 산출물.
+
+사용자 결정(2026-09-27 밤 버튼 5건): 구현 묶음 = **A · C · B · G**(D·E·F는 설계만 · 다음) · 범위 = **[C] 새 챗**(이 세션 = 설계 개정·핸드오프) · Drive 분류 폴더(Phase 6.10)는 **이 작업 뒤 재개**(초안 = `docs/drafts/phase-6.10-drive-category/`) · 연락망 = **협력사 마스터에 업무 연락처 허용**(R-O6 개정 · §27.6 F) · **DataProvider v17 = 메서드 3개 추가 승인**(§27.4).
+
+### 27.1 대응표 — 시트 탭 → 앱 정본 자리
+
+| 시트의 탭(두 시트 합집합) | 앱 정본 자리(v2.20.2 기준) | 판정 | 묶음 |
+|---|---|---|---|
+| WBS(Lv1·Lv2·Task·담당자·소통대상·D-n·시작·종료·진행 + 일별 간트·마일스톤 표기) | S5 WBS(템플릿 전개 · 역할 단위 · 오프셋 · CSS 간트 · 마일스톤) · `wbs_tasks.target` = 소통대상 | 부분 — 사람 배정·Lv2·행사별 태스크 없음 | C |
+| R&R(영업·모객·운영 총괄/PM/Sub/현장 지원 × 사람 × 책임) | R&R 카드(역할 4종 · 책임 불릿) + 담당자 4칸 | 형식 차이 — 사람 연결·4역할 밖 표시 역할 없음 | C |
+| 등록현황(원천 명단 + 산업군·매출·직무·관심트랙·UTM 3종) | S4 등록 시트 연동(읽기 · 매핑 8필드 §24) | 부분 — 시트가 정본으로 남는 설계 · 확장 열은 매핑 밖 | E(다음) |
+| 제작물 리스트업 / 디자인 스콥(구분·항목·상세·종류·사이즈·포맷·비고) | 디자인 보드 항목(규격 4종 사이즈·수량·위치·종류 + 브리프) | 있음 — 포맷·상세·비고는 브리프·규격 종류로 | — |
+| 키비주얼(이미지) | 디자인 보드 버전·갤러리·`03/납품` | 있음 | — |
+| 설치계획(도면 이미지) | 없음(운영가이드 setup은 일정표) | 없음 | A |
+| 참가자 안내(원고 6종 · 발송일 · 채널) | 없음(알림은 내부 Slack · 이메일은 Phase 6b) | 없음 — 가장 큰 공백 | A |
+| 랜딩페이지 링크 | 랜딩보드 `public_url` | 있음 | — |
+| 답사 체크리스트(구분 외부/내부·항목·세부·체크사항·확인내용·담당자) | 운영가이드 `checklists`는 D-day 구간용 | 없음 — 섹션 종류 추가로 해결 | A |
+| 킥오프 문서(외부 Slides 링크) | Drive 링크 등록은 저장소 안 파일만(§7.2b) · `brief_refs`는 항목 단위 | 없음 — 행사 참고 링크 칸 | B |
+| 요청서(발주처 요청 양식 약 40행) | 인테이크(§8.7 Slack 글) + 설정 ① 개요·기타 항목 | 부분 | B |
+| 견적서 사본(국/영문 · 발주 검토·사후 정산 열) | 견적 모듈(§22 R형) + 정산보드 3단(§19) | 있음 | — |
+| 외부연사 제안(후보 A~D · 회신 상태) | 프로그램표 확정 연사 3칸 | 없음 — 후보·회신 상태 | D(다음) |
+| 연락망(베뉴·협력사 담당자 전화) | 발주처 담당자만(설정 ②) · 협력사 마스터는 이름·사업자번호 · 운영가이드 연락망 = R-O6 자리표시 | 충돌(R-O6) | F(다음 · 결정 완료) |
+| 마스터 시트 자체(팀·외부 공유 산출물) | 없음 | 역방향 출구 필요 | G |
+
+### 27.2 묶음 A — 운영가이드 섹션 3종(답사 · 설치 도면 · 참가자 안내)
+
+`guide_sections.kind` +3 (§23.1 · §23.5 정본 순서에 끼운다 → 15종). 세 종류 모두 **표 섹션**(data 필수 · R-O7 content 파생 · R-O8 모양 검사 그대로). 옛 문서는 '뼈대 추가'로 끼운다(R-O9). 회사·행사 고유 문구는 시드하지 않는다.
+
+| kind | 제목 | 묶음 · 정본 자리 | data(type = kind) | 뼈대 |
+|---|---|---|---|---|
+| survey | 답사 체크리스트 | 준비 · `setup` 앞(맨 앞) | rows{scope 'external'/'internal', item, detail, check, finding, owner} · visited_on date null · notes[] | 외부(주차·하역·전원·통신·동선·간판) · 내부(무대·음향·조명·스크린·좌석·등록 데스크·대기실·케이터링) 항목 템플릿 — 확인내용(finding)·담당자는 비움 |
+| floorplan | 설치 도면 | 준비 · `setup` 뒤 | items{title, deliverable_id null, note} | 비움. 도면 파일은 **항목(design 또는 ops)의 버전**으로 올리고 여기서는 연결만(R-M7 — 새 업로드 경로 없음). 연결된 항목의 최신 버전 이미지를 운영계획서 03·16:9 장표에 싣는다(이미지 아닌 파일은 링크만) |
+| messaging | 참가자 안내 | 당일 · `registration` 앞 | rows{stage, send_on date null, send_at time null, channel 'alimtalk'/'email'/'sms'/'other', audience, subject, body, status 'draft'/'ready'/'sent'} | 단계 6 템플릿(참석 선정 안내 · 참가 대기 · 참석 불가 · 최종 참가 안내 D-7 · D-1 리마인드 · 당일) — send_on = 행사일 오프셋(D-7 · D-1 · D-day, 없으면 null) · 원고(subject·body)는 비움 |
+
+- **발송은 앱 밖이다**(알림톡·이메일 도구). 앱은 원고·일정·상태·리마인드까지(R-M5). §9에 '참가자 안내 발송일 D-1' 행 추가(운영 스레드 · PM·등록 담당 멘션 · 본문 = 단계·발송일·채널만, 원고·연락처 0 · 선점 키 `messaging:{section_id}:{row_index}:{send_on}`). 홈 '오늘 할 일' 출처 +1(발송일 = 오늘·지남, status 'sent' 제외 · '내 차례' = pm·reg).
+- 운영계획서 S9: 05 참가자 = 참가자 안내 표(단계·발송일·채널·상태 — 원고 제외) · 03 공간·설치 = 도면 이미지 + 답사 요약(확인내용이 있는 행만). 16:9 장표(§23.7)도 같은 규칙 · `PlanData.guide`에 세 종류 포함(연락망 제외 규칙 그대로).
+- SQL 33번째 `20260928000100_guide_sheet_sections.sql` = `guide_sections_kind_check` · `guide_sections_data_shape` 재정의(3종 data 필수) — 열 추가 0 · RPC 무변경.
+- 순수 함수 = `src/lib/guideStructured.ts`에 템플릿·글 변환·정본 순서 추가(provider 2종·빌더 공용). 빌더 = `components/guide/` 표 편집 부품 재사용(답사 = 체크 칸 + 확인내용 · 도면 = 항목 피커 + 미리보기 · 참가자 안내 = 원고 칸 큰 textarea + 상태 배지). **DataProvider 132 불변**(kind 값 3 · data 타입 3 — 필드만).
+
+### 27.3 묶음 B — 참고 문서 링크 + 요청서
+
+- `projects.reference_links jsonb` — `[{kind 'kickoff'|'request'|'proposal'|'contract'|'other', title, url, added_at}]`. https만 · 저장소 밖 링크 허용(앱이 파일을 읽지 않는다 — 열기만) · 행사당 상한 20(422) · 발주처·파트너·랜딩 지면 0. 화면 = 설정 ① '참고 문서' 카드(온보딩 ① 선택 항목 아래, 견적서 첨부 카드 옆) · 홈 머리에는 두지 않는다. DataProvider **v16.1 → 필드만**(`Project.reference_links` · `ProjectPatch.reference_links`). SQL 35번째(열 1 — PR-B).
+- **요청서** = 인테이크(§8.7) 라벨 사전 확장. 요청서 양식 라벨(행사 개요: 행사명·행사 일시·행사 장소·주최/주관 · 행사 콘텐츠: 행사 주제·주요 아젠다/키워드·핵심 오디언스·목표 인원·프로그램 구성·연사 요청·특이사항 — **가정**: 시트 1 요청서 탭 약 40행 중 표본에서 본 라벨, 나머지는 새 챗에서 원문 대조) → 기존 BriefKey(name·event_date·venue·organizer·theme·target_audience·expected_headcount·notes)에 붙이고 나머지 라벨은 `overview_items`(라벨·값)로. 요청서 원문 시트 링크는 `reference_links` kind 'request'. 붙여 넣기 경로 = 기존 SlackIntakeCard 그대로(서버·AI 변경 0 — 라벨 규칙은 앱·서버 공용 `eventBrief.ts`).
+
+### 27.4 묶음 C — WBS 실무화 (DataProvider **v17 재동결 = 135메서드** · 동결 해제 근거 = 사용자 버튼 승인 2026-09-27 밤)
+
+- 스키마(SQL 34번째 — PR-C): `wbs_tasks.assignee_id uuid null references profiles`(사람 배정 — **그 행사 멤버만** 422 · 배정 ≠ 권한 R-M6) · `wbs_tasks.group_name text null`(Lv2 — `phase_name`이 Lv1 · 템플릿은 null, 행사마다 사람이 묶는다 — **가정**) · `wbs_tasks.source text not null default 'template' check in ('template','custom')`(행사별 태스크 — 재전개 시 custom은 날짜·상태 불변 · 삭제 가능) · `role_charters.people jsonb null` = `[{person_id, display_role}]`(사람 연결 + 표시 역할 — 영업·모객·총괄·PM·Sub·현장 지원 등 **자유 문구** · person_id = 주소록 사람이면 됨, 행사 멤버가 아니어도 — 영업·모객 담당이 그렇다 · **권한 역할 4종 불변**).
+- **v17 = +3**: `createWbsTask(projectId, input{phase_no, group_name?, title, start_date, end_date, role, assignee_id?, target?, note?})`(pm · code = `C-{n}` 자동 · source 'custom' · 종료 409) · `deleteWbsTask(taskId)`(pm · **custom만** — 템플릿 태스크는 409 + 안내 '완료 처리로' — 재전개가 되살리므로) · `updateRoleCharter(charterId, patch{title?, items?, people?})`(pm). `WbsTaskPatch` += `assignee_id`·`group_name`·`target`. 기존 132 시그니처 불변. **다음 예약 슬롯 없음**.
+- RPC = `create_wbs_task`·`delete_wbs_task`·`update_role_charter`(security definer · pm · 종료 409 · assignee 멤버 검사) · RLS = wbs_tasks update 정책 그대로, insert/delete는 RPC만 · role_charters update는 RPC만.
+- 화면 S5: 표에 담당자 칸(주소록 카드 피커 = `MembersEditor` 부품 재사용 · 미배정 = 역할 도트만) · Lv2 그룹 줄(단계 안에서 group_name으로 묶음 · 없으면 묶음 없음) · `＋ 태스크 추가`(pm · 단계·그룹·제목·기간·역할·담당자·소통대상) · 간트에 담당자 이름 · 마일스톤 마커(기존 milestones) · R&R 카드에 사람 칩(표시 역할) + 편집(pm — 주소록 카드 피커). 홈 '오늘 할 일' 내 차례 = 나에게 배정된 태스크 우선(배정 없으면 역할 판정 그대로). 운영계획서 06 조직·인력 = R&R 사람 칩 포함.
+- 재전개(`expandWbs`) = code 매칭 규칙 그대로 + `assignee_id`·`group_name`·`source` 보존 · custom 행은 건드리지 않는다.
+
+### 27.5 묶음 G — 마스터 시트 내보내기 (역방향 출구)
+
+- `POST /api/master-sheet`(Vercel Function · 로그인 멤버 · 서버가 **사용자 JWT로 RLS 아래** 읽는다) · 생성 = **Google Sheets API 직접**(`spreadsheets.create` + `values.batchUpdate` + 서식 최소) — xlsx를 만들지 않는다(§2 exceljs 규칙 무접촉) · 인증 = 저장소 OAuth 연결(quote-gsheet 전례 — **가정**: Drive 전체 scope 토큰으로 Sheets API 호출 가능, 실키로 1회 검증 · 미연결 = 503 + 안내) · 저장 위치 = 행사 폴더 `04_WBS·운영계획/{행사ID}_마스터시트_{YYMMDD}`(새 파일 · 덮어쓰기 없음) · 응답 = 링크 · 로그 `master_sheet.exported`(파일 이름만 · 금액 0).
+- 탭 표준(고정 순서 — 담당자별 변형 없음 R-M4): `개요`(행사 ID · 필수 4 · 일시 · 인원 · 담당자 이름·역할 · 참고 문서 링크 · 랜딩 링크) · `WBS`(Lv1·Lv2·Task·담당자·소통대상·D-n·시작·종료·상태 + 일별 간트 열 D-60~D+7 · 마일스톤 표기) · `R&R`(역할·사람·표시 역할·책임) · `제작물`(디자인 항목 규격·담당·마감·상태·최신 버전·납품) · `운영`(답사 · 참가자 안내 — 원고 포함, 내부용 · 설치 도면 링크 · 현장 운영 표 9종) · `등록`(**통계만** — 명단·개인정보 0 · 연동 시트 링크) · `견적·정산`(**요청자가 정산보드를 볼 수 있는 pm·admin일 때만** — 버킷 3단·마진 · 아니면 탭 자체 없음 R-M3).
+- 앱 = 운영계획서 발행 줄 '마스터 시트 만들기'(멤버 · 클릭에만 · 자동 0) · mock = 사실 안내. 클라이언트 = `src/lib/masterSheet/`(얇은 호출 — DataProvider 밖, quote-gsheet 전례). 앱이 이 시트를 다시 읽지 않는다(R-M1). SQL 0(로그 action은 기존 CHECK가 없으면 0 · 있으면 값 추가).
+
+### 27.6 다음 묶음(설계만 — D · E · F)
+
+- **D 연사 후보**: `program_sessions.speaker_status`('candidate'|'awaiting'|'confirmed') + `speaker_candidates jsonb` `[{name, org, title, note, status}]` — 연사 이름은 프로그램표와 같은 지면(내부·운영계획서) · 확정 시 `speaker_*` 3칸으로 옮긴다. DataProvider 필드만.
+- **E 등록 확장 열**: `sheet_connections.extra_columns`(읽기 전용 표시 열 — 산업군·직무·관심트랙·UTM 등 시트 열 이름 목록) · 명단 표에 열로 · 유입 채널 집계(UTM_Source) → 등록 통계 카드. 마스킹·단방향(§24) 그대로.
+- **F 연락망(결정 완료 2026-09-27)**: `vendors.contacts jsonb` `[{name, role, phone, email}]` — **업무 연락처**. **R-O6 개정**: '개인 연락처'의 범위 = 참가자·개인 휴대폰. 협력사·베뉴 담당자의 업무 연락처는 협력사 마스터에 저장할 수 있고, 운영가이드 `contacts` 섹션은 그 목록에서 조립한다(`source_ref 'vendor_contacts'` · stale R-O4) · 발주처·파트너·랜딩·알림·운영계획서 인쇄 기본값에는 0(인쇄 옵션 명시 켬만 · 마스터 시트 `운영` 탭은 내부용이라 포함).
+
+### 27.7 계약 (R-M1~R-M7)
+
+| # | 계약 |
+|---|---|
+| R-M1 | 정본은 앱 — 마스터 시트는 내보내기 산출물이며 앱이 그 시트를 읽어 되돌리지 않는다(등록 시트 §24만 예외) |
+| R-M2 | 내보내기에 참가자 명단·개인 연락처 0 — 등록은 통계만 · 연락망은 협력사 업무 연락처만(F 뒤) |
+| R-M3 | 금액 탭은 정산보드 열람 권한(pm·admin)이 있는 요청자에게만 · 파일은 행사 폴더 안 · 발주처·파트너·랜딩 0(#RULE-NO-PRICE-TO-CLIENT) |
+| R-M4 | 표준 섹션 고정 — 담당자별 탭·열 변형 없음. 새 종류가 필요하면 kind·탭 추가(설계 개정)로만 |
+| R-M5 | 참가자 안내 발송은 앱 밖 — 앱은 원고·일정·상태·리마인드. 알림 본문에 원고·연락처 0 |
+| R-M6 | WBS 사람 배정 ≠ 권한 — 배정은 표시·'내 차례' 판정용. status 변경·편집 권한은 §6.1 역할 규칙 그대로 · 배정 대상은 그 행사 멤버만 |
+| R-M7 | 도면·킥오프 등 파일에 새 업로드 경로를 만들지 않는다 — 항목 버전(§7.2) 또는 링크(`reference_links`) |
+
+### 27.8 구현 순서(새 챗 · Phase 6.11) · DoD 예약
+
+PR-A(§27.2 · SQL 33번째 · DoD 95) → PR-C(§27.4 · SQL 34번째 · v17 · DoD 96) → PR-B(§27.3 · SQL 35번째 · DoD 97) → PR-G(§27.5 · SQL 0 · DoD 98). PR마다 검증(tsc · vitest · build · `deploy:check` · demo 4단 · 스모크 ③) → 운영 DB 마이그레이션 → 스쿼시 머지 → 운영 배포 확인 → PROGRESS. 그 뒤 Phase 6.10(Drive 분류 폴더 — `docs/drafts/phase-6.10-drive-category/` · SQL 36번째) 재개.
+
+### 27.9 금지
+
+시트를 정본으로 되돌리기(앱이 마스터 시트를 읽어 갱신) · 담당자별 탭·열 변형 허용 · 참가자 명단·개인 연락처 내보내기 · 금액 탭을 권한 없는 요청자·외부 지면에 · 참가자 안내 발송 자동화(알림톡·이메일 API — Phase 6b 별도 결정) · 도면 전용 업로드 경로 · 템플릿 태스크 삭제(완료 처리로) · 배정을 권한으로 쓰기 · exceljs를 quote 모듈 밖에서 import(내보내기는 Sheets API) · 회사·행사 고유 문구·실명을 시드·픽스처·문서에 넣기 · v17 밖 메서드 추가.
