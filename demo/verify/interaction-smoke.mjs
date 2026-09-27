@@ -20,6 +20,7 @@
 //             PR-6 견적 목록(고른 견적 옆 동작·구버전 고치기 막힘)·옵션(체크 카드·막힌 이유·고른 옵션 요약) ·
 //             PR-7 정산보드(머리 불러오기·할 일 알림·KPI 검산 배지·원가 없는 그룹행·발주 항목 ⋯ 메뉴) ·
 //             PR-8 행사 설정(번호 없는 탭·섹션 목록·고정 저장 바·변경 취소)·온보딩(진행 줄·2열·나중에 하기 확인) ·
+//       6.4: 견적 ↔ 기존 행사 연결 — 견적 목록 '기존 행사에 연결'(진행 중 행사만) → 그 행사 묶음으로 · 새 행사 0 ·
 //       6.1: Slack 봇 — 행사 설정 ③ 스레드 링크(DM 링크 거부 → 등록 → 채널·Slack에서 열기 → 웹훅 예비 접힘 → 해제) · 담당자 Slack 칸 ·
 //       3.24 PR-A: 운영가이드 — 옛 문서 뼈대 추가 → 섹션 목록 · 등록 운영 대기 계산 · 목록 링크 = 스크롤만(해시 불변) ·
 //       3.24 PR-B: 운영 보드 유형별 표·카드 요약 → 시나리오 원고(뼈대 · 멘트 쓰기 · 연사 확인 · 비상 멘트) · 큐시트 칸 순서 ·
@@ -327,7 +328,7 @@ check(
   await tab.waitForURL(/#\/schedule/, { timeout: 10_000 })
 }
 
-// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — **Phase 6.2 행사 만들기 인테이크 · 견적서 첨부(2026-09-26) + Phase 6.3 [A] 행사 ID · [B1] 표준 폴더 트리 안내(2026-09-27)**.
+// ── ③-이전(2026-09-26·27 Phase 6.2 · 6.3 [A]·[B1]) 행사 만들기 인테이크 · 견적서 첨부 · 행사 ID · 표준 폴더 트리 안내 — 직전 세션 ③을 회귀 가드로 유지.
 //     세팅 미완료 행사(prj-forum-h2 — 필수 칸이 비어 있어 뒤 PR-5 블록의 '먼저 확인할 행사' 줄이 이 행사를 본다: 폼은 저장하지 않는다)의
 //     온보딩 ① → 'Slack 메시지에서 불러오기'에 라벨 글 붙이기 → 불러오기 → 결과(라벨 규칙 · 채운 칸 n) · 행사명·시작일·장소·인원 칸 채움(주황) ·
 //     배너 · 행사 ID 줄 = YYMMDD_고객사_행사명(코드 칸 없음) · 견적서 '링크 붙이기' → 구글 시트 → 빼기(확인 수락) · 채운 버튼 = 다음: 담당자 하나 ·
@@ -1239,6 +1240,53 @@ await editorSheet.click()
 await tab.getByRole('alert').waitFor({ timeout: 10_000 })
 check(/실서버\(로그인\) 모드에서만/.test((await tab.getByRole('alert').innerText()).trim()), '에디터 ④ mock: 안내 문구')
 await tab.screenshot({ path: resolve(SHOTS, '03f-editor-step4-export.png'), fullPage: true })
+
+// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — **Phase 6.4 PR-1 견적 ↔ 기존 행사 연결(2026-09-27)**.
+//     견적 목록 → 행사 없는 견적(quo-010) 고르기 → 요약 패널 '기존 행사에 연결' 상자(진행 중 행사만 — 종료 행사 없음) →
+//     세팅 미완료 행사(prj-forum-h2)를 골라 '연결' → 그 행사 묶음으로 옮겨지고 상자는 사라진다(새 행사 0 · 전체 리로드 0) →
+//     /api 요청 0(mock). **맨 뒤에서 돈다** — mock 상태를 바꾸므로(quo-010이 prj-forum-h2에 붙는다) 앞 블록들(온보딩·견적 목록)이 그 전 상태를 본다.
+{
+  const docBefore = docRequests.length
+  const apiCalls = []
+  const onReq = (req) => {
+    if (/\/api\//.test(req.url())) apiCalls.push(req.url())
+  }
+  tab.on('request', onReq)
+  await tab.evaluate(() => {
+    window.location.hash = '#/quotes'
+  })
+  await tab.getByRole('heading', { name: '견적', exact: true }).waitFor({ timeout: 10_000 })
+  const row = tab.getByTestId('quote-row-quo-010')
+  await row.waitFor({ timeout: 10_000 })
+  await row.getByRole('button', { name: 'v1' }).click()
+  const summary = tab.getByTestId('quote-summary')
+  const box = summary.getByTestId('quote-link-existing')
+  await box.waitFor({ timeout: 10_000 })
+  const select = box.getByLabel('연결할 행사')
+  const optionValues = await select.locator('option').evaluateAll((els) => els.map((o) => o.value))
+  check(optionValues.includes('prj-forum-h2') && !optionValues.includes('prj-ai-summit'), '연결 후보 = 진행 중 행사만(종료 행사 없음)', optionValues.join(', '))
+  const projectsBefore = await tab.locator('section[aria-label]').count()
+  await select.selectOption('prj-forum-h2')
+  await box.getByRole('button', { name: '연결' }).click()
+  const group = tab.getByRole('region', { name: '리더십 포럼 하반기' })
+  await group.waitFor({ timeout: 10_000 })
+  await group.getByTestId('quote-row-quo-010').waitFor({ timeout: 10_000 })
+  check(true, "'연결' → 그 행사 묶음으로 옮겨짐(새 행사 만들지 않음)")
+  check((await tab.getByTestId('quote-summary').getByTestId('quote-link-existing').count()) === 0, '연결된 견적의 요약에는 연결 상자 없음')
+  check((await tab.locator('section[aria-label]').count()) <= projectsBefore, '묶음 수 늘지 않음(행사 없는 묶음이 비면 사라진다)', `${projectsBefore} → ${await tab.locator('section[aria-label]').count()}`)
+  tab.off('request', onReq)
+  check(apiCalls.length === 0, '데모에서 /api 요청 0(연결은 mock 안에서)', apiCalls.join(', '))
+  check(docRequests.length === docBefore, '견적 연결에 전체 리로드 0', `${docBefore} → ${docRequests.length}`)
+  await tab.evaluate(() => {
+    window.location.hash = '#/home?project=prj-rebuild27'
+  })
+  await tab.waitForFunction(
+    () => localStorage.getItem('communicator.currentProjectId') === 'prj-rebuild27' && location.hash === '#/home',
+    null,
+    { timeout: 10_000 },
+  )
+}
+
 
 await browser.close()
 server.close()

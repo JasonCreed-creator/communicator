@@ -219,7 +219,13 @@ export default function SettlementPage() {
           />
           {isPm && canQuotes && finalQuotes.length === 0 && (
             <p className="mt-2 text-center text-sm text-ink-sub">
-              아직 확정된 견적이 없습니다 — 견적 화면에서 확정한 뒤 다시 시도하세요.
+              이 행사에 연결된 확정 견적이 없습니다 — 견적 화면에서 확정하거나 '기존 행사에 연결'로 이 행사에 붙인 뒤 다시 시도하세요.
+            </p>
+          )}
+          {/* v16 §16.4 — 행사 없는 확정 견적은 정산 시작과 함께 이 행사에 연결된다 */}
+          {isPm && canQuotes && !!pickedQuote && finalQuotes.find((q) => q.id === pickedQuote)?.project_id === null && (
+            <p className="mt-2 text-center text-sm text-ink-sub" data-testid="settlement-link-note">
+              이 견적은 아직 어느 행사에도 연결돼 있지 않습니다 — 정산을 시작하면 이 행사에 연결됩니다.
             </p>
           )}
           <ErrorAlert message={createBoard.error} />

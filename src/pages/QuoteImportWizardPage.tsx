@@ -74,19 +74,34 @@ function Kpi({ caption, value, tone }: { caption: string; value: string; tone?: 
   )
 }
 
+/** ③ 행사 선택 — v16 §16.4: 기존 행사에 연결(기본 = 지금 보는 행사) · 새 행사 만들기(프리필) · 행사 없이 견적만 */
+type ProjectMode = 'existing' | 'new' | 'none'
+
 function WizardBody() {
   const navigate = useNavigate()
-  const { reloadSummaries, setProject } = useProject()
+  const { projectId, summaries, reloadSummaries, setProject } = useProject()
 
   const [step, setStep] = useState(1)
   const [file, setFile] = useState<File | null>(null)
   const [imp, setImp] = useState<QuoteImport | null>(null)
   const [mapping, setMapping] = useState<SectionMapping[]>([])
   const [quote, setQuote] = useState<Quote | null>(null)
-  const [targets, setTargets] = useState({ project_prefill: true, settlement_base: false, board_seed: false })
+  const [projectMode, setProjectMode] = useState<ProjectMode | null>(null)
+  const [linkProjectId, setLinkProjectId] = useState<string>('')
+  const [targets, setTargets] = useState({ settlement_base: false, board_seed: false })
   const [result, setResult] = useState<QuoteImportDistributeResult | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // 운영 실측(2026-09-27): 프리필이 강제로 켜져 이미 만든 행사 옆에 행사가 하나 더 생겼다 — 기본은 '지금 보는 행사에 연결'
+  const activeProjects = useMemo(() => summaries.filter((s) => s.status === 'active'), [summaries])
+  const mode: ProjectMode = projectMode ?? (activeProjects.length > 0 ? 'existing' : 'new')
+  const linkTarget = activeProjects.some((p) => p.id === linkProjectId)
+    ? linkProjectId
+    : activeProjects.some((p) => p.id === projectId)
+      ? projectId
+      : (activeProjects[0]?.id ?? '')
+  const linkedName = (id: string | null) => (id ? summaries.find((s) => s.id === id)?.name ?? '연결됨' : '')
 
   const parsed = imp?.parsed ?? null
   const sectionAmount = useMemo(() => {
@@ -137,6 +152,14 @@ function WizardBody() {
 
   const handleDistribute = async () => {
     if (!imp || !quote) return
+    if ((targets.settlement_base || targets.board_seed) && mode === 'none') {
+      setError('정산 기준·보드 시드는 행사가 있어야 합니다 — 기존 행사를 고르거나 새 행사를 만드세요.')
+      return
+    }
+    if (mode === 'existing' && !linkTarget) {
+      setError('연결할 진행 중 행사가 없습니다 — 새 행사 만들기를 고르세요.')
+      return
+    }
     setBusy(true)
     setError(null)
     try {
@@ -145,7 +168,8 @@ function WizardBody() {
         setQuote(await provider.finalizeQuote(quote.id))
       }
       const distributed = await provider.distributeQuoteImport(imp.id, {
-        project_prefill: targets.project_prefill || targets.settlement_base || targets.board_seed,
+        project_prefill: mode === 'new',
+        link_project_id: mode === 'existing' ? linkTarget : undefined,
         settlement_base: targets.settlement_base,
         board_seed: targets.board_seed,
       })
@@ -379,32 +403,88 @@ function WizardBody() {
                 </span>
               </span>
             </div>
-            <label className="ui-check-row px-3">
-              <input
-                type="checkbox"
-                className="ui-check"
-                checked={targets.project_prefill || targets.settlement_base || targets.board_seed}
-                disabled={targets.settlement_base || targets.board_seed}
-                onChange={(e) => setTargets((t) => ({ ...t, project_prefill: e.target.checked }))}
-              />
-              <span>
-                <span className="font-semibold text-ink">행사 만들기 프리필</span>
-                <span className="block text-sm text-ink-sub">
-                  인식된 행사명·일시·장소로 새 행사를 만들고 견적과 상호 링크합니다(§16 매핑).
+            {/* v16 §16.4 — 행사 선택은 라디오 한 묶음: 기존 행사(기본) · 새 행사 · 없음. 옛 '프리필 강제'는 퇴역 */}
+            <fieldset className="rounded-md border border-border px-3 py-2.5" data-testid="import-project-mode">
+              <legend className="t-caption px-1">행사</legend>
+              <label className="ui-check-row">
+                <input
+                  type="radio"
+                  name="import-project-mode"
+                  className="ui-check"
+                  checked={mode === 'existing'}
+                  disabled={activeProjects.length === 0}
+                  onChange={() => setProjectMode('existing')}
+                />
+                <span>
+                  <span className="font-semibold text-ink">기존 행사에 연결</span>
+                  <span className="block text-sm text-ink-sub">
+                    {activeProjects.length > 0
+                      ? '이미 만든 행사에 이 견적을 붙입니다 — 지금 보는 행사가 기본입니다.'
+                      : '연결할 진행 중 행사가 없습니다.'}
+                  </span>
                 </span>
-              </span>
-            </label>
+              </label>
+              {mode === 'existing' && activeProjects.length > 0 && (
+                <select
+                  aria-label="연결할 행사"
+                  className="ui-input ui-select mt-1.5 ml-7 w-auto max-w-full"
+                  value={linkTarget}
+                  onChange={(e) => setLinkProjectId(e.target.value)}
+                >
+                  {activeProjects.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                      {p.onboarded ? '' : ' · 세팅 미완료'}
+                    </option>
+                  ))}
+                </select>
+              )}
+              <label className="ui-check-row mt-2">
+                <input
+                  type="radio"
+                  name="import-project-mode"
+                  className="ui-check"
+                  checked={mode === 'new'}
+                  onChange={() => setProjectMode('new')}
+                />
+                <span>
+                  <span className="font-semibold text-ink">새 행사 만들기 (프리필)</span>
+                  <span className="block text-sm text-ink-sub">
+                    인식된 행사명·일시·장소로 새 행사를 만들고 견적과 상호 링크합니다(§16 매핑).
+                  </span>
+                </span>
+              </label>
+              <label className="ui-check-row mt-2">
+                <input
+                  type="radio"
+                  name="import-project-mode"
+                  className="ui-check"
+                  checked={mode === 'none'}
+                  onChange={() => {
+                    setProjectMode('none')
+                    setTargets({ settlement_base: false, board_seed: false })
+                  }}
+                />
+                <span>
+                  <span className="font-semibold text-ink">행사 없이 견적만</span>
+                  <span className="block text-sm text-ink-sub">나중에 견적 목록에서 연결할 수 있습니다. 정산 기준·보드 시드는 쓸 수 없습니다.</span>
+                </span>
+              </label>
+            </fieldset>
             <label className="ui-check-row px-3">
               <input
                 type="checkbox"
                 className="ui-check"
                 checked={targets.settlement_base}
+                disabled={mode === 'none'}
                 onChange={(e) => setTargets((t) => ({ ...t, settlement_base: e.target.checked }))}
               />
               <span>
                 <span className="font-semibold text-ink">정산보드 기준 견적 — 확정하고 기준으로 설정</span>
                 <span className="block text-sm text-ink-sub">
-                  견적이 확정(잠금)되고 버킷 스냅숏이 정산보드에 만들어집니다. 행사 프리필이 함께 켜집니다.
+                  {mode === 'none'
+                    ? '행사를 고르면 쓸 수 있습니다.'
+                    : '견적이 확정(잠금)되고 버킷 스냅숏이 고른 행사의 정산보드에 만들어집니다.'}
                 </span>
               </span>
             </label>
@@ -413,11 +493,14 @@ function WizardBody() {
                 type="checkbox"
                 className="ui-check"
                 checked={targets.board_seed}
+                disabled={mode === 'none'}
                 onChange={(e) => setTargets((t) => ({ ...t, board_seed: e.target.checked }))}
               />
               <span>
                 <span className="font-semibold text-ink">보드 항목 시드</span>
-                <span className="block text-sm text-ink-sub">금액 제외 — 품목·규격·수량만 디자인·운영 보드에 만듭니다.</span>
+                <span className="block text-sm text-ink-sub">
+                  {mode === 'none' ? '행사를 고르면 쓸 수 있습니다.' : '금액 제외 — 품목·규격·수량만 디자인·운영 보드에 만듭니다.'}
+                </span>
               </span>
             </label>
           </div>
@@ -438,7 +521,14 @@ function WizardBody() {
           <p className="t-card-title">가져오기 완료</p>
           <ul className="mt-3 space-y-1.5 text-sm text-ink">
             <li>· 견적 등록: {quote.title} · v{quote.version} {quote.is_final ? '(확정)' : '(작성 중)'}</li>
-            <li>· 행사 만들기: {result.project_id ? '새 행사 생성 · 견적과 링크됨' : '하지 않음'}</li>
+            <li>
+              · 행사:{' '}
+              {result.project_created
+                ? '새 행사 생성 · 견적과 링크됨'
+                : result.project_id
+                  ? `기존 행사에 연결됨 — ${linkedName(result.project_id)}`
+                  : '하지 않음'}
+            </li>
             <li>· 정산 기준: {result.settlement_created ? '버킷 스냅숏 생성됨' : '하지 않음'}</li>
             <li>· 보드 시드: {result.deliverables_seeded > 0 ? `${result.deliverables_seeded}건` : '하지 않음'}</li>
           </ul>
@@ -446,7 +536,7 @@ function WizardBody() {
             <button type="button" className="btn btn-accent" onClick={() => navigate('/quotes')}>
               견적 목록으로
             </button>
-            {result.project_id && (
+            {result.project_id && result.project_created && (
               <button
                 type="button"
                 className="btn btn-ghost"
@@ -456,6 +546,18 @@ function WizardBody() {
                 }}
               >
                 행사 설정으로 이동
+              </button>
+            )}
+            {result.project_id && !result.project_created && (
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => {
+                  setProject(result.project_id!)
+                  navigate(result.settlement_created ? '/settlement' : '/home')
+                }}
+              >
+                {result.settlement_created ? '정산보드 열기' : '행사로 이동'}
               </button>
             )}
           </div>

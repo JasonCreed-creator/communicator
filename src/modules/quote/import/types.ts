@@ -14,6 +14,11 @@ export interface ParsedQuoteHeader {
   manager?: string
   total_amount?: number
   vat_mode?: 'included' | 'excluded' | 'unknown'
+  /**
+   * v2.18 — 문서에서 읽은 통화 표기(ISO 코드). **원화가 아닐 때만** 채운다(USD·EUR·JPY·GBP…) —
+   * 금액은 적힌 숫자 그대로 두고 환산하지 않는다(확인 큐·견적 화면에서 사람이 판단). 원화·표기 없음 = undefined
+   */
+  currency?: string
 }
 
 /** §22.2-3 — 항목 행. amount 외에는 서식(A·B·C형)에 따라 있거나 없을 수 있다 */

@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────
-// DataProvider 인터페이스 v15 — 2026-09-25 재동결 (설계서 v2.11 §19.5) — 131메서드
+// DataProvider 인터페이스 v16 — 2026-09-27 재동결 (설계서 v2.18 §16.4) — 132메서드
 //   (아래 이력 전체를 유지한다. v7 표기는 2026-08-23 시점의 스냅숏이었다 — v8·v8.1·v9은
 //   그 뒤에 이어 붙은 것이므로 제목 줄만 최신으로 갱신한다.)
 //   v1: 2026-08-19 동결(35메서드). v2: v1.2 승인 근거로 41메서드 재동결.
@@ -94,6 +94,10 @@
 //   **필드 추가만, 131 불변**: PlanData.guide(첫 운영가이드의 섹션 — 연락망 제외) — 16:9 장표형 운영계획서의 현장 운영 장 소스.
 //   v15.7: Phase 6.3 [B2](사용자 범위 "[A] + [B] 연속으로", 2026-09-27) + 설계서 v2.17.1 §9 → **필드 추가만, 131 불변**:
 //   Project·ProjectPatch.design_thread_url(디자인 채널의 행사 스레드 — design 영역 알림이 이 스레드로, 운영 스레드엔 [키비주얼] 3줄).
+//   v16: 사용자 승인(2026-09-27 — 버튼 "승인 — 메서드 1건 추가", 운영 실측 "견적리스트에서 견적서를 선택하면 새로 행사를 만들어버림") +
+//   설계서 v2.18 §16.4 → **linkQuoteToProject 1메서드 추가 = 132메서드**. **기존 131메서드 시그니처 불변** 후 재동결.
+//   견적을 이미 있는 행사에 붙이는 유일한 경로(위저드 ③ '기존 행사에 연결' · 견적 목록 · 정산 시작의 미연결 견적 자동 연결이 전부 이 메서드).
+//   QuoteImportDistributeInput.link_project_id · QuoteImportDistributeResult.project_created · ParsedQuoteHeader.currency는 필드 추가.
 //
 // 프로젝트 스코프 규칙(설계서 v2.1 §4-21 R-L1): 프로젝트 단위 조회·생성 메서드는 projectId를
 // 인자로 받는다. currentUser()는 행위자 신원·권한 판정 전용이며 스코프 유도에 쓰지 않는다.
@@ -447,6 +451,12 @@ export interface DataProvider {
   finalizeQuote(quoteId: UUID): Promise<Quote>
   /** §16 핸드오프: 확정 견적 → 행사 생성(프리필, onboarded_at null) + 상호 링크. 미확정이면 409 */
   createProjectFromQuote(quoteId: UUID): Promise<Project>
+  /**
+   * v16 §16.4 — 견적을 **이미 있는 행사**에 연결(상호 링크). 권한 = admin·sales 또는 그 행사의 pm.
+   * 같은 행사면 멱등 · 다른 행사에 연결돼 있으면 409 · 새 버전이 있는 옛 버전 409 · 종료 행사 409.
+   * 확정 견적이면 finalize와 같은 규칙(같은 행사의 다른 확정본 archived · projects.quote_id 갱신), 미확정이면 quote_id는 비어 있을 때만.
+   */
+  linkQuoteToProject(quoteId: UUID, projectId: UUID): Promise<Quote>
   /** §8 GET /quotes/{id}/export.xlsx — 자동 외부 업로드 없음. 저장은 modules/quote saveQuoteFile */
   exportQuoteXlsx(quoteId: UUID, lang?: 'ko' | 'en'): Promise<QuoteExportResult>
 

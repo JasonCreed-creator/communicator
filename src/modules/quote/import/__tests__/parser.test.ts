@@ -10,9 +10,11 @@ import {
   A_EXPECTED,
   B_EXPECTED,
   C_EXPECTED,
+  D_EXPECTED,
   syntheticQuoteA,
   syntheticQuoteB,
   syntheticQuoteC,
+  syntheticQuoteD,
 } from './fixtures/syntheticQuotes'
 
 const itemCount = (doc: ParsedQuoteDoc) => doc.sections.reduce((sum, s) => sum + s.items.length, 0)
@@ -175,10 +177,10 @@ describe('C형(패키지·UNIT PRICE/QTY/AMOUNT/SELECT) 골든', () => {
     expect(checkOf(doc, '단가×수량×일수')).toMatchObject({ expected: 13, actual: 13, ok: true })
   })
 
-  it('버킷 매핑: Add-ons만 저신뢰', () => {
+  it('버킷 매핑: Add-ons는 custom — v2.18부터 영문 키워드(add-ons)도 규칙표에 있어 확신 배정(저신뢰 0)', () => {
     const map = mapSectionsToBuckets(doc)
     expect(map.map((m) => m.bucket)).toEqual(['s1', 's2', 's3', 's4', 'custom', 's5', 'recruit'])
-    expect(lowCount(doc)).toBe(1)
+    expect(lowCount(doc)).toBe(0)
   })
 })
 
@@ -202,5 +204,78 @@ describe('입력 방어', () => {
     const ab = new ArrayBuffer((buf as ArrayBuffer).byteLength)
     new Uint8Array(ab).set(new Uint8Array(buf as ArrayBuffer))
     expect(() => parseQuoteWorkbook(ab, '메모.xlsx')).toThrow(/항목 표/)
+  })
+})
+
+// ── v2.18 §22.2-0 영문 견적서(해외 인바운드) — 라벨 사전 국/영문 · 통화 경고 · 단어 단위 키워드 ──
+describe('D형(영문 · USD) 골든 — v2.18', () => {
+  let doc: ParsedQuoteDoc
+  beforeAll(async () => {
+    doc = parseQuoteWorkbook(await syntheticQuoteD(), 'virtual_quotation_en.xlsx')
+  })
+
+  it('영문 열 라벨(ITEM·DESCRIPTION·UNIT PRICE·QTY·AMOUNT)을 읽고 섹션 5·항목 8건 — Subtotal 행이 소계', () => {
+    expect(doc.format).toBe('C')
+    expect(doc.sections).toHaveLength(D_EXPECTED.sections)
+    expect(itemCount(doc)).toBe(D_EXPECTED.items)
+    expect(doc.sections[0]).toMatchObject({ name: '1. Venue Rental', subtotal: 45_000 })
+    expect(doc.sections[0].items[0]).toMatchObject({ title: 'Hall B rental', spec: 'Main hall, 2 days', unit_price: 22_500, qty: 2, amount: 45_000 })
+    expect(doc.sections[3].items[0]).toMatchObject({ title: 'Registration staff', unit_price: 500, qty: 20, amount: 10_000 })
+  })
+
+  it('영문 헤더 6필드 — Event가 Event Date를 삼키지 않고(단어 단위) Contact가 담당자', () => {
+    expect(doc.header.event_name).toBe('Virtual Global Tech Summit 2027')
+    expect(doc.header.client).toBe('Virtual Overseas Corp.')
+    expect(doc.header.date_range).toBe('10-11 March 2027')
+    expect(doc.header.venue).toBe('Virtual Convention Center, Hall B')
+    expect(doc.header.quoted_at).toBe('15 January 2027')
+    expect(doc.header.manager).toBe('Jane Planner')
+  })
+
+  it('총액 블록 — Sub Total → Agency Fee 15% → VAT → Grand Total (VAT included) · 대표 금액 = 포함 총액', () => {
+    expect(doc.totals.items_sum).toBe(D_EXPECTED.itemsSum)
+    expect(doc.totals.agency_fee).toBe(D_EXPECTED.agencyFee)
+    expect(doc.totals.agency_fee_rate).toBeCloseTo(0.15, 10)
+    expect(doc.totals.vat).toBe(D_EXPECTED.vat)
+    expect(doc.totals.grand_total).toBe(D_EXPECTED.grandTotal)
+    expect(doc.header.total_amount).toBe(D_EXPECTED.grandTotal)
+    expect(doc.header.vat_mode).toBe('included')
+  })
+
+  it('통화 = USD를 적고 경고만 남긴다(환산 없음) · 외화는 대행료 검산에 만원 절사를 쓰지 않는다 · 검산 전부 통과', () => {
+    expect(doc.header.currency).toBe('USD')
+    expect(doc.warnings.some((w) => w.includes('USD') && w.includes('환산 없음'))).toBe(true)
+    expect(doc.checks.every((c) => c.ok)).toBe(true)
+    const fee = checkOf(doc, '대행료 15%')!
+    expect(fee.name).not.toContain('절사')
+    expect(fee).toMatchObject({ expected: 15_000, actual: 15_000, ok: true })
+    expect(checkOf(doc, '총액 체인')).toMatchObject({ expected: 126_500, actual: 126_500, ok: true })
+    expect(checkOf(doc, '단가×수량×일수')).toMatchObject({ expected: 8, actual: 8, ok: true })
+    // "Optional - not included" 항목은 섹션 합계 검산에서 빠진다
+    expect(doc.warnings.some((w) => w.includes("'총액 미포함' 표기 항목 1건"))).toBe(true)
+  })
+
+  it('버킷 매핑 — 영문 키워드 단어 단위: Venue Rental→s1 · Stage & AV→s2 · Design & Signage→s3 · Operation Staff→s4 · Optional Add-ons→custom(확신)', () => {
+    const map = mapSectionsToBuckets(doc)
+    expect(map.map((m) => m.bucket)).toEqual(['s1', 's2', 's3', 's4', 'custom'])
+    expect(map.every((m) => m.confidence === 'high')).toBe(true)
+  })
+
+  it('국문 문서는 통화 경고가 없다(A형) — 원화 표기가 있으면 원화 문서', async () => {
+    const ko = parseQuoteWorkbook(await syntheticQuoteA(), '가상견적_A형.xlsx')
+    expect(ko.header.currency).toBeUndefined()
+    expect(ko.warnings.some((w) => w.includes('통화'))).toBe(false)
+  })
+})
+
+describe('단어 단위 키워드(v2.18) — 영문 부분 문자열 오탐 방지', () => {
+  it("'av'는 'Travel & Accommodation'을 삼키지 않고, 'lead'는 'Leadership Session'을 삼키지 않는다", async () => {
+    const { matchesKeyword, mapSectionName } = await import('../buckets')
+    expect(matchesKeyword('travel & accommodation', 'av')).toBe(false)
+    expect(matchesKeyword('stage & av', 'av')).toBe(true)
+    expect(matchesKeyword('leadership session', 'lead')).toBe(false)
+    expect(matchesKeyword('lead generation', 'lead')).toBe(true)
+    expect(mapSectionName('6. Travel & Accommodation')).toMatchObject({ bucket: 'custom', confidence: 'low' })
+    expect(mapSectionName('2. 무대 시스템')).toMatchObject({ bucket: 's2', confidence: 'high' })
   })
 })

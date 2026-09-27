@@ -62,7 +62,7 @@ describe('DoD 76 ① 견적 목록', () => {
     expect(versions).toEqual(['v3', 'v2', 'v1'])
 
     const unlinked = screen.getByRole('region', { name: '행사 없이 견적만' })
-    expect(within(unlinked).getByText('확정하면 이 견적으로 행사를 만들 수 있습니다')).toBeTruthy()
+    expect(within(unlinked).getByText('기존 행사에 연결하거나, 확정하면 새 행사를 만들 수 있습니다')).toBeTruthy()
     expect(within(unlinked).queryByRole('button', { name: '행사로 이동 →' })).toBeNull()
   })
 

@@ -242,6 +242,14 @@ export async function createSettlementBoardCore(
     throw new ProviderError('conflict', '이미 정산 보드가 있습니다.')
   }
   const quote = await mustFindFinalQuote(ctx, quoteId)
+  // v16 §16.4 — 정산 기준 견적은 이 행사의 견적이어야 한다. 아직 어느 행사에도 안 붙은 견적은 여기서 이 행사에 연결한다
+  // (운영 실측: 다른 행사에 붙은 견적이 드롭다운에 없어 정산을 시작하지 못했다 — 붙이는 길이 이 한 곳).
+  if (quote.project_id && quote.project_id !== projectId) {
+    throw new ProviderError('validation', '다른 행사에 연결된 견적입니다 — 그 행사의 정산보드에서 쓰거나 견적 목록에서 연결을 확인하세요.')
+  }
+  if (!quote.project_id) {
+    await ctx.rpc<Quote>('link_quote_to_project', { p_quote: quote.id, p_project: projectId })
+  }
   const now = nowIso()
   const board = ctx.q(
     await ctx.sb

@@ -1,4 +1,4 @@
-# MICE 커뮤니케이터 — 시스템 설계서 v2.15
+# MICE 커뮤니케이터 — 시스템 설계서 v2.18
 
 | 항목 | 내용 |
 |---|---|
@@ -861,6 +861,7 @@ draft ──(담당/PM)──> internal_review ──(PM만)──> pending_appr
 | POST /quotes · POST /quotes/{id}/versions | admin·sales | 새 견적 / 새 버전(이전 버전 superseded) — 서버가 엔진으로 breakdown·total 재계산해 저장(클라이언트 값 신뢰 안 함) (v2.0) |
 | POST /quotes/{id}/finalize | admin·sales | is_final=true·locked_at 기록. 같은 프로젝트의 다른 final은 archived (v2.0) |
 | POST /quotes/{id}/create-project | admin·sales | **핸드오프**: 확정 견적에서 projects 생성(§16 매핑으로 프리필, onboarded_at null) + quote.project_id·project.quote_id 상호 연결 → S0 진입 (v2.0) |
+| POST /quotes/{id}/link-project | admin·sales **또는 그 행사 pm** | (v2.18 §16.4) 견적을 **이미 있는 행사**에 연결 — SQL RPC `link_quote_to_project`(security definer). 같은 행사 멱등 · 다른 행사 409 · 옛 버전 409 · 종료 행사 409 · 확정본이면 다른 확정본 archived + projects.quote_id · 미확정이면 quote_id는 비어 있을 때만. 로그 `quote.linked`(금액 없음) |
 | GET /quotes/{id}/export.xlsx | admin·sales | ExcelJS 견적서 — 자동 외부 업로드 없음(Phase 5에서 Drive 저장은 명시 버튼) (v2.0) |
 | POST /api/quote-gsheet | admin·sales | **(v2.8.1, Vercel Function)** 견적서 xlsx(= export.xlsx와 같은 파일)를 받아 서비스 계정으로 Drive 폴더(`GOOGLE_QUOTE_FOLDER_ID`)에 **구글 스프레드시트로 변환 업로드**하고 링크 반환. 요청자 이메일에 편집자 공유(특정 사용자만 — "링크가 있는 모든 사용자" 금지). 자격증명 없으면 503(데모로 흉내 내지 않음). 사용자 명시 클릭에만 실행 — §12 ③ "자동 업로드 없음"과 무충돌. GET은 `{ready}`만 |
 | GET·PATCH /compliance-cards | 멤버(체크)·pm(편집) | 컴플라이언스 카드 (v2.0) |
@@ -880,7 +881,7 @@ draft ──(담당/PM)──> internal_review ──(PM만)──> pending_appr
 | POST /projects/{id}/wbs-expand-host | pm | 주최형 템플릿(§15.3)을 event_date 기준 전개 — partner_submit 방향은 **파트너별 인스턴스** 생성 |
 | POST /quote-imports | admin·sales | xlsx 업로드 → 서식 감지(A·B·C형)·섹션·항목·검산 결과 반환. **커밋 없음** |
 | POST /quote-imports/{id}/confirm | admin·sales | 확인 큐에서 수정한 매핑 확정 → quotes 등록(source='imported', 새 버전) |
-| POST /quote-imports/{id}/distribute | admin·sales | 분배 실행: {targets: project_prefill? board_seed? settlement_base?} — §22.4 규칙 |
+| POST /quote-imports/{id}/distribute | admin·sales | 분배 실행: {targets: link_project_id? project_prefill? board_seed? settlement_base?} — §22.4 규칙. (v2.18) `link_project_id`가 프리필보다 우선 · 결과에 `project_created` |
 
 ---
 
@@ -1128,6 +1129,7 @@ UI 공통: 한국어, 데스크톱 우선 + 반응형(발주처 화면은 모바
 
 ## 14. 개정 이력
 
+- **v2.18** (2026-09-27): **견적 ↔ 기존 행사 연결 + 영문 견적서 인식**(Phase 6.4 PR-1 — 운영 실측 "견적리스트에서 견적서를 선택하면 새로 행사를 만들어버림" + "정산보드에 견적이 안 붙음" → 원인 = 위저드 ③ 프리필 강제 · §16.4 신설 · §22.4 '기존 행사에 연결' 행 · §22.2 규칙 0 국/영문 · §19.2 정산 시작 연결 · §8 API 2행). SQL 29번째 `quote_link`(RPC 1 · 스키마 변경 0) · **DataProvider v16 = 132메서드**(사용자 승인 · `linkQuoteToProject`). PR-2 = PDF 견적서 AI 인식(사용자 결정 "AI로 읽기 — 키는 Vercel에").
 - **v2.17.1** (2026-09-27): **운영/디자인 스레드 2개 + 댓글 태그 — 운영 커뮤니케이션 프로토콜 v1.0 정합 [B2]**(Phase 6.3 — §9 v2.17.1 블록 · §8.4 `test` target · §4 projects.design_thread_url · §26.2 두 행 완료). SQL 28번째 `design_thread`(열 1 · 함수 재정의 5 · 알릴 사건 += 납품) · DataProvider v15.7(필드만 — 131 불변).
 - **v2.17** (2026-09-27): **표준 폴더 트리 — 운영 커뮤니케이션 프로토콜 v1.0 정합 [B1]**(Phase 6.3 — §7.1 전면 개정(저장소/{연도}/행사 ID/01_견적 · 02_계약 · 03_제작·키비주얼(KV·초청장·현장물·납품) · 04_WBS·운영계획 · 05_현장 · 06_결과보고·정산 · 99_archive) · §7.1b 연도 폴더 거부 + 지정 폴더 동기화 · §7.5 납품 · §7.8 · §8 API 표 2행 · §19.5a 원본 폴더 · §26.2 [B1] 완료 · §26.3 금지). 기존 행사 폴더는 이름·연도 자리만(사용자 선택) · SQL 0 · DataProvider 131 불변. [B2](스레드 2개 · 태그)는 다음.
 - **v2.16** (2026-09-27): **행사 ID 체계 `YYMMDD_고객사_행사명` — 운영 커뮤니케이션 프로토콜 v1.0 정합 [A]**(Phase 6.3 — §4-1d 신설(§26에 정본) · §4 projects.code 주석 · §7.1 폴더 이름 · §7.2 파일명 · §10 S0·S6① 필수 4 = 행사명·고객사·행사일·장소 + 행사 ID 줄 · §16 code 행 · §9 알림 줄머리 `[행사명]` · SQL 27번째(Drive 판정 함수 4종 organizer) · DataProvider 131 불변 · 필드 변경 0). 사용자 제공 프로토콜 캔버스 2건이 정본 — 자동 코드(`RSRP26`) 지적 → "코드가 꼭 필요한가" → "드라이브 폴더는 yymmdd 행사명으로 통일" → 프로토콜의 `YYMMDD_고객사_행사명`으로 확정 · 범위 "[A] + [B] 연속". [B](표준 폴더 트리 · 운영/디자인 스레드 2개 · 댓글 태그)는 다음.
@@ -1312,6 +1314,27 @@ UI 공통: 한국어, 데스크톱 우선 + 반응형(발주처 화면은 모바
 | wbs_tasks 시드 | — | 온보딩 완료 시 §15 템플릿(target 열 포함)으로 전개 — Configurator event_tasks는 시드하지 않음 |
 
 견적 없이 행사를 먼저 만드는 경로(S-1 → S0)는 그대로 유지. 행사 설정 ①에서 "견적 연결"로 사후 연결 가능(admin·sales).
+
+---
+
+### 16.4 견적 ↔ 기존 행사 연결 (v2.18 · Phase 6.4 PR-1 — 사용자 승인 2026-09-27 "승인 — 메서드 1건 추가")
+
+**경위(운영 실측 2026-09-27)**: 견적서 가져오기 ③에서 '정산보드 기준 견적'을 켜자 '행사 만들기 프리필'이 강제로 켜져 **이미 만든 행사 옆에 새 행사가 하나 더** 생겼고(견적·정산보드가 거기 붙음), 보고 있던 행사의 정산보드는 "확정 견적 없음"이었다. §16 핸드오프는 **새 행사 만들기**뿐이라 견적을 기존 행사에 붙이는 길이 앱 어디에도 없었다. 데이터는 Code가 운영 DB에서 직접 옮기고(견적·보드·가져오기 기록 → 원래 행사) 빈 껍데기 행사는 지웠다(사용자 승인).
+
+**계약** — `DataProvider.linkQuoteToProject(quoteId, projectId): Promise<Quote>`(**v16 = 132메서드**, 사용자 승인) = SQL RPC `link_quote_to_project`(security definer, 29번째 마이그레이션 `20260927000300_quote_link.sql`):
+
+| 규칙 | 판정 |
+|---|---|
+| 권한 | app_role admin·sales **또는 그 행사의 pm**(§6.1 — 정산 시작 경로는 pm이 부른다) → 아니면 403 |
+| 행사 | 없음 404 · 종료(closed) 409 |
+| 견적 | 없음 404 · **같은 행사에 이미 연결 = 멱등(그대로 반환)** · 다른 행사에 연결 409 · `superseded_by`가 있는 옛 버전 409(최신 버전만) |
+| 확정본 | finalize_quote와 같은 규칙 — 같은 행사의 다른 확정본은 `archived`, `projects.quote_id` = 이 견적 |
+| 미확정 | `quotes.project_id`만 잇고 `projects.quote_id`는 **비어 있을 때만** 채운다(프리필 materialize와 같은 규칙) |
+| 로그 | `quote.linked`(meta = version·is_final·source — **금액 키 없음**) |
+
+**쓰는 자리 3곳(전부 이 한 메서드)**: ① 견적서 가져오기 ③ '행사' 라디오 = **기존 행사에 연결(기본 = 지금 보는 행사)** · 새 행사 만들기(프리필) · 행사 없이 견적만(`QuoteImportDistributeInput.link_project_id` — 프리필보다 우선, §22.4) ② 견적 목록 요약 패널 — 행사 없는 최신 버전에 '기존 행사에 연결'(진행 중 행사 셀렉트 + 연결 · 확정 여부 무관) ③ 정산 시작(`createSettlementBoard`) — 행사 없는 확정 견적은 시작과 함께 그 행사에 연결, **다른 행사의 견적은 422**(옛 코드는 검사하지 않았다).
+
+금지: 견적을 두 행사에 동시에 붙이기 · 링크만으로 상태·금액 바꾸기 · 옛 버전 연결 · 연결 경로를 RPC 밖(PostgREST update)에 두기(quotes_update RLS는 영업·관리자뿐이라 pm 경로가 막힌다).
 
 ---
 
@@ -1591,7 +1614,7 @@ optional peer `@types/node`를 설치하지 않아 `node:fs`·`process` 타입�
 
 ### 19.2 버킷 체계 — 기본 9 + 행사별 추가
 
-기본 버킷은 확정 견적 breakdown에서 스냅숏된다. `recruit` 한 덩어리를 **rc와 ld로 쪼개는 것이 유일한 비자명 매핑**이다.
+기본 버킷은 확정 견적 breakdown에서 스냅숏된다. `recruit` 한 덩어리를 **rc와 ld로 쪼개는 것이 유일한 비자명 매핑**이다. (v2.18 §16.4) 기준 견적은 **이 행사의 확정 견적**이어야 한다 — 어느 행사에도 안 붙은 확정 견적은 정산 시작과 함께 이 행사에 연결되고, 다른 행사의 견적은 422.
 
 | code | 라벨 | 견적 breakdown 출처 | has_cost | is_margin_base |
 |---|---|---|:---:|:---:|
@@ -1825,6 +1848,8 @@ PDF 서식은 2차(xlsx 우선). 같은 행사의 복수 안(예: TAAS GBR/PLZ �
 
 ### 22.2 인식 규칙 (파서 계약)
 
+- **(v2.18 · 0) 국문·영문 라벨 사전** — 해외 인바운드 행사의 영문 견적서도 같은 규칙으로 읽는다: 열(ITEM · DESCRIPTION · UNIT PRICE · QTY · DAYS · AMOUNT · REMARKS) · 헤더(Event · Client · Event Date · Venue · Quote Date · Contact) · 총액 블록(Sub Total · Agency/Management/Service Fee · VAT/Tax · Grand Total · Total (excl./incl. VAT)) · 소계(Subtotal · Sub-total · Total) · 섹션 → 버킷 영문 키워드(단어 단위 — `av`가 `travel`을 삼키지 않는다). 영문 헤더 키는 단어 단위 일치(`event`가 `eventdate`를 삼키지 않게). **통화가 원화가 아니면 `header.currency`(USD·EUR·JPY·GBP·SGD·HKD·AUD·CNY)에 적고 경고만** — 금액은 적힌 숫자 그대로, 환산은 사람 몫(확인 큐·견적 화면). 외화 문서의 대행료 검산은 만원 절사 대신 반올림 기준. 골든 픽스처 D형(영문·USD)이 고정한다. 견적서 **작성**의 영문은 에디터 '견적서 언어' 토글(영문 엑셀)이 이미 담당한다.
+
 1. **헤더 필드**: 라벨 사전 매칭 — 행사명/Project Title, 고객명, 일시/기간, 장소/Venue, 견적일, 담당자, 총액 계열(최종 견적·총 견적·Total). 인식 실패 필드는 빈 값으로 확인 큐에 노출(추정 금지).
 2. **섹션**: "N." 숫자 프리픽스 제목 행(뒤에 소계/total 행 동반) 기준. 섹션 없는 문서는 전체를 1섹션으로.
 3. **항목 행**: 금액 열에 숫자가 있는 행. 열 역할(단가·수량·일수·금액)은 헤더 행 라벨로 추정하고, A형은 단가×수량×일수=금액 검산으로 역확인.
@@ -1846,7 +1871,8 @@ PDF 서식은 2차(xlsx 우선). 같은 행사의 복수 안(예: TAAS GBR/PLZ �
 | 대상 | 동작 | 조건 |
 |---|---|---|
 | 견적 모듈 등록 | quotes(source='imported') 새 버전 생성, S-2 목록에 '임포트' 배지 | 기본 켜짐(필수) |
-| 행사 만들기 프리필 | §16 핸드오프 매핑 재사용 — 인식된 행사명·일시·장소·인원으로 S0 프리필 | 행사 미연결 시 |
+| **기존 행사에 연결** (v2.18) | `link_project_id` — 새 행사를 만들지 않고 고른 행사에 상호 링크(§16.4). 위저드 ③ '행사' 라디오의 **기본값 = 지금 보는 행사** | 행사 미연결 시 · 프리필보다 우선 |
+| 행사 만들기 프리필 | §16 핸드오프 매핑 재사용 — 인식된 행사명·일시·장소·인원으로 S0 프리필 | 행사 미연결 시 · '새 행사 만들기'를 고른 때만(옛 '정산 기준을 켜면 프리필 강제'는 퇴역) |
 | 정산보드 기준 견적 | 확정(finalize) 후 §19 버킷 스냅숏 — 매핑 확정본이 버킷 배정 근거 | 확정 견적만 |
 | 보드 항목 시드 | 디자인·운영 성격 항목을 해당 보드에 시드 — **금액 제외, 품목·규격·수량만** | 선택(기본 꺼짐) |
 
