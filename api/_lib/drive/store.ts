@@ -67,6 +67,13 @@ export interface ConnectionInfo {
   last_error_at: string | null
 }
 
+/** Phase 6.7 — projects.quote_attachment(jsonb) 가운데 서버가 읽는 세 칸 */
+export interface ProjectAttachmentRow {
+  kind: 'drive' | 'link'
+  file_name: string | null
+  drive_file_id: string | null
+}
+
 export interface RegisterVersionArgs {
   deliverable_id: string
   file_name: string
@@ -87,6 +94,8 @@ export interface DriveStore {
   setSettlementImportFile(importId: string, fileId: string): Promise<void>
   /** Phase 6.2 — 사용자 JWT로 `drive_project_file_check`: 행사 폴더에 파일을 올릴 수 있는가(pm · 종료 안 된 행사) + 행사 정보 */
   projectFileCheck(jwt: string, projectId: string): Promise<ProjectRow>
+  /** 사용자 JWT(RLS — 행사 멤버·admin)로 `projects.quote_attachment`만 — 행사가 안 보이면 404, 첨부가 없으면 null */
+  projectAttachment(jwt: string, projectId: string): Promise<ProjectAttachmentRow | null>
   /** 항목이 아직 DB에 있는가 — 항목 폴더 보관(archive-item)은 지워진 항목에만 허용한다 */
   deliverableExists(deliverableId: string): Promise<boolean>
   /** 사용자 JWT로 `drive_upload_check` — upload_version과 같은 판정(404·403·409)을 바이트 전송 전에 */
@@ -213,6 +222,20 @@ export function supabaseDriveStore(env: StoreEnv): DriveStore {
       const data = must(res as Res<ProjectRow>)
       if (!data) throw new DriveError(404, 'not_found', '행사를 찾을 수 없습니다.')
       return data
+    },
+    async projectAttachment(jwt, projectId) {
+      const row = must(await asUser(jwt).from('projects').select('id, quote_attachment').eq('id', projectId).maybeSingle()) as {
+        id: string
+        quote_attachment: Partial<ProjectAttachmentRow> | null
+      } | null
+      if (!row) throw new DriveError(404, 'not_found', '행사를 찾을 수 없습니다.')
+      const a = row.quote_attachment
+      if (!a || (a.kind !== 'drive' && a.kind !== 'link')) return null
+      return {
+        kind: a.kind,
+        file_name: typeof a.file_name === 'string' ? a.file_name : null,
+        drive_file_id: typeof a.drive_file_id === 'string' ? a.drive_file_id : null,
+      }
     },
     async deliverableExists(deliverableId) {
       return Boolean(must(await admin.from('deliverables').select('id').eq('id', deliverableId).maybeSingle()))

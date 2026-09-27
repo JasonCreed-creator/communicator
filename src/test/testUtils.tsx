@@ -27,6 +27,7 @@ import PlanDocPage from '../pages/PlanDocPage'
 import LegacyGonePage from '../pages/LegacyGonePage'
 import ProjectListPage from '../pages/ProjectListPage'
 import QuoteEditorPage from '../pages/QuoteEditorPage'
+import QuoteImportWizardPage from '../pages/QuoteImportWizardPage'
 import QuotesPage from '../pages/QuotesPage'
 import RegistrationPage from '../pages/RegistrationPage'
 import OnsiteCheckinPage from '../pages/OnsiteCheckinPage'
@@ -85,6 +86,8 @@ export function renderRoute(path: string) {
             <Route path="/quotes" element={<QuotesPage />} />
             <Route path="/quotes/new" element={<QuoteEditorPage />} />
             <Route path="/quotes/:quoteId/edit" element={<QuoteEditorPage />} />
+            {/* v2.4 §22 견적서 가져오기 위저드 — App.tsx와 동일하게 가드 밖(Phase 6.7 다리 테스트가 정산보드 → 위저드 이동을 본다) */}
+            <Route path="/quotes/import" element={<QuoteImportWizardPage />} />
 
             <Route element={<OnboardingGuard />}>
               <Route path="/home" element={<HomeDashboardPage />} />

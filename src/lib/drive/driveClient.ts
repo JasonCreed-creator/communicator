@@ -203,6 +203,23 @@ export function createDriveClient(opts: DriveClientOptions) {
       return parse<{ file_id: string; file_name: string; url: string }>(res)
     },
 
+    /**
+     * Phase 6.7 — 온보딩에서 첨부한 견적서(Drive 01_견적)를 파일로 받아 온다(견적 가져오기 ① '이 파일로 읽기').
+     * 첨부가 없거나 링크 첨부면 파일 없이 형식만 돌려준다 — 화면이 "링크는 내려받아 올리라"고 안내한다.
+     */
+    async projectAttachmentFile(projectId: string): Promise<{ file: File | null; file_name: string | null; kind: 'drive' | 'link' | null }> {
+      const r = await post<{ token: string | null; file_name: string | null; kind: 'drive' | 'link' | null }>({
+        action: 'project-file-url',
+        project_id: projectId,
+      })
+      if (!r.token) return { file: null, file_name: r.file_name, kind: r.kind }
+      const res = await send({ url: streamUrl(r.token), method: 'GET' })
+      if (!res.ok) await parse<never>(res)
+      const blob = await res.blob()
+      const name = r.file_name ?? '견적서'
+      return { file: new File([blob], name, { type: blob.type || 'application/octet-stream' }), file_name: name, kind: 'drive' }
+    },
+
     async fileUrls(versionIds: string[]): Promise<Record<string, string | null>> {
       if (versionIds.length === 0) return {}
       const r = await post<{ tokens: Record<string, string | null> }>({ action: 'file-urls', version_ids: versionIds })

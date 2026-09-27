@@ -12,6 +12,7 @@
 //   · 버킷 표(원가 없는 버킷은 그룹행 아래) · 불러온 견적서 이력(있을 때만)
 // **마진 식은 lib/settlement 정본 그대로다 — 표시만 바꾼다.**
 import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { isPm as isPmUser } from '../lib/roles'
 import EmptyState from '../components/internal/EmptyState'
 import ErrorAlert from '../components/internal/ErrorAlert'
@@ -24,6 +25,7 @@ import SettlementKpis from '../components/settlement/SettlementKpis'
 import VendorQuoteHistory, { VendorQuoteDialog } from '../components/settlement/VendorQuoteImport'
 import { useProject } from '../context/ProjectContext'
 import { useAsync, useMutation } from '../hooks/useAsync'
+import { quoteAttachmentLabel } from '../lib/quoteAttachment'
 import { quoteBucketSpec } from '../lib/settlement'
 import { computeQuoteOutputs } from '../modules/quote/engine/quoteInput'
 import { getDataProvider } from '../providers'
@@ -111,6 +113,9 @@ export default function SettlementPage() {
 
   const me = useAsync(() => provider.getCurrentUser(), [])
   const board = useAsync(() => provider.getSettlementBoard(projectId), [projectId])
+  // Phase 6.7 — 온보딩 견적서 첨부가 있으면 빈 상태에서 '견적 가져오기'로 이어 준다(2026-09-27 실사용: "견적서를 온보딩 시점에서 올렸는데 적용이 안됨")
+  const project = useAsync(() => provider.getProject(projectId), [projectId])
+  const attachment = project.data?.quote_attachment ?? null
   const vendors = useAsync(() => provider.listVendors(), [])
   const members = useAsync(() => provider.listMembers(projectId), [projectId])
   const hasBoard = !!board.data
@@ -220,6 +225,16 @@ export default function SettlementPage() {
               )
             }
           />
+          {isPm && canQuotes && !finalQuotes.some((q) => q.project_id === projectId) && attachment && (
+            <p className="mt-2 text-center text-sm text-ink-sub" data-testid="settlement-attachment-note">
+              온보딩에서 첨부한 견적서 <span className="font-semibold text-ink">{quoteAttachmentLabel(attachment)}</span>
+              {attachment.kind === 'drive' ? '이(가) 행사 폴더에 있습니다' : ' 링크가 있습니다'} — 견적 가져오기에서 읽어 확정하면 여기서 정산을
+              시작할 수 있습니다.{' '}
+              <Link to="/quotes/import" className="font-semibold text-accent-deep underline">
+                견적 가져오기로
+              </Link>
+            </p>
+          )}
           {isPm && canQuotes && finalQuotes.length === 0 && (
             <p className="mt-2 text-center text-sm text-ink-sub">
               이 행사에 연결된 확정 견적이 없습니다 — 견적 화면에서 확정하거나 '기존 행사에 연결'로 이 행사에 붙인 뒤 다시 시도하세요.
