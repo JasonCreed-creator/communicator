@@ -61,7 +61,7 @@ export interface Targeting {
 export interface Project {
   id: UUID
   name: string
-  /** 행사 약칭 — 파일명 규약에 사용, 전역 유일 */
+  /** 내부 자동 식별자(EVT-…) — 전역 유일. v2.16부터 화면·폴더·파일 이름에 쓰지 않는다(행사 ID = YYMMDD_고객사_행사명 파생 — lib/projectLabel) */
   code: string
   /** v2.4 §21 — 'agency'(대행형, 기본) | 'host'(주최형). event_type과 직교하는 축이며
    *  전환은 표시 계층만 바꾼다 — 어떤 행도 삭제되지 않는다(R-H1) */

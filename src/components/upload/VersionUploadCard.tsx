@@ -190,7 +190,7 @@ export default function VersionUploadCard({
       : drive.loading
         ? 'Drive 연결 상태를 확인하는 중…'
         : serverDrive
-          ? 'Drive 행사 폴더에 저장됩니다(파일명은 규약 YYMMDD_코드_카테고리_제목_vN으로 바뀝니다).'
+          ? 'Drive 행사 폴더에 저장됩니다(파일명은 규약 행사ID_제목_vN — 행사ID = YYMMDD_고객사_행사명 — 으로 바뀝니다).'
           : null
 
   const pct = progress && progress.size > 0 ? Math.round((progress.sent / progress.size) * 100) : progress ? 100 : 0

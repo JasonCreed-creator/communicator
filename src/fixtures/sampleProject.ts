@@ -755,7 +755,7 @@ export function createFixtureState(): MockState {
       end_time: null,
       expected_headcount: null,
       seating: null,
-      organizer: null,
+      organizer: '가상 리더십 협회',
       target_audience: null,
       status: 'active',
       closed_at: null,

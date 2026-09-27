@@ -256,9 +256,10 @@ export function createFakeDriveStore() {
       users.set(u.jwt, u)
       return u
     },
-    addProject(p: ProjectRow) {
-      projects.set(p.id, p)
-      return p
+    addProject(p: Omit<ProjectRow, 'organizer'> & { organizer?: string | null }) {
+      const row: ProjectRow = { organizer: null, ...p }
+      projects.set(p.id, row)
+      return row
     },
     addMember(profileId: string, projectId: string, role: MemberRole) {
       members.set(`${profileId}:${projectId}`, role)

@@ -1,5 +1,6 @@
 // 컨펌 워크플로우 상태 머신 — 설계서 §5 전이표의 단일 정본.
 // 모든 상태 전이는 이 모듈의 검증을 거친다(CLAUDE.md §6: transitionStatus 단일 경유, 전이표 밖 전이는 409).
+import { labelSegment, projectLabel, type ProjectLabelSource } from './projectLabel'
 import { ProviderError } from './errors'
 import type { DeliverableStatus, MemberRole } from '../types/enums'
 
@@ -88,20 +89,15 @@ export function isPreviewFileName(fileName: string): boolean {
   return (PREVIEW_EXTENSIONS as readonly string[]).includes(fileExtension(fileName))
 }
 
-// ── 파일명 규약 (§7.2): YYMMDD_{code}_{category}_{title}_v{n}.{ext} ──
+// ── 파일명 규약 (§7.2 · v2.16 운영 프로토콜 v1.0): {행사ID}_{제목}_v{n}.{ext} — 행사ID = YYMMDD_고객사_행사명(src/lib/projectLabel) ──
 export function buildVersionFileName(params: {
-  date: Date
-  project_code: string
-  category: string
+  project: ProjectLabelSource
   title: string
   version_no: number
   original_file_name: string
 }): string {
-  const { date, project_code, category, title, version_no, original_file_name } = params
-  const yy = String(date.getFullYear()).slice(2)
-  const mm = String(date.getMonth() + 1).padStart(2, '0')
-  const dd = String(date.getDate()).padStart(2, '0')
+  const { project, title, version_no, original_file_name } = params
   const ext = fileExtension(original_file_name)
-  const base = `${yy}${mm}${dd}_${project_code}_${category}_${title}_v${version_no}`
+  const base = `${projectLabel(project)}_${labelSegment(title, 80) || '산출물'}_v${version_no}`
   return ext ? `${base}.${ext}` : base
 }

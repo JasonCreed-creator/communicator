@@ -1,8 +1,9 @@
 // 공용 행사개요 폼 — 행사 설정 '개요' 탭과 온보딩 1단계가 같은 상태·검증·저장을 쓴다(설계서 v1.5 §10).
 // 저장은 updateProject 단일 호출로 개요 전 필드를 patch한다(pm 전용, §8 PATCH /projects/{id}).
-// 필수 4(행사명·코드·시작일·장소) 중 시작일·장소만 클라이언트에서 막고, 행사명·코드가 비면
-// updateProject를 그대로 호출해 서버 검증 메시지('행사명은 비울 수 없습니다.' 등)를 그대로 노출한다.
-// 앞의 둘은 필드 줄 오류, 뒤의 둘은 서버 응답이라 블록 경고 — §10-C의 두 갈래가 그대로 나뉜다.
+// 필수 4(행사명·고객사·시작일·장소 — v2.16 §4-1d: 행사 코드 퇴역, 고객사가 행사 ID의 가운데 칸) 중 고객사·시작일·장소는 클라이언트에서 막고,
+// 행사명이 비면 updateProject를 그대로 호출해 서버 검증 메시지('행사명은 비울 수 없습니다.')를 그대로 노출한다.
+// 앞의 셋은 필드 줄 오류, 뒤는 서버 응답이라 블록 경고 — §10-C의 두 갈래가 그대로 나뉜다.
+// 행사 ID(YYMMDD_고객사_행사명 — 스레드 제목·Drive 폴더·파일명 접두)는 입력 칸이 아니라 세 칸에서 파생해 읽기 전용으로 보여 준다.
 //
 // Phase 3.23 PR-8(디자인지시서 v1.4 §7-2.12 · 캔버스 '행사 설정 — 섹션과 고정 저장 바' · '온보딩 — 넓은 2열'):
 //   · layout='settings' — 왼쪽 섹션 목록(기본 정보 · 일정·장소 · 내용 · 모객 설정 — 변경 수) + 섹션 카드 +
@@ -15,7 +16,7 @@ import Field from '../internal/Field'
 import { canUseQuotes } from '../quote/QuoteGate'
 import { useAsync, useMutation } from '../../hooks/useAsync'
 import { EVENT_TYPE_LABELS, formatDateWeekday } from '../../lib/labels'
-import { isPlaceholderCode, suggestProjectCode } from '../../lib/projectCode'
+import { projectLabel, projectLabelParts } from '../../lib/projectLabel'
 import type { BriefLink } from '../../lib/intake/eventBrief'
 import type { IntakeFileInfo } from '../../lib/intake/intakeClient'
 import QuoteAttachmentCard from './QuoteAttachmentCard'
@@ -50,7 +51,6 @@ const TARGETING_AXES: { key: keyof Targeting; label: string; short: string; opti
 
 interface FormValues {
   name: string
-  code: string
   eventType: EventType
   eventDate: string
   eventEndDate: string
@@ -90,7 +90,6 @@ export interface OverviewPrefill {
 /** 칸 이름(저장 바의 '바뀐 칸' 목록)과 소속 섹션 */
 const FIELD_META: Record<FieldKey, { label: string; section: SectionId }> = {
   name: { label: '행사명', section: 'basic' },
-  code: { label: '행사 코드', section: 'basic' },
   eventType: { label: '행사 유형', section: 'basic' },
   eventDate: { label: '시작일', section: 'schedule' },
   eventEndDate: { label: '종료일', section: 'schedule' },
@@ -100,7 +99,7 @@ const FIELD_META: Record<FieldKey, { label: string; section: SectionId }> = {
   expectedHeadcount: { label: '예상 인원', section: 'schedule' },
   seating: { label: '좌석 형태', section: 'schedule' },
   theme: { label: '주제(슬로건)', section: 'content' },
-  organizer: { label: '주최·주관', section: 'content' },
+  organizer: { label: '고객사(주최·주관)', section: 'basic' },
   mcName: { label: '사회자', section: 'content' },
   targetAudience: { label: '참가 대상', section: 'content' },
   items: { label: '기타 항목', section: 'content' },
@@ -112,12 +111,11 @@ const FIELD_META: Record<FieldKey, { label: string; section: SectionId }> = {
 const FIELD_ORDER = Object.keys(FIELD_META) as FieldKey[]
 
 /** 온보딩에서 접어 두는 선택 항목 — 필수 4 · 유형 · 예상 인원 · 시간은 2열에 늘 보인다 */
-const OPTIONAL_KEYS: FieldKey[] = ['seating', 'theme', 'organizer', 'mcName', 'targetAudience', 'items']
+const OPTIONAL_KEYS: FieldKey[] = ['seating', 'theme', 'mcName', 'targetAudience', 'items']
 
 function valuesFrom(project: Project): FormValues {
   return {
     name: project.name,
-    code: project.code,
     eventType: project.event_type,
     eventDate: project.event_date ?? '',
     eventEndDate: project.event_end_date ?? '',
@@ -158,10 +156,11 @@ function originalText(key: FieldKey, v: FormValues): string | null {
   return raw
 }
 
-/** 클라이언트에서 막는 필수 항목 — 행사명·코드는 서버 메시지를 그대로 쓴다(파일 머리 주석) */
-type RequiredKey = 'eventDate' | 'venue'
+/** 클라이언트에서 막는 필수 항목 — 행사명은 서버 메시지를 그대로 쓴다(파일 머리 주석) */
+type RequiredKey = 'organizer' | 'eventDate' | 'venue'
 
 const REQUIRED_MESSAGES: Record<RequiredKey, string> = {
+  organizer: '고객사(주최·주관)를 입력하세요 — 행사 ID에 들어갑니다.',
   eventDate: '시작일을 입력하세요.',
   venue: '장소를 입력하세요.',
 }
@@ -202,20 +201,9 @@ export default function ProjectOverviewForm({
 }: ProjectOverviewFormProps) {
   const project = useAsync(() => provider.getProject(projectId), [projectId])
   const [values, setValues] = useState<FormValues | null>(null)
-  // Phase 6.2 — 행사 코드 자동(온보딩 · 자리표시 코드일 때만). 사람이 코드 칸을 고치면 꺼진다
-  const [codeAuto, setCodeAuto] = useState(false)
   // 인테이크가 채운 칸(주황 표시) · 적용한 인테이크 id
   const [prefilledKeys, setPrefilledKeys] = useState<Set<FieldKey>>(() => new Set())
   const [appliedPrefillId, setAppliedPrefillId] = useState<string | null>(null)
-  // 자동 코드가 다른 행사와 겹치지 않게 — 온보딩에서만 읽는다
-  const otherCodes = useAsync<string[]>(
-    () =>
-      layout === 'onboarding'
-        ? provider.listProjects().then((list) => list.filter((p) => p.id !== projectId).map((p) => p.code))
-        : Promise.resolve([]),
-    [layout, projectId],
-  )
-  const takenCodes = otherCodes.data ?? []
   // 저장된 기준 — 바뀐 칸 판정·변경 취소·'원래 …' 표기가 이 값을 본다. 저장에 성공하면 그 값이 새 기준
   const [baseline, setBaseline] = useState<FormValues | null>(null)
   // §10-C — 필수 미입력은 그 줄에서 말한다. 블록 경고(ErrorAlert)는 저장 실패(서버·권한) 몫으로 비워 둔다.
@@ -239,14 +227,8 @@ export default function ProjectOverviewForm({
     const loaded = valuesFrom(project.data as Project)
     setValues((prev) => prev ?? loaded)
     setBaseline((prev) => prev ?? loaded)
-    // 새 행사(세팅 전 · createProject({})의 EVT-… 자리표시)만 자동 — 정해진 코드는 덮어쓰지 않는다(폴더·파일 이름에 이미 쓰였을 수 있다)
-    setCodeAuto((prev) => prev || (layout === 'onboarding' && !project.data!.onboarded_at && isPlaceholderCode(loaded.code)))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project.data])
-
-  /** 코드 자동 — 행사명·행사일이 바뀌면 다시 만든다(다른 행사 코드와 겹치면 -2, -3…) */
-  const autoCode = (name: string, eventDate: string): string | null =>
-    suggestProjectCode(name, { eventDate: eventDate || null, taken: takenCodes })
 
   // Phase 6.2 — 인테이크 결과 적용(id마다 한 번). 채운 칸은 주황 표시, 선택 항목을 채웠으면 접힌 칸을 펼친다
   useEffect(() => {
@@ -264,14 +246,13 @@ export default function ProjectOverviewForm({
         const have = new Set(prev.items.map((it) => it.label.trim()))
         next.items = [...prev.items, ...extraItems.filter((it) => !have.has(it.label.trim()))]
       }
-      if (codeAuto && keys.includes('name')) next.code = autoCode(next.name, next.eventDate) ?? ''
       return next
     })
     setPrefilledKeys(new Set(keys))
     if (keys.some((k) => OPTIONAL_KEYS.includes(k))) setOptionalOpen(true)
     setAppliedPrefillId(prefill.id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prefill, appliedPrefillId, values, codeAuto])
+  }, [prefill, appliedPrefillId, values])
 
   const changed = useMemo<FieldKey[]>(() => {
     if (!values || !baseline) return []
@@ -288,7 +269,7 @@ export default function ProjectOverviewForm({
   }, [dirty, onDirtyChange])
 
   const requiredFilled = values
-    ? filledRequired({ name: values.name, code: values.code, event_date: values.eventDate, venue: values.venue }).size
+    ? filledRequired({ name: values.name, organizer: values.organizer, event_date: values.eventDate, venue: values.venue }).size
     : null
   useEffect(() => {
     if (requiredFilled !== null) onRequiredFilledChange?.(requiredFilled)
@@ -304,12 +285,8 @@ export default function ProjectOverviewForm({
   const set = <K extends keyof FormValues>(key: K, v: FormValues[K]) => {
     setValues((prev) => {
       if (!prev) return prev
-      const next = { ...prev, [key]: v }
-      // 코드가 자동일 때 행사명·행사일을 고치면 코드도 따라간다(연도 두 자리는 행사일에서)
-      if (codeAuto && (key === 'name' || key === 'eventDate')) next.code = autoCode(next.name, next.eventDate) ?? ''
-      return next
+      return { ...prev, [key]: v }
     })
-    if (key === 'code') setCodeAuto(false)
     if (prefilledKeys.has(key)) {
       setPrefilledKeys((prev) => {
         const nextKeys = new Set(prev)
@@ -319,7 +296,7 @@ export default function ProjectOverviewForm({
     }
     // 입력을 고치는 순간 그 줄의 오류는 낡는다 — 저장까지 붉게 남겨 두지 않는다
     const touched: RequiredKey | null =
-      key === 'eventDate' ? 'eventDate' : key === 'venue' ? 'venue' : null
+      key === 'eventDate' ? 'eventDate' : key === 'venue' ? 'venue' : key === 'organizer' ? 'organizer' : null
     if (!touched) return
     setFieldErrors((prev) => {
       if (!prev[touched]) return prev
@@ -350,7 +327,6 @@ export default function ProjectOverviewForm({
   const tintClass = (key: keyof FormValues): string => {
     // Phase 6.2 — 인테이크가 채운 칸 · 자동으로 만든 코드도 같은 주황(채워 둔 값 — 확인하라는 뜻)
     if (prefilledKeys.has(key)) return ' bg-accent-tint'
-    if (key === 'code' && codeAuto && values.code.trim() && !isPlaceholderCode(values.code)) return ' bg-accent-tint'
     if (!prefillFromQuote || !initial) return ''
     const v = initial[key]
     const filled = Array.isArray(v) ? v.length > 0 : typeof v === 'string' ? v.trim() !== '' : false
@@ -384,13 +360,13 @@ export default function ProjectOverviewForm({
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     const missing: Partial<Record<RequiredKey, string>> = {}
+    if (!values.organizer.trim()) missing.organizer = REQUIRED_MESSAGES.organizer
     if (!values.eventDate) missing.eventDate = REQUIRED_MESSAGES.eventDate
     if (!values.venue.trim()) missing.venue = REQUIRED_MESSAGES.venue
     setFieldErrors(missing)
     if (Object.keys(missing).length > 0) return
     const patch: ProjectPatch = {
       name: values.name.trim(),
-      code: values.code.trim(),
       event_type: values.eventType,
       event_date: values.eventDate || null,
       event_end_date: values.eventEndDate || null,
@@ -434,43 +410,42 @@ export default function ProjectOverviewForm({
       />
     </Field>
   )
-  // 파일 이름 규약 = 올린 날 YYMMDD_코드_…(lib/statusMachine.buildVersionFileName) — 예시는 오늘 날짜로
-  const today = new Date()
-  const yymmdd = `${String(today.getFullYear()).slice(2)}${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}`
-  const codeHint = `파일 이름 앞에 붙습니다 — 예: ${yymmdd}_${values.code.trim() || 'CODE'}_…`
-  // Phase 6.2 — 온보딩에서는 행사명에서 자동으로 만든다. 사람이 고치면 자동이 꺼지고, '행사명에서 다시 만들기'로 되돌릴 수 있다
-  const codeAutoHint: ReactNode =
-    layout === 'onboarding' && !readOnly ? (
-      codeAuto ? (
-        <span data-testid="code-auto-hint">행사명에서 자동으로 만들었어요 — 고칠 수 있어요 · {codeHint}</span>
-      ) : (
-        <span>
-          {codeHint}{' '}
-          <button
-            type="button"
-            className="underline"
-            onClick={() => {
-              setCodeAuto(true)
-              setValues((prev) => (prev ? { ...prev, code: autoCode(prev.name, prev.eventDate) ?? prev.code } : prev))
-            }}
-          >
-            행사명에서 다시 만들기
-          </button>
-        </span>
-      )
-    ) : (
-      changedHint('code', codeHint)
-    )
-  const codeField = () => (
-    <Field id="ov-code" label="행사 코드" required hint={codeAutoHint}>
+  // v2.16 §4-1d — 고객사(주최·주관)는 행사 ID의 가운데 칸이라 필수. 주최형이면 우리 회사명을 적는다(회사명은 데이터 — 하드코딩 금지)
+  const organizerField = (span?: string) => (
+    <Field
+      id="ov-organizer"
+      label="고객사(주최·주관)"
+      required
+      span={span}
+      error={fieldErrors.organizer}
+      hint={changedHint('organizer', '행사 ID 가운데 칸 — 주최형이면 우리 회사명')}
+    >
       <input
-        id="ov-code"
-        value={values.code}
-        onChange={(e) => set('code', e.target.value)}
+        id="ov-organizer"
+        value={values.organizer}
+        onChange={(e) => set('organizer', e.target.value)}
         disabled={readOnly}
-        className={`${inputBase}${tintClass('code')}${changedClass('code')}`}
+        aria-invalid={fieldErrors.organizer ? true : undefined}
+        className={`${inputBase}${tintClass('organizer')}${errorClass('organizer')}${changedClass('organizer')}`}
       />
     </Field>
+  )
+  // 행사 ID — 저장하지 않고 행사일·고객사·행사명에서 늘 파생(운영 프로토콜 v1.0: 스레드 제목 = Drive 폴더 = 파일명 접두)
+  const labelParts = projectLabelParts({ name: values.name, organizer: values.organizer, event_date: values.eventDate })
+  const labelText = projectLabel({ name: values.name, organizer: values.organizer, event_date: values.eventDate })
+  const projectLabelRow = (span = 'sm:col-span-2') => (
+    <div className={`rounded-md bg-canvas px-3 py-2 ${span}`} data-testid="project-label">
+      <p className="t-caption">행사 ID</p>
+      <p className="mt-0.5 font-mono text-sm text-ink" data-testid="project-label-value">
+        {labelText}
+      </p>
+      <p className="mt-0.5 text-xs text-ink-cap">
+        {labelParts.missing.length > 0
+          ? `아직 빈 칸: ${labelParts.missing.map((k) => (k === 'event_date' ? '시작일' : '고객사')).join(' · ')} — 채우면 완성돼요. `
+          : ''}
+        Slack 스레드 제목 · Drive 행사 폴더 · 파일 이름 앞에 이 ID를 씁니다(YYMMDD_고객사_행사명 — 자동).
+      </p>
+    </div>
   )
   const eventTypeField = (hint: string) => (
     <Field id="ov-event-type" label="행사 유형" hint={changedHint('eventType', hint)}>
@@ -580,7 +555,7 @@ export default function ProjectOverviewForm({
       </select>
     </Field>
   )
-  const textField = (key: 'theme' | 'organizer' | 'mcName' | 'targetAudience', id: string, label: string, span?: string) => (
+  const textField = (key: 'theme' | 'mcName' | 'targetAudience', id: string, label: string, span?: string) => (
     <Field id={id} label={label} span={span} hint={changedHint(key)}>
       <input
         id={id}
@@ -734,7 +709,7 @@ export default function ProjectOverviewForm({
       data-testid="quote-prefill-banner"
       className="rounded-md border border-accent/30 bg-accent-tint px-3 py-2 text-xs text-accent-deep"
     >
-      확정 견적에서 채워 둔 값입니다(주황 표시) — 전부 고칠 수 있습니다. 행사 코드는 자동 제안이니 확인해 주세요.
+      확정 견적에서 채워 둔 값입니다(주황 표시) — 전부 고칠 수 있습니다. 고객사·행사일을 확인하면 행사 ID가 정해집니다.
     </p>
   ) : prefilledKeys.size > 0 ? (
     <p
@@ -772,7 +747,7 @@ export default function ProjectOverviewForm({
           <div className="flex flex-col gap-4">
             <p className="text-xs font-semibold tracking-[0.02em] text-ink-sub">무엇을</p>
             {nameField('')}
-            {codeField()}
+            {organizerField()}
             {eventTypeField('포맷(컨퍼런스·전시 등)은 3단계에서 고릅니다')}
             {headcountField()}
           </div>
@@ -786,6 +761,7 @@ export default function ProjectOverviewForm({
             </div>
             {venueField('', "미정이면 '(가안)'을 붙여 두세요")}
           </div>
+          {projectLabelRow('md:col-span-2')}
         </div>
 
         {values.eventType === 'recruiting' && (
@@ -814,7 +790,6 @@ export default function ProjectOverviewForm({
             <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
               {seatingField()}
               {textField('theme', 'ov-theme', '주제(슬로건)')}
-              {textField('organizer', 'ov-organizer', '주최·주관')}
               {textField('mcName', 'ov-mc', '사회자')}
               {textField('targetAudience', 'ov-audience', '참가 대상', 'sm:col-span-2')}
               {itemsField('sm:col-span-2')}
@@ -847,7 +822,8 @@ export default function ProjectOverviewForm({
       body: (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {nameField()}
-          {codeField()}
+          {organizerField('sm:col-span-2')}
+          {projectLabelRow()}
           {eventTypeField('바꿔도 등록 데이터는 지워지지 않고 화면에서만 숨겨집니다. 일정(WBS) 다시 펼치기는 일정 화면에서 합니다.')}
           {formatRow()}
           {dmsGroup()}
@@ -878,7 +854,6 @@ export default function ProjectOverviewForm({
       body: (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {textField('theme', 'ov-theme', '주제(슬로건)')}
-          {textField('organizer', 'ov-organizer', '주최·주관')}
           {textField('mcName', 'ov-mc', '사회자')}
           {textField('targetAudience', 'ov-audience', '참가 대상')}
           {itemsField('sm:col-span-2')}

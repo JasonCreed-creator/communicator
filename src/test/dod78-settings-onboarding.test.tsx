@@ -38,9 +38,6 @@ async function openSettings(id = PROJECT_ID) {
   await screen.findByLabelText('행사명')
 }
 
-function yymmdd(d: Date): string {
-  return `${String(d.getFullYear()).slice(2)}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`
-}
 
 describe('DoD 78-A 행사 설정 — 탭 · 상태 배지 · 섹션 · 고정 저장 바', () => {
   it('A1 탭 이름에 번호가 없고 지금 탭은 aria-current="page", 탭 줄 오른쪽에 필수 요약', async () => {
@@ -63,10 +60,10 @@ describe('DoD 78-A 행사 설정 — 탭 · 상태 배지 · 섹션 · 고정 �
     cleanup()
 
     await openSettings(draftId)
-    const todo = screen.getByText('세팅 미완료 · 필수 2개 남음')
+    const todo = screen.getByText('세팅 미완료 · 필수 3개 남음')
     expect(todo.getAttribute('data-level')).toBe('attention')
     expect(todo.className).not.toContain('negative')
-    expect(screen.getByTestId('required-summary').textContent).toBe('필수 2개 남음 — 행사일 · 장소')
+    expect(screen.getByTestId('required-summary').textContent).toBe('필수 3개 남음 — 고객사 · 행사일 · 장소')
   })
 
   it('A3 개요 = 섹션 목록 + 섹션 카드 — 모객형이면 4개, 누른 섹션이 지금 섹션이 된다', async () => {
@@ -126,7 +123,7 @@ describe('DoD 78-A 행사 설정 — 탭 · 상태 배지 · 섹션 · 고정 �
     expect(screen.getByRole('region', { name: '모객 설정' })).toBeTruthy()
   })
 
-  it('A6 행사 포맷은 읽기 전용(고르는 칸 없음)이고, 행사 코드 칸은 오늘 날짜로 파일 이름 예시를 보인다', async () => {
+  it('A6 행사 포맷은 읽기 전용(고르는 칸 없음)이고, 행사 ID 줄은 YYMMDD_고객사_행사명(읽기 전용 · 코드 칸 없음)', async () => {
     await openSettings()
     const fmt = screen.getByTestId('format-display')
     expect(fmt.textContent).toContain('컨퍼런스')
@@ -134,7 +131,9 @@ describe('DoD 78-A 행사 설정 — 탭 · 상태 배지 · 섹션 · 고정 �
     // 기본 정보 섹션의 고르는 칸은 행사 유형 하나 — 포맷 셀렉트가 없다
     const basic = screen.getByRole('region', { name: '기본 정보' })
     expect(within(basic).getAllByRole('combobox').map((el) => el.id)).toEqual(['ov-event-type'])
-    expect(screen.getByText(`파일 이름 앞에 붙습니다 — 예: ${yymmdd(new Date())}_STC26_…`)).toBeTruthy()
+    expect(within(basic).getByTestId('project-label-value').textContent).toMatch(/^\d{6}_.+_.+$/)
+    expect(within(basic).getByTestId('project-label').textContent).toContain('Slack 스레드 제목 · Drive 행사 폴더 · 파일 이름')
+    expect(screen.queryByLabelText('행사 코드')).toBeNull()
   })
 
   it('A7 PM이 아니면 칸이 잠기고 저장 바가 없다 — 섹션 목록으로 읽기는 그대로', async () => {
@@ -194,7 +193,7 @@ describe('DoD 78-B 온보딩 — 머리 줄 · 넓은 2열 · 선택 항목 · �
 
     const what = screen.getByText('무엇을').parentElement as HTMLElement
     const whenWhere = screen.getByText('언제 · 어디서').parentElement as HTMLElement
-    for (const label of ['행사명', '행사 코드', '행사 유형', '예상 인원']) expect(within(what).getByLabelText(label)).toBeTruthy()
+    for (const label of ['행사명', '고객사(주최·주관)', '행사 유형', '예상 인원']) expect(within(what).getByLabelText(label)).toBeTruthy()
     for (const label of ['시작일', '종료일', '장소']) expect(within(whenWhere).getByLabelText(label)).toBeTruthy()
 
     const primaries = screen.getAllByRole('button').filter((b) => /\bbtn-(primary|accent)\b/.test(b.className))
@@ -206,7 +205,7 @@ describe('DoD 78-B 온보딩 — 머리 줄 · 넓은 2열 · 선택 항목 · �
     select(PROJECT_ID)
     renderRoute('/onboarding')
     const filled = await screen.findByTestId('optional-fields')
-    expect(within(filled).getByText('선택 항목 6개')).toBeTruthy()
+    expect(within(filled).getByText('선택 항목 5개')).toBeTruthy()
     expect(within(filled).getByRole('button', { name: '접기' }).getAttribute('aria-expanded')).toBe('true')
     expect(within(filled).getByLabelText('주제(슬로건)')).toBeTruthy()
     cleanup()

@@ -223,9 +223,7 @@ export function programDomain(ctx: SupabaseCtx): Pick<DataProvider, ProgramMetho
           deliverable_id: d.id,
           drive_file_id: `pending:${newId()}`,
           file_name: buildVersionFileName({
-            date: new Date(),
-            project_code: project.code,
-            category: d.category,
+            project,
             title: d.title,
             version_no: versionNo,
             original_file_name: '스냅숏.pdf',

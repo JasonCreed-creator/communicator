@@ -25,7 +25,7 @@
 //       3.24 PR-B: 운영 보드 유형별 표·카드 요약 → 시나리오 원고(뼈대 · 멘트 쓰기 · 연사 확인 · 비상 멘트) · 큐시트 칸 순서 ·
 //       3.24 PR-C: 16:9 장표 — 운영계획서 → 장표(사이드바 없음 · 목차 쪽 번호 · 본문 넘침 0 · 16:9) → 인쇄 PDF 쪽 수·용지 960×540pt ·
 //       4.8: 협력사 견적서 PDF·사진 — 불러오기 대화상자(엑셀·PDF·사진 받음 · AI 안내) → PDF 고르기 → 'AI로 읽기' → mock 사실 안내 · 서버 요청 0 ·
-//       6.2: 행사 만들기 인테이크 — 세팅 미완료 행사 온보딩 ① → Slack 글 붙이기 → 라벨 규칙으로 채움(주황 · 배너 · 기록) → 코드 '행사명에서 다시 만들기' →
+//       6.2: 행사 만들기 인테이크 — 세팅 미완료 행사 온보딩 ① → Slack 글 붙이기 → 라벨 규칙으로 채움(주황 · 배너 · 기록) → 행사 ID 줄(YYMMDD_고객사_행사명) →
 //            견적서 링크 붙이기 → 빼기 · 채운 버튼 1개 · /api 요청 0)
 // 캡처는 dist-demo/shots-interaction/ 에 남긴다. 실패 시 exit 1.
 import { createServer } from 'node:http'
@@ -330,7 +330,7 @@ check(
 // ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — **Phase 6.2 행사 만들기 인테이크 · 견적서 첨부 · 행사 코드 자동(2026-09-26)**.
 //     세팅 미완료 행사(prj-forum-h2 — 필수 칸이 비어 있어 뒤 PR-5 블록의 '먼저 확인할 행사' 줄이 이 행사를 본다: 폼은 저장하지 않는다)의
 //     온보딩 ① → 'Slack 메시지에서 불러오기'에 라벨 글 붙이기 → 불러오기 → 결과(라벨 규칙 · 채운 칸 n) · 행사명·시작일·장소·인원 칸 채움(주황) ·
-//     배너 · 코드 칸 '행사명에서 다시 만들기' → 코드 = 이니셜+연도 · 견적서 '링크 붙이기' → 구글 시트 → 빼기(확인 수락) · 채운 버튼 = 다음: 담당자 하나 ·
+//     배너 · 행사 ID 줄 = YYMMDD_고객사_행사명(코드 칸 없음) · 견적서 '링크 붙이기' → 구글 시트 → 빼기(확인 수락) · 채운 버튼 = 다음: 담당자 하나 ·
 //     /api 요청 0(데모는 봇·AI 없이 라벨 규칙) → RB27 홈 → 다시 '일정'으로.
 {
   const docBefore = docRequests.length
@@ -355,11 +355,10 @@ check(
   check(/bg-accent-tint/.test((await nameBox.getAttribute('class')) ?? ''), '채운 칸 = 주황 표시')
   check((await tab.getByLabel('시작일').inputValue()) === '2027-05-20' && (await tab.getByLabel('장소').inputValue()) === '가상 전시장 B홀' && (await tab.getByLabel('예상 인원').inputValue()) === '800', '시작일·장소·인원 칸 채움')
   check((await tab.getByTestId('intake-prefill-banner').count()) === 1, '인테이크 배너(원문과 대조 안내)')
-  // 코드: 이 행사는 정해진 코드가 있어 자동이 꺼져 있다 → '행사명에서 다시 만들기'로 이니셜+연도
-  await tab.getByRole('button', { name: '행사명에서 다시 만들기' }).click()
-  const codeVal = await tab.getByLabel('행사 코드').inputValue()
-  check(codeVal === 'GCB27', "코드 '행사명에서 다시 만들기' = 이니셜 + 행사일 연도", codeVal)
-  check((await tab.getByTestId('code-auto-hint').count()) === 1, '코드 자동 안내')
+  // 행사 ID(v2.16): 시작일·고객사·행사명에서 파생 — 인테이크가 셋을 채웠으니 완성형 · 코드 칸 없음
+  const labelVal = await tab.getByTestId('project-label-value').innerText()
+  check(labelVal === '270520_가상인재㈜_가상 채용 박람회 2027', '행사 ID = YYMMDD_고객사_행사명(파생)', labelVal)
+  check((await tab.getByLabel('행사 코드').count()) === 0, '행사 코드 칸 없음')
   // 견적서 링크
   const qa = tab.getByTestId('quote-attachment')
   await qa.getByRole('button', { name: '링크 붙이기' }).click()

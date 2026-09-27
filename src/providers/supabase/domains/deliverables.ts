@@ -415,9 +415,7 @@ export function deliverablesDomain(ctx: SupabaseCtx): DeliverablesDomain {
       ) as { version_no: number }[]
       const versionNo = (latest[0]?.version_no ?? 0) + 1
       const fileName = buildVersionFileName({
-        date: new Date(),
-        project_code: project.code,
-        category: d.category,
+        project,
         title: d.title,
         version_no: versionNo,
         original_file_name: input.file_name,

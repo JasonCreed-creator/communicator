@@ -28,6 +28,7 @@ export type CardSpec =
   | {
       kind: 'work'
       project_code: string
+      project_name: string
       area: string | null
       requester: string | null
       items: WorkCardItem[]
@@ -36,6 +37,7 @@ export type CardSpec =
   | {
       kind: 'review'
       project_code: string
+      project_name: string
       area: string | null
       sender: string | null
       partner: string | null
@@ -118,7 +120,7 @@ const plain = (text: string) => ({ type: 'plain_text', text, emoji: false })
 export function cardMessage(card: CardSpec, mentions: readonly Recipient[], cardId: string, now: number): { text: string; blocks: unknown[] } {
   const who = mentionText(mentions)
   const lead = who ? `${who} ` : ''
-  const head = `[${slackEscape(card.project_code || '행사')}]`
+  const head = `[${slackEscape(card.project_name || '행사')}]`
   const area = card.area ? AREA_LABEL[card.area] ?? null : null
   const blocks: unknown[] = []
 

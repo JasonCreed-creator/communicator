@@ -73,7 +73,7 @@ export const BRIEF_LABELS: Record<BriefKey, string> = {
   end_time: '종료 시간',
   venue: '장소',
   expected_headcount: '예상 인원',
-  organizer: '주최·주관',
+  organizer: '고객사(주최·주관)',
   theme: '주제',
   target_audience: '참가 대상',
   event_type: '행사 유형',

@@ -6,6 +6,7 @@ import {
   REVOKED_TOKEN,
 } from '../../fixtures/sampleProject'
 import { ProviderError } from '../../lib/errors'
+import { projectLabel } from '../../lib/projectLabel'
 import { addDays, toIsoDate } from '../../lib/wbs'
 import { MockProvider } from './MockProvider'
 
@@ -128,10 +129,12 @@ describe('수정요청 루프 — 새 버전 업로드 시 draft 자동 복귀 (
     await expectError(() => p.uploadVersion('dlv-001', { file_name: 'x.png' }), 409)
   })
 
-  it('파일명은 규약대로 생성된다 (§7.2)', async () => {
+  it('파일명은 규약대로 생성된다 (§7.2 · v2.16 행사ID_제목_vN)', async () => {
     p.switchUser('usr-ops')
     const v = await p.uploadVersion('dlv-005', { file_name: '수정본.pdf' })
-    expect(v.file_name).toMatch(/^\d{6}_STC26_시나리오_운영 시나리오_v2\.pdf$/)
+    const project = await p.getProject(PROJECT_ID)
+    expect(v.file_name).toBe(`${projectLabel(project)}_운영 시나리오_v2.pdf`)
+    expect(v.file_name).toMatch(/^\d{6}_.+_.+_운영 시나리오_v2\.pdf$/)
   })
 })
 
