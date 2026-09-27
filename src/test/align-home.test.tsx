@@ -71,6 +71,11 @@ describe('홈(S1) 정렬 — 요약 5칸 + 오늘 할 일 한 목록', () => {
     renderRoute('/home')
     const list = await screen.findByTestId('today-list')
     expect(within(list).getByRole('heading', { name: '오늘 할 일' })).toBeTruthy()
+    // 픽스처 날짜는 고정이라 달력이 흐를수록 지연 행이 늘고, 임박 행(6.6 = 오늘)은 일정 행 8행 상한 뒤로 밀린다
+    // → '더 보기'가 있으면 펼친 뒤 판정한다(달력 드리프트와 무관한 계약: 순서만 본다)
+    await within(list).findAllByTestId('today-row') // 행이 실린 뒤에야 '더 보기' 단추가 있다
+    const more = within(list).queryByRole('button', { name: /일정 행 \d+건 더 보기/ })
+    if (more) await userEvent.click(more)
     const rows = await within(list).findAllByTestId('today-row')
     expect(rows.length).toBeGreaterThan(3)
     // 지연 행이 컨펌대기·미등록 파일·임박보다 앞선다
