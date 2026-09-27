@@ -165,7 +165,8 @@ function detectFormat(map: ColumnMap): 'A' | 'B' | 'C' {
 
 // ── 행 종류 ────────────────────────────────────────────────────────────
 const SUBTOTAL_KEYS = ['소계', 'subtotal', 'sub-total', 'sectiontotal', 'total', '합계', '계']
-const NOTE_PREFIX = /^[※*＊·]/
+// v2.20.2 — 안내 줄: ※·*·⚠️(리멤버 견적서 '⚠️ 호텔 비용은 …')·! 로 시작하는 줄은 항목·제목이 아니다
+const NOTE_PREFIX = /^[※*＊·⚠!！]/
 
 function isSubtotalRow(row: Row): boolean {
   const first = firstFilled(row)
@@ -205,11 +206,12 @@ const HEADER_FIELDS: { field: keyof ParsedQuoteHeader; keys: string[] }[] = [
       'event', 'eventtitle', 'project', 'projectname', 'subject', 'title'],
   },
   { field: 'client', keys: ['고객명', '고객사', '발주처', '수신처', 'client', 'customer', 'clientname', 'to', 'attn', 'attention', 'billto'] },
-  { field: 'date_range', keys: ['일시', '행사기간', '기간', '행사일', 'eventdate', 'eventdates', 'date', 'dates', 'period', 'schedule', 'eventperiod'] },
-  { field: 'venue', keys: ['장소', 'venue', '행사장', '개최장소', 'location', 'place'] },
+  { field: 'date_range', keys: ['일시', '행사기간', '기간', '행사일', 'eventdate', 'eventdates', 'dates', 'period', 'schedule', 'eventperiod'] },
+  { field: 'venue', keys: ['장소', '베뉴', 'venue', '행사장', '개최장소', 'location', 'place'] }, // v2.20.2 — 리멤버 견적서 라벨 '베뉴'
   {
     field: 'quoted_at',
-    keys: ['견적일시', '견적일', '견적일자', '제안일자', '작성일', 'quotedate', 'quotationdate', 'dateofquote', 'issuedate', 'dateissued', 'issued'],
+    // v2.20.2 — 영문 'Date' 한 단어는 견적일(리멤버 영문 견적서 'Date' · 제안일자). 행사일은 'Event Date'·'Period'
+    keys: ['견적일시', '견적일', '견적일자', '제안일자', '작성일', 'quotedate', 'quotationdate', 'dateofquote', 'issuedate', 'dateissued', 'issued', 'date'],
   },
   { field: 'manager', keys: ['담당자', 'manager', '담당', 'contact', 'contactperson', 'preparedby', 'pic', 'incharge'] },
 ]
@@ -269,11 +271,14 @@ function findBody(rows: Row[]): BodyLayout | null {
   for (let r = 0; r < rows.length; r++) {
     const map = classifyHeaderRow(rows[r] ?? [])
     if (!map) continue
-    // 섹션 제목 행이 헤더 행 바로 위에 오는 서식(B형)이 있어 위로 되짚는다.
+    // 섹션 제목 행이 헤더 행 바로 위에 오는 서식(B형·리멤버 견적서)이 있어 위로 되짚는다.
+    // 제목과 열 헤더 사이의 안내 줄(⚠️·※ — 리멤버 견적서 베뉴 섹션)은 건너뛴다(v2.20.2 실사용: 첫 섹션 제목을 잃어 '전체'가 됐다)
     let start = r
     for (let k = r - 1; k >= 0; k--) {
       const row = rows[k] ?? []
       if (isEmptyRow(row)) continue
+      const first = firstFilled(row)
+      if (first && NOTE_PREFIX.test(first[1])) continue
       if (looksLikeTotalsRow(row)) break
       if (sectionTitleOf(row)) {
         start = k
@@ -442,6 +447,31 @@ function rateCandidates(...texts: string[]): number[] {
   return out
 }
 
+/**
+ * v2.20.2 — 한 행에 라벨이 둘인 서식: 첫 라벨 오른쪽 어딘가에 "VAT 포함"·"부가세 별도" 같은 짧은 라벨 셀이 더 있고
+ * 그 오른쪽 숫자가 그 값이다(리멤버 견적서 총액 행). 첫 라벨은 호출자가 처리한다.
+ */
+function scanSecondaryLabels(row: Row, labelCol: number, block: TotalsBlock): void {
+  for (let c = labelCol + 1; c < row.length; c++) {
+    const key = norm(row[c])
+    if (!key || num(row[c]) !== null) continue
+    const included = /^(vat|v\.a\.t\.?|부가세)(포함|incl\.?|included|inclusive)$/.test(key)
+    const excluded = /^(vat|v\.a\.t\.?|부가세)(별도|미포함|excl\.?|excluded|exclusive)$/.test(key)
+    if (!included && !excluded) continue
+    let value: number | null = null
+    for (let k = c + 1; k < row.length; k++) {
+      const n = num(row[k])
+      if (n !== null) {
+        value = n
+        break
+      }
+    }
+    if (value === null) continue
+    if (included && block.vat_included_total === undefined) block.vat_included_total = value
+    if (excluded && block.pre_vat_total === undefined) block.pre_vat_total = value
+  }
+}
+
 function parseTotalsBlock(rows: Row[], bodyStart: number): TotalsBlock {
   const block: TotalsBlock = {}
   for (let r = 0; r < bodyStart; r++) {
@@ -450,6 +480,9 @@ function parseTotalsBlock(rows: Row[], bodyStart: number): TotalsBlock {
     if (!first) continue
     const [labelCol, labelRaw] = first
     const key = norm(labelRaw)
+    // v2.20.2 — 참고용 대안 총액("추가옵션 제외(VAT별도)"·"Excl. Add-ons (VAT excl.)" — 리멤버 견적서 둘째 총액 줄)은
+    // 총액 체인이 아니다. 통째로 건너뛴다(전에는 라벨 속 'VAT' 때문에 부가세 금액으로 읽혀 검산이 어긋났다)
+    if (/(제외|excl)/.test(key) && /(옵션|option|add-?on)/.test(key)) continue
     // 라벨 오른쪽의 첫 숫자 셀
     let amount: number | null = null
     for (let c = labelCol + 1; c < row.length; c++) {
@@ -460,6 +493,27 @@ function parseTotalsBlock(rows: Row[], bodyStart: number): TotalsBlock {
       }
     }
     const line = rowText(row)
+
+    // v2.20.2 — 같은 행의 두 번째 라벨(리멤버 견적서: "총 견적금액(VAT별도) · 일금… · 39,770,000 | VAT 포함 | 43,747,000")
+    scanSecondaryLabels(row, labelCol, block)
+
+    // v2.20.2 — 대표 금액 라벨("총 견적금액(VAT별도)"·"Grand Total (VAT included)")은 부가세 줄보다 먼저 본다.
+    // 전에는 라벨 속 'VAT' 때문에 부가세 줄로 읽혀 공급가 39,770,000이 부가세가 되고 총액이 두 배가 됐다(실사용 2026-09-27).
+    if (TOTAL_LABEL_KEYS.some((k) => key.includes(k))) {
+      const value = amount ?? amountInText(text(valueRightOf(row, labelCol)))
+      if (value !== null) {
+        if (block.headline === undefined) {
+          block.headline = value
+          block.headlineRow = r
+        }
+        if (/별도|미포함|excl|exclusive|before|without|net|plus/.test(key)) {
+          if (block.pre_vat_total === undefined) block.pre_vat_total = value
+        } else if (/포함|incl|inclusive|including|with/.test(key)) {
+          if (block.vat_included_total === undefined) block.vat_included_total = value
+        }
+      }
+      continue
+    }
 
     // 같은 이름의 라벨이 여러 번 나오면 **처음 것이 이긴다**(하단 안내 문구가 값을 덮지 않도록)
     if (/항목합계|항목합|직접비합계|소계합계|^sub-?total|itemstotal|itemtotal|directcost|totalofitems/.test(key)) {
@@ -548,6 +602,8 @@ function detectVatMode(
 const FEE_BASE_EXCLUDE = /옵션|식음|케이터링|모객|f&b|선택|option|add-?on|catering|recruit|lead\s*gen/i
 const VENUE_HINT = /베뉴|대관|장소|venue|hall\s*rental|room\s*rental/i
 const FEE_HINT = /대행료|기획료|pco|agency\s*fee|management\s*fee|service\s*fee|coordination\s*fee/i
+/** 비율(%) 후보를 읽을 줄 — 대행료·기획료·이윤·인건비를 말하는 줄만(v2.20.2) */
+const FEE_RATE_CONTEXT = /대행료|기획료|수수료|이윤|인건비|관리비|pco|fee|commission|margin|markup/i
 
 function feeBaseOf(sections: ParsedQuoteSection[]): number {
   return sections.reduce((sum, s) => {
@@ -636,7 +692,13 @@ export function parseQuoteWorkbook(data: ArrayBuffer, fileName: string): ParsedQ
   const feeBase = feeInsideItems ? feeBaseOf(sections) : itemsSum
   if (agencyFee !== undefined && feeBase > 0) {
     const implied = agencyFee / feeBase
-    const candidates = rateCandidates(...rows.slice(0, layout.bodyStart).map((row) => rowText(row ?? [])))
+    // v2.20.2 — 비율 후보는 대행료·기획료를 말하는 줄에서만(리멤버 견적서 머리 "KPI 달성선 68명 (85% 인정)"이 기획료 85%로 잡혔다)
+    const candidates = rateCandidates(
+      ...rows
+        .slice(0, layout.bodyStart)
+        .map((row) => rowText(row ?? []))
+        .filter((t) => FEE_RATE_CONTEXT.test(t)),
+    )
     const pool = [...(agencyFeeRate !== undefined ? [agencyFeeRate] : []), ...candidates]
     let best: number | undefined
     let bestDiff = Number.POSITIVE_INFINITY
@@ -678,7 +740,8 @@ export function parseQuoteWorkbook(data: ArrayBuffer, fileName: string): ParsedQ
   if (vat !== undefined) totals.vat = vat
   if (grandTotal !== undefined) totals.grand_total = grandTotal
 
-  header.total_amount = block.headline ?? grandTotal
+  // v2.20.2 — 대표 금액 라벨이 없으면(영문 'Total (VAT excl.)') 부가세 판정과 같은 쪽 값을 쓴다(별도 = 부가세 전 총계)
+  header.total_amount = block.headline ?? (vatMode === 'excluded' && block.pre_vat_total !== undefined ? block.pre_vat_total : grandTotal)
   header.vat_mode = vatMode
   const currency = detectCurrency(rows)
   if (currency) {

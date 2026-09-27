@@ -533,6 +533,12 @@ export interface QuoteBreakdown {
    * 없다 — 골든 벡터 등가 테스트(DoD 21)가 보는 것은 위 8개 필드뿐이라 이 필드는 건드리지 않는다.
    */
   custom_sections?: { code: string; label: string; amount: number }[]
+  /**
+   * v2.20.2 §19.2 — 임포트 견적 전용. recruit를 정산보드 rc(RSVP 운영비)·ld(리드젠/쇼업 보장)로 나눈 값(`recruitSplit`).
+   * 엔진 견적에는 없다(엔진 산출값 rsvpPkg·showup을 그대로 쓴다). 골든 벡터(DoD 21)가 보는 8개 필드가 아니다.
+   */
+  recruit_rsvp?: number
+  recruit_showup?: number
 }
 
 export interface Quote {

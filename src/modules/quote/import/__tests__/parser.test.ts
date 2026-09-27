@@ -177,9 +177,9 @@ describe('C형(패키지·UNIT PRICE/QTY/AMOUNT/SELECT) 골든', () => {
     expect(checkOf(doc, '단가×수량×일수')).toMatchObject({ expected: 13, actual: 13, ok: true })
   })
 
-  it('버킷 매핑: Add-ons는 custom — v2.18부터 영문 키워드(add-ons)도 규칙표에 있어 확신 배정(저신뢰 0)', () => {
+  it('버킷 매핑: "추가 옵션 (Add-ons)"은 options(ot) — v2.20.2 우리 견적서 제목표가 국문 "추가 옵션"을 먼저 잡는다(저신뢰 0)', () => {
     const map = mapSectionsToBuckets(doc)
-    expect(map.map((m) => m.bucket)).toEqual(['s1', 's2', 's3', 's4', 'custom', 's5', 'recruit'])
+    expect(map.map((m) => m.bucket)).toEqual(['s1', 's2', 's3', 's4', 'options', 's5', 'recruit'])
     expect(lowCount(doc)).toBe(0)
   })
 })

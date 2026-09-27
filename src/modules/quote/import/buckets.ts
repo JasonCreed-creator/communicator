@@ -47,11 +47,36 @@ export function bucketLabel(code: string): string {
   return QUOTE_IMPORT_BUCKETS.find((b) => b.code === code)?.label ?? code
 }
 
-/** 섹션명 하나를 버킷으로 — 무매칭·복수매칭은 custom + 저신뢰 */
+/**
+ * v2.20.2 — 우리 견적서(리멤버 MICE 솔루션 견적서 — Configurator 내보내기 `exportEstimate`)의 섹션 제목은 정해져 있다.
+ * 키워드 규칙보다 먼저 본다(실사용 2026-09-27: "운영인력·등록·보험"이 운영(s4)·등록(recruit) 두 규칙에 걸려 custom이 됐다).
+ * 국문·영문 제목 모두 — 제목 뒤의 꼬리("(100명 기준)"·"[게런티 40명]"·"[예상치 · 확정 아님]")는 무시한다.
+ */
+export const KNOWN_SECTION_BUCKETS: { bucket: string; pattern: RegExp }[] = [
+  { bucket: 's1', pattern: /베뉴\s*사용료|venue\s*rental/i },
+  { bucket: 's2', pattern: /시스템\s*구축|system\s*\/?\s*av\b/i },
+  { bucket: 's3', pattern: /디자인\s*[·/]\s*브랜딩|design\s*\/?\s*branding/i },
+  { bucket: 's4', pattern: /운영\s*인력\s*[·/]\s*등록\s*[·/]\s*보험|운영\s*[·/]\s*등록\s*[·/]\s*보험|operations?\s*[·/]\s*staff\s*[·/]\s*insurance/i },
+  { bucket: 'options', pattern: /추가\s*옵션|^\s*\d*[.)]?\s*add-?ons?\s*$/i }, // 영문은 제목이 'N. Add-ons'뿐일 때만(리멤버 영문 견적서) — 'Optional Add-ons (not included)' 같은 남의 제목은 §22.2-6 custom 규칙 그대로
+  { bucket: 's5', pattern: /pco\s*(기획료|planning\s*fee)/i },
+  { bucket: 'recruit', pattern: /모객\s*솔루션|audience\s*recruitment/i },
+  { bucket: 'attendee', pattern: /참가\s*인원\s*관리|참관객\s*관리|attendee\s*management/i },
+]
+
+/** 섹션명 하나를 버킷으로 — 우리 견적서 제목은 확신 · 키워드 규칙 하나면 확신 · 여러 규칙이면 키워드 적중이 뚜렷이 많은 쪽 · 그 밖은 custom + 저신뢰 */
 export function mapSectionName(name: string): { bucket: string; confidence: 'high' | 'low' } {
+  const known = KNOWN_SECTION_BUCKETS.find((k) => k.pattern.test(name))
+  if (known) return { bucket: known.bucket, confidence: 'high' }
   const lower = name.toLowerCase()
-  const matched = SECTION_BUCKET_RULES.filter((r) => r.keywords.some((k) => matchesKeyword(lower, k)))
-  if (matched.length === 1) return { bucket: matched[0].bucket, confidence: 'high' }
+  const scored = SECTION_BUCKET_RULES.map((r) => ({ bucket: r.bucket, hits: r.keywords.filter((k) => matchesKeyword(lower, k)).length })).filter(
+    (r) => r.hits > 0,
+  )
+  if (scored.length === 1) return { bucket: scored[0].bucket, confidence: 'high' }
+  if (scored.length > 1) {
+    // v2.20.2 — "운영인력·등록·보험"처럼 두 규칙에 걸려도 한쪽 적중이 2개 이상 많으면 그쪽(§22.2-6)
+    const sorted = [...scored].sort((a, b) => b.hits - a.hits)
+    if (sorted[0].hits - sorted[1].hits >= 2) return { bucket: sorted[0].bucket, confidence: 'high' }
+  }
   return { bucket: 'custom', confidence: 'low' }
 }
 
