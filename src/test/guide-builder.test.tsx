@@ -101,7 +101,7 @@ describe('운영가이드 빌더 — RE:BUILD 27 픽스처', () => {
     expect(zone.content ?? '').toMatch(/애프터파티 정원 150명 유지 여부/)
   })
 
-  it('(e) 빈 문서에서는 "기본 섹션 만들기" 시드 버튼이 보이고(v2.13 — 현장 운영 12섹션), 섹션이 있으면 보이지 않는다', async () => {
+  it('(e) 빈 문서에서는 "기본 섹션 만들기" 시드 버튼이 보이고(v2.13 — 현장 운영 12섹션 · v2.21 +3 = 15), 섹션이 있으면 보이지 않는다', async () => {
     // RB27 가이드(GUIDE_ID)는 이미 섹션이 있으므로 시드 버튼이 없다
     renderBuilder(true)
     await screen.findByRole('heading', { name: /존별 운영$/ })
@@ -131,7 +131,7 @@ describe('운영가이드 빌더 — RE:BUILD 27 픽스처', () => {
     expect(screen.queryByRole('button', { name: '기본 섹션 만들기' })).toBeNull()
 
     const built = await provider.listGuideSections(fresh.id)
-    expect(built).toHaveLength(12)
+    expect(built).toHaveLength(15)
   })
 
   it('(f) 읽기 전용(canEdit=false)에서는 편집·정렬·삭제·추가·시드·반영 버튼이 전혀 없다', async () => {

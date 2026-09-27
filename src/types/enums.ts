@@ -130,6 +130,7 @@ export type ScenarioBlockKind = (typeof SCENARIO_BLOCK_KINDS)[number]
 
 // v2.5 §23: guide_sections.kind — v2.13 §23.5(Phase 3.24): 현장 운영 섹션 9종 추가(표로 채우는 섹션 — data jsonb).
 // zone·role·contacts·custom은 마크다운 그대로, emergency는 data가 있으면 표·없으면 마크다운(옛 문서).
+// v2.21 §27.2(Phase 6.11 PR-A): 마스터 시트 대체 3종 — survey(답사 체크리스트)·floorplan(설치 도면)·messaging(참가자 안내), 전부 표 섹션.
 export const GUIDE_SECTION_KINDS = [
   'zone',
   'role',
@@ -145,6 +146,9 @@ export const GUIDE_SECTION_KINDS = [
   'registration',
   'vip',
   'safety',
+  'survey',
+  'floorplan',
+  'messaging',
 ] as const
 export type GuideSectionKind = (typeof GUIDE_SECTION_KINDS)[number]
 

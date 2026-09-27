@@ -1045,6 +1045,61 @@ export interface GuideEmergencyData {
   rows: GuideEmergencyRow[]
 }
 
+// ── v2.21 §27.2 마스터 시트 대체 섹션 3종 (Phase 6.11 PR-A) — 답사 · 설치 도면 · 참가자 안내 ─────────
+
+/** 답사 체크리스트 한 줄 — 구분(외부/내부) · 항목 · 세부 · 체크사항 · 확인내용(답사에서 적는다) · 담당자 */
+export interface GuideSurveyRow {
+  scope: 'external' | 'internal'
+  item: string
+  detail: string
+  check: string
+  /** 답사 뒤 확인한 내용 — 비어 있으면 아직 확인 전 */
+  finding: string
+  owner: string
+}
+export interface GuideSurveyData {
+  type: 'survey'
+  rows: GuideSurveyRow[]
+  /** 답사일 'YYYY-MM-DD' — 없으면 null */
+  visited_on: string | null
+  notes: string[]
+}
+
+/** 설치 도면 한 줄 — 도면 파일은 항목(design·ops)의 버전으로 올리고 여기서는 연결만(R-M7 — 새 업로드 경로 없음) */
+export interface GuideFloorplanItem {
+  title: string
+  /** 연결한 항목 — 최신 버전 이미지를 운영계획서·장표에 싣는다(이미지가 아니면 링크만) */
+  deliverable_id: UUID | null
+  note: string
+}
+export interface GuideFloorplanData {
+  type: 'floorplan'
+  items: GuideFloorplanItem[]
+}
+
+export type GuideMessagingChannel = 'alimtalk' | 'email' | 'sms' | 'other'
+export type GuideMessagingStatus = 'draft' | 'ready' | 'sent'
+
+/** 참가자 안내 한 단계 — 발송은 앱 밖(알림톡·이메일 도구). 앱은 원고·일정·상태·리마인드까지(R-M5) */
+export interface GuideMessagingRow {
+  /** 단계 이름(참석 선정 안내 · 최종 참가 안내 · D-1 리마인드 …) */
+  stage: string
+  /** 발송일 'YYYY-MM-DD' — 없으면 null(리마인드 없음) */
+  send_on: string | null
+  /** 발송 시각 'HH:MM' — 없으면 null */
+  send_at: string | null
+  channel: GuideMessagingChannel
+  /** 받는 대상(선정자 · 대기자 · 전원 등) — 명단·연락처가 아니라 묶음 이름 */
+  audience: string
+  subject: string
+  body: string
+  status: GuideMessagingStatus
+}
+export interface GuideMessagingData {
+  type: 'messaging'
+  rows: GuideMessagingRow[]
+}
+
 export type GuideSectionData =
   | GuideSetupData
   | GuideStaffingData
@@ -1056,6 +1111,9 @@ export type GuideSectionData =
   | GuideVipData
   | GuideSafetyData
   | GuideEmergencyData
+  | GuideSurveyData
+  | GuideFloorplanData
+  | GuideMessagingData
 
 // ── v2.6 §24 sheet_connections — 등록 명단 구글 시트 연동 (행사당 1개) ──────
 // 대원칙(§24.1): 시트 → 앱 단방향(앱은 시트에 쓰지 않는다) · 자동 덮어쓰기 없음 ·

@@ -161,6 +161,8 @@ function SlideBody({ slide }: { slide: Exclude<DeckSlide, { kind: 'cover' }> }) 
       return <RegistrationBody stats={slide.stats} capacity={slide.capacity} notes={slide.notes} caption={slide.caption} />
     case 'checklists':
       return <ChecklistsBody cards={slide.cards} />
+    case 'figures':
+      return <FiguresBody figures={slide.figures} />
     case 'empty':
       return (
         <div className="flex h-full flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border-strong text-center">
@@ -169,6 +171,35 @@ function SlideBody({ slide }: { slide: Exclude<DeckSlide, { kind: 'cover' }> }) 
         </div>
       )
   }
+}
+
+// ── 설치 도면 (v2.21 §27.2) — 한 장에 2개, 이미지면 그림 · 아니면 파일 이름만 ─────────────────
+
+function FiguresBody({ figures }: { figures: { title: string; note: string; item_title: string | null; version: { version_no: number; file_name: string } | null; image_url: string | null }[] }) {
+  return (
+    <div className={`grid h-full gap-6 ${figures.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+      {figures.map((f, i) => (
+        <figure key={i} className="m-0 flex min-h-0 flex-col rounded-lg border border-border p-4" data-testid="deck-figure">
+          <figcaption className="mb-3 flex items-baseline justify-between gap-3">
+            <span className="text-[17px] font-semibold text-ink">{f.title}</span>
+            {f.version && (
+              <span className="shrink-0 text-[12px] text-ink-cap">
+                v{f.version.version_no} · {f.version.file_name}
+              </span>
+            )}
+          </figcaption>
+          {f.image_url ? (
+            <img src={f.image_url} alt={`${f.title} 도면`} className="min-h-0 flex-1 rounded-md object-contain" />
+          ) : (
+            <div className="flex flex-1 items-center justify-center rounded-md border border-dashed border-border-strong text-[14px] text-ink-cap">
+              {f.version ? '이미지가 아니라 파일 이름만 싣습니다' : f.item_title ? '아직 올린 버전이 없습니다' : '연결한 항목이 없습니다'}
+            </div>
+          )}
+          {f.note && <p className="m-0 mt-2 text-[13px] text-ink-sub">{f.note}</p>}
+        </figure>
+      ))}
+    </div>
+  )
 }
 
 // ── 표지 ──────────────────────────────────────────────────────────────

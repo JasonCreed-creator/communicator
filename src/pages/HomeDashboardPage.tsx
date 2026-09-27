@@ -9,7 +9,8 @@ import { activityActionLabel, activityActorLabel } from '../components/internal/
 import HomeSummaryTiles, { type SummaryTile } from '../components/home/HomeSummaryTiles'
 import TodayListCard from '../components/home/TodayListCard'
 import UpcomingCard, { type UpcomingEntry } from '../components/home/UpcomingCard'
-import { buildTodayRows } from '../components/home/todayItems'
+import { buildTodayRows, type TodayMessagingRow } from '../components/home/todayItems'
+import { messagingDueRows } from '../lib/guideStructured'
 import { groupHostTasks } from '../components/partner/partnerBoardUtils'
 import { useProject } from '../context/ProjectContext'
 import { useAsync } from '../hooks/useAsync'
@@ -63,6 +64,21 @@ export default function HomeDashboardPage() {
 
   const memberById = useMemo(() => new Map((members.data ?? []).map((m) => [m.user_id, m])), [members.data])
 
+  const today = toIsoDate(new Date())
+  // v2.21 §27.2 — 참가자 안내 발송일(오늘·지남 · 발송 완료 제외)은 운영가이드 messaging 섹션에서 읽는다(원고는 싣지 않는다)
+  const guideIds = (deliverables.data ?? []).filter((d) => d.category === '운영가이드').map((d) => d.id)
+  const messaging = useAsync(async (): Promise<TodayMessagingRow[]> => {
+    const out: TodayMessagingRow[] = []
+    for (const id of guideIds) {
+      const sections = await provider.listGuideSections(id)
+      for (const s of sections) {
+        if (s.data?.type !== 'messaging') continue
+        for (const { index, row } of messagingDueRows(s.data, today)) out.push({ deliverableId: id, sectionId: s.id, index, row })
+      }
+    }
+    return out
+  }, [guideIds.join(','), today])
+
   const partnerPending = useMemo(() => {
     if (!isHost) return []
     const nameById = new Map((partners.data ?? []).map((p) => [p.id, p.name]))
@@ -80,7 +96,6 @@ export default function HomeDashboardPage() {
     [settlement.data],
   )
 
-  const today = toIsoDate(new Date())
   const lateMilestones = useMemo(
     () => (dashboard.data?.upcoming_milestones ?? []).filter((m) => !m.done && m.due_date < today),
     [dashboard.data, today],
@@ -98,12 +113,13 @@ export default function HomeDashboardPage() {
       overBudget,
       inbox: inbox.data ?? [],
       guides: dashboard.data?.my_requested ?? [],
+      messaging: messaging.data ?? [],
       myRoles: rolesOf(me.data),
       roleOf,
       nameOf,
     })
     // 멤버가 늦게 와도 이름·역할만 채워질 뿐 목록은 즉시 렌더된다
-  }, [dashboard.data, lateMilestones, isHost, partnerPending, overBudget, inbox.data, me.data, memberById])
+  }, [dashboard.data, lateMilestones, isHost, partnerPending, overBudget, inbox.data, messaging.data, me.data, memberById])
 
   const upcoming = useMemo<UpcomingEntry[]>(() => {
     const until = addDays(today, UPCOMING_DAYS)

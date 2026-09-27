@@ -1150,6 +1150,7 @@ UI 공통: 한국어, 데스크톱 우선 + 반응형(발주처 화면은 모바
 
 ## 14. 개정 이력
 
+- **v2.21.1** (2026-09-28): **Phase 6.11 PR-A 운영가이드 섹션 3종 구현**(§27.2 구현 판단 6건 추가 · SQL 33번째 = kind·data CHECK + `notify_claim_reminders` ⑦ · §9 참가자 안내 D-1 행 그대로 · DataProvider 132 불변 · DoD 95).
 - **v2.21** (2026-09-27 밤): **마스터 시트 대체 정본 — §27 신설**(Phase 6.11 · 구현 = 새 챗 · 계기 = 실행사 마스터 시트 2건(담당자 다름) 분석 "완전 대체" · "형식과 구성이 조금씩 다름" · 원칙 = 탭마다 앱에 정본 자리 하나 · 사용자 결정 5건 = 구현 묶음 A·C·B·G(D·E·F 설계만) · 범위 [C] 새 챗 · Phase 6.10 Drive 분류 폴더는 뒤에 재개(초안 `docs/drafts/phase-6.10-drive-category/`) · 연락망 = 협력사 마스터 업무 연락처 허용(R-O6 개정) · **DataProvider v17 = +3**(`createWbsTask`·`deleteWbsTask`·`updateRoleCharter` — 135) · 스키마 = guide_sections kind +3(survey·floorplan·messaging) · `projects.reference_links` · `wbs_tasks.assignee_id/group_name/source` · `role_charters.people` · `vendors.contacts`(F 설계) · API `POST /api/master-sheet`(Sheets API 직접 · 금액 탭은 pm·admin만) · §9 참가자 안내 D-1 · §13 · §23.1 · §23.2 R-O6 · §23.5 · §4. SQL은 새 챗 PR마다(33~35번째)).
 - **v2.20.2** (2026-09-27 밤): **견적서 인식률 — 리멤버 서식(R형)**(Phase 6.9 — 실사용 "인식률이 너무 떨어진다" · §22.1 R형 행 · §22.2 (0b) 안내 줄·라벨 둘인 총액 줄·대안 총액 줄·비율 후보·머리 라벨 + 규칙 6 우리 제목표·적중 차 판정 · §19.2 가져온 견적의 rc·ld 분할(`recruit_rsvp`·`recruit_showup` · 옛 임포트는 기준 견적 갱신이 다시 나눔) + **custom 섹션 = 행사별 버킷 스냅숏**(전에는 보드에서 사라짐) · §22.4 · AI 규칙 문장 힌트 · SQL 0 · DataProvider 132 불변 · DoD 94).
 - **v2.20.1** (2026-09-27 밤): **서버 함수 역할 규칙 정합**(Phase 6.8 — §6.1 행 추가 · sheets·Drive·알림 서버 함수가 SQL `app.member_role()`과 같은 규칙(admin → pm · 여러 역할 행 → 대표 역할) · 실사용 관리자 '시트 확인' 403 정정 · SQL 0 · DataProvider 132 불변).
@@ -2429,7 +2430,8 @@ DMS 등록의 "신청 → 주최 승인 → 확정" 게이트를 **기존 RSVP �
 
 - **발송은 앱 밖이다**(알림톡·이메일 도구). 앱은 원고·일정·상태·리마인드까지(R-M5). §9에 '참가자 안내 발송일 D-1' 행 추가(운영 스레드 · PM·등록 담당 멘션 · 본문 = 단계·발송일·채널만, 원고·연락처 0 · 선점 키 `messaging:{section_id}:{row_index}:{send_on}`). 홈 '오늘 할 일' 출처 +1(발송일 = 오늘·지남, status 'sent' 제외 · '내 차례' = pm·reg).
 - 운영계획서 S9: 05 참가자 = 참가자 안내 표(단계·발송일·채널·상태 — 원고 제외) · 03 공간·설치 = 도면 이미지 + 답사 요약(확인내용이 있는 행만). 16:9 장표(§23.7)도 같은 규칙 · `PlanData.guide`에 세 종류 포함(연락망 제외 규칙 그대로).
-- SQL 33번째 `20260928000100_guide_sheet_sections.sql` = `guide_sections_kind_check` · `guide_sections_data_shape` 재정의(3종 data 필수) — 열 추가 0 · RPC 무변경.
+- SQL 33번째 `20260928000100_guide_sheet_sections.sql` = `guide_sections_kind_check` · `guide_sections_data_shape` 재정의(3종 data 필수) + `notify_claim_reminders` ⑦(참가자 안내 발송일 D-1 — 선점 키 `rem:messaging:{section_id}:{row_index}:{send_on}` · 받는 사람 = pm·reg · 본문 재료 = 단계·발송일·시각·채널) — 열 추가 0 · RPC 무변경.
+- **(v2.21.1 · PR-A 구현 판단 2026-09-28)** ① 위 "운영계획서 S9 05·03"은 16:9 장표의 장 번호(05 참가자 · 03 공간·설치)다 — A4 S9에서는 **04 존별 운영**(도면 그림 + 답사 확인 사항)과 **06 등록 통계**(참가자 안내 일정 — 원고 제외)에 해당한다(S9 번호 정본 = `planSections.ts`). ② 선점 키는 다른 리마인드와 같은 `rem:` 접두를 쓴다(30일 정리 규칙 공유). ③ 참가자 안내 Slack 줄의 태그는 운영 어휘 가운데 `[WBS]`(일정 알림)로 — 원고·대상은 싣지 않고 '원고 열기' 링크로 앱을 연다. ④ 설치 도면 미리보기는 PNG·JPG만 그림, PDF·그 밖은 항목 링크(파일 이름)만 — 도면 연결 후보 = 그 행사의 디자인·운영 항목(정형 문서·공통 제외). ⑤ 답사 `check`는 체크사항(글)이며 '확인됨' 판정 = `finding`이 비어 있지 않음(별도 체크 칸 없음). ⑥ 옛 12섹션 문서는 '뼈대 추가'로 3종만 끼운다(기존 순서 불변 — R-O9).
 - 순수 함수 = `src/lib/guideStructured.ts`에 템플릿·글 변환·정본 순서 추가(provider 2종·빌더 공용). 빌더 = `components/guide/` 표 편집 부품 재사용(답사 = 체크 칸 + 확인내용 · 도면 = 항목 피커 + 미리보기 · 참가자 안내 = 원고 칸 큰 textarea + 상태 배지). **DataProvider 132 불변**(kind 값 3 · data 타입 3 — 필드만).
 
 ### 27.3 묶음 B — 참고 문서 링크 + 요청서

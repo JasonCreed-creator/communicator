@@ -220,8 +220,8 @@ check(
 }
 
 // ── ③-이전(2026-09-26 Phase 3.24 PR-A) 운영가이드 현장 운영 섹션 — 직전 PR ③을 회귀 가드로 유지.
-//     일정(②에서 도착) → RB27 '현장 운영가이드 (가안)'(옛 4섹션 문서): '뼈대 추가' 안내 9개 → 누르면 설치·철거 일정 등 새 섹션 ·
-//     섹션 목록(13개 · 묶음) · 존별 운영 '갱신 있음' 그대로 → 등록 운영 고치기: 라인 5 · 도착 400 → 20명/분 · 100명 · 약 5분 → 저장 →
+//     일정(②에서 도착) → RB27 '현장 운영가이드 (가안)'(옛 4섹션 문서): '뼈대 추가' 안내 12개(v2.21 §27.2 +3 = 답사·도면·참가자 안내) → 누르면 설치·철거 일정 등 새 섹션 ·
+//     섹션 목록(16개 · 묶음) · 존별 운영 '갱신 있음' 그대로 → 등록 운영 고치기: 라인 5 · 도착 400 → 20명/분 · 100명 · 약 5분 → 저장 →
 //     섹션 목록 'D-day 진행표' 누르기 = 해시 그대로 + 그 카드가 화면 안 → 다시 '일정'으로(아래 ③-이전 블록이 일정에서 시작한다).
 {
   const docBefore = docRequests.length
@@ -230,14 +230,14 @@ check(
   })
   const banner = tab.getByTestId('guide-skeleton-banner')
   await banner.waitFor({ timeout: 10_000 })
-  check(/9개/.test(await banner.innerText()), "옛 문서: '뼈대 추가' 안내 — 빠진 섹션 9개", await banner.innerText())
+  check(/12개/.test(await banner.innerText()), "옛 문서: '뼈대 추가' 안내 — 빠진 섹션 12개(v2.21 +3)", await banner.innerText())
   await banner.getByRole('button', { name: '뼈대 추가' }).click()
   await tab.getByRole('heading', { name: '설치·철거 일정' }).waitFor({ timeout: 10_000 })
   check((await tab.getByTestId('guide-skeleton-banner').count()) === 0, '뼈대 추가 → 안내 사라짐')
   const rail = tab.getByRole('navigation', { name: '섹션 목록' })
   check(await rail.isVisible(), '섹션 목록(넓은 칸에서 보임)')
   const filled = (await tab.getByTestId('guide-filled').innerText()).trim()
-  check(/^섹션 \d+ \/ 13 채움$/.test(filled), '섹션 목록 채움 수(13섹션)', filled)
+  check(/^섹션 \d+ \/ 16 채움$/.test(filled), '섹션 목록 채움 수(16섹션 — 옛 4 + 뼈대 12)', filled)
   const zone = tab.locator('article', { has: tab.getByRole('heading', { name: '존별 운영' }) })
   check(/갱신 있음/.test(await zone.innerText()), "존별 운영 '갱신 있음' 그대로(뼈대 추가가 건드리지 않음)")
   // 고치는 동안 제목(h3)이 입력 칸으로 바뀌므로 카드는 id로 잡는다
@@ -260,6 +260,57 @@ check(
   check(hashAfter === hashBefore && dayBox !== null && dayBox.y >= -4 && dayBox.y < vh, "섹션 목록 링크 = 해시 그대로 · 그 카드가 화면 안", `${hashBefore} → ${hashAfter} · y=${dayBox?.y}`)
   await tab.screenshot({ path: resolve(SHOTS, '03-guide-structured.png'), fullPage: true })
   check(docRequests.length === docBefore, '운영가이드 뼈대 추가·고치기·목록 이동에 전체 리로드 0', `${docBefore} → ${docRequests.length}`)
+  await tab.locator('aside nav a', { hasText: '일정' }).first().click()
+  await tab.waitForURL(/#\/schedule/, { timeout: 10_000 })
+}
+
+// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — **Phase 6.11 PR-A 마스터 시트 대체 · 운영가이드 섹션 3종(2026-09-28)**.
+//     일정(위 블록 끝) → RB27 운영가이드(위 블록이 뼈대를 더해 15종 다 있음): 답사 체크리스트(확인 0/14 · 표에 외부·내부·체크사항·확인내용) ·
+//     설치 도면(비어 있음 · 고치기 → 파일 입력 0 · 도면 추가 → 항목 연결 셀렉트 → 저장 → 카드에 항목 링크) ·
+//     참가자 안내(발송 완료 0/6 · 고치기 → 원고 칸 · 상태 '발송 완료' → 저장 → 1/6 · '원고 보기') · 전체 리로드 0 → 다시 '일정'으로.
+{
+  const docBefore = docRequests.length
+  await tab.evaluate(() => {
+    window.location.hash = '#/items/dlv-rb27-guide-01'
+  })
+  await tab.getByRole('heading', { name: '답사 체크리스트' }).waitFor({ timeout: 10_000 })
+  for (const name of ['답사 체크리스트', '설치 도면', '참가자 안내']) {
+    check((await tab.getByRole('heading', { name }).count()) === 1, `뼈대 추가 뒤 새 섹션 '${name}' 카드 1개`)
+  }
+  const surveyCard = tab.locator('article', { has: tab.getByRole('heading', { name: '답사 체크리스트' }) })
+  check((await surveyCard.getByTestId('survey-progress').innerText()).trim() === '확인 0 / 14', '답사: 확인 0 / 14(템플릿 외부 6 · 내부 8)')
+  const surveyText = await surveyCard.innerText()
+  check(/외부/.test(surveyText) && /내부/.test(surveyText) && /체크사항/.test(surveyText) && /확인내용/.test(surveyText), '답사 표 = 구분·항목·체크사항·확인내용 칸')
+
+  const planId = await tab.locator('article', { has: tab.getByRole('heading', { name: '설치 도면' }) }).getAttribute('id')
+  const planCard = tab.locator(`[id="${planId}"]`)
+  check(/비어 있음/.test(await planCard.innerText()), '설치 도면: 시드 = 비어 있음(도면은 항목 버전에 연결만)')
+  await planCard.getByRole('button', { name: '고치기' }).click()
+  check((await planCard.locator('input[type="file"]').count()) === 0, '설치 도면 고치기: 파일 입력 0(새 업로드 경로 없음 — R-M7)')
+  await planCard.getByRole('button', { name: '＋ 도면 추가' }).click()
+  await planCard.getByRole('textbox', { name: '도면 1 이름' }).fill('무대 평면도')
+  const linkSelect = planCard.getByRole('combobox', { name: '무대 평면도 연결 항목' })
+  const optionCount = await linkSelect.locator('option').count()
+  check(optionCount > 1, '설치 도면: 연결 항목 후보 = 이 행사의 디자인·운영 항목', `${optionCount - 1}개`)
+  await linkSelect.selectOption({ index: 1 })
+  await planCard.getByRole('button', { name: '저장' }).click()
+  await planCard.getByRole('button', { name: '고치기' }).waitFor({ timeout: 10_000 })
+  await tab.waitForTimeout(400)
+  const planAfter = await planCard.innerText()
+  check(/무대 평면도/.test(planAfter) && !/비어 있음/.test(planAfter) && (await planCard.getByRole('link', { name: /열기$/ }).count()) >= 1, '설치 도면 저장 → 카드에 도면 이름 + 연결 항목 열기 링크')
+
+  const msgId = await tab.locator('article', { has: tab.getByRole('heading', { name: '참가자 안내' }) }).getAttribute('id')
+  const msgCard = tab.locator(`[id="${msgId}"]`)
+  check((await msgCard.getByTestId('messaging-progress').innerText()).trim() === '발송 완료 0 / 6', '참가자 안내: 발송 완료 0 / 6(단계 6)')
+  await msgCard.getByRole('button', { name: '고치기' }).click()
+  await msgCard.getByLabel('원고').nth(3).fill('안녕하세요. 최종 참가 안내입니다.')
+  await msgCard.getByRole('combobox', { name: '최종 참가 안내 상태' }).selectOption('sent')
+  await msgCard.getByRole('button', { name: '저장' }).click()
+  await msgCard.getByRole('button', { name: '고치기' }).waitFor({ timeout: 10_000 })
+  const msgAfter = await msgCard.innerText()
+  check(/발송 완료 1 \/ 6/.test(msgAfter) && /원고 보기/.test(msgAfter), '참가자 안내 저장 → 발송 완료 1 / 6 · 원고 보기')
+  await tab.screenshot({ path: resolve(SHOTS, '03-guide-sheet-sections.png'), fullPage: true })
+  check(docRequests.length === docBefore, '운영가이드 3종 고치기·저장에 전체 리로드 0', `${docBefore} → ${docRequests.length}`)
   await tab.locator('aside nav a', { hasText: '일정' }).first().click()
   await tab.waitForURL(/#\/schedule/, { timeout: 10_000 })
 }
