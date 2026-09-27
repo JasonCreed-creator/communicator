@@ -9,10 +9,12 @@
 //   ③ 섹션 이름 → 버킷: 우리 제목(꼬리 무시) · 남의 영문 Add-ons는 custom · 두 규칙에 걸려도 적중이 뚜렷이 많으면 그쪽 · 비슷하면 custom 저신뢰
 //   ④ splitRecruit — 쇼업/리드젠 표기 = ld, 그 밖 = rc · 항목 없으면 소계 전부 rc · 소계 나머지 rc · 모객 섹션 없으면 null
 //   ⑤ 정산보드(mock): 가져오기 → 확정 → 정산 기준이면 rc·ld = 분할 · 옛 임포트(분할 기록 없음)도 가져오기 기록에서 다시 나눔 · 기록조차 없으면 0(지어내지 않음)
+//   ⑥ 기본 9버킷 밖 섹션(custom)도 행사별 버킷으로 스냅숏 — 견적에 있던 금액이 보드에서 사라지지 않는다(버킷 합 = 견적 총액 · 기준 견적 갱신도 같은 code)
 import { describe, expect, it } from 'vitest'
 import { calcEstimate } from '../modules/quote/engine/calcEstimate'
 import { exportEstimate } from '../modules/quote/export/exportEstimate'
 import { R_EXPECTED, syntheticQuoteR } from '../modules/quote/import/__tests__/fixtures/syntheticQuotes'
+import { customBucketLabel, quoteBucketSpec } from '../lib/settlement'
 import { mapSectionName, mapSectionsToBuckets } from '../modules/quote/import/buckets'
 import { parseQuoteWorkbook } from '../modules/quote/import/parser'
 import { splitRecruit } from '../modules/quote/import/recruitSplit'
@@ -211,5 +213,44 @@ describe('DoD 94 ⑤ 정산보드 — 가져온 견적의 rc·ld', () => {
     await provider.rebaseSettlementBoard(projectId, quote.id)
     expect(await amounts()).toMatchObject({ rc: 0, ld: 0, s1: p.s1 })
     imp.quote_id = quote.id
+  })
+})
+
+describe('DoD 94 ⑥ 정산보드 — 기본 버킷 밖 섹션(custom)도 뿌린다', () => {
+  it('quoteBucketSpec: custom_sections가 9버킷 뒤에 원가 있음·마진 기준으로 붙고 이름은 번호 접두를 뗀다 · 없으면 9줄 그대로', () => {
+    const base = { s1: 1, s2: 2, s3: 3, s4: 4, s5: 5, options: 6, attendee: 7 }
+    const engine = { rsvpPkg: 8, showup: 9 }
+    expect(quoteBucketSpec(base, engine)).toHaveLength(9)
+    const rows = quoteBucketSpec({ ...base, custom_sections: [{ code: 'custom:5. 기념품·경품', label: '5. 기념품·경품', amount: 1_200_000 }, { code: 'custom:F&B', label: 'F&B', amount: 800_000 }] }, engine)
+    expect(rows).toHaveLength(11)
+    expect(rows[9]).toEqual({ code: 'custom:5. 기념품·경품', label: '기념품·경품', quote_amount: 1_200_000, has_cost: true, is_margin_base: true })
+    expect(rows[10]).toEqual({ code: 'custom:F&B', label: 'F&B', quote_amount: 800_000, has_cost: true, is_margin_base: true })
+    expect(customBucketLabel('5-1. 웰컴 리셉션')).toBe('웰컴 리셉션')
+    expect(customBucketLabel('3) Signage')).toBe('Signage')
+    expect(customBucketLabel('  4.  ')).toBe('4.')
+  })
+
+  it('mock: 섹션 하나를 custom으로 확정하면 보드에 그 이름의 버킷이 견적 금액으로 생기고(견적에서 온 버킷 · 지우기 409) 버킷 합 = 견적 총액 · 기준 견적 갱신 뒤에도 그대로', async () => {
+    const provider = mockProvider()
+    provider.switchUser('usr-pm')
+    provider.setAppRole('sales')
+    const { p, buf } = await exported(CFG)
+    const imported = await provider.importQuoteFile('리멤버_견적서_custom.xlsx', buf)
+    // 사람이 확인 큐에서 디자인 섹션을 '기타(행사별 버킷)'로 바꿨다
+    const mapping = imported.mapping.map((m) => (m.section === '3. 디자인·브랜딩' ? { ...m, bucket: 'custom' } : m))
+    const quote = await provider.confirmQuoteImport(imported.id, { mapping })
+    expect(quote.breakdown.s3).toBe(0)
+    expect(quote.breakdown.custom_sections).toEqual([{ code: 'custom:3. 디자인·브랜딩', label: '3. 디자인·브랜딩', amount: p.s3 }])
+    await provider.finalizeQuote(quote.id)
+    const { project_id } = await provider.distributeQuoteImport(imported.id, { project_prefill: true, settlement_base: true })
+    const board = (await provider.getSettlementBoard(project_id!))!
+    const custom = board.buckets.find((b) => b.bucket.code === 'custom:3. 디자인·브랜딩')!
+    expect(custom.bucket).toMatchObject({ label: '디자인·브랜딩', quote_amount: p.s3, has_cost: true, is_margin_base: true, source: 'quote' })
+    expect(board.buckets.find((b) => b.bucket.code === 's3')!.bucket.quote_amount).toBe(0)
+    expect(board.buckets.reduce((sum, b) => sum + b.bucket.quote_amount, 0)).toBe(p.pk) // 견적에 있던 금액이 보드에서 사라지지 않는다
+    await expect(provider.deleteSettlementBucket(custom.bucket.id)).rejects.toMatchObject({ code: 'conflict' })
+    const after = await provider.rebaseSettlementBoard(project_id!, quote.id)
+    expect(after.buckets.filter((b) => b.bucket.code === 'custom:3. 디자인·브랜딩')).toHaveLength(1)
+    expect(after.buckets.find((b) => b.bucket.code === 'custom:3. 디자인·브랜딩')!.bucket.quote_amount).toBe(p.s3)
   })
 })

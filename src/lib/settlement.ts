@@ -157,11 +157,22 @@ export function quoteBucketSpec(
     /** v2.20.2 — 임포트 견적이 기록한 모객 분할(있으면 엔진 값보다 우선 — 가져온 견적의 엔진 입력은 비어 있어 0이 된다) */
     recruit_rsvp?: number
     recruit_showup?: number
+    /** v2.20.2 — 임포트 견적의 기본 9버킷 밖 섹션(§22.4 custom) — 행사별 버킷으로 스냅숏한다(실사용: "기본 버킷 프리셋이 아니더라도 견적서 항목들을 불러와서 뿌려줘야") */
+    custom_sections?: { code: string; label: string; amount: number }[]
   },
   engine: { rsvpPkg: number; showup: number },
 ): BucketSpecRow[] {
   const rsvp = breakdown.recruit_rsvp ?? engine.rsvpPkg
   const showup = breakdown.recruit_showup ?? engine.showup
+  // 가져온 견적의 custom 섹션 = 견적에 **있던** 금액이라 원가 있음·마진 기준(행사별 추가 버킷의 0원 시작과 다르다).
+  // code는 임포트가 준 그대로(기준 견적 갱신의 code 매칭 근거) · 이름은 섹션 번호 접두를 뗀다
+  const custom: BucketSpecRow[] = (breakdown.custom_sections ?? []).map((c) => ({
+    code: c.code,
+    label: customBucketLabel(c.label),
+    quote_amount: c.amount,
+    has_cost: true,
+    is_margin_base: true,
+  }))
   return [
     { code: 's1', label: '베뉴 사용료', quote_amount: breakdown.s1, has_cost: true, is_margin_base: true },
     { code: 's2', label: '시스템 구축', quote_amount: breakdown.s2, has_cost: true, is_margin_base: true },
@@ -173,5 +184,12 @@ export function quoteBucketSpec(
     { code: 'rc', label: 'RSVP 운영비', quote_amount: rsvp, has_cost: false, is_margin_base: true },
     // 리드젠(쇼업 보장)은 외부 매체비 성격이라 마진 기준 계약액에서 뺀다(§19.1)
     { code: 'ld', label: '리드젠(쇼업 보장)', quote_amount: showup, has_cost: false, is_margin_base: false },
+    ...custom,
   ]
+}
+
+/** 임포트 custom 섹션 이름 → 버킷 이름: "5. 기념품·경품" → "기념품·경품" (비면 원문) */
+export function customBucketLabel(sectionName: string): string {
+  const stripped = sectionName.replace(/^\s*\d+(?:[.\-]\d+)*[.)]?\s*/, '').trim()
+  return stripped || sectionName.trim()
 }
