@@ -462,7 +462,7 @@ export class MockProvider implements DataProvider {
     const summaries = this.state.projects.map((p) => {
       const deliverables = this.state.deliverables.filter((d) => d.project_id === p.id)
       const pmMember = this.state.members.find((m) => m.project_id === p.id && m.role === 'pm')
-      const overviewComplete = !!(p.name.trim() && p.code.trim() && p.event_date && p.venue)
+      const overviewComplete = !!(p.name.trim() && (p.organizer ?? '').trim() && p.event_date && p.venue)
       const steps = (overviewComplete ? 1 : 0) + (pmMember ? 1 : 0) + (p.onboarded_at ? 1 : 0)
       return {
         id: p.id,
@@ -1174,9 +1174,7 @@ export class MockProvider implements DataProvider {
       file_name: driveLink
         ? input.file_name.trim() || `Drive 파일(${driveLink.id.slice(0, 8)})`
         : buildVersionFileName({
-            date: new Date(),
-            project_code: this.projectOf(d).code,
-            category: d.category,
+            project: this.projectOf(d),
             title: d.title,
             version_no: versionNo,
             original_file_name: input.file_name,
@@ -2288,9 +2286,7 @@ export class MockProvider implements DataProvider {
       drive_file_id: this.nextId('drv-f'),
       // 파일명은 .pdf 규약(§5 발송 조건) — mock 내용물은 인쇄용 HTML, 실제 PDF는 Phase 5
       file_name: buildVersionFileName({
-        date: new Date(),
-        project_code: this.projectOf(d).code,
-        category: d.category,
+        project: this.projectOf(d),
         title: d.title,
         version_no: versionNo,
         original_file_name: '스냅숏.pdf',
@@ -3148,9 +3144,7 @@ export class MockProvider implements DataProvider {
       version_no: versionNo,
       drive_file_id: this.nextId('drv-f'),
       file_name: buildVersionFileName({
-        date: new Date(),
-        project_code: this.projectOf(d).code,
-        category: d.category,
+        project: this.projectOf(d),
         title: d.title,
         version_no: versionNo,
         original_file_name: originalFileName,

@@ -2,7 +2,7 @@
 //
 //   {DRIVE_ROOT}/                      사용자 지정 저장소 루트(2026-09-24 "MICE Communicator")
 //   ├ 00_견적서/                       견적 스프레드시트(Phase 4.2 — GOOGLE_QUOTE_FOLDER_ID가 없을 때 기본)
-//   ├ {YYMMDD}_{코드}_{행사명}/         행사 루트 = projects.drive_root_folder_id
+//   ├ {YYMMDD}_{고객사}_{행사명}/       행사 루트 = projects.drive_root_folder_id (행사 ID — 운영 프로토콜 v1.0 · src/lib/projectLabel)
 //   │  ├ 01_기획 · 02_견적·정산 · 03_회의록
 //   │  ├ 04_운영/{항목명}/              ops 영역
 //   │  ├ 05_산출물/디자인/{항목명}/      design 영역
@@ -14,6 +14,7 @@
 // 끊겨도 두 번째 실행이 같은 폴더를 채택한다(중복 0). 파트 폴더는 표준 이름으로 찾는다 — 사람이 미리 만든 폴더도 그대로 쓴다.
 import { DriveError } from './errors.js'
 import { FOLDER_MIME, qEscape, type DriveApi, type DriveFile } from './googleDrive.js'
+import { projectLabel } from '../../../src/lib/projectLabel.js'
 import type { DeliverableRow, DriveStore, ProjectRow } from './store.js'
 
 export const QUOTE_FOLDER = '00_견적서'
@@ -47,12 +48,9 @@ export function sanitizeName(s: string, max = 120): string {
   return cleaned || '이름 없음'
 }
 
-/** 행사 루트 이름: YYMMDD_코드_행사명 (행사일이 없으면 코드_행사명) */
-export function projectFolderName(p: Pick<ProjectRow, 'code' | 'name' | 'event_date'>): string {
-  const code = sanitizeName(p.code, 40)
-  const name = sanitizeName(p.name, 80)
-  const m = (p.event_date ?? '').match(/^\d{2}(\d{2})-(\d{2})-(\d{2})/)
-  return m ? `${m[1]}${m[2]}${m[3]}_${code}_${name}` : `${code}_${name}`
+/** 행사 루트 이름 = 행사 ID(YYMMDD_고객사_행사명 — 운영 프로토콜 v1.0). 행사일이 없으면 날짜 칸을, 고객사가 없으면 고객사 칸을 뺀다 */
+export function projectFolderName(p: Pick<ProjectRow, 'name' | 'organizer' | 'event_date'>): string {
+  return projectLabel(p)
 }
 
 /**

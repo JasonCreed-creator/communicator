@@ -1,5 +1,6 @@
 // S-2 ⑤ 행사 만들기 — §16 핸드오프: 확정 견적 → createProjectFromQuote → S0 ① 프리필.
 // 확정 전에는 비활성(§10 S-2). 금액은 어떤 키로도 넘어가지 않는다(#RULE-NO-PRICE-TO-CLIENT).
+import { projectLabel } from '../../lib/projectLabel'
 import { quoteToProjectDraft } from '../../modules/quote/handoff'
 import type { Quote } from '../../types/entities'
 import type { QuoteStrings } from './quoteStrings'
@@ -42,7 +43,7 @@ export default function StepHandoff({
           <dl className="grid gap-x-6 gap-y-1.5 text-sm sm:grid-cols-2">
             {[
               ['행사명', draft.name],
-              ['행사 코드(제안)', draft.code_suggestion],
+              ['행사 ID(예상)', projectLabel({ name: draft.name, organizer: draft.organizer, event_date: draft.event_date })],
               ['행사일', draft.event_date ?? '—'],
               ['운영 시간', [draft.start_time, draft.end_time].filter(Boolean).join('–') || '—'],
               ['베뉴', draft.venue ?? '—'],

@@ -540,7 +540,7 @@ export interface ProjectSummary {
   status: ProjectStatus
   /** onboarded_at !== null 파생값 */
   onboarded: boolean
-  /** 온보딩 진행 단계(0~3): ①개요 필수 4(행사명·코드·시작일·장소) ②PM 지정 ③완료 처리 */
+  /** 온보딩 진행 단계(0~3): ①개요 필수 4(행사명·고객사·시작일·장소) ②PM 지정 ③완료 처리 */
   onboarding_steps_done: number
   pm_name: string | null
   /** 미결 컨펌(pending_approval 항목 수) */

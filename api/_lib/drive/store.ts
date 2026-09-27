@@ -13,6 +13,8 @@ export interface ProjectRow {
   id: string
   code: string
   name: string
+  /** 고객사(주최·주관) — 행사 ID(YYMMDD_고객사_행사명)의 가운데 칸 */
+  organizer: string | null
   event_date: string | null
   status: 'active' | 'closed'
   drive_root_folder_id: string | null
@@ -188,7 +190,7 @@ export function supabaseDriveStore(env: StoreEnv): DriveStore {
       return must(
         await admin
           .from('projects')
-          .select('id, code, name, event_date, status, drive_root_folder_id')
+          .select('id, code, name, organizer, event_date, status, drive_root_folder_id')
           .eq('id', projectId)
           .maybeSingle(),
       ) as ProjectRow | null

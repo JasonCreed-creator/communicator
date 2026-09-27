@@ -100,7 +100,7 @@ describe('S-1 행사 목록 — 진행 중 카드', () => {
       .find((r) => r.dataset.projectId === draftId)!
     expect(within(row).getByText('세팅 1/3단계').getAttribute('data-level')).toBe('attention') // 생성자 PM 자동 등록 → 1단계
     // 남은 필수 항목이 이름으로(행사명·코드는 입력됨 → 행사일·장소만 남음)
-    expect(row.textContent).toContain('필수 2개 남음 — 행사일 · 장소')
+    expect(row.textContent).toContain('필수 3개 남음 — 고객사 · 행사일 · 장소')
     await userEvent.click(within(row).getByRole('button', { name: '이어서 세팅하기' }))
     expect(await screen.findByRole('heading', { name: '행사 기본 정보' })).toBeTruthy()
   })
@@ -122,7 +122,7 @@ describe('S6 행사 설정 — 필수 스트립 · 탭 배지 · 연동 빈 상�
     localStorage.setItem('communicator.currentProjectId', draftId)
     renderRoute('/settings')
     await screen.findByRole('heading', { name: '행사 설정' })
-    expect((await screen.findByTestId('required-summary')).textContent).toBe('필수 2개 남음 — 행사일 · 장소')
+    expect((await screen.findByTestId('required-summary')).textContent).toBe('필수 3개 남음 — 고객사 · 행사일 · 장소')
   })
 
   it('(6) 탭 라벨의 미입력 개수 배지는 선택 항목이면 중립이고, 탭 이름은 흔들지 않는다', async () => {
@@ -148,7 +148,7 @@ describe('S6 행사 설정 — 필수 스트립 · 탭 배지 · 연동 빈 상�
     renderRoute('/settings')
     await screen.findByRole('heading', { name: '행사 설정' })
     const overviewGap = await screen.findByTestId('tab-gap-overview')
-    expect(overviewGap.textContent).toBe('2') // 행사일 · 장소
+    expect(overviewGap.textContent).toBe('3') // 고객사 · 행사일 · 장소(v2.16 — 고객사가 필수 4에 들어왔다)
     expect(overviewGap.dataset.tone).toBe('required')
     expect(overviewGap.className).toContain('bg-accent-tint')
   })

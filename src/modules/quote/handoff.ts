@@ -1,7 +1,6 @@
 // 견적 → 행사 핸드오프 매핑 — 설계서 부록 §16의 정본 구현.
 // POST /quotes/{id}/create-project 가 수행하는 projects ← quotes.input 매핑.
 // **금액·섹션 산출(breakdown·total_amount)은 어떤 키로도 넘기지 않는다** (#RULE-NO-PRICE-TO-CLIENT).
-import { suggestProjectCode as suggestCode } from '../../lib/projectCode'
 import type { OverviewItem, Quote, Targeting } from '../../types/entities'
 import type { EventType } from '../../types/enums'
 import { venueDisplayName } from './engine/quoteInput'
@@ -9,7 +8,7 @@ import { venueDisplayName } from './engine/quoteInput'
 /** §16 매핑 결과 — projects 필드의 프리필 초안 (S0 ①에서 확인·수정 가능) */
 export interface QuoteProjectDraft {
   name: string
-  /** 행사명 이니셜+연도 2자리 자동 제안 — S0 ①에서 확인(필수) */
+  /** 내부 식별자 자리표시(EVT-…) — v2.16부터 사람이 보는 행사 ID는 YYMMDD_고객사_행사명으로 파생(lib/projectLabel) */
   code_suggestion: string
   event_date: string | null
   event_end_date: string | null
@@ -27,9 +26,10 @@ export interface QuoteProjectDraft {
   overview_items: OverviewItem[] | null
 }
 
-/** 행사 코드 자동 제안 — Phase 6.2부터 공용 규칙(src/lib/projectCode: 영문·한글 초성 이니셜 + 연도 2자리). 글자를 못 얻으면 'EVT'+연도 */
-export function suggestProjectCode(name: string, eventDate: string | null): string {
-  return suggestCode(name, { eventDate }) ?? `EVT${(eventDate ?? '').slice(2, 4)}`
+/** 내부 식별자 자리표시 — createProject({})의 EVT-… 와 같은 모양(견적 id 끝 8자) */
+export function placeholderProjectCode(quoteId: string): string {
+  const tail = String(quoteId).replace(/[^A-Za-z0-9]/g, '').slice(-8).toUpperCase()
+  return `EVT-${tail || 'QUOTE'}`
 }
 
 /** targeting 5축 → 요약 문장 (§16 target_audience 소스) */
@@ -71,7 +71,7 @@ export function quoteToProjectDraft(quote: Quote): QuoteProjectDraft {
 
   return {
     name,
-    code_suggestion: suggestProjectCode(name, input.event_date),
+    code_suggestion: placeholderProjectCode(quote.id),
     event_date: input.event_date ?? null,
     event_end_date: input.event_end_date ?? null,
     start_time: input.start_time ?? null,

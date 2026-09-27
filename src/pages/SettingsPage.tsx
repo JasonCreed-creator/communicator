@@ -153,14 +153,13 @@ export default function SettingsPage() {
   const missing = project.data ? missingRequired(project.data) : []
   const onboarded = !!project.data?.onboarded_at
 
-  // 탭별 미입력 — ①은 필수 4 + 선택 개요 4, ②는 PM 지정(필수)·연락 창구(선택), ③은 연동 2종(선택)
+  // 탭별 미입력 — ①은 필수 4(행사명·고객사·행사일·장소) + 선택 개요 3, ②는 PM 지정(필수)·연락 창구(선택), ③은 연동 2종(선택)
   const gaps: Record<Tab, TabGap> = {
     overview: {
       required: missingCount,
       optional: project.data
         ? [
             project.data.theme,
-            project.data.organizer,
             project.data.target_audience,
             project.data.expected_headcount,
           ].filter((v) => v == null || v === '').length

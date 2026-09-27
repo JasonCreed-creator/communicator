@@ -37,7 +37,7 @@ function setup(over: Partial<DriveEnv> = {}) {
   db.addUser({ jwt: 'jwt-admin', authUserId: 'auth-admin', email: 'admin@example.com', profileId: 'p-admin', appRole: 'admin' })
   db.addUser({ jwt: 'jwt-design', authUserId: 'auth-design', email: 'design@example.com', profileId: 'p-design', appRole: 'staff' })
   db.addUser({ jwt: 'jwt-reg', authUserId: 'auth-reg', email: 'reg@example.com', profileId: 'p-reg', appRole: 'staff' })
-  db.addProject({ id: 'prj-1', code: 'STC26', name: '가상 컨퍼런스', event_date: '2026-10-20', status: 'active', drive_root_folder_id: null })
+  db.addProject({ id: 'prj-1', code: 'STC26', name: '가상 컨퍼런스', organizer: '가상고객', event_date: '2026-10-20', status: 'active', drive_root_folder_id: null })
   db.addMember('p-pm', 'prj-1', 'pm')
   db.addMember('p-admin', 'prj-1', 'pm')
   db.addMember('p-design', 'prj-1', 'design')
@@ -75,13 +75,13 @@ describe('DoD 61 · ① 표준 트리 — 멱등·이름 규약·기존 폴더 �
     expect(await r2.json()).toEqual({ configured: false })
   })
 
-  it('행사 폴더 = YYMMDD_코드_행사명 + 파트 7종 + 05_산출물/디자인, 두 번 실행해도 폴더 수 불변', async () => {
+  it('행사 폴더 = 행사 ID(YYMMDD_고객사_행사명) + 파트 7종 + 05_산출물/디자인, 두 번 실행해도 폴더 수 불변', async () => {
     const s = setup()
     const before = s.drive.folderCount()
     const r = await s.clientAs('jwt-pm').ensureTree('prj-1')
     expect(r.created).toBe(true)
     const root = s.drive.files.get(r.folder_id)!
-    expect(root.name).toBe('261020_STC26_가상 컨퍼런스')
+    expect(root.name).toBe('261020_가상고객_가상 컨퍼런스')
     expect(root.parents).toEqual([s.drive.rootId])
     expect(s.drive.childrenOf(root.id).map((f) => f.name).sort()).toEqual(
       ['01_기획', '02_견적·정산', '03_회의록', '04_운영', '05_산출물', '06_발주처공유', '99_archive'].sort(),

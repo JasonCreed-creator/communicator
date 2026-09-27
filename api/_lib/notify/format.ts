@@ -152,8 +152,9 @@ function shortDate(iso: string | null | undefined): string | null {
   return `${kst.getUTCMonth() + 1}/${kst.getUTCDate()}`
 }
 
-function head(row: { project_code: string }): string {
-  return `[${slackEscape(row.project_code || '행사')}]`
+/** 줄머리 = [행사명] — v2.16부터 행사 코드는 내부 식별자라 사람 눈에 보이지 않는다 */
+function head(row: { project_name: string }): string {
+  return `[${slackEscape(row.project_name || '행사')}]`
 }
 
 function withLink(text: string, url: string | null, label = '열기'): string {
@@ -215,6 +216,7 @@ export function eventUnits(rows: readonly EventRow[], base: string | null): Mess
           card: {
             kind: 'review',
             project_code: r.project_code,
+            project_name: r.project_name,
             area: r.area ?? null,
             sender: partner ? null : r.actor_name ?? null,
             partner: partner ? r.partner_name ?? '파트너' : null,
@@ -242,6 +244,7 @@ export function eventUnits(rows: readonly EventRow[], base: string | null): Mess
     const card: CardSpec = {
       kind: 'work',
       project_code: first.project_code,
+      project_name: first.project_name,
       area: first.area ?? null,
       requester: first.actor_name ?? null,
       board_url: appLink(base, area ? `board/${area}` : 'home', first.project_id),
@@ -344,7 +347,7 @@ export function manualUnit(row: ManualRow, base: string | null): MessageUnit {
 
 /** 설정 화면 '테스트 보내기' 한 줄 — 스레드(봇)면 '이 스레드로', 웹훅이면 '이 채널로' */
 export function testLine(project: { project_code: string; project_name: string }, where: 'channel' | 'thread' = 'channel'): string {
-  return `[${slackEscape(project.project_code || '행사')}] 알림 테스트 — ${slackEscape(project.project_name)}의 알림이 이 ${where === 'thread' ? '스레드' : '채널'}로 옵니다.`
+  return `[${slackEscape(project.project_name || '행사')}] 알림 테스트 — 이 행사의 알림이 이 ${where === 'thread' ? '스레드' : '채널'}로 옵니다.`
 }
 
 /** Slack Incoming Webhook 본문 — text 한 칸만(미리보기 펼침 끔). 금액 키가 들어갈 자리가 없다 */

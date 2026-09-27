@@ -1,5 +1,5 @@
 /** @vitest-environment jsdom */
-// DoD-19 (v1.5): 행사 설정 — ① 필수 4(행사명·코드·시작일·장소) 미입력 저장 거부·세팅 미완료 뱃지,
+// DoD-19 (v1.5 · v2.16): 행사 설정 — ① 필수 4(행사명·고객사·시작일·장소) 미입력 저장 거부·세팅 미완료 뱃지,
 // ② 담당자 추가/삭제·마지막 PM 삭제 409. (①에서 저장한 값의 S9 ① 반영은 dod8 (c)가 증명.)
 import { cleanup, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'

@@ -32,6 +32,7 @@ describe('DoD-20 새 행사 흐름·유도', () => {
     await userEvent.type(nameInput, '신규 워크숍 2026')
     fireEvent.change(screen.getByLabelText('시작일'), { target: { value: '2026-12-01' } })
     await userEvent.type(screen.getByLabelText('장소'), '가상러닝센터 2F')
+    await userEvent.type(screen.getByLabelText('고객사(주최·주관)'), '가상러닝') // v2.16 — 고객사는 필수(행사 ID 가운데 칸)
     await userEvent.click(screen.getByRole('button', { name: '다음: 담당자' }))
 
     // ② 담당자(생성자=pm 자동) → 다음

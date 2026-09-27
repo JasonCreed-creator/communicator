@@ -206,7 +206,7 @@ describe('DoD 79 · ② 보낼 곳 — 스레드(봇) → 웹훅 → 없음', ()
     expect(await drain(s, slack)).toMatchObject({ sent: 1, messages: 1 })
     expect(slack.calls).toHaveLength(1)
     expect(slack.calls[0]).toMatchObject({ method: 'chat.postMessage', body: { channel: 'C0PROJ001', thread_ts: '1727251234.567890', unfurl_links: false } })
-    expect(String(slack.calls[0].body.text)).toContain('[VST26] 새 버전 — 메인 무대 백월 v2')
+    expect(String(slack.calls[0].body.text)).toContain('[가상 서밋 2026] 새 버전 — 메인 무대 백월 v2')
   })
 
   it('봇 토큰이 없으면 같은 사건이 웹훅으로(카드 대신 줄) · 둘 다 없으면 skipped', async () => {
@@ -246,8 +246,8 @@ describe('DoD 79 · ③ 멘션', () => {
     expect(s.slackIds).toEqual({ 'p-design': 'U0DESIGN1' })
     const text = String(slack.posts()[0].body.text)
     expect(text.split('\n')).toEqual([
-      `<@U0DESIGN1> <@U0PM00001> [VST26] 발주처 승인 — 메인 무대 백월 (<${BASE}/items/${D1}?project=${P1}|열기>)`,
-      `<@U0DESIGN1> <@U0PM00001> [VST26] 발주처 승인 — 등록데스크 배너 (<${BASE}/items/${D2}?project=${P1}|열기>)`,
+      `<@U0DESIGN1> <@U0PM00001> [가상 서밋 2026] 발주처 승인 — 메인 무대 백월 (<${BASE}/items/${D1}?project=${P1}|열기>)`,
+      `<@U0DESIGN1> <@U0PM00001> [가상 서밋 2026] 발주처 승인 — 등록데스크 배너 (<${BASE}/items/${D2}?project=${P1}|열기>)`,
     ])
   })
 
@@ -255,7 +255,7 @@ describe('DoD 79 · ③ 멘션', () => {
     const s = fakeStore({ events: [event({ key: 'act:1', action: 'approval.decided', decision: 'changes_requested', recipients: [OPS], client_comment: '로고 크기를 한 단계 줄여 주세요.' })] })
     const slack = fakeSlack()
     expect(await drain(s, slack)).toMatchObject({ sent: 1, failed: 0 })
-    expect(String(slack.posts()[0].body.text)).toMatch(/^최운영\(Slack 미연결\) \[VST26\] 발주처 수정요청 — 메인 무대 백월 .*\n>로고 크기를 한 단계 줄여 주세요\.$/)
+    expect(String(slack.posts()[0].body.text)).toMatch(/^최운영\(Slack 미연결\) \[가상 서밋 2026\] 발주처 수정요청 — 메인 무대 백월 .*\n>로고 크기를 한 단계 줄여 주세요\.$/)
     expect(s.slackIds).toEqual({})
   })
 
@@ -292,7 +292,7 @@ describe('DoD 79 · ④ 의뢰 카드', () => {
     expect(await drain(s, slack)).toMatchObject({ sent: 1, messages: 1 })
     const post = slack.posts()[0].body
     expect(post).toMatchObject({ channel: 'C0PROJ001', thread_ts: '1727251234.567890' })
-    expect(post.text).toBe('<@U0DESIGN1> [VST26] 새 제작 요청 — 메인 무대 백월 · 마감 10/2 (금)')
+    expect(post.text).toBe('<@U0DESIGN1> [가상 서밋 2026] 새 제작 요청 — 메인 무대 백월 · 마감 10/2 (금)')
     const json = JSON.stringify(post.blocks)
     expect(json).toContain('<@U0DESIGN1> 새 제작 요청이에요 · 요청 박피엠')
     for (const t of ['*마감*\\n10/2 (금) · 7일 남음', '*규격*\\n23000×5000mm · 1개', '*종류*\\n현수막', '*위치*\\n그랜드볼룸 무대 뒤', '>행사 로고와 슬로건을 중앙에', '참고 자료 2개 · 전문은 앱에서']) {
@@ -342,13 +342,13 @@ describe('DoD 79 · ④ 의뢰 카드', () => {
       ],
       BASE + '/',
     )
-    expect(review.line).toContain('[VST26] 내부검토 요청 — 메인 무대 백월 v2 · 이디자')
+    expect(review.line).toContain('[가상 서밋 2026] 내부검토 요청 — 메인 무대 백월 v2 · 이디자')
     const r = cardMessage(review.card!, review.mentions!, 'c1', NOW)
-    expect(r.text).toBe('<@U0PM00001> [VST26] 검토 요청 — 메인 무대 백월 v2 · 이디자')
+    expect(r.text).toBe('<@U0PM00001> [가상 서밋 2026] 검토 요청 — 메인 무대 백월 v2 · 이디자')
     const rj = JSON.stringify(r.blocks)
     for (const t of ['검토 요청이에요 · 보낸 사람 이디자', '>띠 높이를 줄였습니다', '`260925_VST26_백월_v2.pdf`', '10/2 (금) · 7일 남음', '검토하러 가기']) expect(rj).toContain(t)
     const p = cardMessage(partner.card!, partner.mentions!, 'c2', NOW)
-    expect(p.text).toBe('<@U0PM00001> [VST26] 파트너 제출 — 부스 그래픽 v1 · 가상골드플랫폼')
+    expect(p.text).toBe('<@U0PM00001> [가상 서밋 2026] 파트너 제출 — 부스 그래픽 v1 · 가상골드플랫폼')
     expect(JSON.stringify(p.blocks)).toContain('파트너 제출물이 왔어요 · 가상골드플랫폼')
   })
 
@@ -384,7 +384,7 @@ describe('DoD 79 · ⑤ 실패해도 막지 않는다', () => {
       )
     const ok = fakeSlack()
     expect(await (await call(ok)).json()).toEqual({ sent: true, channel: 'thread' })
-    expect(ok.posts()[0].body).toMatchObject({ channel: 'C0PROJ001', thread_ts: '1727251234.567890', text: '[VST26] 알림 테스트 — 가상 서밋 2026의 알림이 이 스레드로 옵니다.' })
+    expect(ok.posts()[0].body).toMatchObject({ channel: 'C0PROJ001', thread_ts: '1727251234.567890', text: '[가상 서밋 2026] 알림 테스트 — 이 행사의 알림이 이 스레드로 옵니다.' })
     const bad = await call(fakeSlack({ fail: 'not_in_channel' }))
     expect(bad.status).toBe(502)
     expect((await bad.json()).error.message).toContain('에이전트 및 앱 → 앱 추가')
@@ -413,7 +413,7 @@ const RESPONSE_URL = 'https://hooks.slack.com/actions/T0/1/abc'
 const CARD_ID = '55555555-5555-4555-8555-555555555555'
 function ackPayload(user: string, over: Record<string, unknown> = {}) {
   const card = cardMessage(
-    { kind: 'work', project_code: 'VST26', area: 'design', requester: '박피엠', board_url: null, items: [{ deliverable_id: D1, notify_key: 'k', title: '메인 무대 백월', url: `${BASE}/items/${D1}` }] },
+    { kind: 'work', project_code: 'VST26', project_name: '가상 서밋 2026', area: 'design', requester: '박피엠', board_url: null, items: [{ deliverable_id: D1, notify_key: 'k', title: '메인 무대 백월', url: `${BASE}/items/${D1}` }] },
     [{ ...DESIGN, slack_user_id: 'U0DESIGN1' }],
     CARD_ID,
     NOW,
@@ -507,16 +507,16 @@ describe('DoD 79 · ⑦ 리마인드', () => {
   it('24시간 미확인 = 원래 카드 링크 + 받는 사람 멘션 · 항목 마감 D-1 = 담당자', () => {
     const units = reminderUnits(
       [
-        { key: 'rem:unacked:x', kind: 'unacked', project_id: P1, project_code: 'VST26', project_name: 'x', webhook: null, thread: THREAD, title: '현장 동선도', count: 1, request_kind: 'work', channel_id: 'C0PROJ001', message_ts: '1727251300.001001', thread_ts: '1727251234.567890', recipients: [OPS] },
-        { key: 'rem:due:y', kind: 'deliverable_due', project_id: P1, project_code: 'VST26', project_name: 'x', webhook: null, thread: THREAD, deliverable_id: D1, title: '메인 무대 백월', recipients: [DESIGN] },
+        { key: 'rem:unacked:x', kind: 'unacked', project_id: P1, project_code: 'VST26', project_name: '가상 서밋 2026', webhook: null, thread: THREAD, title: '현장 동선도', count: 1, request_kind: 'work', channel_id: 'C0PROJ001', message_ts: '1727251300.001001', thread_ts: '1727251234.567890', recipients: [OPS] },
+        { key: 'rem:due:y', kind: 'deliverable_due', project_id: P1, project_code: 'VST26', project_name: '가상 서밋 2026', webhook: null, thread: THREAD, deliverable_id: D1, title: '메인 무대 백월', recipients: [DESIGN] },
       ],
       BASE + '/',
     )
     expect(units[0].line).toBe(
-      '[VST26] 어제 제작 요청을 아직 확인하지 않았어요 — 현장 동선도 (<https://acme.slack.com/archives/C0PROJ001/p1727251300001001?thread_ts=1727251234.567890&cid=C0PROJ001|요청 카드>)',
+      '[가상 서밋 2026] 어제 제작 요청을 아직 확인하지 않았어요 — 현장 동선도 (<https://acme.slack.com/archives/C0PROJ001/p1727251300001001?thread_ts=1727251234.567890&cid=C0PROJ001|요청 카드>)',
     )
     expect(units[0].mentions).toEqual([OPS])
-    expect(units[1].line).toContain('[VST26] 항목 마감 D-1 — 메인 무대 백월')
+    expect(units[1].line).toContain('[가상 서밋 2026] 항목 마감 D-1 — 메인 무대 백월')
     expect(units[1].mentions).toEqual([DESIGN])
     expect(units.every((u) => u.thread === THREAD)).toBe(true)
   })

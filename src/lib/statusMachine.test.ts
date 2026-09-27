@@ -67,16 +67,17 @@ describe('컨펌 발송 조건 — 미리보기 포맷(§5)', () => {
   })
 })
 
-describe('파일명 규약 — §7.2', () => {
-  it('YYMMDD_{code}_{category}_{title}_v{n}.{ext}', () => {
+describe('파일명 규약 — §7.2 (v2.16 행사 ID)', () => {
+  it('{행사ID}_{제목}_v{n}.{ext} — 행사ID = YYMMDD_고객사_행사명 · 제목의 경로 문자 정리 · 빈 칸은 그 칸 없이', () => {
     const name = buildVersionFileName({
-      date: new Date(2026, 7, 19), // 2026-08-19 (로컬)
-      project_code: 'STC26',
-      category: '키비주얼',
+      project: { name: '가상 컨퍼런스', organizer: '가상고객', event_date: '2026-10-20' },
       title: '메인 키비주얼',
       version_no: 3,
       original_file_name: '작업본 final(진짜).png',
     })
-    expect(name).toBe('260819_STC26_키비주얼_메인 키비주얼_v3.png')
+    expect(name).toBe('261020_가상고객_가상 컨퍼런스_메인 키비주얼_v3.png')
+    expect(buildVersionFileName({ project: { name: '가상 포럼', organizer: null, event_date: null }, title: 'A/B 배너', version_no: 1, original_file_name: 'x.pdf' })).toBe(
+      '가상 포럼_A B 배너_v1.pdf',
+    )
   })
 })

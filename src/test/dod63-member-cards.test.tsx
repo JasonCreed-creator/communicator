@@ -40,10 +40,11 @@ const pool = () => screen.getByRole('list', { name: '배정할 수 있는 담당
 let projectId = ''
 
 beforeAll(async () => {
-  // 새 행사 — 필수 4(행사명·코드·시작일·장소)를 채워 온보딩 ①을 '다음'으로 넘길 수 있게 한다
+  // 새 행사 — 필수 4(행사명·고객사·시작일·장소)를 채워 온보딩 ①을 '다음'으로 넘길 수 있게 한다
   const created = await mockProvider().createProject({
     name: '카드 배정 시험 행사',
     code: 'CARD-63',
+    organizer: '가상 시험 고객',
     event_date: '2026-11-20',
     venue: '가상 컨벤션홀',
   })

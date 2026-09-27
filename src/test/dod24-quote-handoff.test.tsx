@@ -33,7 +33,7 @@ describe('DoD-24 §16 핸드오프 (provider)', () => {
 
     // §16 좌측(projects) ← 우측(quotes.input) 매핑
     expect(created.name).toBe('파트너 서밋 2026')
-    expect(created.code).toMatch(/26$/) // 이니셜+연도 2자리 자동 제안 (S0 ①에서 확인)
+    expect(created.code).toMatch(/^EVT-/) // v2.16 — 내부 식별자 자리표시(사람이 보는 행사 ID는 YYMMDD_고객사_행사명으로 파생)
     expect(created.event_date).toBe('2026-12-10')
     expect(created.start_time).toBe('14:00')
     expect(created.end_time).toBe('18:00')
@@ -73,8 +73,9 @@ describe('DoD-24 §16 핸드오프 (provider)', () => {
     await waitFor(() => expect(nameInput.value).toBe('파트너 서밋 2026'))
     expect(nameInput.className).toContain('bg-accent-tint')
     expect(nameInput.disabled).toBe(false)
-    const codeInput = (await screen.findByLabelText('행사 코드')) as HTMLInputElement
-    expect(codeInput.value).toBe(created.code)
+    // v2.16 — 코드 칸 없음 · 고객사(client_company)가 프리필돼 행사 ID 가운데 칸이 된다
+    expect((await screen.findByLabelText('고객사(주최·주관)') as HTMLInputElement).value).toBe('가상파트너스')
+    expect(screen.queryByLabelText('행사 코드')).toBeNull()
     localStorage.removeItem('communicator.currentProjectId')
   })
 

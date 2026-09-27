@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
-// DoD 84 (Phase 6.2 · 설계서 v2.15 §10 S0 · S6①) — 앱 쪽: 온보딩 ① 'Slack 메시지에서 불러오기' · 행사 코드 자동 · 견적서 첨부.
+// DoD 84 (Phase 6.2 · 설계서 v2.15 §10 S0 · S6① · v2.16 §4-1d) — 앱 쪽: 온보딩 ① 'Slack 메시지에서 불러오기' · 행사 ID 파생 · 견적서 첨부.
 //   ① 새 행사 온보딩: 카드 · 글 붙여 넣기 → 라벨 규칙으로 읽음 → 폼 칸 채움(주황) · 배너 · 읽지 못한 칸 · 기록(intake) · 링크는 실서버 안내
-//   ② 행사 코드: 행사명을 치면 자동(주황 · 안내) · 코드를 고치면 자동 꺼짐 → '행사명에서 다시 만들기' · 행사일이 연도 · 다른 행사 코드와 겹치면 -2
+//   ② 행사 ID: 행사명·고객사·시작일을 따라 파생(읽기 전용 줄 · 빈 칸 안내) · 고객사는 필수 · 행사 코드 칸 없음(v2.16)
 //   ③ 견적서 첨부: 빈 상태 · 파일은 데모에서 막힘(사실 안내) · 링크(https만) → 붙임 → 구글 시트 이름 · 빼기(확인) · Slack 첨부 목록(파일은 막힘 · 링크는 붙임)
 //   ④ 온보딩의 채운 버튼은 여전히 '다음: 담당자' 하나 · 설정 ①에도 견적서 칸(design은 읽기 전용)
 //   ⑤ briefToPrefill 매핑(notes → 기타 항목 · recruiting만 · null은 건드리지 않음)
@@ -13,7 +13,7 @@ import { PROJECT_ID } from '../fixtures/sampleProject'
 import { briefToPrefill, INTAKE_NOTES_LABEL } from '../lib/intake/briefPrefill'
 import { EMPTY_BRIEF } from '../lib/intake/eventBrief'
 import { INTAKE_MOCK_LINK_MESSAGE } from '../lib/intake/intakeGateway'
-import { suggestProjectCode } from '../lib/projectCode'
+import { projectLabel } from '../lib/projectLabel'
 import { QUOTE_ATTACHMENT_INVALID_MESSAGE } from '../lib/quoteAttachment'
 import { mockProvider, renderRoute } from './testUtils'
 
@@ -64,11 +64,11 @@ describe('DoD 84 · ① 온보딩 — Slack 메시지에서 불러오기', () =>
     expect((screen.getByLabelText('종료 시간') as HTMLInputElement).value).toBe('18:00')
     expect((screen.getByLabelText('장소') as HTMLInputElement).value).toBe('가상홀 A')
     expect((screen.getByLabelText('예상 인원') as HTMLInputElement).value).toBe('300')
-    // 선택 항목(주최·주관)을 채웠으니 접힌 칸이 펼쳐진다
-    expect((screen.getByLabelText('주최·주관') as HTMLInputElement).value).toBe('가상테크㈜')
+    // 고객사(필수 · 행사 ID 가운데 칸)도 채워진다
+    expect((screen.getByLabelText('고객사(주최·주관)') as HTMLInputElement).value).toBe('가상테크㈜')
     expect(screen.getByTestId('intake-prefill-banner').textContent).toContain('채운 칸 7개')
-    // 행사 코드는 행사명에서 자동
-    expect((screen.getByLabelText('행사 코드') as HTMLInputElement).value).toBe('GTP27')
+    // 행사 ID는 시작일·고객사·행사명에서 파생(저장하지 않는다)
+    expect(screen.getByTestId('project-label-value').textContent).toBe('270312_가상테크㈜_가상 테크 포럼 2027')
 
     await waitFor(async () => {
       const saved = await mockProvider().getProject(project.id)
@@ -85,60 +85,50 @@ describe('DoD 84 · ① 온보딩 — Slack 메시지에서 불러오기', () =>
     const card = screen.getByTestId('slack-intake')
     await userEvent.type(within(card).getByLabelText('Slack 메시지 링크 또는 글'), '행사명: 가상 채용 박람회{enter}참가 신청 300명 예상')
     await userEvent.click(within(card).getByRole('button', { name: '불러오기' }))
-    expect((await within(card).findByTestId('slack-intake-missing')).textContent).toContain('시작일 · 장소 · 주최·주관')
+    expect((await within(card).findByTestId('slack-intake-missing')).textContent).toContain('시작일 · 장소 · 고객사(주최·주관)')
     expect((screen.getByLabelText('행사 유형') as HTMLSelectElement).value).toBe('recruiting')
     await userEvent.type(screen.getByLabelText('시작일'), '2027-05-20')
     await userEvent.type(screen.getByLabelText('장소'), '가상 전시장')
+    await userEvent.type(screen.getByLabelText('고객사(주최·주관)'), '가상인재㈜')
     await userEvent.click(screen.getByRole('button', { name: '다음: 담당자' }))
     await screen.findByRole('heading', { name: '담당자 배정' })
     const saved = await mockProvider().getProject(project.id)
-    expect(saved).toMatchObject({ name: '가상 채용 박람회', code: 'GCB27', event_date: '2027-05-20', venue: '가상 전시장', expected_headcount: 300, event_type: 'recruiting' })
+    expect(saved).toMatchObject({ name: '가상 채용 박람회', organizer: '가상인재㈜', event_date: '2027-05-20', venue: '가상 전시장', expected_headcount: 300, event_type: 'recruiting' })
+    expect(saved.code).toMatch(/^EVT-/) // 내부 식별자는 자리표시 그대로
   })
 })
 
-describe('DoD 84 · ② 행사 코드 자동', () => {
-  it('새 행사: 행사명을 치면 코드가 따라오고(주황 · 안내) 코드를 고치면 자동이 꺼진다 → 다시 만들기 · 행사일이 연도 · 겹치면 -2', async () => {
+describe('DoD 84 · ② 행사 ID 파생', () => {
+  it('새 행사: 행사 ID 줄이 행사명·고객사·시작일을 따라가고 빈 칸을 알린다 · 고객사 없이 다음은 그 줄 오류 · 행사 코드 칸 없음', async () => {
     await newProjectOnboarding()
-    const name = screen.getByLabelText('행사명') as HTMLInputElement
-    const code = screen.getByLabelText('행사 코드') as HTMLInputElement
-    expect(code.value).toMatch(/^EVT-/) // 자리표시는 사람이 이름을 치기 전까지 그대로
+    const label = () => screen.getByTestId('project-label-value').textContent
+    expect(screen.getByTestId('project-label').textContent).toContain('아직 빈 칸: 시작일 · 고객사')
+    expect(label()).toBe('새 행사')
+    const name = screen.getByLabelText('행사명')
     await userEvent.clear(name)
     await userEvent.type(name, '가상 테크 포럼')
-    expect(code.value).toBe(`GTP${String(new Date().getFullYear()).slice(2)}`)
-    expect(code.className).toContain('bg-accent-tint')
-    expect(screen.getByTestId('code-auto-hint').textContent).toContain('행사명에서 자동으로 만들었어요')
-    // 행사일을 넣으면 연도가 바뀐다
+    await userEvent.type(screen.getByLabelText('고객사(주최·주관)'), '가상테크㈜')
+    expect(label()).toBe('가상테크㈜_가상 테크 포럼')
     await userEvent.type(screen.getByLabelText('시작일'), '2028-04-01')
-    expect(code.value).toBe('GTP28')
-    // 샘플 행사 코드(STC26)와 겹치면 -2
-    await userEvent.clear(name)
-    await userEvent.type(name, '서울 테크 Conference')
-    await userEvent.clear(screen.getByLabelText('시작일'))
-    await userEvent.type(screen.getByLabelText('시작일'), '2026-10-20')
-    expect(code.value).toBe('STC26-2')
-    expect(suggestProjectCode('서울 테크 Conference', { eventDate: '2026-10-20', taken: ['STC26'] })).toBe('STC26-2')
-    // 사람이 고치면 자동이 꺼진다
-    await userEvent.clear(code)
-    await userEvent.type(code, 'MYCODE')
-    expect(screen.queryByTestId('code-auto-hint')).toBeNull()
-    await userEvent.type(name, ' 2026')
-    expect(code.value).toBe('MYCODE')
-    // 다시 만들기
-    await userEvent.click(screen.getByRole('button', { name: '행사명에서 다시 만들기' }))
-    expect(code.value).toBe('STC26-2')
-    expect(screen.getByTestId('code-auto-hint')).toBeTruthy()
+    expect(label()).toBe('280401_가상테크㈜_가상 테크 포럼')
+    expect(screen.getByTestId('project-label').textContent).not.toContain('아직 빈 칸')
+    expect(screen.queryByLabelText('행사 코드')).toBeNull()
+    // 고객사를 비우고 다음 → 그 줄에서 막는다(행사 ID 가운데 칸)
+    await userEvent.clear(screen.getByLabelText('고객사(주최·주관)'))
+    await userEvent.type(screen.getByLabelText('장소'), '가상홀')
+    await userEvent.click(screen.getByRole('button', { name: '다음: 담당자' }))
+    expect(await screen.findByText('고객사(주최·주관)를 입력하세요 — 행사 ID에 들어갑니다.')).toBeTruthy()
+    expect(screen.queryByRole('heading', { name: '담당자 배정' })).toBeNull()
   })
 
-  it('세팅이 끝난 행사(행사 설정)에서는 코드를 자동으로 바꾸지 않는다', async () => {
+  it('행사 설정에서도 행사 ID 줄은 읽기 전용이고 저장된 값에서 파생한다 · 코드 칸 없음', async () => {
     localStorage.setItem('communicator.currentProjectId', PROJECT_ID)
     renderRoute('/settings')
-    const name = (await screen.findByLabelText('행사명')) as HTMLInputElement
-    const code = screen.getByLabelText('행사 코드') as HTMLInputElement
-    const before = code.value
-    await userEvent.type(name, ' 확장')
-    expect(code.value).toBe(before)
-    expect(screen.queryByTestId('code-auto-hint')).toBeNull()
-    expect(screen.queryByRole('button', { name: '행사명에서 다시 만들기' })).toBeNull()
+    await screen.findByLabelText('행사명')
+    const p = await mockProvider().getProject(PROJECT_ID)
+    expect(screen.getByTestId('project-label-value').textContent).toBe(projectLabel(p))
+    expect(screen.getByTestId('project-label-value').textContent).toMatch(/^\d{6}_.+_.+$/)
+    expect(screen.queryByLabelText('행사 코드')).toBeNull()
   })
 })
 

@@ -31,7 +31,7 @@ import {
   validateEventBrief,
   type EventBriefFields,
 } from '../lib/intake/eventBrief'
-import { codeLetter, codeStem, isPlaceholderCode, suggestProjectCode } from '../lib/projectCode'
+import { labelDate, labelSegment, projectLabel, projectLabelParts } from '../lib/projectLabel'
 import { normalizeQuoteAttachment, quoteAttachmentLabel } from '../lib/quoteAttachment'
 import { parseSlackMessageLink } from '../lib/slackThread'
 import { createFakeDrive } from './helpers/fakeDrive'
@@ -53,48 +53,20 @@ const SAMPLE = [
   '참가 신청 페이지 필요, 동시통역 2개 언어, 생중계 검토',
 ].join('\n')
 
-// ── ① 행사 코드 ───────────────────────────────────────────────────────
+// ── ① 행사 ID ─────────────────────────────────────────────────────────
 
-describe('DoD 84 · ① 행사 코드 자동', () => {
-  it('글자 하나: 영문 대문자 · 한글 초성(ㅇ은 모음) · 숫자·기호 없음', () => {
-    expect(codeLetter('S')).toBe('S')
-    expect(codeLetter('b')).toBe('B')
-    expect(codeLetter('서')).toBe('S')
-    expect(codeLetter('컨')).toBe('K')
-    expect(codeLetter('아')).toBe('A')
-    expect(codeLetter('이')).toBe('I')
-    expect(codeLetter('오')).toBe('O')
-    expect(codeLetter('리')).toBe('R')
-    expect(codeLetter('7')).toBeNull()
-    expect(codeLetter('·')).toBeNull()
-  })
-
-  it('행사명 → 코드: 이니셜 최대 4 + 연도(행사일 → 이름 속 연도 → 올해) · 한 단어면 음절 초성 · 글자 없으면 null', () => {
-    expect(suggestProjectCode('서울 테크 컨퍼런스 2026', { today: TODAY })).toBe('STK26')
-    expect(suggestProjectCode('서울 테크 Conference 2026', { today: TODAY })).toBe('STC26')
-    expect(suggestProjectCode('리멤버 빌드 2027', { today: TODAY })).toBe('RB27')
-    expect(suggestProjectCode('Virtual Summit 2026', { today: TODAY })).toBe('VS26')
-    expect(suggestProjectCode('가상 테크 포럼 2027', { eventDate: '2027-03-12' })).toBe('GTP27')
-    // 행사일이 이름 속 연도보다 먼저
-    expect(suggestProjectCode('서울 테크 컨퍼런스 2026', { eventDate: '2027-01-10' })).toBe('STK27')
-    // 다섯 단어 → 앞 4자
-    expect(codeStem('글로벌 인재 채용 박람회 서울')).toBe('GICB')
-    // 한 단어 → 음절 초성
-    expect(suggestProjectCode('리멤버데이', { today: TODAY })).toBe('RMBD26')
-    expect(suggestProjectCode('Buildup', { today: TODAY })).toBe('BUIL26')
-    // 글자 없음
-    expect(suggestProjectCode('2026', { today: TODAY })).toBeNull()
-    expect(suggestProjectCode('   ', { today: TODAY })).toBeNull()
-  })
-
-  it('겹치면 -2, -3(대소문자 무관) · 자리표시 코드(EVT-…·빈 칸)만 자동이 덮어쓴다', () => {
-    expect(suggestProjectCode('서울 테크 컨퍼런스 2026', { today: TODAY, taken: ['stk26'] })).toBe('STK26-2')
-    expect(suggestProjectCode('서울 테크 컨퍼런스 2026', { today: TODAY, taken: ['STK26', 'STK26-2'] })).toBe('STK26-3')
-    expect(isPlaceholderCode('EVT-101')).toBe(true)
-    expect(isPlaceholderCode('EVT-MFZ9K2')).toBe(true)
-    expect(isPlaceholderCode('')).toBe(true)
-    expect(isPlaceholderCode('STC26')).toBe(false)
-    expect(isPlaceholderCode('EVTX')).toBe(false)
+describe('DoD 84 · ① 행사 ID(YYMMDD_고객사_행사명 — v2.16 §4-1d · 운영 프로토콜 v1.0)', () => {
+  it('행사일·고객사·행사명에서 파생 · 비면 그 칸 없이 · 경로 문자·공백 정리 · 길이 상한 · 빠진 칸 목록', () => {
+    expect(projectLabel({ name: '가상 컨퍼런스', organizer: '가상고객', event_date: '2026-10-20' })).toBe('261020_가상고객_가상 컨퍼런스')
+    expect(projectLabel({ name: '가상 포럼', organizer: null, event_date: '2026-10-20' })).toBe('261020_가상 포럼')
+    expect(projectLabel({ name: '가상 포럼', organizer: '가상고객', event_date: null })).toBe('가상고객_가상 포럼')
+    expect(projectLabel({ name: '  ', organizer: '', event_date: '' })).toBe('이름 없음')
+    expect(projectLabel({ name: 'A/B: 런칭 <쇼>', organizer: '가상재단 / 리멤버 MICE', event_date: '2027-01-05' })).toBe('270105_가상재단 리멤버 MICE_A B 런칭 쇼')
+    expect(labelSegment('x'.repeat(100), 80)).toHaveLength(80)
+    expect(labelDate('2026-10-20T00:00:00Z')).toBe('261020')
+    expect(labelDate('10/20')).toBeNull()
+    expect(projectLabelParts({ name: '가상 포럼', organizer: null, event_date: null }).missing).toEqual(['event_date', 'organizer'])
+    expect(projectLabelParts({ name: '가상 포럼', organizer: '가상고객', event_date: '2026-10-20' }).missing).toEqual([])
   })
 })
 

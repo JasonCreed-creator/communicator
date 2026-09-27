@@ -156,7 +156,7 @@ describe('DoD 68 · ② 보낼 곳 — 행사 채널 → 공용 → 없음', () 
     expect(s.posts.map((p) => p.url).sort()).toEqual([GLOBAL_HOOK, PROJECT_HOOK].sort())
     const project = s.posts.find((p) => p.url === PROJECT_HOOK)!.body.text.split('\n')
     expect(project).toHaveLength(2)
-    expect(s.posts.find((p) => p.url === GLOBAL_HOOK)!.body.text).toContain('[OTH] 발주처 승인 — 메인 키비주얼')
+    expect(s.posts.find((p) => p.url === GLOBAL_HOOK)!.body.text).toContain('[가상 컨퍼런스] 발주처 승인 — 메인 키비주얼')
     expect(s.posts.every((p) => p.body.unfurl_links === false)).toBe(true)
   })
 })
@@ -176,11 +176,11 @@ describe('DoD 68 · ③ 문구 — [코드] 사건 — 항목 (링크)', () => {
       base,
     )
     const lines = units.map((u) => u.line)
-    expect(lines[0]).toBe(`[STC26] 새 버전 — 메인 키비주얼 v3 · 김디자인 (<${BASE}/items/${D1}?project=${P1}|열기>)`)
-    expect(lines[1]).toContain('[STC26] 컨펌 발송 — 메인 키비주얼 · 기한 10/1')
-    expect(lines[2]).toContain('[STC26] 발주처 수정요청 — 메인 키비주얼')
-    expect(lines[3]).toContain('[STC26] 파트너 제출 — 메인 키비주얼 · 가상 파트너 v1')
-    expect(lines[4]).toContain('[STC26] 새 지시 — 메인 키비주얼 → 박운영')
+    expect(lines[0]).toBe(`[가상 컨퍼런스] 새 버전 — 메인 키비주얼 v3 · 김디자인 (<${BASE}/items/${D1}?project=${P1}|열기>)`)
+    expect(lines[1]).toContain('[가상 컨퍼런스] 컨펌 발송 — 메인 키비주얼 · 기한 10/1')
+    expect(lines[2]).toContain('[가상 컨퍼런스] 발주처 수정요청 — 메인 키비주얼')
+    expect(lines[3]).toContain('[가상 컨퍼런스] 파트너 제출 — 메인 키비주얼 · 가상 파트너 v1')
+    expect(lines[4]).toContain('[가상 컨퍼런스] 새 지시 — 메인 키비주얼 → 박운영')
   })
 
   it('새 지시가 여러 건이면 행사마다 한 줄(보드 링크) · 키는 전부 그 줄에 묶인다', () => {
@@ -190,7 +190,7 @@ describe('DoD 68 · ③ 문구 — [코드] 사건 — 항목 (링크)', () => {
     const units = eventUnits(rows, base)
     expect(units).toHaveLength(1)
     expect(units[0].keys).toHaveLength(12)
-    expect(units[0].line).toContain('[STC26] 새 지시 12건 — 제출물 1, 제출물 2, 제출물 3 외 9건')
+    expect(units[0].line).toContain('[가상 컨퍼런스] 새 지시 12건 — 제출물 1, 제출물 2, 제출물 3 외 9건')
     expect(units[0].line).toContain(`/board/ops?project=${P1}|보드>`)
   })
 
@@ -212,27 +212,27 @@ describe('DoD 68 · ③ 문구 — [코드] 사건 — 항목 (링크)', () => {
   it('리마인드 4종 · 수동 리마인드 · 20줄 넘으면 …외 N건', () => {
     const rem = reminderUnits(
       [
-        { key: 'r1', kind: 'approval_due', project_id: P1, project_code: 'STC26', project_name: 'x', webhook: null, deliverable_id: D1, title: '명찰' },
-        { key: 'r2', kind: 'milestone_due', project_id: P1, project_code: 'STC26', project_name: 'x', webhook: null, title: '인쇄 발주' },
-        { key: 'r3', kind: 'partner_due', project_id: P1, project_code: 'STC26', project_name: 'x', webhook: null, title: '부스 도면', partner_name: '가상 파트너' },
-        { key: 'r4', kind: 'inbox_digest', project_id: P1, project_code: 'STC26', project_name: 'x', webhook: null, count: 3 },
-        { key: 'r5', kind: 'inbox_digest', project_id: P1, project_code: 'STC26', project_name: 'x', webhook: null, count: 0 },
+        { key: 'r1', kind: 'approval_due', project_id: P1, project_code: 'STC26', project_name: '가상 컨퍼런스', webhook: null, deliverable_id: D1, title: '명찰' },
+        { key: 'r2', kind: 'milestone_due', project_id: P1, project_code: 'STC26', project_name: '가상 컨퍼런스', webhook: null, title: '인쇄 발주' },
+        { key: 'r3', kind: 'partner_due', project_id: P1, project_code: 'STC26', project_name: '가상 컨퍼런스', webhook: null, title: '부스 도면', partner_name: '가상 파트너' },
+        { key: 'r4', kind: 'inbox_digest', project_id: P1, project_code: 'STC26', project_name: '가상 컨퍼런스', webhook: null, count: 3 },
+        { key: 'r5', kind: 'inbox_digest', project_id: P1, project_code: 'STC26', project_name: '가상 컨퍼런스', webhook: null, count: 0 },
       ],
       base,
     )
     expect(rem.map((u) => u.line?.split(' (')[0])).toEqual([
-      '[STC26] 컨펌 기한 D-1 — 명찰 · 발주처 응답 없음',
-      '[STC26] 마일스톤 D-1 — 인쇄 발주',
-      '[STC26] 파트너 마감 D-1 — 가상 파트너 · 부스 도면 미제출',
-      '[STC26] 미등록 파일 3건 — 홈 인박스에서 항목에 연결하거나 무시하세요',
+      '[가상 컨퍼런스] 컨펌 기한 D-1 — 명찰 · 발주처 응답 없음',
+      '[가상 컨퍼런스] 마일스톤 D-1 — 인쇄 발주',
+      '[가상 컨퍼런스] 파트너 마감 D-1 — 가상 파트너 · 부스 도면 미제출',
+      '[가상 컨퍼런스] 미등록 파일 3건 — 홈 인박스에서 항목에 연결하거나 무시하세요',
       undefined,
     ])
     const m = manualUnit(
-      { key: 'm', kind: 'manual_delayed', project_id: P1, project_code: 'STC26', project_name: 'x', webhook: null, total: 7, items: [{ title: '현장답사', date: '2026-09-20' }] },
+      { key: 'm', kind: 'manual_delayed', project_id: P1, project_code: 'STC26', project_name: '가상 컨퍼런스', webhook: null, total: 7, items: [{ title: '현장답사', date: '2026-09-20' }] },
       base,
     )
-    expect(m.line).toContain('[STC26] 리마인드 — 지연 태스크 7건: 현장답사(9/20) 외 6건')
-    expect(manualUnit({ key: 'm2', kind: 'manual_approval', project_id: P1, project_code: 'S', project_name: 'x', webhook: null, total: 0, items: [] }, base).line).toBeNull()
+    expect(m.line).toContain('[가상 컨퍼런스] 리마인드 — 지연 태스크 7건: 현장답사(9/20) 외 6건')
+    expect(manualUnit({ key: 'm2', kind: 'manual_approval', project_id: P1, project_code: 'S', project_name: '가상 컨퍼런스', webhook: null, total: 0, items: [] }, base).line).toBeNull()
     const long = slackPayload(Array.from({ length: 25 }, (_, i) => `줄 ${i}`))
     expect(long.text.split('\n')).toHaveLength(21)
     expect(long.text.endsWith('…외 5건')).toBe(true)
@@ -260,7 +260,7 @@ describe('DoD 68 · ④ 인증 — 누가 무엇을 부를 수 있나', () => {
     const s = setup({
       env: { SLACK_WEBHOOK_URL: GLOBAL_HOOK },
       events: [event({ key: 'act:9', action: 'version.uploaded' })],
-      reminders: [{ key: 'rem:m', kind: 'milestone_due', project_id: P1, project_code: 'STC26', project_name: 'x', webhook: null, title: '인쇄' }],
+      reminders: [{ key: 'rem:m', kind: 'milestone_due', project_id: P1, project_code: 'STC26', project_name: '가상 컨퍼런스', webhook: null, title: '인쇄' }],
     })
     const status = await s.call('GET')
     const body = await status.json()
@@ -281,15 +281,15 @@ describe('DoD 68 · ④ 인증 — 누가 무엇을 부를 수 있나', () => {
     const ok = await s.call('POST', { action: 'test', project_id: P1 }, 'jwt-pm')
     expect(await ok.json()).toEqual({ sent: true, channel: 'project' })
     expect(s.posts[0]).toMatchObject({ url: PROJECT_HOOK })
-    expect(s.posts[0].body.text).toBe('[STC26] 알림 테스트 — 가상 컨퍼런스의 알림이 이 채널로 옵니다.')
+    expect(s.posts[0].body.text).toBe('[가상 컨퍼런스] 알림 테스트 — 이 행사의 알림이 이 채널로 옵니다.')
   })
 
   it('리마인드: 멤버면 누구나 · 같은 시간 두 번째는 409 · 목록이 비면 보내지 않고 skipped', async () => {
-    const row: ManualRow = { key: 'man:1', kind: 'manual_approval', project_id: P1, project_code: 'STC26', project_name: 'x', webhook: PROJECT_HOOK, total: 2, items: [{ title: '명찰', date: '2026-10-02T00:00:00Z' }, { title: '배너', date: null }] }
+    const row: ManualRow = { key: 'man:1', kind: 'manual_approval', project_id: P1, project_code: 'STC26', project_name: '가상 컨퍼런스', webhook: PROJECT_HOOK, total: 2, items: [{ title: '명찰', date: '2026-10-02T00:00:00Z' }, { title: '배너', date: null }] }
     const s = setup({ manual: row })
     const first = await s.call('POST', { action: 'remind', project_id: P1, target: 'approval' }, 'jwt-design')
     expect(await first.json()).toEqual({ sent: true, total: 2 })
-    expect(s.posts[0].body.text).toContain('[STC26] 리마인드 — 컨펌 대기 2건: 명찰(기한 10/2), 배너')
+    expect(s.posts[0].body.text).toContain('[가상 컨퍼런스] 리마인드 — 컨펌 대기 2건: 명찰(기한 10/2), 배너')
     const again = await s.call('POST', { action: 'remind', project_id: P1, target: 'approval' }, 'jwt-design')
     expect(again.status).toBe(409)
     expect((await again.json()).error.message).toContain('한 시간 뒤')

@@ -217,7 +217,7 @@ export function projectsDomain(ctx: SupabaseCtx): ProjectsDomain {
         const mine = deliverables.filter((d) => d.project_id === p.id)
         const pmMember = members.find((m) => m.project_id === p.id && m.role === 'pm')
         const pmProfile = pmMember ? one(pmMember.profiles) : null
-        const overviewComplete = !!(p.name.trim() && p.code.trim() && p.event_date && p.venue)
+        const overviewComplete = !!(p.name.trim() && (p.organizer ?? '').trim() && p.event_date && p.venue)
         const steps = (overviewComplete ? 1 : 0) + (pmMember ? 1 : 0) + (p.onboarded_at ? 1 : 0)
         return {
           id: p.id,
