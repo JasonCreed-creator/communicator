@@ -134,7 +134,9 @@ function requireAdmin(user: CallerIdentity, what = 'Drive 연결'): void {
   if (user.appRole !== 'admin') throw new DriveError(403, 'forbidden', `${what}은(는) 관리자(admin)만 할 수 있습니다.`)
 }
 
+/** 행사 안 역할 — 전역 admin은 멤버가 아니어도 pm(Phase 6.5 · SQL `app.member_role()`과 같은 규칙). 실사용 2026-09-27: 서버 함수만 이 규칙을 빼먹어 admin이 403을 받았다 */
 async function requireMember(ctx: DriveCtx, user: CallerIdentity, projectId: string): Promise<MemberRole> {
+  if (user.appRole === 'admin') return 'pm'
   const role = await ctx.store.memberRole(user.profileId, projectId)
   if (!role) throw new DriveError(403, 'forbidden', '프로젝트 멤버가 아닙니다.')
   return role

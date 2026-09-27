@@ -688,6 +688,7 @@ draft ──(담당/PM)──> internal_review ──(PM만)──> pending_appr
 | 행사 생성(S0 새 행사)·행사개요 편집·종료 (v1.5) | ● | — | — | — | — |
 | **행사 삭제(하드) (v2.8)** | **—** | — | — | — | — |  ← 프로젝트 역할이 아니라 **전역 `app_role='admin'`** 전용 (§4-1c)
 | **(v2.18.1) 전역 admin의 행사 권한** | 전역 `app_role='admin'`은 **모든 행사에서 pm과 같다 — 멤버가 아니어도**(2026-09-27 사용자 지시 "PM이 아니어도 이진철은 전체 어드민 권한"). 판정은 `app.member_role()` 한 곳(admin → 'pm')이라 is_member·is_pm·has_role·can_write_area·require_roles·RLS·RPC 전부에 같이 적용 · 앱은 `ctx.roleIn`(supabase)·`currentUser()`(mock)가 같은 규칙 · SQL 31번째 `admin_full_access`. 알림 멘션(`notify_role_people`)은 배정된 사람만 본다 — admin이 PM으로 멘션되지는 않는다 | | | | |
+| **(v2.20.1) 서버 함수의 역할 판정** | Vercel Functions(`api/`)가 `project_members`를 직접 읽는 자리(sheets · Drive · 알림)는 **SQL `app.member_role()`과 같은 한 줄** — admin → pm(멤버 무관) · 그 밖은 행 전부 → 대표 역할(pm > design > ops > reg) · 0행 → 403. `maybeSingle` 금지(여러 역할 = 행 여러 개). 실사용 2026-09-27 관리자 '시트 확인' 403 정정(Phase 6.8) | 서버는 권한을 새로 발명하지 않는다(§8.3) — RPC·RLS로 갈 수 있는 판정은 그쪽으로 |
 | 행사 목록 열람·셀렉터 전환 (v1.5) | ●(멤버인 행사만) | ● | ● | ● | — |
 | 견적 생성·버전·확정·Excel (v2.0) | ●(app_role admin·sales만 — 프로젝트 역할과 무관) | — | — | — | — |
 | 연결 견적 요약 열람 (v2.0) | ●(해당 행사 pm) | — | — | — | — (토큰 경로는 quotes 테이블 자체를 조회 불가) |
@@ -1138,6 +1139,7 @@ UI 공통: 한국어, 데스크톱 우선 + 반응형(발주처 화면은 모바
 
 ## 14. 개정 이력
 
+- **v2.20.1** (2026-09-27 밤): **서버 함수 역할 규칙 정합**(Phase 6.8 — §6.1 행 추가 · sheets·Drive·알림 서버 함수가 SQL `app.member_role()`과 같은 규칙(admin → pm · 여러 역할 행 → 대표 역할) · 실사용 관리자 '시트 확인' 403 정정 · SQL 0 · DataProvider 132 불변).
 - **v2.20** (2026-09-27 밤): **첨부 견적서 → 견적 가져오기 다리**(Phase 6.7 — §22.6 신설 · §8 `project-file-url` · 실사용 "견적서를 온보딩 시점에서 올렸는데 적용이 안됨" · 서버 읽기 경로 1개 + 위저드 ① 첨부 카드 + 정산보드 빈 상태 안내 · SQL 0 · DataProvider 132 불변).
 - **v2.19** (2026-09-27 밤): **담당자 중복 배정**(Phase 6.6 — §4-2 키 (행사·사람·역할) · §6.1 여러 역할 = 합집합 · §8 members · SQL 32번째 `multi_role` · DataProvider v16.1 `removeMember` 역할 인자 — 132 불변).
 - **v2.18.1** (2026-09-27 저녁): **실사용 결함 묶음 1**(Phase 6.5 — §19.2 버킷 견적 금액 수기 조정 · §7.1 개요 저장 뒤 폴더 자리·이름 맞춤 · §6.1 전역 admin = 모든 행사 pm · SQL 31번째 `admin_full_access`).

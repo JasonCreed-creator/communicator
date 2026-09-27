@@ -261,10 +261,12 @@ async function cron(env: NotifyEnv, store: NotifyStore, fetchImpl: typeof fetch,
   return reminders.length ? add(events, await deliver(reminderUnits(reminders, base), env, store, fetchImpl, now)) : events
 }
 
+/** 행사 안 역할 — 전역 admin은 멤버가 아니어도 pm(Phase 6.5 · SQL `app.member_role()`과 같은 규칙 — 실사용 2026-09-27 서버 함수 누락 정정) */
 async function requireMember(store: NotifyStore, jwt: string | null, projectId: string): Promise<string> {
-  const profileId = jwt ? await store.authProfile(jwt) : null
-  if (!profileId) throw new NotifyError(401, 'forbidden', '로그인이 필요합니다.')
-  const role = await store.memberRole(profileId, projectId)
+  const me = jwt ? await store.authProfile(jwt) : null
+  if (!me) throw new NotifyError(401, 'forbidden', '로그인이 필요합니다.')
+  if (me.app_role === 'admin') return 'pm'
+  const role = await store.memberRole(me.id, projectId)
   if (!role) throw new NotifyError(403, 'forbidden', '이 행사의 담당자가 아닙니다.')
   return role
 }

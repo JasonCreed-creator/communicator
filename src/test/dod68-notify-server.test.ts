@@ -46,7 +46,12 @@ function setup(opts: { events?: EventRow[]; reminders?: ReminderRow[]; manual?: 
   let events = opts.events ?? []
   let reminders = opts.reminders ?? []
   let manual = opts.manual ?? null
-  const users: Record<string, string> = { 'jwt-pm': 'p-pm', 'jwt-design': 'p-design', 'jwt-out': 'p-out' }
+  const users: Record<string, { id: string; app_role: 'admin' | 'sales' | 'staff' }> = {
+    'jwt-pm': { id: 'p-pm', app_role: 'sales' },
+    'jwt-design': { id: 'p-design', app_role: 'staff' },
+    'jwt-out': { id: 'p-out', app_role: 'staff' },
+    'jwt-admin': { id: 'p-admin', app_role: 'admin' }, // 전역 admin — 이 행사의 멤버가 아니다(Phase 6.5)
+  }
   const roles: Record<string, string> = { [`p-pm:${P1}`]: 'pm', [`p-design:${P1}`]: 'design' }
   const store: NotifyStore = {
     async claimEvents() {
@@ -273,11 +278,13 @@ describe('DoD 68 · ④ 인증 — 누가 무엇을 부를 수 있나', () => {
     expect(await run.json()).toMatchObject({ sent: 2, messages: 2 })
   })
 
-  it('테스트 보내기: pm만(design 403 · 비멤버 403 · 로그인 없음 401) · 행사 채널로 한 줄', async () => {
+  it('테스트 보내기: pm만(design 403 · 비멤버 403 · 로그인 없음 401 · 전역 admin은 멤버 아니어도 통과) · 행사 채널로 한 줄', async () => {
     const s = setup()
     expect((await s.call('POST', { action: 'test', project_id: P1 })).status).toBe(401)
     expect((await s.call('POST', { action: 'test', project_id: P1 }, 'jwt-out')).status).toBe(403)
     expect((await s.call('POST', { action: 'test', project_id: P1 }, 'jwt-design')).status).toBe(403)
+    // Phase 6.5 — 전역 admin = 모든 행사 pm(멤버 표에 없어도). 실사용 2026-09-27: 서버 함수만 옛 판정이라 403이 났다
+    expect((await s.call('POST', { action: 'test', project_id: P1 }, 'jwt-admin')).status).toBe(200)
     const ok = await s.call('POST', { action: 'test', project_id: P1 }, 'jwt-pm')
     expect(await ok.json()).toEqual({ sent: true, channel: 'project' })
     expect(s.posts[0]).toMatchObject({ url: PROJECT_HOOK })
