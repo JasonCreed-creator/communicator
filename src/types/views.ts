@@ -76,6 +76,8 @@ export interface CurrentUser extends UserRef {
   project_id: UUID
   /** v2.0 — 전역 역할 (profiles.app_role): 견적 메뉴·API 게이트 (admin·sales) */
   app_role: AppRole
+  /** Phase 6.16 — 지금 보는 행사의 담당자인가(roles.length > 0 또는 admin). false면 열람만 — 화면은 `lib/roles.isMemberOf` */
+  is_member?: boolean
 }
 
 export interface MemberWithProfile {
@@ -568,6 +570,8 @@ export interface ProjectSummary {
   /** 확정(final) 항목 수 / 전체 항목 수 — 전체 진행률 소스 */
   finals: number
   deliverable_total: number
+  /** Phase 6.16 — 로그인한 사람이 이 행사의 담당자(역할 보유 또는 전역 admin)인가. false = 열람만(목록 배지·안내 줄) */
+  is_member: boolean
 }
 
 /** 온보딩 완료 상태 — 설계서 v1.4.1 §8 GET /projects/{id}/onboarding.

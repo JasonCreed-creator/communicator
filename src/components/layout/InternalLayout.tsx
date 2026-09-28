@@ -154,7 +154,12 @@ function ProjectRow({
       }`}
     >
       <span className="min-w-0">
-        <span className="block truncate text-sm font-semibold text-ink">{summary.name}</span>
+        <span className="block truncate text-sm font-semibold text-ink">
+          {summary.name}
+          {!summary.is_member && (
+            <span className="ml-1.5 rounded-full bg-track px-1.5 py-0.5 align-middle text-[11px] font-medium text-ink-sub">열람</span>
+          )}
+        </span>
         <span className="block truncate text-xs text-ink-sub">{selectorSubtitle(summary)}</span>
       </span>
       <span
@@ -380,6 +385,10 @@ function Shell({ children }: { children: ReactNode }) {
 
 export default function InternalLayout() {
   const [drawerOpen, setDrawerOpen] = useState(false)
+  // Phase 6.16 — 행사 목록은 전원 공유. 담당이 아닌 행사를 보고 있으면 본문 위에 한 줄로 알린다(쓰기는 RLS·역할이 막는다)
+  const { projectId, summaries } = useProject()
+  const viewing = summaries.find((s) => s.id === projectId)
+  const viewer = !!viewing && !viewing.is_member
 
   return (
     <Shell>
@@ -419,6 +428,15 @@ export default function InternalLayout() {
       {/* 콘텐츠 — §4: --canvas 배경, max-width 1120 중앙 */}
       <div className="md:pl-[232px]">
         <main className="mx-auto max-w-[1120px]">
+          {viewer && (
+            <div
+              role="note"
+              data-testid="viewer-banner"
+              className="mx-6 mt-4 rounded-md border border-steel/20 bg-steel-tint px-3 py-2 text-xs text-steel"
+            >
+              담당이 아닌 행사 — 열람만 할 수 있어요. 담당 배정은 이 행사의 PM에게 요청하세요.
+            </div>
+          )}
           <Outlet />
         </main>
       </div>

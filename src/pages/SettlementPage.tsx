@@ -23,6 +23,7 @@ import SettlementBucketTable from '../components/settlement/SettlementBucketTabl
 import SettlementItems from '../components/settlement/SettlementItems'
 import SettlementKpis from '../components/settlement/SettlementKpis'
 import VendorQuoteHistory, { VendorQuoteDialog } from '../components/settlement/VendorQuoteImport'
+import PermissionNotice from '../components/internal/PermissionNotice'
 import { useProject } from '../context/ProjectContext'
 import { useAsync, useMutation } from '../hooks/useAsync'
 import { quoteAttachmentLabel } from '../lib/quoteAttachment'
@@ -108,6 +109,8 @@ function BoardAlert({
 
 export default function SettlementPage() {
   const { projectId, summaries } = useProject()
+  // Phase 6.16 — 담당이 아닌 행사(열람자)는 이 화면의 데이터(RLS = 멤버)가 비어 보이므로 사실을 먼저 말한다
+  const viewer = summaries.find((s) => s.id === projectId)?.is_member === false
   const summary = summaries.find((s) => s.id === projectId) ?? null
   const readOnly = summary?.status === 'closed'
 
@@ -198,6 +201,19 @@ export default function SettlementPage() {
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </div>
   )
+
+  // Phase 6.16 — 열람자(담당 아님)에게는 빈 상태 대신 사실을 먼저 말한다(정산 표는 RLS = 멤버라 늘 비어 보인다)
+  if (viewer) {
+    return (
+      <section className="space-y-6 p-6">
+        {header()}
+        <PermissionNotice
+          reason="정산보드(금액)는 이 행사의 담당자만 볼 수 있어요 — 지금은 열람 중입니다."
+          howToRequest="담당 배정은 이 행사의 PM에게 요청하세요. 보드·일정·운영계획서는 열람할 수 있습니다."
+        />
+      </section>
+    )
+  }
 
   // ── 빈 상태 — 확정 견적을 불러오는 것이 시작점이다(R-S2) ─────────────
   if (!board.loading && !view) {

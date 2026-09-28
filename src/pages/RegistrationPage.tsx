@@ -4,6 +4,7 @@ import DensityToggle from '../components/internal/DensityToggle'
 import EmptyState from '../components/internal/EmptyState'
 import ErrorAlert from '../components/internal/ErrorAlert'
 import PageHeader from '../components/internal/PageHeader'
+import PermissionNotice from '../components/internal/PermissionNotice'
 import StatTile from '../components/internal/StatTile'
 import TableSkeleton from '../components/internal/TableSkeleton'
 import { LevelBadge } from '../components/internal/StatusBadge'
@@ -62,7 +63,9 @@ const TABS: { id: Tab; label: string }[] = [
 ]
 
 export default function RegistrationPage() {
-  const { projectId } = useProject()
+  const { projectId, summaries } = useProject()
+  // Phase 6.16 — 행사 목록은 전원 공유지만 참가자 명단·RSVP(개인정보)는 담당자만(RLS). 열람자에게는 빈 표 대신 사실을 말한다
+  const viewer = summaries.find((s) => s.id === projectId)?.is_member === false
   const [tab, setTab] = useState<Tab>('rsvp')
   // 시트 반영·연결 변경이 일어나면 이 값을 올려 연결·명단·KPI를 한꺼번에 다시 읽는다.
   const [syncTick, setSyncTick] = useState(0)
@@ -87,6 +90,18 @@ export default function RegistrationPage() {
   const sheetConnected = connection.data !== null
   // 3.17.1 T3 — 제외 건수는 클릭 가능한 진입점이다(숫자만 두면 탈락한 사람이 D-Day에 발견된다)
   const [excludedOpen, setExcludedOpen] = useState(false)
+
+  if (viewer) {
+    return (
+      <section className="space-y-6 p-6">
+        <PageHeader caption="운영" title="등록" />
+        <PermissionNotice
+          reason="참가자 명단·RSVP는 이 행사의 담당자만 볼 수 있어요 — 지금은 열람 중입니다."
+          howToRequest="담당 배정(PM·등록)은 이 행사의 PM에게 요청하세요. 보드·일정·운영계획서는 열람할 수 있습니다."
+        />
+      </section>
+    )
+  }
 
   return (
     <section className="space-y-6 p-6">

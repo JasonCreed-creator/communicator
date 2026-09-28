@@ -208,7 +208,8 @@ export function projectsDomain(ctx: SupabaseCtx): ProjectsDomain {
     async listProjects() {
       // 로그인만 요구한다 — 멤버십이 하나도 없는 새 사용자도 빈 목록을 보고 행사를 만들 수 있어야 한다.
       // 어느 행사가 보이는지는 RLS(멤버·생성자)가 정한다.
-      await ctx.me()
+      const me = await ctx.me()
+      // Phase 6.16 — 목록은 로그인한 내부 사용자 전원에게 같다(RLS app.can_view). 담당 여부(is_member)는 배지·안내 줄용
       const projects = ctx.q(await ctx.sb.from('projects').select('*')) as Project[]
       if (projects.length === 0) return []
       const ids = projects.map((p) => p.id)
@@ -245,6 +246,7 @@ export function projectsDomain(ctx: SupabaseCtx): ProjectsDomain {
           delayed_tasks: tasks.filter((t) => t.project_id === p.id && isDelayed(t, today)).length,
           finals: mine.filter((d) => d.status === 'final').length,
           deliverable_total: mine.length,
+          is_member: me.app_role === 'admin' || members.some((m) => m.project_id === p.id && m.user_id === me.id),
         }
       })
       // 진행 중 먼저(등록순 — 기본 선택이 결정적이도록 created_at 기준), 종료는 뒤로(최근 종료순) — mock 동일

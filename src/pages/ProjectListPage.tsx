@@ -282,6 +282,7 @@ function AttentionRow({
           )}
           <span className="text-sm font-semibold text-ink">{s.name}</span>
           {isCurrent && <LevelBadge level="attention" label="지금 보는 행사" />}
+          {!s.is_member && <LevelBadge level="neutral" label="열람" />}
           <span className="t-caption">{identity(s)}</span>
         </div>
         <p className="text-sm text-ink-sub">{description}</p>
@@ -340,6 +341,11 @@ function ProjectCard({
           {isCurrent && (
             <span data-testid="current-badge">
               <LevelBadge level="attention" label="지금 보는 행사" />
+            </span>
+          )}
+          {!s.is_member && (
+            <span data-testid="viewer-badge">
+              <LevelBadge level="neutral" label="열람" />
             </span>
           )}
           <ActionMenu label={`행사 메뉴 ${s.name}`} items={menu} width={212} />
