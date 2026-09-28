@@ -116,6 +116,10 @@ export type WbsDirection = (typeof WBS_DIRECTIONS)[number]
 export const WBS_SOURCES = ['template', 'custom'] as const
 export type WbsSource = (typeof WBS_SOURCES)[number]
 
+/** v2.21 §27.3(Phase 6.11 PR-B) — 참고 문서 링크 종류(projects.reference_links[].kind) */
+export const REFERENCE_LINK_KINDS = ['kickoff', 'request', 'proposal', 'contract', 'other'] as const
+export type ReferenceLinkKind = (typeof REFERENCE_LINK_KINDS)[number]
+
 // v2.4 §22: 견적서 임포트 — quotes.source
 export const QUOTE_SOURCES = ['engine', 'imported'] as const
 export type QuoteSource = (typeof QUOTE_SOURCES)[number]

@@ -1051,6 +1051,33 @@ ${assertSql(`exists (select 1 from wbs_tasks where project_id='${PRJ}' and code=
 update role_charters set title = 'hack' where project_id='${PRJ}';
 ${assertSql(`not exists (select 1 from role_charters where project_id='${PRJ}' and title='hack')`)}`, { role: 'authenticated', sub: authId.pm })
 
+  // 5n. 참고 문서 링크 (Phase 6.11 PR-B · 설계서 v2.21 §27.3) — 열 1 · 모양 CHECK(https · kind 5종 · 상한 20) · pm만 쓰기 · 발주처·파트너 응답에 열 0
+  const REF_LINKS = `'[{"kind":"request","title":"요청서 시트","url":"https://docs.google.com/spreadsheets/d/virtual-request","added_at":"2026-09-28T09:00:00Z"},{"kind":"kickoff","title":"","url":"https://example.com/kickoff-notes","added_at":"2026-09-28T09:00:00Z"}]'::jsonb`
+  scenario('참고 문서: pm이 링크 2건 저장(https · kind) → 2건', `
+update projects set reference_links = ${REF_LINKS} where id='${PRJ}';
+${assertSql(`(select jsonb_array_length(reference_links) = 2 and reference_links->0->>'kind' = 'request' from projects where id='${PRJ}')`)}`, { role: 'authenticated', sub: authId.pm })
+  scenario('참고 문서: 21건은 모양 CHECK 거부(상한 20)', `
+update projects set reference_links = (select jsonb_agg(jsonb_build_object('kind','other','title','t','url','https://example.com/doc/'||g,'added_at',now())) from generate_series(1,21) g) where id='${PRJ}';`,
+    { role: 'authenticated', sub: authId.pm, expect: 'error', match: 'projects_reference_links_shape' })
+  scenario('참고 문서: http 주소·모르는 kind는 모양 CHECK 거부', `
+do $$ begin
+  begin update projects set reference_links = '[{"kind":"other","title":"x","url":"http://example.com/x","added_at":"2026-09-28T09:00:00Z"}]'::jsonb where id='${PRJ}'; raise exception 'ASSERT_FAILED: http'; exception when check_violation then null; end;
+  begin update projects set reference_links = '[{"kind":"memo","title":"x","url":"https://example.com/x","added_at":"2026-09-28T09:00:00Z"}]'::jsonb where id='${PRJ}'; raise exception 'ASSERT_FAILED: kind'; exception when check_violation then null; end;
+  begin update projects set reference_links = '{"kind":"other"}'::jsonb where id='${PRJ}'; raise exception 'ASSERT_FAILED: not array'; exception when check_violation then null; end;
+end $$;
+update projects set reference_links = null where id='${PRJ}';
+${assertSql(`(select reference_links is null from projects where id='${PRJ}')`)}`, { role: 'authenticated', sub: authId.pm })
+  scenario('참고 문서: design(비 pm)은 열을 고치지 못한다(RLS projects_update · 0행 갱신)', `
+update projects set reference_links = ${REF_LINKS} where id='${PRJ}';
+${assertSql(`(select reference_links is null from projects where id='${PRJ}')`)}`, { role: 'authenticated', sub: authId.design })
+  scenario('참고 문서: 발주처 client_status·client_queue · 파트너 partner_portal 응답에 reference_links 키 0', `
+update projects set reference_links = ${REF_LINKS} where id='${PRJ}';
+update projects set reference_links = ${REF_LINKS} where id=(select p.project_id from partner_tokens t join partners p on p.id=t.partner_id where t.token='${PARTNER_TOKEN}');
+set local role anon;
+${assertSql(`position('reference_links' in client_status('${DEMO_TOKEN}')::text) = 0`)}
+${assertSql(`position('reference_links' in client_queue('${DEMO_TOKEN}')::text) = 0`)}
+${assertSql(`position('reference_links' in partner_portal('${PARTNER_TOKEN}')::text) = 0`)}`)
+
   // 6. 시크릿 커밋 가드 (§8 DoD 9) — 실키 값 패턴이 레포 파일에 없는가
   const grep = spawnSync('grep', ['-rnE', 'sb_secret_[A-Za-z0-9_-]{10,}|sbp_[A-Za-z0-9]{20,}', 'src', 'supabase', 'scripts', '--include=*.ts', '--include=*.tsx', '--include=*.sql', '--include=*.mjs', '--include=*.md'], { encoding: 'utf8' })
   record('시크릿 커밋 가드: sb_secret_/sbp_ 실키 패턴 0건 (DoD 9)', grep.status === 1, grep.stdout)

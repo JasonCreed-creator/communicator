@@ -12,6 +12,7 @@ import { isPm } from '../../../lib/roles'
 import { normalizeSlackWebhook, SLACK_WEBHOOK_INVALID_MESSAGE } from '../../../lib/slackWebhook'
 import { sameSlackThread, SLACK_DESIGN_THREAD_SAME_MESSAGE, normalizeSlackThreadLink, normalizeSlackUserId, SLACK_THREAD_INVALID_MESSAGE, SLACK_USER_ID_INVALID_MESSAGE } from '../../../lib/slackThread'
 import { normalizeQuoteAttachment, QUOTE_ATTACHMENT_INVALID_MESSAGE } from '../../../lib/quoteAttachment'
+import { normalizeReferenceLinks, REFERENCE_LINK_INVALID_MESSAGE, REFERENCE_LINKS_LIMIT_MESSAGE } from '../../../lib/referenceLinks'
 import { isDelayed, toIsoDate } from '../../../lib/wbs'
 import type { ClientContact, ClientToken, Project, UUID, WbsTask } from '../../../types/entities'
 import type { MemberRole } from '../../../types/enums'
@@ -437,6 +438,13 @@ export function projectsDomain(ctx: SupabaseCtx): ProjectsDomain {
         const att = normalizeQuoteAttachment(patch.quote_attachment)
         if (att === 'invalid') throw new ProviderError('validation', QUOTE_ATTACHMENT_INVALID_MESSAGE)
         row.quote_attachment = att
+      }
+      // v2.21 §27.3(Phase 6.11 PR-B) — 참고 문서 링크(https · 상한 20 · 내부 화면에만 — client_status·partner_portal은 열을 싣지 않는다)
+      if (patch.reference_links !== undefined) {
+        const links = normalizeReferenceLinks(patch.reference_links)
+        if (links === 'invalid') throw new ProviderError('validation', REFERENCE_LINK_INVALID_MESSAGE)
+        if (links === 'limit') throw new ProviderError('validation', REFERENCE_LINKS_LIMIT_MESSAGE)
+        row.reference_links = links
       }
       // v2.0 — "견적 연결" 액션: app_role admin·sales 전용 (§6.1·§10), 상호 링크 동기화
       if (patch.quote_id !== undefined) {

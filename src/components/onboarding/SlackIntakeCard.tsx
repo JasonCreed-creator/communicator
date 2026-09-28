@@ -2,7 +2,8 @@
 // 메시지 링크(봇이 읽음 — 실서버) 또는 글 붙여 넣기 → 행사 기본 정보를 폼에 채운다(주황 표시 · 사람이 확인·수정 뒤 저장).
 //   · 읽은 방식 = 라벨 규칙 + AI(Claude, 키가 있을 때) — 결과 줄에 어느 쪽인지 표시. 못 읽은 칸은 이름으로 알린다(추측 없음)
 //   · 기록: projects.intake(링크·시각·보낸 사람·방식·채운 칸 — 원문은 저장하지 않는다) · 선택하면 그 글의 스레드를 행사 Slack 스레드로 등록(설정 ③과 같은 칸)
-//   · 첨부 파일·링크는 아래 '견적서' 칸(QuoteAttachmentCard)이 붙인다 — 여기서는 개수만 알린다
+//   · 첨부 파일·링크는 아래 '견적서' 칸(QuoteAttachmentCard)·'참고 문서' 칸(ReferenceLinksCard — v2.21 §27.3)이 붙인다 — 여기서는 개수만 알린다
+//   · 요청서 시트(라벨 열 · 값 열)를 복사해 붙여도 같은 라벨 규칙으로 읽는다(탭 구분 · 구분 열 건너뜀 — eventBrief.ts)
 //   · mock(데모)은 붙여 넣은 글을 라벨 규칙으로 그 자리에서 읽는다(AI·링크는 실서버)
 import { useState } from 'react'
 import ErrorAlert from '../internal/ErrorAlert'
@@ -99,6 +100,7 @@ export default function SlackIntakeCard({
           <p className="t-card-title">Slack 메시지에서 불러오기</p>
           <p className="mt-0.5 text-xs text-ink-cap">
             요청 글의 링크(⋯ → 링크 복사)나 글 자체를 붙이면 행사명·일시·장소·인원을 아래 칸에 채워 둡니다 — 읽은 값은 전부 고칠 수 있어요.
+            요청서 시트(라벨 열 · 값 열)를 복사해 붙여도 같은 규칙으로 읽고, 주요 아젠다·프로그램 구성·연사 요청은 기타 항목으로 들어갑니다.
             {gateway.mode === 'mock' ? ' 데모에서는 붙여 넣은 글을 라벨(행사명: · 일시: …) 규칙으로 읽습니다.' : ''}
           </p>
         </div>
@@ -152,7 +154,7 @@ export default function SlackIntakeCard({
           {result.ai_note && <p className="text-xs text-ink-cap">{result.ai_note}</p>}
           {(result.files.length > 0 || result.links.length > 0) && (
             <p className="text-xs text-ink-sub" data-testid="slack-intake-attachments">
-              첨부 파일 {result.files.length}개 · 링크 {result.links.length}개 — 아래 ‘견적서’ 칸에서 붙일 수 있어요
+              첨부 파일 {result.files.length}개 · 링크 {result.links.length}개 — 아래 ‘견적서’·‘참고 문서’ 칸에서 붙일 수 있어요
             </p>
           )}
           {savedNote && <p className="text-xs text-positive">{savedNote}</p>}

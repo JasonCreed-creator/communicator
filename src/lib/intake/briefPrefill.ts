@@ -19,6 +19,8 @@ export function briefToPrefill(f: EventBriefFields): OverviewPrefillValues {
   if (f.target_audience) v.targetAudience = f.target_audience
   // 모객형만 채운다 — 뚜렷하지 않으면(null) 기본값(일반형)을 건드리지 않는다
   if (f.event_type === 'recruiting') v.eventType = 'recruiting'
-  if (f.notes) v.items = [{ label: INTAKE_NOTES_LABEL, value: f.notes }]
+  // 기타 항목 = 메모 한 줄 + 요청서의 나머지 라벨(v2.21 §27.3 — 주요 아젠다/키워드 · 프로그램 구성 · 연사 요청). 폼은 같은 이름이 이미 있으면 그대로 둔다
+  const items = [...(f.notes ? [{ label: INTAKE_NOTES_LABEL, value: f.notes }] : []), ...(f.overview_items ?? [])]
+  if (items.length > 0) v.items = items
   return v
 }
