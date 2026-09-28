@@ -135,6 +135,16 @@ export default function SettlementPage() {
     [quotes.data, projectId],
   )
 
+  // Phase 6.12(2026-09-28 실사용 "견적을 올렸는데 정산보드에 반영 안 됨") — 가져온 견적이 행사에 연결만 되고 확정되지 않으면
+  // '확정 견적 선택'에 아무것도 없어 막다른 길이었다(위저드 ③ '정산보드 기준 견적' 기본 꺼짐). 이 행사에 연결된 초안 중 최신 버전을 찾아
+  // 여기서 바로 확정하고 정산을 시작할 수 있게 한다(finalizeQuote → createSettlementBoard — DataProvider 불변).
+  const latestDraft = useMemo(() => {
+    const drafts = (quotes.data ?? []).filter(
+      (q) => q.project_id === projectId && !q.is_final && !q.superseded_by && q.status !== 'archived' && q.status !== 'superseded',
+    )
+    return drafts.sort((a, b) => b.version - a.version || (b.created_at < a.created_at ? -1 : 1))[0] ?? null
+  }, [quotes.data, projectId])
+
   const [pickedQuote, setPickedQuote] = useState('')
   const [rebasing, setRebasing] = useState(false)
   const [expanded, setExpanded] = useState<string | null>(null)
@@ -143,6 +153,12 @@ export default function SettlementPage() {
   const [vqOpen, setVqOpen] = useState<VendorQuoteImportView | 'new' | null>(null)
 
   const createBoard = useMutation((quoteId: string) => provider.createSettlementBoard(projectId, quoteId))
+  // 초안 견적을 확정(잠금)한 뒤 그 견적으로 보드를 만든다 — 확정만 되고 보드가 실패하면 다음엔 '확정 견적 선택'에 나타난다
+  const finalizeAndStart = useMutation(async (quoteId: string) => {
+    await provider.finalizeQuote(quoteId)
+    await provider.createSettlementBoard(projectId, quoteId)
+    return true as const
+  })
   const rebase = useMutation((quoteId: string) => provider.rebaseSettlementBoard(projectId, quoteId))
   const addBucket = useMutation((code: string, label: string) =>
     provider.createSettlementBucket(projectId, { code, label }),
@@ -184,6 +200,35 @@ export default function SettlementPage() {
 
   // ── 빈 상태 — 확정 견적을 불러오는 것이 시작점이다(R-S2) ─────────────
   if (!board.loading && !view) {
+    // Phase 6.12 — 이 행사에 연결된 초안이 있고 고를 확정 견적이 없으면 빈 셀렉트 대신 '확정하고 정산 시작'이 채운 버튼
+    const draftOnly = !!latestDraft && finalQuotes.length === 0
+    const draftBox =
+      canEdit && canQuotes && latestDraft ? (
+        <div className="mx-auto max-w-xl rounded-md border border-border bg-canvas p-4 text-left text-sm" data-testid="settlement-draft-quote">
+          <p className="text-ink">
+            이 행사에 연결된 견적{' '}
+            <span className="font-semibold">
+              {latestDraft.title} v{latestDraft.version}
+            </span>
+            이(가) 아직 확정되지 않았습니다 — 정산 기준은 확정 견적만 됩니다.
+          </p>
+          <p className="mt-1 text-xs text-ink-cap">
+            견적서 가져오기 ③에서 ‘정산보드 기준 견적’을 켜지 않았거나 견적 화면에서 확정하지 않으면 이렇게 남습니다. 확정하면 견적이
+            잠기고(뒤에 새 버전으로 고쳐 기준을 갱신할 수 있어요) 버킷 스냅숏이 여기 만들어집니다.
+          </p>
+          <button
+            type="button"
+            className={`btn btn-sm mt-3 ${draftOnly ? 'btn-primary' : 'btn-ghost'}`}
+            disabled={finalizeAndStart.pending || createBoard.pending}
+            onClick={async () => {
+              const ok = await finalizeAndStart.run(latestDraft.id)
+              if (ok) board.reload()
+            }}
+          >
+            {finalizeAndStart.pending ? '확정하는 중…' : `v${latestDraft.version} 확정하고 정산 시작`}
+          </button>
+        </div>
+      ) : null
     return (
       <div className="flex flex-col gap-6 p-4 md:p-6">
         {header()}
@@ -191,7 +236,9 @@ export default function SettlementPage() {
           <EmptyState
             message="확정 견적을 불러와 정산을 시작합니다."
             action={
-              canEdit ? (
+              canEdit && draftOnly ? (
+                draftBox
+              ) : canEdit ? (
                 <div className="flex flex-wrap items-center justify-center gap-2">
                   <select
                     aria-label="기준 견적"
@@ -235,18 +282,20 @@ export default function SettlementPage() {
               </Link>
             </p>
           )}
-          {isPm && canQuotes && finalQuotes.length === 0 && (
+          {isPm && canQuotes && finalQuotes.length === 0 && !latestDraft && (
             <p className="mt-2 text-center text-sm text-ink-sub">
               이 행사에 연결된 확정 견적이 없습니다 — 견적 화면에서 확정하거나 '기존 행사에 연결'로 이 행사에 붙인 뒤 다시 시도하세요.
             </p>
           )}
+          {/* Phase 6.12 — 고를 확정 견적이 있어도 뒤에 초안이 남아 있으면 그 초안을 확정해 기준으로 쓰는 길을 함께 보인다 */}
+          {!draftOnly && draftBox && <div className="mt-4">{draftBox}</div>}
           {/* v16 §16.4 — 행사 없는 확정 견적은 정산 시작과 함께 이 행사에 연결된다 */}
           {isPm && canQuotes && !!pickedQuote && finalQuotes.find((q) => q.id === pickedQuote)?.project_id === null && (
             <p className="mt-2 text-center text-sm text-ink-sub" data-testid="settlement-link-note">
               이 견적은 아직 어느 행사에도 연결돼 있지 않습니다 — 정산을 시작하면 이 행사에 연결됩니다.
             </p>
           )}
-          <ErrorAlert message={createBoard.error} />
+          <ErrorAlert message={createBoard.error ?? finalizeAndStart.error} />
         </div>
       </div>
     )

@@ -144,9 +144,13 @@ describe('정산 기준 분배 (C형) — 확정 동반', () => {
     await user.click(screen.getByRole('button', { name: '이 매핑으로 확정' }))
 
     await screen.findByText('어디까지 반영할까요?')
-    // v16 — 기본은 '기존 행사에 연결'(샘플 행사에는 이미 정산보드가 있다) → 옛 흐름대로 새 행사를 만들어 기준으로 삼는다
+    // v16 — 기본은 '기존 행사에 연결'(샘플 행사에는 이미 정산보드가 있어 정산 기준을 켤 수 없다) → 옛 흐름대로 새 행사를 만들어 기준으로 삼는다.
+    // Phase 6.12 — 새 행사·보드 없는 행사에서는 '정산보드 기준 견적'이 기본 켜짐(누르면 꺼진다)
+    const settlementBox = screen.getByRole('checkbox', { name: /정산보드 기준 견적/ }) as HTMLInputElement
+    expect(settlementBox.checked).toBe(false)
+    expect(settlementBox.disabled).toBe(true)
     await user.click(screen.getByRole('radio', { name: /새 행사 만들기/ }))
-    await user.click(screen.getByRole('checkbox', { name: /정산보드 기준 견적/ }))
+    expect((screen.getByRole('checkbox', { name: /정산보드 기준 견적/ }) as HTMLInputElement).checked).toBe(true)
     await user.click(screen.getByRole('button', { name: '분배 실행' }))
 
     const done = await screen.findByText('가져오기 완료')

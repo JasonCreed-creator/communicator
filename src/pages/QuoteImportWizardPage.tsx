@@ -110,7 +110,11 @@ function WizardBody() {
   const [quote, setQuote] = useState<Quote | null>(null)
   const [projectMode, setProjectMode] = useState<ProjectMode | null>(null)
   const [linkProjectId, setLinkProjectId] = useState<string>('')
-  const [targets, setTargets] = useState({ settlement_base: false, board_seed: false })
+  // Phase 6.12(2026-09-28 실사용 "견적을 올렸는데 정산보드에 반영 안 됨") — 정산 기준은 행사가 있고 그 행사에 아직 정산보드가 없으면
+  // **기본 켜짐**(사람이 끌 수 있다). 보드가 있는 행사에는 켤 수 없다 — 기준을 바꾸는 길은 정산보드의 '기준 견적 갱신'이고, 여기서 켜면
+  // 확정만 된 채 보드 생성이 409로 끊겼다.
+  const [settlementChoice, setSettlementChoice] = useState<boolean | null>(null)
+  const [boardSeed, setBoardSeed] = useState(false)
   const [result, setResult] = useState<QuoteImportDistributeResult | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -124,6 +128,14 @@ function WizardBody() {
       ? projectId
       : (activeProjects[0]?.id ?? '')
   const linkedName = (id: string | null) => (id ? summaries.find((s) => s.id === id)?.name ?? '연결됨' : '')
+  // 고른 행사에 정산보드가 이미 있는가(없으면 정산 기준 기본 켜짐 · 있으면 켤 수 없음)
+  const targetBoard = useAsync(
+    async () => (mode === 'existing' && linkTarget ? !!(await provider.getSettlementBoard(linkTarget).catch(() => null)) : false),
+    [mode, linkTarget],
+  )
+  const targetHasBoard = targetBoard.data === true
+  const settlementLocked = mode === 'none' || targetHasBoard || (mode === 'existing' && targetBoard.loading)
+  const settlementBase = settlementLocked ? false : (settlementChoice ?? true)
 
   const parsed = imp?.parsed ?? null
   const sectionAmount = useMemo(() => {
@@ -198,7 +210,7 @@ function WizardBody() {
 
   const handleDistribute = async () => {
     if (!imp || !quote) return
-    if ((targets.settlement_base || targets.board_seed) && mode === 'none') {
+    if ((settlementBase || boardSeed) && mode === 'none') {
       setError('정산 기준·보드 시드는 행사가 있어야 합니다 — 기존 행사를 고르거나 새 행사를 만드세요.')
       return
     }
@@ -210,14 +222,14 @@ function WizardBody() {
     setError(null)
     try {
       // 정산 기준은 확정 견적만 가능(§19.2) — 사용자가 켰으면 여기서 먼저 확정한다
-      if (targets.settlement_base && !quote.is_final) {
+      if (settlementBase && !quote.is_final) {
         setQuote(await provider.finalizeQuote(quote.id))
       }
       const distributed = await provider.distributeQuoteImport(imp.id, {
         project_prefill: mode === 'new',
         link_project_id: mode === 'existing' ? linkTarget : undefined,
-        settlement_base: targets.settlement_base,
-        board_seed: targets.board_seed,
+        settlement_base: settlementBase,
+        board_seed: boardSeed,
       })
       setResult(distributed)
       reloadSummaries()
@@ -559,7 +571,8 @@ function WizardBody() {
                   checked={mode === 'none'}
                   onChange={() => {
                     setProjectMode('none')
-                    setTargets({ settlement_base: false, board_seed: false })
+                    setSettlementChoice(null)
+                    setBoardSeed(false)
                   }}
                 />
                 <span>
@@ -572,16 +585,18 @@ function WizardBody() {
               <input
                 type="checkbox"
                 className="ui-check"
-                checked={targets.settlement_base}
-                disabled={mode === 'none'}
-                onChange={(e) => setTargets((t) => ({ ...t, settlement_base: e.target.checked }))}
+                checked={settlementBase}
+                disabled={settlementLocked}
+                onChange={(e) => setSettlementChoice(e.target.checked)}
               />
               <span>
                 <span className="font-semibold text-ink">정산보드 기준 견적 — 확정하고 기준으로 설정</span>
-                <span className="block text-sm text-ink-sub">
+                <span className="block text-sm text-ink-sub" data-testid="import-settlement-hint">
                   {mode === 'none'
                     ? '행사를 고르면 쓸 수 있습니다.'
-                    : '견적이 확정(잠금)되고 버킷 스냅숏이 고른 행사의 정산보드에 만들어집니다.'}
+                    : targetHasBoard
+                      ? '이 행사에는 이미 정산보드가 있습니다 — 기준을 바꾸려면 정산보드의 ‘기준 견적 갱신’을 쓰세요.'
+                      : '견적이 확정(잠금)되고 버킷 스냅숏이 고른 행사의 정산보드에 만들어집니다. 끄면 견적은 작성 중으로 남고, 정산보드에서 ‘확정하고 정산 시작’으로 이을 수 있어요.'}
                 </span>
               </span>
             </label>
@@ -589,9 +604,9 @@ function WizardBody() {
               <input
                 type="checkbox"
                 className="ui-check"
-                checked={targets.board_seed}
+                checked={boardSeed}
                 disabled={mode === 'none'}
-                onChange={(e) => setTargets((t) => ({ ...t, board_seed: e.target.checked }))}
+                onChange={(e) => setBoardSeed(e.target.checked)}
               />
               <span>
                 <span className="font-semibold text-ink">보드 항목 시드</span>
@@ -626,7 +641,12 @@ function WizardBody() {
                   ? `기존 행사에 연결됨 — ${linkedName(result.project_id)}`
                   : '하지 않음'}
             </li>
-            <li>· 정산 기준: {result.settlement_created ? '버킷 스냅숏 생성됨' : '하지 않음'}</li>
+            <li>
+              · 정산 기준: {result.settlement_created ? '버킷 스냅숏 생성됨' : '하지 않음'}
+              {!result.settlement_created && result.project_id && (
+                <span className="text-ink-sub"> — 견적은 작성 중으로 남았습니다. 정산보드에서 ‘확정하고 정산 시작’으로 이을 수 있어요.</span>
+              )}
+            </li>
             <li>· 보드 시드: {result.deliverables_seeded > 0 ? `${result.deliverables_seeded}건` : '하지 않음'}</li>
           </ul>
           <div className="mt-5 flex flex-wrap gap-2">
@@ -655,6 +675,18 @@ function WizardBody() {
                 }}
               >
                 {result.settlement_created ? '정산보드 열기' : '행사로 이동'}
+              </button>
+            )}
+            {result.project_id && !result.settlement_created && (
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => {
+                  setProject(result.project_id!)
+                  navigate('/settlement')
+                }}
+              >
+                정산보드에서 확정하고 시작
               </button>
             )}
           </div>

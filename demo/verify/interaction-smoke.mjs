@@ -27,6 +27,7 @@
 //       3.24 PR-B: 운영 보드 유형별 표·카드 요약 → 시나리오 원고(뼈대 · 멘트 쓰기 · 연사 확인 · 비상 멘트) · 큐시트 칸 순서 ·
 //       3.24 PR-C: 16:9 장표 — 운영계획서 → 장표(사이드바 없음 · 목차 쪽 번호 · 본문 넘침 0 · 16:9) → 인쇄 PDF 쪽 수·용지 960×540pt ·
 //       4.8: 협력사 견적서 PDF·사진 — 불러오기 대화상자(엑셀·PDF·사진 받음 · AI 안내) → PDF 고르기 → 'AI로 읽기' → mock 사실 안내 · 서버 요청 0 ·
+//       6.12: 견적 올렸는데 정산보드 반영 0 — 정산보드 빈 상태의 초안 견적 안내 상자 → '확정하고 정산 시작' → 보드(맨 뒤 블록 · 6.4 블록이 붙여 둔 초안) ·
 //       6.11 PR-B: 참고 문서 링크 — 설정 ① 카드(붙이기 → 요청서 배지 · 1/20 → 빼기) · 온보딩 ① 요청서 시트 붙여 넣기(탭 · 구분 열) → 기타 항목 3 · 시트 링크 → 참고 문서로 ·
 //       6.2: 행사 만들기 인테이크 — 세팅 미완료 행사 온보딩 ① → Slack 글 붙이기 → 라벨 규칙으로 채움(주황 · 배너 · 기록) → 행사 ID 줄(YYMMDD_고객사_행사명) →
 //            견적서 링크 붙이기 → 빼기 · 채운 버튼 1개 · /api 요청 0)
@@ -1456,8 +1457,9 @@ await tab.screenshot({ path: resolve(SHOTS, '03f-editor-step4-export.png'), full
 
 // ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — **Phase 6.4 PR-1 견적 ↔ 기존 행사 연결(2026-09-27)**.
 //     견적 목록 → 행사 없는 견적(quo-010) 고르기 → 요약 패널 '기존 행사에 연결' 상자(진행 중 행사만 — 종료 행사 없음) →
-//     세팅 미완료 행사(prj-forum-h2)를 골라 '연결' → 그 행사 묶음으로 옮겨지고 상자는 사라진다(새 행사 0 · 전체 리로드 0) →
-//     /api 요청 0(mock). **맨 뒤에서 돈다** — mock 상태를 바꾸므로(quo-010이 prj-forum-h2에 붙는다) 앞 블록들(온보딩·견적 목록)이 그 전 상태를 본다.
+//     보드 없는 진행 중 행사(prj-virtual-expo)를 골라 '연결' → 그 행사 묶음으로 옮겨지고 상자는 사라진다(새 행사 0 · 전체 리로드 0) →
+//     /api 요청 0(mock). **맨 뒤에서 돈다** — mock 상태를 바꾸므로(quo-010이 prj-virtual-expo에 붙는다) 앞 블록들(온보딩·견적 목록)이 그 전 상태를 본다.
+//     (2026-09-28 Phase 6.12) 연결 대상을 prj-forum-h2 → prj-virtual-expo로 — 맨 뒤 6.12 블록이 이 초안을 정산보드에서 확정한다(forum-h2는 세팅 미완료라 가드가 막는다).
 {
   const docBefore = docRequests.length
   const apiCalls = []
@@ -1479,9 +1481,9 @@ await tab.screenshot({ path: resolve(SHOTS, '03f-editor-step4-export.png'), full
   const optionValues = await select.locator('option').evaluateAll((els) => els.map((o) => o.value))
   check(optionValues.includes('prj-forum-h2') && !optionValues.includes('prj-ai-summit'), '연결 후보 = 진행 중 행사만(종료 행사 없음)', optionValues.join(', '))
   const projectsBefore = await tab.locator('section[aria-label]').count()
-  await select.selectOption('prj-forum-h2')
+  await select.selectOption('prj-virtual-expo')
   await box.getByRole('button', { name: '연결' }).click()
-  const group = tab.getByRole('region', { name: '리더십 포럼 하반기' })
+  const group = tab.getByRole('region', { name: '가상산업박람회 2026' })
   await group.waitFor({ timeout: 10_000 })
   await group.getByTestId('quote-row-quo-010').waitFor({ timeout: 10_000 })
   check(true, "'연결' → 그 행사 묶음으로 옮겨짐(새 행사 만들지 않음)")
@@ -1583,6 +1585,37 @@ await tab.screenshot({ path: resolve(SHOTS, '03f-editor-step4-export.png'), full
   tab.off('request', onReq)
   check(apiCalls.length === 0, '데모에서 /api 요청 0', apiCalls.join(', '))
   check(docRequests.length === docBefore, '첨부 다리 경로에 전체 리로드 0', `${docBefore} → ${docRequests.length}`)
+}
+
+// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — **Phase 6.12 견적을 올렸는데 정산보드에 반영 안 됨(2026-09-28 실사용)**.
+//     앞 6.4 블록이 초안 견적(quo-010)을 보드 없는 행사(prj-virtual-expo)에 연결해 두었다 = 운영에서 일어난 상태(연결만 되고 확정 0 —
+//     위저드 ③ '정산보드 기준 견적'이 꺼진 채 분배됨). 정산보드(?project=prj-virtual-expo) 빈 상태 → 빈 '확정 견적 선택' 대신 초안 안내 상자
+//     (채운 버튼 = 'v1 확정하고 정산 시작' 하나) → 누르면 견적 확정 + 버킷 스냅숏 → 보드(KPI) · 초안 상자 사라짐 · /api 요청 0 · 전체 리로드 0.
+{
+  const docBefore = docRequests.length
+  const apiCalls = []
+  const onReq = (req) => {
+    if (/\/api\//.test(req.url())) apiCalls.push(req.url())
+  }
+  tab.on('request', onReq)
+  await tab.evaluate(() => {
+    window.location.hash = '#/settlement?project=prj-virtual-expo'
+  })
+  const draftBox = tab.getByTestId('settlement-draft-quote')
+  await draftBox.waitFor({ timeout: 10_000 })
+  const draftText = await draftBox.innerText()
+  check(/v1/.test(draftText) && draftText.includes('아직 확정되지 않았습니다'), '정산보드 빈 상태 = 연결된 초안 견적 안내 상자', draftText)
+  check((await tab.getByLabel('기준 견적').count()) === 0, '고를 확정 견적이 없으면 빈 셀렉트 0')
+  const filledS = (await tab.locator('main .btn-accent, main .btn-primary').allInnerTexts()).map((t) => t.trim())
+  check(filledS.join('|') === 'v1 확정하고 정산 시작', "채운 버튼 = 'v1 확정하고 정산 시작' 하나", filledS.join(' · '))
+  await tab.screenshot({ path: resolve(SHOTS, '03-settlement-draft-quote.png'), fullPage: true })
+  await draftBox.getByRole('button', { name: /확정하고 정산 시작/ }).click()
+  await tab.getByTestId('settlement-kpis').waitFor({ timeout: 10_000 })
+  check((await tab.getByTestId('settlement-draft-quote').count()) === 0, '확정하고 정산 시작 → 보드(KPI) · 초안 상자 사라짐')
+  await tab.screenshot({ path: resolve(SHOTS, '03-settlement-after-finalize.png'), fullPage: true })
+  tab.off('request', onReq)
+  check(apiCalls.length === 0, '데모에서 /api 요청 0(확정·보드 생성은 mock 안에서)', apiCalls.join(', '))
+  check(docRequests.length === docBefore, '초안 확정·정산 시작에 전체 리로드 0', `${docBefore} → ${docRequests.length}`)
 }
 
 await browser.close()
