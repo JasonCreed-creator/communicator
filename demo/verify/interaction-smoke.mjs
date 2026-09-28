@@ -27,6 +27,7 @@
 //       3.24 PR-B: 운영 보드 유형별 표·카드 요약 → 시나리오 원고(뼈대 · 멘트 쓰기 · 연사 확인 · 비상 멘트) · 큐시트 칸 순서 ·
 //       3.24 PR-C: 16:9 장표 — 운영계획서 → 장표(사이드바 없음 · 목차 쪽 번호 · 본문 넘침 0 · 16:9) → 인쇄 PDF 쪽 수·용지 960×540pt ·
 //       4.8: 협력사 견적서 PDF·사진 — 불러오기 대화상자(엑셀·PDF·사진 받음 · AI 안내) → PDF 고르기 → 'AI로 읽기' → mock 사실 안내 · 서버 요청 0 ·
+//       6.11 PR-B: 참고 문서 링크 — 설정 ① 카드(붙이기 → 요청서 배지 · 1/20 → 빼기) · 온보딩 ① 요청서 시트 붙여 넣기(탭 · 구분 열) → 기타 항목 3 · 시트 링크 → 참고 문서로 ·
 //       6.2: 행사 만들기 인테이크 — 세팅 미완료 행사 온보딩 ① → Slack 글 붙이기 → 라벨 규칙으로 채움(주황 · 배너 · 기록) → 행사 ID 줄(YYMMDD_고객사_행사명) →
 //            견적서 링크 붙이기 → 빼기 · 채운 버튼 1개 · /api 요청 0)
 // 캡처는 dist-demo/shots-interaction/ 에 남긴다. 실패 시 exit 1.
@@ -315,7 +316,102 @@ check(
   await tab.waitForURL(/#\/schedule/, { timeout: 10_000 })
 }
 
-// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — **Phase 6.11 PR-C 마스터 시트 대체 · WBS 실무화(2026-09-28)**.
+// ── ③ 이번 세션이 바꾼 화면의 핵심 클릭 경로 — **Phase 6.11 PR-B 마스터 시트 대체 · 참고 문서 링크 + 요청서(2026-09-28)**.
+//     행사 설정 ①(prj-rb27 · 데모 사용자 = pm): '참고 문서' 카드(견적서 카드 옆 · 0/20) → '＋ 링크 붙이기' → 종류(기본 요청서)·문서 이름·https 링크 → 붙이기 →
+//     행(요청서 배지 · 이름 링크 · 구글 시트 · 1/20) → 빼기(확인 수락) → 빈 상태 · 온보딩 ①(prj-forum-h2): 요청서 시트(탭 · 구분 열)를 붙여 넣기 → 불러오기 →
+//     채운 칸 11개 · 기타 항목 = 요청 사항 + 주요 아젠다/키워드 · 프로그램 구성 · 연사 요청 · 글 속 시트 링크 → '참고 문서로' → 폼(주소 · 종류 요청서) → 취소(저장 0) ·
+//     /api 요청 0 · 전체 리로드 0 → 원래 행사의 일정으로 되돌아간다(뒤 PR-C 블록이 이어서 본다).
+{
+  const docBefore = docRequests.length
+  const backProject = await tab.evaluate(() => localStorage.getItem('communicator.currentProjectId'))
+  const apiCalls = []
+  const onReq = (req) => {
+    if (/\/api\//.test(req.url())) apiCalls.push(req.url())
+  }
+  tab.on('request', onReq)
+  await tab.evaluate(() => {
+    window.location.hash = '#/settings?project=prj-rb27'
+  })
+  const refCard = tab.getByTestId('reference-links')
+  await refCard.waitFor({ timeout: 10_000 })
+  check((await tab.getByTestId('quote-attachment').count()) === 1, '설정 ① = 견적서 카드 옆에 참고 문서 카드')
+  check((await refCard.getByTestId('reference-links-count').innerText()).trim() === '0/20' && (await refCard.getByTestId('reference-links-empty').count()) === 1, '참고 문서 빈 상태 · 0/20')
+  await refCard.getByRole('button', { name: '＋ 링크 붙이기' }).click()
+  const refForm = refCard.getByTestId('reference-link-form')
+  await refForm.waitFor({ timeout: 10_000 })
+  check((await refForm.getByLabel('종류').inputValue()) === 'request', '링크 폼 종류 기본값 = 요청서')
+  await refForm.getByLabel('문서 이름').fill('요청서 시트')
+  await refForm.getByLabel('링크').fill('https://docs.google.com/spreadsheets/d/virtual-request-demo')
+  await refForm.getByRole('button', { name: '붙이기' }).click()
+  const refRow = refCard.getByTestId('reference-link-row')
+  await refRow.waitFor({ timeout: 10_000 })
+  const refRowText = await refRow.innerText()
+  check(/요청서/.test(refRowText) && /요청서 시트/.test(refRowText) && /구글 시트/.test(refRowText), '붙인 행 = 요청서 배지 · 이름 · 구글 시트', refRowText)
+  check((await refRow.getByRole('link', { name: '요청서 시트' }).getAttribute('target')) === '_blank', '링크는 새 탭')
+  check((await refCard.getByTestId('reference-links-count').innerText()).trim() === '1/20', '참고 문서 1/20')
+  await tab.screenshot({ path: resolve(SHOTS, '03-reference-links.png'), fullPage: true })
+  tab.once('dialog', (d) => d.accept())
+  await refCard.getByRole('button', { name: '요청서 시트 빼기' }).click()
+  await refCard.getByTestId('reference-links-empty').waitFor({ timeout: 10_000 })
+  check(true, '참고 문서 빼기(확인 수락) → 빈 상태')
+
+  // 온보딩 ① — 요청서 시트 붙여 넣기(탭 구분 · 구분 열) → 기타 항목 + 참고 문서 제안
+  await tab.evaluate(() => {
+    window.location.hash = '#/onboarding?project=prj-forum-h2'
+  })
+  await tab.getByRole('heading', { name: '행사 기본 정보' }).waitFor({ timeout: 10_000 })
+  const intakeCard2 = tab.getByTestId('slack-intake')
+  await intakeCard2.waitFor({ timeout: 10_000 })
+  const requestSheet = [
+    '행사 개요\t행사명\t가상 AI 서밋 2027',
+    '\t행사 일시\t2027-04-08(목) 13:00~18:00',
+    '\t행사 장소\t가상 컨벤션센터 3층 그랜드볼룸',
+    '\t주최/주관\t가상테크㈜',
+    '행사 콘텐츠\t행사 주제\tAI 전환의 실무',
+    '\t주요 아젠다/키워드\tAI 에이전트 · 데이터 거버넌스',
+    '\t핵심 오디언스\t제조·금융 IT 의사결정자',
+    '\t목표 인원\t400명',
+    '\t프로그램 구성\t키노트 2 · 패널 1 · 네트워킹',
+    '\t연사 요청\t업계 CTO급 2인(섭외 협의)',
+    '\t특이사항\t동시통역 · 생중계 검토',
+    '요청서 원문: https://docs.google.com/spreadsheets/d/virtual-request-sheet',
+  ].join('\n')
+  await intakeCard2.getByLabel('Slack 메시지 링크 또는 글').fill(requestSheet)
+  await intakeCard2.getByRole('button', { name: '불러오기' }).click()
+  await intakeCard2.getByTestId('slack-intake-result').waitFor({ timeout: 10_000 })
+  check((await intakeCard2.getByTestId('slack-intake-summary').innerText()).includes('채운 칸 11개'), '요청서 시트 붙여 넣기 → 채운 칸 11개')
+  check((await tab.getByLabel('행사명').inputValue()) === '가상 AI 서밋 2027' && (await tab.getByLabel('주제(슬로건)').inputValue()) === 'AI 전환의 실무' && (await tab.getByLabel('예상 인원').inputValue()) === '400', '행사명·주제·인원 칸 채움(탭 · 구분 열)')
+  const itemLabels = []
+  for (let i = 1; i <= 4; i++) itemLabels.push(await tab.getByLabel(`기타 항목 ${i} 이름`).inputValue())
+  check(itemLabels.join(' · ') === '요청 사항(Slack) · 주요 아젠다/키워드 · 프로그램 구성 · 연사 요청', '기타 항목 = 요청 사항 + 요청서 항목 3(정본 라벨)', itemLabels.join(' · '))
+  const refCard2 = tab.getByTestId('reference-links')
+  const slackLinks = refCard2.getByTestId('reference-links-slack')
+  await slackLinks.waitFor({ timeout: 10_000 })
+  check(/요청서 같음/.test(await slackLinks.innerText()), '글 속 시트 링크 = 요청서 같음(종류 어림)')
+  await slackLinks.getByRole('button', { name: '참고 문서로' }).click()
+  const refForm2 = refCard2.getByTestId('reference-link-form')
+  await refForm2.waitFor({ timeout: 10_000 })
+  check((await refForm2.getByLabel('링크').inputValue()) === 'https://docs.google.com/spreadsheets/d/virtual-request-sheet' && (await refForm2.getByLabel('종류').inputValue()) === 'request', '참고 문서로 → 폼에 주소 · 종류 요청서')
+  await tab.screenshot({ path: resolve(SHOTS, '03-request-sheet-intake.png'), fullPage: true })
+  await refForm2.getByRole('button', { name: '취소' }).click()
+  const primaries2 = await tab.$$eval('button', (els) => els.filter((b) => /\bbtn-(primary|accent)\b/.test(b.className)).map((b) => b.textContent?.trim()))
+  check(primaries2.length === 1 && primaries2[0] === '다음: 담당자', '채운 버튼 = 다음: 담당자 하나(참고 문서 단추는 ghost)', primaries2.join(' · '))
+  tab.off('request', onReq)
+  check(apiCalls.length === 0, '데모에서 /api 요청 0(라벨 규칙만)', apiCalls.join(', '))
+  check(docRequests.length === docBefore, '참고 문서·요청서 붙여 넣기에 전체 리로드 0', `${docBefore} → ${docRequests.length}`)
+  await tab.evaluate((id) => {
+    window.location.hash = `#/home?project=${id}`
+  }, backProject)
+  await tab.waitForFunction(
+    (id) => localStorage.getItem('communicator.currentProjectId') === id && location.hash === '#/home',
+    backProject,
+    { timeout: 10_000 },
+  )
+  await tab.locator('aside nav a', { hasText: '일정' }).first().click()
+  await tab.waitForURL(/#\/schedule/, { timeout: 10_000 })
+}
+
+// ── ③-이전(2026-09-28 Phase 6.11 PR-C) 마스터 시트 대체 · WBS 실무화 — 직전 PR ③을 회귀 가드로 유지.
 //     일정(위 블록 끝 — 그 행사의 S5 · 데모 사용자 = pm): 담당 칸 = 역할 글자 → '담당자 고르기' → 멤버 카드 4장(파일 입력 0) → 카드 누르기 → 칸에 이름 ·
 //     '＋ 태스크 추가'(채운 버튼 1 · 열면 ghost) → 폼(단계·묶음·제목·기간·역할·담당자) → C-1 행(행사별 태그 · 묶음 줄 · 담당 이름) ·
 //     간트 → 담당자 이름 + 마일스톤 마커(◆) · R&R pm '편집' → '＋ 사람 추가' → 주소록 카드 → 표시 역할 → 저장 → 칩(이름 · 표시 역할) · 전체 리로드 0 · 일정에 머문다.

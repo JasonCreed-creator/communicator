@@ -1,6 +1,8 @@
 // 화면(S1~S9)·API 계약(설계서 §8)이 요구하는 뷰 모델과 입력 타입.
 // 엔티티(§4)와 달리 여기는 조합 형태라 프론트 편의에 맞춰 정의하되, 필드명은 snake_case로 통일한다.
-import type { SettlementBoard, SettlementBucket, SettlementItem } from './entities'
+import type { SettlementBoard, SettlementBucket, SettlementItem,
+  ReferenceLink,
+} from './entities'
 import type { VendorQuoteParsed, VendorQuoteQuestion } from '../lib/vendorQuote'
 import type { SettlementTotals } from '../lib/settlement'
 import type { SectionMapping } from '../modules/quote/import/types'
@@ -465,6 +467,10 @@ export interface ProjectPatch {
    */
   intake?: ProjectIntake | null
   quote_attachment?: QuoteAttachment | null
+  /**
+   * v2.21 §27.3(Phase 6.11 PR-B) — 참고 문서 링크 전체 치환(null·[] = 없음). https만 · 상한 20(422 — src/lib/referenceLinks). pm 전용
+   */
+  reference_links?: ReferenceLink[] | null
 }
 
 /** v1.5 — POST /projects 입력(§8): S0 ① 저장 시 개요 필드 일괄 수신, onboarded_at은 null.

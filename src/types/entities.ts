@@ -33,6 +33,7 @@ import type {
   WbsDirection,
   WbsSource,
   WbsStatus,
+  ReferenceLinkKind,
 } from './enums'
 import type { ParsedQuoteDoc, SectionMapping } from '../modules/quote/import/types'
 
@@ -113,6 +114,11 @@ export interface Project {
   intake?: ProjectIntake | null
   /** v15.6(Phase 6.2) — 견적서 첨부(파일은 Drive 행사 폴더 01_견적 · 링크는 주소만). 행사 하나에 하나(바꾸면 교체) */
   quote_attachment?: QuoteAttachment | null
+  /**
+   * v2.21 §27.3(Phase 6.11 PR-B) — 참고 문서 링크(킥오프·요청서·제안서·계약·기타). https 주소만 · 앱은 열기만(파일을 읽지 않는다) ·
+   * 행사당 상한 20. 내부 화면에만 — 발주처·파트너·랜딩 지면에는 싣지 않는다. 선택 필드 — 없는 행은 링크 없음과 같다
+   */
+  reference_links?: ReferenceLink[] | null
   /** v1.3 — S0 온보딩에서 선택. general이면 등록 모듈 경량 모드(표시 계층 토글) */
   event_type: EventType
   /** v2.6 §25 — 행사 유형 4분류. 시드이지 잠금이 아니다(이후 kind·event_type 독립 변경 가능) */
@@ -159,6 +165,15 @@ export interface QuoteAttachment {
   drive_file_id: string | null
   /** upload = 내 컴퓨터 · slack = Slack 메시지의 첨부 파일 · link = 주소 입력 */
   source: 'upload' | 'slack' | 'link'
+  added_at: IsoDateTime
+}
+
+/** v2.21 §27.3(Phase 6.11 PR-B) — 참고 문서 링크 한 건(projects.reference_links jsonb 배열의 원소) */
+export interface ReferenceLink {
+  kind: ReferenceLinkKind
+  /** 화면 이름 — 비면 호스트로 보인다 */
+  title: string
+  url: string
   added_at: IsoDateTime
 }
 

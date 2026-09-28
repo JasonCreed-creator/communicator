@@ -20,6 +20,7 @@ import { projectLabel, projectLabelParts } from '../../lib/projectLabel'
 import type { BriefLink } from '../../lib/intake/eventBrief'
 import type { IntakeFileInfo } from '../../lib/intake/intakeClient'
 import QuoteAttachmentCard from './QuoteAttachmentCard'
+import ReferenceLinksCard from './ReferenceLinksCard'
 import {
   COMPANY_SIZE,
   INDUSTRY,
@@ -732,6 +733,17 @@ export default function ProjectOverviewForm({
     />
   ) : null
 
+  // v2.21 §27.3(Phase 6.11 PR-B) — 참고 문서 링크(킥오프·요청서·제안서·계약 · Slack 글의 링크) — 견적서 첨부 카드 옆
+  const referenceLinks = project.data ? (
+    <ReferenceLinksCard
+      projectId={projectId}
+      project={project.data as Project}
+      readOnly={readOnly}
+      onChanged={() => project.reload()}
+      slackLinks={intakeExtras?.links}
+    />
+  ) : null
+
   // ── 온보딩 배치 — 넓은 2열 + 선택 항목 접기 ─────────────────────────────
   if (!isSettings) {
     const optionalFilled = OPTIONAL_KEYS.filter((k) => {
@@ -798,6 +810,7 @@ export default function ProjectOverviewForm({
         </div>
 
         {quoteAttachment}
+        {referenceLinks}
 
         {errorAndReadOnly}
 
@@ -828,6 +841,7 @@ export default function ProjectOverviewForm({
           {formatRow()}
           {dmsGroup()}
           <div className="sm:col-span-2">{quoteAttachment}</div>
+          <div className="sm:col-span-2">{referenceLinks}</div>
         </div>
       ),
     },

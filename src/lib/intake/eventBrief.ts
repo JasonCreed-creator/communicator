@@ -31,6 +31,11 @@ export interface EventBriefFields {
   event_type: BriefEventType | null
   /** 그 밖의 요구사항 요약(운영 메모) */
   notes: string | null
+  /**
+   * v2.21 §27.3(Phase 6.11 PR-B) — 요청서 양식의 나머지 라벨(주요 아젠다/키워드 · 프로그램 구성 · 연사 요청)은 개요의 '기타 항목'(라벨·값)으로.
+   * 라벨 규칙만 채운다 — AI 스키마에는 없다(AI 결과는 늘 null)
+   */
+  overview_items: { label: string; value: string }[] | null
 }
 
 export type BriefKey = keyof EventBriefFields
@@ -48,7 +53,11 @@ export const BRIEF_KEYS: readonly BriefKey[] = [
   'target_audience',
   'event_type',
   'notes',
+  'overview_items',
 ]
+
+/** AI(Claude) 구조화 출력의 칸 — overview_items는 라벨 규칙 전용이라 뺀다(스키마·규칙 문장은 Phase 6.2 그대로) */
+export const AI_BRIEF_KEYS: readonly BriefKey[] = BRIEF_KEYS.filter((k) => k !== 'overview_items')
 
 export const EMPTY_BRIEF: EventBriefFields = {
   name: null,
@@ -63,6 +72,7 @@ export const EMPTY_BRIEF: EventBriefFields = {
   target_audience: null,
   event_type: null,
   notes: null,
+  overview_items: null,
 }
 
 export const BRIEF_LABELS: Record<BriefKey, string> = {
@@ -78,6 +88,7 @@ export const BRIEF_LABELS: Record<BriefKey, string> = {
   target_audience: '참가 대상',
   event_type: '행사 유형',
   notes: '메모',
+  overview_items: '기타 항목',
 }
 
 // ── 날짜·시간 ──────────────────────────────────────────────────────────
@@ -198,34 +209,56 @@ export function findTimes(text: string): { start: string; end: string | null } |
 // 빈 칸은 "MICE only"·빈 값 — 2026-09-27 운영 실측). 굵은 글씨 별표·불릿·팀 멘션·이모지 코드는 규칙을 돌리기 전에 걷어낸다.
 
 const BULLET = String.raw`[-•·◦▪●○▸►]?`
-const LABELED: { key: Exclude<BriefKey, 'event_type' | 'notes' | 'event_end_date' | 'end_time' | 'expected_headcount'>; re: RegExp }[] = [
+/**
+ * 라벨과 값 사이 — 콜론(반각·전각) 또는 탭. v2.21 §27.3(Phase 6.11 PR-B): 요청서 시트(라벨 열 · 값 열)를 복사해 붙이면 칸 사이가 탭이다.
+ * 라벨 앞에는 시트의 구분 열("행사 개요" · "행사 콘텐츠" — 병합 셀이라 첫 줄에만 값이 있다)이 한 칸 올 수 있다 — 콜론 없는 짧은 칸 + 탭
+ */
+const SEP = String.raw`(?:[:：]|\t)`
+const HEAD = String.raw`^(?:[^\t\n:：]{0,24}\t)?\s*${BULLET}\s*`
+const LABELED: { key: Exclude<BriefKey, 'event_type' | 'notes' | 'event_end_date' | 'end_time' | 'expected_headcount' | 'overview_items'>; re: RegExp }[] = [
   {
     key: 'name',
     re: new RegExp(
-      String.raw`^\s*${BULLET}\s*(?:행사명|행사\s*이름|행사\s*타이틀|행사\s*제목|행사\s*명칭|이벤트명|이벤트\s*이름|세미나명|컨퍼런스명|프로젝트명|프로젝트|제목|명칭|행사)\s*[:：][ \t]*(.+)$`,
+      String.raw`${HEAD}(?:행사명|행사\s*이름|행사\s*타이틀|행사\s*제목|행사\s*명칭|이벤트명|이벤트\s*이름|세미나명|컨퍼런스명|프로젝트명|프로젝트|제목|명칭|행사)\s*${SEP}[ \t]*(.+)$`,
       'm',
     ),
   },
-  { key: 'venue', re: new RegExp(String.raw`^\s*${BULLET}\s*(?:행사\s*장소|장소명|장소|행사장|개최\s*장소|개최지|베뉴|위치|venue)\s*[:：][ \t]*(.+)$`, 'mi') },
+  { key: 'venue', re: new RegExp(String.raw`${HEAD}(?:행사\s*장소|장소명|장소|행사장|개최\s*장소|개최지|베뉴|위치|venue)\s*${SEP}[ \t]*(.+)$`, 'mi') },
   {
     key: 'organizer',
-    re: new RegExp(String.raw`^\s*${BULLET}\s*(?:발주처|고객사명|고객사|고객명|클라이언트|광고주|주최·주관|주최/주관|주최|주관|의뢰사|고객)\s*[:：][ \t]*(.+)$`, 'm'),
+    re: new RegExp(String.raw`${HEAD}(?:발주처|고객사명|고객사|고객명|클라이언트|광고주|주최·주관|주최\s*/\s*주관|주최|주관|의뢰사|고객)\s*${SEP}[ \t]*(.+)$`, 'm'),
   },
-  { key: 'theme', re: new RegExp(String.raw`^\s*${BULLET}\s*(?:주제|슬로건|테마|컨셉|콘셉트|목적|행사\s*목적)\s*[:：][ \t]*(.+)$`, 'm') },
+  // v2.21 §27.3 — 요청서 '행사 주제'
+  { key: 'theme', re: new RegExp(String.raw`${HEAD}(?:행사\s*주제|주제|슬로건|테마|컨셉|콘셉트|목적|행사\s*목적)\s*${SEP}[ \t]*(.+)$`, 'm') },
   {
     key: 'target_audience',
+    // v2.21 §27.3 — 요청서 '핵심 오디언스'
     re: new RegExp(
-      String.raw`^\s*${BULLET}\s*(?:참가\s*대상|참석\s*대상|참가자\s*대상|모객\s*대상|타깃\s*조건|타겟\s*조건|타깃\s*대상|타겟\s*대상|타깃|타겟|대상)\s*[:：][ \t]*(.+)$`,
+      String.raw`${HEAD}(?:참가\s*대상|참석\s*대상|참가자\s*대상|모객\s*대상|핵심\s*오디언스|타깃\s*오디언스|타겟\s*오디언스|오디언스|타깃\s*조건|타겟\s*조건|타깃\s*대상|타겟\s*대상|타깃|타겟|대상)\s*${SEP}[ \t]*(.+)$`,
       'm',
     ),
   },
 ]
+/**
+ * v2.21 §27.3(Phase 6.11 PR-B) — 요청서 양식의 나머지 라벨은 개요의 '기타 항목'으로(라벨은 정본 이름으로 통일 · 값은 그 줄만).
+ * 표본에서 본 라벨 셋(가정 — 실물 요청서 원문 대조는 기획자님 몫). 담당자·연락처·금액 줄은 여기에 넣지 않는다
+ */
+const OVERVIEW_ITEM_RULES: { label: string; re: RegExp }[] = [
+  {
+    label: '주요 아젠다/키워드',
+    re: new RegExp(String.raw`${HEAD}(?:주요\s*(?:아젠다|어젠다)(?:\s*/\s*키워드)?|(?:아젠다|어젠다)(?:\s*/\s*키워드)?|주요\s*키워드|키워드)\s*${SEP}[ \t]*(.+)$`, 'm'),
+  },
+  { label: '프로그램 구성', re: new RegExp(String.raw`${HEAD}(?:프로그램\s*구성|세션\s*구성|프로그램\s*안|프로그램)\s*${SEP}[ \t]*(.+)$`, 'm') },
+  { label: '연사 요청', re: new RegExp(String.raw`${HEAD}(?:연사\s*요청|연사\s*섭외|희망\s*연사|연사|스피커|강연자)\s*${SEP}[ \t]*(.+)$`, 'm') },
+]
+/** v2.21 §27.3 — 요청서 '특이사항' 줄은 메모로(참고 ID와 함께) */
+const NOTE_LINE_RE = new RegExp(String.raw`${HEAD}(?:특이\s*사항|특이점|요청\s*사항|기타\s*요청|기타\s*사항|참고\s*사항|비고)\s*${SEP}[ \t]*(.+)$`, 'm')
 const DATE_LINE_RE = new RegExp(
-  String.raw`^\s*${BULLET}\s*(?:행사\s*일시|행사\s*일자|개최\s*일시|개최일|행사일|일시|일자|날짜|행사\s*기간|기간|행사\s*일정|일정|date)\s*[:：][ \t]*(.+)$`,
+  String.raw`${HEAD}(?:행사\s*일시|행사\s*일자|개최\s*일시|개최일|행사일|일시|일자|날짜|행사\s*기간|기간|행사\s*일정|일정|date)\s*${SEP}[ \t]*(.+)$`,
   'mi',
 )
 const HEADCOUNT_LINE_RE = new RegExp(
-  String.raw`^\s*${BULLET}\s*(?:예상\s*인원|참가\s*인원|참석\s*인원|목표\s*인원|모객\s*인원|참가\s*예정|참석\s*예정|예상\s*참석|쇼업\s*목표|목표\s*쇼업|인원|규모|참가자\s*수|참석자|참가자)\s*[:：][ \t]*(?:약|총)?\s*(\d[\d,]*)\s*(?:명|인|pax|persons?)?`,
+  String.raw`${HEAD}(?:예상\s*인원|참가\s*인원|참석\s*인원|목표\s*인원|모객\s*인원|참가\s*예정|참석\s*예정|예상\s*참석|쇼업\s*목표|목표\s*쇼업|인원|규모|참가자\s*수|참석자|참가자)\s*${SEP}[ \t]*(?:약|총)?\s*(\d[\d,]*)\s*(?:명|인|pax|persons?)?`,
   'im',
 )
 const HEADCOUNT_ANY_RE = /(?:약|총)?\s*(\d{1,3}(?:,\d{3})+|\d{2,6})\s*(?:명|pax)(?![a-z])/i
@@ -233,7 +266,7 @@ const RECRUITING_RE = /모객|RSVP|참가\s*신청|사전\s*등록|초청\s*발�
 /** 채우지 않은 칸의 자리표시(워크플로 봇 기본값 "MICE only" 포함) — 값이 아니다 */
 const PLACEHOLDER_RE = /^(?:mice only|미정|tbd|tba|n\/?a|-|—|–|없음|해당\s*없음|추후\s*확정|확인\s*필요|\?+)$/i
 /** 메모로 옮기는 참고 ID 줄 — 금액·연락처·담당자 줄은 어떤 칸에도 옮기지 않는다 */
-const NOTE_ID_RE = new RegExp(String.raw`^\s*${BULLET}\s*(아이템\s*ID|아이템\s*아이디|매관시\s*(?:계약\s*)?ID|계약\s*ID|집행\s*ID|재계약\s*ID)\s*[:：][ \t]*(.+)$`, 'gmi')
+const NOTE_ID_RE = new RegExp(String.raw`${HEAD}(아이템\s*ID|아이템\s*아이디|매관시\s*(?:계약\s*)?ID|계약\s*ID|집행\s*ID|재계약\s*ID)\s*${SEP}[ \t]*(.+)$`, 'gmi')
 
 /** 규칙을 돌리기 전 정리 — Slack mrkdwn(굵게 `*…*` · 링크 · 멘션 · 팀 멘션 · 이모지 코드)을 걷어낸 글 */
 export function normalizeForRules(text: string): string {
@@ -340,8 +373,10 @@ export function extractBriefByRules(text: string, today: Date = new Date()): Rul
   const fields: EventBriefFields = { ...EMPTY_BRIEF }
   const matched: BriefKey[] = []
   const src = normalizeForRules(text)
-  const value = (raw: string): string | null => {
-    const v = clean(raw)
+  // 시트 줄(탭 구분)은 라벨 다음 첫 칸만 값이다(그 뒤 칸은 비고 열) · 콜론 줄은 나머지 전부
+  const value = (raw: string, max = 200): string | null => {
+    const cell = raw.includes('\t') ? (raw.split('\t').map((x) => x.trim()).find(Boolean) ?? '') : raw
+    const v = clean(cell, max)
     return v && !PLACEHOLDER_RE.test(v) ? v : null
   }
   for (const { key, re } of LABELED) {
@@ -398,15 +433,32 @@ export function extractBriefByRules(text: string, today: Date = new Date()): Rul
     fields.event_type = 'recruiting'
     matched.push('event_type')
   }
-  // 참고 ID(아이템ID·매관시 계약 ID·집행 ID·재계약 ID)만 메모로 — 금액·계약서류·인입채널·담당자 줄은 옮기지 않는다
-  const ids: string[] = []
+  // 메모 = 요청서 '특이사항' 줄(v2.21 §27.3) + 참고 ID(아이템ID·매관시 계약 ID·집행 ID·재계약 ID) — 금액·계약서류·인입채널·담당자 줄은 옮기지 않는다
+  const notes: string[] = []
+  const noteLine = NOTE_LINE_RE.exec(src)
+  if (noteLine) {
+    const v = value(noteLine[1], 400)
+    if (v) notes.push(v)
+  }
   for (const m of src.matchAll(NOTE_ID_RE)) {
     const v = value(m[2])
-    if (v) ids.push(`${m[1].replace(/\s+/g, '')} ${v}`)
+    if (v) notes.push(`${m[1].replace(/\s+/g, '')} ${v}`)
   }
-  if (ids.length > 0) {
-    fields.notes = ids.join(' · ').slice(0, 500)
+  if (notes.length > 0) {
+    fields.notes = notes.join(' · ').slice(0, 500)
     matched.push('notes')
+  }
+  // v2.21 §27.3 — 요청서의 나머지 라벨(주요 아젠다/키워드 · 프로그램 구성 · 연사 요청)은 기타 항목으로(라벨 이름은 정본으로 통일)
+  const items: { label: string; value: string }[] = []
+  for (const { label, re } of OVERVIEW_ITEM_RULES) {
+    const m = re.exec(src)
+    if (!m) continue
+    const v = value(m[1], 300)
+    if (v) items.push({ label, value: v })
+  }
+  if (items.length > 0) {
+    fields.overview_items = items
+    matched.push('overview_items')
   }
   return { fields, matched }
 }
@@ -419,7 +471,7 @@ const nullable = (schema: Record<string, unknown>) => ({ anyOf: [schema, { type:
 export const AI_EVENT_BRIEF_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: [...BRIEF_KEYS],
+  required: [...AI_BRIEF_KEYS],
   properties: {
     name: nullable({ type: 'string', description: '행사명' }),
     event_date: nullable({ type: 'string', description: '시작일 YYYY-MM-DD' }),
@@ -494,6 +546,8 @@ export function validateEventBrief(raw: unknown): EventBriefFields {
     target_audience: optStr(r.target_audience, 200),
     event_type: r.event_type === 'general' || r.event_type === 'recruiting' ? r.event_type : null,
     notes: optStr(r.notes, 500),
+    // 기타 항목은 라벨 규칙 전용 — AI가 무엇을 보내도 null(mergeBrief가 규칙 값을 얹는다)
+    overview_items: null,
   }
 }
 
@@ -507,7 +561,10 @@ export function mergeBrief(rules: RuleExtraction, ai: EventBriefFields | null): 
 
 /** 채워진 칸 */
 export function filledBriefKeys(fields: EventBriefFields): BriefKey[] {
-  return BRIEF_KEYS.filter((k) => fields[k] !== null && fields[k] !== '')
+  return BRIEF_KEYS.filter((k) => {
+    const v = fields[k]
+    return Array.isArray(v) ? v.length > 0 : v !== null && v !== ''
+  })
 }
 
 // ── 글 속 링크·첨부 ─────────────────────────────────────────────────────
