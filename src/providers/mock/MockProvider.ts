@@ -345,7 +345,18 @@ export class MockProvider implements DataProvider {
     // 지금 보는 행사(localStorage — ProjectContext·supabase ctx와 같은 키)의 멤버십을 먼저, 없으면 첫 멤버십
     const mine = this.state.members.filter((m) => m.user_id === user.id)
     const preferred = readCurrentProjectId()
-    const membership = mine.find((m) => m.project_id === preferred) ?? mine[0]
+    // Phase 6.16 — 지금 보는 행사가 있는데 거기 담당이 아니면 **열람자**(roles 0 · project_id = 그 행사). 다른 행사의
+    // 역할을 빌려 오지 않는다(전에는 첫 멤버십으로 폴백해 열람 중인 행사에서 권한이 있는 것처럼 보였다).
+    // 저장값이 없을 때만 첫 멤버십(등록순) — 새 사용자·마지막 행사를 지운 직후의 폴백은 그대로
+    // 담당자가 한 명도 없는 행사(픽스처의 세팅 미완료 행사 — 실서버는 생성자가 pm으로 자동 배정돼 있을 수 없는 경우)는
+    // 옛 규칙(첫 멤버십)을 그대로 둔다 — 그 행사를 만든 사람이 이어서 세팅하는 흐름(dod19·47·52)
+    const preferredMembers = preferred ? this.state.members.filter((m) => m.project_id === preferred) : []
+    const viewingElsewhere =
+      !!preferred &&
+      this.state.projects.some((p) => p.id === preferred) &&
+      preferredMembers.length > 0 &&
+      !preferredMembers.some((m) => m.user_id === user.id)
+    const membership = viewingElsewhere ? undefined : (mine.find((m) => m.project_id === preferred) ?? mine[0])
     const appRole = this.appRoleOf(user.id)
     // v16.1 — 같은 행사에서 가진 역할 전부(한 사람이 여러 역할). 대표 역할은 pm > design > ops > reg
     const roles: MemberRole[] =
@@ -356,8 +367,10 @@ export class MockProvider implements DataProvider {
       ...user,
       role: primaryRole(roles) ?? 'reg',
       roles,
-      project_id: membership?.project_id ?? '',
+      project_id: membership?.project_id ?? (viewingElsewhere ? preferred! : ''),
       app_role: appRole,
+      // Phase 6.16 — 열람자(담당 아님) 판정. supabase ctx.currentUser와 같은 규칙
+      is_member: appRole === 'admin' || roles.length > 0,
     }
   }
 
@@ -494,7 +507,7 @@ export class MockProvider implements DataProvider {
 
   // ── v1.5 다중 행사 (§8 GET/POST /projects·close·members) ──────────
   async listProjects(): Promise<ProjectSummary[]> {
-    this.currentUser()
+    const user = this.currentUser()
     const today = toIsoDate(new Date())
     const summaries = this.state.projects.map((p) => {
       const deliverables = this.state.deliverables.filter((d) => d.project_id === p.id)
@@ -520,6 +533,8 @@ export class MockProvider implements DataProvider {
         ).length,
         finals: deliverables.filter((d) => d.status === 'final').length,
         deliverable_total: deliverables.length,
+        // Phase 6.16 — 목록은 전원 공유, 담당 여부만 표시(배지·안내 줄)
+        is_member: user.app_role === 'admin' || this.state.members.some((m) => m.project_id === p.id && m.user_id === user.id),
       }
     })
     // 진행 중 먼저(등록순 — 기본 선택이 결정적이도록 created_at 기준), 종료는 뒤로(최근 종료순)

@@ -13,10 +13,21 @@ export function primaryRole(roles: readonly MemberRole[]): MemberRole | null {
   return null
 }
 
-/** 현재 사용자의 역할 집합 — roles가 없는 옛 값(단일 role)은 그 하나로 본다 */
+/**
+ * 현재 사용자의 역할 집합 — `roles`가 있으면(빈 배열 포함) 그것이 정본, 없는 옛 값(단일 role)만 그 하나로 본다.
+ * Phase 6.16 — 담당이 아닌 행사를 열람하는 사용자는 roles=[]·role='reg'(자리표시)라 **권한 0**이어야 한다.
+ * 전에는 빈 배열을 [role]로 되돌려 열람자가 등록 권한(reg)을 가진 것처럼 판정했다.
+ */
 export function rolesOf(user: { role: MemberRole; roles?: readonly MemberRole[] } | null | undefined): MemberRole[] {
   if (!user) return []
-  return user.roles && user.roles.length > 0 ? [...user.roles] : [user.role]
+  return user.roles ? [...user.roles] : [user.role]
+}
+
+/** Phase 6.16 — 지금 보는 행사의 담당자인가(역할이 하나라도 있거나 전역 admin). 아니면 열람자 */
+export function isMemberOf(user: { role: MemberRole; roles?: readonly MemberRole[]; is_member?: boolean } | null | undefined): boolean {
+  if (!user) return false
+  if (user.is_member !== undefined) return user.is_member
+  return rolesOf(user).length > 0
 }
 
 export function hasRole(

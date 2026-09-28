@@ -186,7 +186,9 @@ export class SupabaseCtx {
     for (const r of sorted) byProject.set(r.project_id, [...(byProject.get(r.project_id) ?? []), r.role])
     for (const [pid, roles] of byProject) this.roleCache.set(pid, sortRoles(roles))
     const preferred = this.currentProjectId()
-    const pick = sorted.find((r) => r.project_id === preferred) ?? sorted[0]
+    // Phase 6.16 — 지금 보는 행사(저장값)가 있는데 거기 담당이 아니면 열람자(roles 0 · project_id = 그 행사). 저장값이 없을 때만 첫 멤버십
+    const viewingElsewhere = !!preferred && !sorted.some((r) => r.project_id === preferred)
+    const pick = viewingElsewhere ? undefined : (sorted.find((r) => r.project_id === preferred) ?? sorted[0])
     const roles = me.app_role === 'admin' ? ['pm' as MemberRole] : sortRoles(pick ? byProject.get(pick.project_id) ?? [] : [])
     return {
       id: me.id,
@@ -196,8 +198,10 @@ export class SupabaseCtx {
       phone: me.phone,
       role: primaryRole(roles) ?? 'reg',
       roles,
-      project_id: pick?.project_id ?? '',
+      project_id: pick?.project_id ?? (viewingElsewhere ? preferred! : ''),
       app_role: me.app_role,
+      // Phase 6.16 — 담당이 아닌 행사도 보이므로(열람) 담당 여부를 따로 알린다. 열람자 = roles 0 + admin 아님
+      is_member: me.app_role === 'admin' || roles.length > 0,
     }
   }
 

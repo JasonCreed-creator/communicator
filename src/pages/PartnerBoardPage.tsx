@@ -31,6 +31,7 @@ import {
   partnerLinkStatus,
 } from '../components/partner/partnerBoardUtils'
 import { buildMailto } from '../components/partner/partnerReceipt'
+import PermissionNotice from '../components/internal/PermissionNotice'
 import { useProject } from '../context/ProjectContext'
 import { useAsync } from '../hooks/useAsync'
 import { externalViewUrl } from '../lib/externalLink'
@@ -98,7 +99,9 @@ function PartnerPortalLinks({ partners }: { partners: PartnerWithProgress[] }) {
 }
 
 export default function PartnerBoardPage() {
-  const { projectId } = useProject()
+  const { projectId, summaries } = useProject()
+  // Phase 6.16 — 담당이 아닌 행사(열람자)는 이 화면의 데이터(RLS = 멤버)가 비어 보이므로 사실을 먼저 말한다
+  const viewer = summaries.find((s) => s.id === projectId)?.is_member === false
   const [searchParams] = useSearchParams()
   const project = useAsync(() => provider.getProject(projectId), [projectId])
   const me = useAsync(() => provider.getCurrentUser(), [])
@@ -198,6 +201,15 @@ export default function PartnerBoardPage() {
       body: `안녕하세요, ${projectName} 사무국입니다.\n\n아직 접수되지 않은 제출 자료가 있어 안내드립니다.\n마감 전 회신 부탁드립니다.\n\n감사합니다.`,
     })
   }, [partnerList, projectName])
+
+  if (viewer) {
+    return (
+      <section className="space-y-6 p-6">
+        <PageHeader caption="운영" title="파트너 보드" />
+        <PermissionNotice reason="파트너 보드(계약·접수)는 이 행사의 담당자만 볼 수 있어요 — 지금은 열람 중입니다." howToRequest="담당 배정은 이 행사의 PM에게 요청하세요. 보드·일정·운영계획서는 열람할 수 있습니다." />
+      </section>
+    )
+  }
 
   return (
     <section className="space-y-6 p-6">

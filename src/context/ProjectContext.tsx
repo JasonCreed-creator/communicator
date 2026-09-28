@@ -88,9 +88,13 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
   const verified = list.data !== selectedAtRef.current
   const known = selectedId !== null && summaries.some((s) => s.id === selectedId)
   const usable = selectedId !== null && (known || !verified)
+  // Phase 6.16 — 목록이 전원에게 같아졌으므로 저장값이 없을 때는 **내가 담당인 진행 중 행사**를 먼저 고른다(없으면 첫 진행 중)
   const resolvedId = usable
     ? selectedId
-    : (summaries.find((s) => s.status === 'active')?.id ?? summaries[0]?.id ?? null)
+    : (summaries.find((s) => s.status === 'active' && s.is_member)?.id ??
+      summaries.find((s) => s.status === 'active')?.id ??
+      summaries[0]?.id ??
+      null)
 
   // 죽은 저장값은 비운다 — 두지 않으면 새로고침 때 같은 404가 되살아난다.
   useEffect(() => {

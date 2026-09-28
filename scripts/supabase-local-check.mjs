@@ -115,10 +115,35 @@ async function main() {
     { role: 'authenticated', sub: authId.design, expect: 'error', match: 'row-level security' })
   const salesQuotes = scenario('RLS① sales(pm 계정) → quotes 조회 가능', `select count(*) from quotes;`, { role: 'authenticated', sub: authId.pm })
   record('RLS① sales → quotes 6행', salesQuotes === '6', `보인 행 ${salesQuotes}`)
-  const nonMember = scenario('RLS② 비멤버 → 종료 행사(prj-ai-summit) 조회 0행', `select count(*) from projects where id = '${PRJ_CLOSED}';`, { role: 'authenticated', sub: authId.design })
-  record('RLS② 비멤버 → project 0행 확인', nonMember === '0', `보인 행 ${nonMember}`)
-  const memberSees = scenario('RLS② 멤버 → 자기 행사 목록', `select count(*) from projects;`, { role: 'authenticated', sub: authId.design })
-  record('RLS② design 멤버 행사 수 = 멤버십 수', memberSees === psql(['-c', `select count(*) from project_members where user_id = (select id from profiles where auth_user_id='${authId.design}')`]).out, `보인 행 ${memberSees}`)
+  // Phase 6.16 — 행사 목록 전원 공유: 비멤버도 행사·산출물·WBS를 **열람**한다(app.can_view). 명단·정산·발주처 토큰·파트너는 여전히 멤버만
+  const nonMember = scenario('RLS② 비멤버(design) → 종료 행사(prj-ai-summit) 열람 1행 (Phase 6.16 전원 공유)', `select count(*) from projects where id = '${PRJ_CLOSED}';`, { role: 'authenticated', sub: authId.design })
+  record('RLS② 비멤버 → project 열람 1행 확인 (6.16)', nonMember === '1', `보인 행 ${nonMember}`)
+  const memberSees = scenario('RLS② 로그인 사용자 → 행사 전부 열람', `select count(*) from projects;`, { role: 'authenticated', sub: authId.design })
+  record('RLS② design → 행사 수 = 전체 행사 수 (6.16)', memberSees === psql(['-c', `select count(*) from projects`]).out, `보인 행 ${memberSees}`)
+  // 6.16 열람/담당만/쓰기 — 데이터가 있는 샘플 행사(PRJ)에서 design의 배정을 잠시 빼 '담당 아닌 행사'를 만든다(종료 행사는 시드 데이터가 0이라 검사가 비어 있었다)
+  const viewerProfile = psql(['-c', `select id from profiles where auth_user_id = '${authId.design}'`]).out
+  psql(['-c', `delete from project_members where project_id = '${PRJ}' and user_id = '${viewerProfile}'`])
+  const prjDeliverables = psql(['-c', `select count(*) from deliverables where project_id = '${PRJ}'`]).out
+  const prjTasks = psql(['-c', `select count(*) from wbs_tasks where project_id = '${PRJ}'`]).out
+  const prjAttendees = psql(['-c', `select count(*) from attendees where project_id = '${PRJ}'`]).out
+  const viewD = scenario('6.16 열람: 비멤버(배정 뺀 design) → 샘플 행사 산출물 전부', `select count(*) from deliverables where project_id = '${PRJ}';`, { role: 'authenticated', sub: authId.design })
+  record(`6.16 열람: 비멤버 산출물 ${viewD}/${prjDeliverables} (0 아님)`, viewD === prjDeliverables && viewD !== '0', `보인 행 ${viewD}`)
+  const viewT = scenario('6.16 열람: 비멤버 → 샘플 행사 WBS 전부', `select count(*) from wbs_tasks where project_id = '${PRJ}';`, { role: 'authenticated', sub: authId.design })
+  record(`6.16 열람: 비멤버 WBS ${viewT}/${prjTasks} (0 아님)`, viewT === prjTasks && viewT !== '0', `보인 행 ${viewT}`)
+  const viewA = scenario('6.16 담당만: 비멤버 → 샘플 행사 참가자 명단 0행', `select count(*) from attendees where project_id = '${PRJ}';`, { role: 'authenticated', sub: authId.design })
+  record(`6.16 담당만: 비멤버 명단 0행 (실제 ${prjAttendees}행)`, viewA === '0' && prjAttendees !== '0', `보인 행 ${viewA}`)
+  const viewS = scenario('6.16 담당만: 비멤버 → 정산보드 0행', `select count(*) from settlement_boards where project_id = '${PRJ}';`, { role: 'authenticated', sub: authId.design })
+  record('6.16 담당만: 비멤버 정산보드 0행', viewS === '0', `보인 행 ${viewS}`)
+  const viewTok = scenario('6.16 담당만: 비멤버 → 발주처 링크 토큰 0행', `select count(*) from client_tokens where project_id = '${PRJ}';`, { role: 'authenticated', sub: authId.design })
+  record('6.16 담당만: 비멤버 발주처 토큰 0행', viewTok === '0', `보인 행 ${viewTok}`)
+  const viewerItem = psql(['-c', `select id from deliverables where project_id = '${PRJ}' limit 1`]).out
+  scenario('6.16 쓰기: 비멤버 코멘트 insert 거부(RLS)', `insert into comments (deliverable_id, author_user_id, visibility, body) values ('${viewerItem}', '${viewerProfile}', 'internal', 'x');`,
+    { role: 'authenticated', sub: authId.design, expect: 'error', match: 'row-level security' })
+  const viewerUpd = scenario('6.16 쓰기: 비멤버 WBS update 0행(정책 = 멤버)', `with u as (update wbs_tasks set status = 'done' where project_id = '${PRJ}' returning 1) select count(*) from u;`, { role: 'authenticated', sub: authId.design })
+  record('6.16 쓰기: 비멤버 WBS update 0행', viewerUpd === '0', `갱신 ${viewerUpd}행`)
+  psql(['-c', `insert into project_members (project_id, user_id, role) values ('${PRJ}', '${viewerProfile}', 'design') on conflict do nothing`])
+  const restored = psql(['-c', `select count(*) from project_members where project_id = '${PRJ}' and user_id = '${viewerProfile}' and role = 'design'`]).out
+  record('6.16 정리: design 배정 복원', restored === '1', `행 ${restored}`)
   scenario('RLS③ anon(토큰 경로 롤) → quotes 권한 없음', `select count(*) from quotes;`, { role: 'anon', expect: 'error', match: 'permission denied' })
   scenario('RLS③ anon → deliverables 권한 없음', `select count(*) from deliverables;`, { role: 'anon', expect: 'error', match: 'permission denied' })
   scenario('RLS③ anon → settlement_items 권한 없음 (§19.7)', `select count(*) from settlement_items;`, { role: 'anon', expect: 'error', match: 'permission denied' })
