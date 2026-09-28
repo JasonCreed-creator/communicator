@@ -1,17 +1,23 @@
 -- ─────────────────────────────────────────────────────────────────────
--- 20260927000700 · 보관 분류(Drive 분류 폴더) — 설계서 v2.21 §7.1 · §4-1 · Phase 6.10 (2026-09-27 사용자 지시
---   "아카이빙 폴더를 MICE Biz로 — 이미 일반·자체·모객·비모객으로 나누어 놨음 · 각각 해당하는 프로젝트를 하위로")
+-- 20260928000400 · 보관 분류(Drive 분류 폴더) — 설계서 v2.21.6 §7.1 · §4-1 · Phase 6.10 (2026-09-27 사용자 지시
+--   "아카이빙 폴더를 MICE Biz로 — 이미 일반·자체·모객·비모객으로 나누어 놨음 · 각각 해당하는 프로젝트를 하위로" · 버튼 승인 3건 ·
+--   Phase 6.11 뒤 재개 2026-09-28)
 --
 --   · projects.drive_category — 설정 ③에서 고른 보관 분류(선택). null = 자동(주최형 → own · 대행형 모객형 → solution_recruiting ·
 --     대행형 일반형 → solution_general). 'custom'(일반행사)은 사람이 고를 때만
 --   · Drive 판정 함수 4종이 kind · event_type · drive_category도 돌려준다 — 서버가 분류 폴더(저장소 루트 바로 아래)를 고를 때 쓴다
 --   · 연도 폴더 층(v2.17)은 퇴역 — 스키마엔 흔적 없음
+--   · 파괴적 문장 0(drop 없음 — 커넥터 확인 창 없이 적용되게): CHECK는 없을 때만 더한다 · 함수는 create or replace
 
 alter table projects add column if not exists drive_category text;
-alter table projects drop constraint if exists projects_drive_category_check;
-alter table projects add constraint projects_drive_category_check
-  check (drive_category is null or drive_category in ('solution_recruiting', 'solution_general', 'own', 'custom'));
-comment on column projects.drive_category is '보관 분류(Drive 저장소 분류 폴더) — null = 자동(kind·event_type) · 설정 ③에서 고르면 그 값(v2.21 §7.1)';
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'projects_drive_category_check' and conrelid = 'projects'::regclass) then
+    alter table projects add constraint projects_drive_category_check
+      check (drive_category is null or drive_category in ('solution_recruiting', 'solution_general', 'own', 'custom'));
+  end if;
+end $$;
+comment on column projects.drive_category is '보관 분류(Drive 저장소 분류 폴더) — null = 자동(kind·event_type) · 설정 ③에서 고르면 그 값(v2.21.6 §7.1)';
 
 create or replace function public.drive_upload_check(p_deliverable uuid)
 returns jsonb language plpgsql security definer set search_path = public as $$

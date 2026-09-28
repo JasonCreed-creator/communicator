@@ -1,5 +1,6 @@
 // 화면(S1~S9)·API 계약(설계서 §8)이 요구하는 뷰 모델과 입력 타입.
 // 엔티티(§4)와 달리 여기는 조합 형태라 프론트 편의에 맞춰 정의하되, 필드명은 snake_case로 통일한다.
+import type { DriveCategory } from './enums'
 import type { SettlementBoard, SettlementBucket, SettlementItem,
   ReferenceLink,
 } from './entities'
@@ -329,7 +330,7 @@ export interface UploadVersionInput {
   file?: Blob
   /**
    * v13.1(2026-09-24, 설계서 v2.9 §7.2b) — Drive에 직접 올린 파일의 링크로 버전 등록. 있으면 file은 무시한다.
-   * MICE Communicator 루트 안 파일만 — 행사 폴더 안이면 그대로 참조, 루트의 다른 곳이면 항목 폴더로 복사, 밖이면 403.
+   * 저장소 루트 안 파일만(v2.21.6 — 팀 폴더/분류 폴더/행사 ID) — 행사 폴더 안이면 그대로 참조, 루트의 다른 곳이면 항목 폴더로 복사, 밖이면 403.
    */
   drive_link?: string
   /** v13.1 — 업로드 진행률(보낸 바이트, 전체 바이트). 조각 업로드 중 여러 번 불린다 */
@@ -415,6 +416,8 @@ export interface ProjectOverviewPatch {
 // ── v1.3 프로젝트 기본정보·온보딩 (§8 PATCH /projects/{id}, S0) ────
 export interface ProjectPatch {
   name?: string
+  /** v2.21.6 Phase 6.10 — 보관 분류(null = 자동 · 분류 4종). 바뀌면 다음 폴더 보장 때 행사 폴더가 그 분류 폴더로 옮겨진다 */
+  drive_category?: DriveCategory | null
   /** v1.5 — 행사 코드 (전역 유일, 파일명 규약) */
   code?: string
   /** v2.4 §21 R-H1 — 전환은 표시 계층만 바꾼다(어떤 행도 삭제되지 않는다) */

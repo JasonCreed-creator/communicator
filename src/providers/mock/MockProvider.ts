@@ -196,6 +196,7 @@ import { UPLOADABLE_STATUSES, uploadBlockedMessage } from '../../lib/uploadGate'
 import { normalizeSlackWebhook, SLACK_WEBHOOK_INVALID_MESSAGE } from '../../lib/slackWebhook'
 import { sameSlackThread, SLACK_DESIGN_THREAD_SAME_MESSAGE, normalizeSlackThreadLink, normalizeSlackUserId, SLACK_THREAD_INVALID_MESSAGE, SLACK_USER_ID_INVALID_MESSAGE } from '../../lib/slackThread'
 import { normalizeQuoteAttachment, QUOTE_ATTACHMENT_INVALID_MESSAGE } from '../../lib/quoteAttachment'
+import { DRIVE_CATEGORY_INVALID_MESSAGE, isDriveCategory } from '../../lib/driveCategory'
 import { normalizeReferenceLinks, REFERENCE_LINK_INVALID_MESSAGE, REFERENCE_LINKS_LIMIT_MESSAGE } from '../../lib/referenceLinks'
 import {
   buildVendorQuote,
@@ -2200,6 +2201,11 @@ export class MockProvider implements DataProvider {
       if (links === 'invalid') throw new ProviderError('validation', REFERENCE_LINK_INVALID_MESSAGE)
       if (links === 'limit') throw new ProviderError('validation', REFERENCE_LINKS_LIMIT_MESSAGE)
       project.reference_links = links
+    }
+    // v2.21.6(Phase 6.10) — 보관 분류(Drive 분류 폴더). null = 자동 · 분류 4종만(그 밖 422). mock에는 Drive가 없어 값만 둔다
+    if (patch.drive_category !== undefined) {
+      if (patch.drive_category !== null && !isDriveCategory(patch.drive_category)) throw new ProviderError('validation', DRIVE_CATEGORY_INVALID_MESSAGE)
+      project.drive_category = patch.drive_category
     }
     // v2.0 — 행사 설정 ① 모객형 전용 그룹 (일반형이면 UI 숨김·데이터 보존)
     if (patch.guarantee_pax !== undefined) project.guarantee_pax = patch.guarantee_pax

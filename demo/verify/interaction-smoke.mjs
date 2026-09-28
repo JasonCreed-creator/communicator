@@ -29,6 +29,7 @@
 //       4.8: 협력사 견적서 PDF·사진 — 불러오기 대화상자(엑셀·PDF·사진 받음 · AI 안내) → PDF 고르기 → 'AI로 읽기' → mock 사실 안내 · 서버 요청 0 ·
 //       6.12: 견적 올렸는데 정산보드 반영 0 — 정산보드 빈 상태의 초안 견적 안내 상자 → '확정하고 정산 시작' → 보드(맨 뒤 블록 · 6.4 블록이 붙여 둔 초안) ·
 //       6.11 PR-G: 마스터 시트 내보내기 — 운영계획서 발행 줄 '마스터 시트 만들기' → mock 사실 안내(만들지 않음 · /api 요청 0 · 결과 줄 0) ·
+//       6.10: 보관 분류 — 행사 설정 ③ Drive 카드 '보관 분류' 셀렉트(자동 → 자체행사 → 자동 · 폴더 안내 저장소/분류/행사 ID · /api 0) ·
 //       6.11 PR-B: 참고 문서 링크 — 설정 ① 카드(붙이기 → 요청서 배지 · 1/20 → 빼기) · 온보딩 ① 요청서 시트 붙여 넣기(탭 · 구분 열) → 기타 항목 3 · 시트 링크 → 참고 문서로 ·
 //       6.2: 행사 만들기 인테이크 — 세팅 미완료 행사 온보딩 ① → Slack 글 붙이기 → 라벨 규칙으로 채움(주황 · 배너 · 기록) → 행사 ID 줄(YYMMDD_고객사_행사명) →
 //            견적서 링크 붙이기 → 빼기 · 채운 버튼 1개 · /api 요청 0)
@@ -602,7 +603,30 @@ check(
   const driveCard = tab.getByTestId('drive-card')
   await driveCard.waitFor({ timeout: 10_000 })
   const driveText = await driveCard.innerText()
-  check(/저장소\/연도\/행사 ID/.test(driveText) && driveText.includes('03_제작·키비주얼/{항목} · KV · 초청장 · 현장물 · 납품') && driveText.includes('06_결과보고·정산') && !driveText.includes('05_산출물'), 'Drive 카드 = 표준 폴더 트리(연도/행사 ID · 03 하위 4 · 옛 이름 0)')
+  check(/저장소\/분류\/행사 ID/.test(driveText) && driveText.includes('03_제작·키비주얼/{항목} · KV · 초청장 · 현장물 · 납품') && driveText.includes('06_결과보고·정산') && !driveText.includes('05_산출물'), 'Drive 카드 = 표준 폴더 트리(분류/행사 ID · 03 하위 4 · 옛 이름 0)')
+  // ── ③ Phase 6.10(2026-09-28) 보관 분류 — Drive 카드의 '보관 분류' 셀렉트(자동 = 성격·유형) → 자체행사로 고르면 저장되고 폴더 안내가
+  //     저장소/자체행사(Remember titled)/행사 ID/로 바뀐다 · 다시 '자동'으로 · /api 요청 0(데모 — 값만 저장 · 폴더 이동은 실서버의 다음 보장 때).
+  {
+    const apiCalls = []
+    const onReq = (req) => {
+      if (/\/api\//.test(req.url())) apiCalls.push(req.url())
+    }
+    tab.on('request', onReq)
+    const catSelect = driveCard.getByTestId('drive-category-select')
+    await catSelect.waitFor({ timeout: 10_000 })
+    const autoText = await catSelect.locator('option').first().innerText()
+    check(/^자동 — /.test(autoText.trim()), "보관 분류 첫 선택지 = '자동 — {성격·유형 판정}'", autoText)
+    await catSelect.selectOption('own')
+    const folderLine = driveCard.getByTestId('drive-category-folder')
+    await tab.waitForFunction(() => document.querySelector('[data-testid="drive-category-folder"]')?.textContent?.includes('자체행사(Remember titled)'), null, { timeout: 10_000 })
+    check((await folderLine.innerText()).includes('저장소/자체행사(Remember titled)/'), "자체행사로 고르면 폴더 안내 = 저장소/자체행사(Remember titled)/행사 ID/", await folderLine.innerText())
+    await catSelect.selectOption('')
+    await tab.waitForFunction(() => !document.querySelector('[data-testid="drive-category-folder"]')?.textContent?.includes('자체행사(Remember titled)'), null, { timeout: 10_000 })
+    check(!(await folderLine.innerText()).includes('자체행사(Remember titled)'), "'자동'으로 되돌리면 자동 판정 폴더로", await folderLine.innerText())
+    tab.off('request', onReq)
+    check(apiCalls.length === 0, '보관 분류 저장에 /api 요청 0(데모)', apiCalls.join(', '))
+    await driveCard.screenshot({ path: resolve(SHOTS, '03-drive-category.png') })
+  }
   // 스레드 2개(v2.17.1 [B2]) — Slack 카드에 운영 스레드 칸 + 디자인 스레드 칸(선택)이 함께 있고 태그 안내가 적혀 있다
   const slackCard = tab.getByTestId('slack-card')
   check((await slackCard.getByTestId('slack-thread-box').count()) === 1 && (await slackCard.getByTestId('slack-design-thread-box').count()) === 1, 'Slack 카드 = 운영 스레드 칸 + 디자인 스레드 칸')

@@ -11,6 +11,7 @@
 // 불변 규칙: 공유 권한은 바꾸지 않는다(anyone 링크 0) · 루트 밖 파일은 읽어 들이지 않는다 · 권한 판정은 SQL 정본에 맡긴다.
 import { randomUUID } from 'node:crypto'
 import { driveFolderUrl, looksLikeDriveFileId, parseDriveLink } from '../../../src/lib/driveLink.js'
+import { driveCategoryOfFolderName, resolveDriveCategory } from '../../../src/lib/driveCategory.js'
 import {
   driveAccessToken,
   driveAuthMode,
@@ -43,6 +44,7 @@ import {
   ensureProjectRoot,
   ensureProjectTree,
   ensureRootFolders,
+  isPlacementFolderName,
   isYearFolderName,
   PART,
   QUOTE_FOLDER,
@@ -306,17 +308,18 @@ export async function adoptFolderOp(ctx: DriveCtx, user: CallerIdentity, project
   const api = driveApiFor(ctx)
   const f = await api.getFile(parsed.id)
   if (!f || f.trashed || f.mimeType !== FOLDER_MIME) {
-    throw new DriveError(404, 'not_found', '폴더를 찾을 수 없습니다 — 링크가 맞는지, MICE Communicator 폴더 안에 있는지 확인하세요.')
+    throw new DriveError(404, 'not_found', '폴더를 찾을 수 없습니다 — 링크가 맞는지, 저장소 폴더 안에 있는지 확인하세요.')
   }
   if (f.id === root) throw new DriveError(422, 'validation', '저장소 루트 자체는 행사 폴더로 쓸 수 없습니다 — 그 안의 행사 폴더 링크를 붙여 주세요.')
   if (f.parents?.includes(root) && (f.name === QUOTE_FOLDER || f.name === ARCHIVE_FOLDER)) {
     throw new DriveError(422, 'validation', `예약 폴더(${QUOTE_FOLDER}·${ARCHIVE_FOLDER})는 행사 폴더로 쓸 수 없습니다.`)
   }
-  if (f.parents?.includes(root) && isYearFolderName(f.name)) {
-    throw new DriveError(422, 'validation', `연도 폴더(${f.name})는 행사 폴더로 쓸 수 없습니다 — 그 안의 행사 폴더 링크를 붙여 주세요.`)
+  if (f.parents?.includes(root) && isPlacementFolderName(f.name)) {
+    const what = isYearFolderName(f.name) ? '옛 연도 폴더' : '분류 폴더'
+    throw new DriveError(422, 'validation', `${what}(${f.name})는 행사 폴더로 쓸 수 없습니다 — 그 안의 행사 폴더 링크를 붙여 주세요.`)
   }
   if (!(await ancestorIds(api, f, root)).has(root)) {
-    throw new DriveError(403, 'forbidden', 'MICE Communicator 폴더 밖의 폴더는 행사 폴더로 지정할 수 없습니다.')
+    throw new DriveError(403, 'forbidden', '저장소 폴더 밖의 폴더는 행사 폴더로 지정할 수 없습니다.')
   }
   const owner = f.appProperties?.[APP_PROJECT_KEY]
   const other = await ctx.store.projectByRoot(f.id)
@@ -325,7 +328,20 @@ export async function adoptFolderOp(ctx: DriveCtx, user: CallerIdentity, project
   }
   await api.update(f.id, { appProperties: { [APP_PROJECT_KEY]: projectId } })
   await ctx.store.setProjectRoot(projectId, f.id)
-  await ctx.store.log(projectId, 'drive.tree_adopted', 'project', projectId, { folder_id: f.id })
+  // v2.21.6 Phase 6.10 — 분류 폴더 안에 있던 폴더를 채택하면 그 분류를 보관 분류로 기록한다(자동 판정과 다를 때만 —
+  // 사람이 둔 자리를 존중 · 다음 보장 때 자동 분류 폴더로 끌어오지 않게). 설정 ③에서 다시 고칠 수 있다
+  const parentId = f.parents?.[0]
+  let adoptedCategory: string | null = null
+  if (parentId && parentId !== root) {
+    const parent = await api.getFile(parentId, 'id,name,parents')
+    const cat = parent && (parent.parents ?? []).includes(root) ? driveCategoryOfFolderName(parent.name) : null
+    if (cat && cat !== resolveDriveCategory(project)) {
+      await ctx.store.setProjectDriveCategory(projectId, cat)
+      project.drive_category = cat
+      adoptedCategory = cat
+    }
+  }
+  await ctx.store.log(projectId, 'drive.tree_adopted', 'project', projectId, { folder_id: f.id, ...(adoptedCategory ? { drive_category: adoptedCategory } : {}) })
   project.drive_root_folder_id = f.id
   await syncProjectRootPlacement(api, ctx.store, root, project, f)
   await ensureParts(api, f.id)
@@ -342,7 +358,7 @@ export async function archiveProjectOp(ctx: DriveCtx, user: CallerIdentity, fold
   const f = await api.getFile(str(folderId, '폴더 id', 200))
   if (!f || f.trashed || f.mimeType !== FOLDER_MIME) return { archived: false, reason: 'missing' }
   if (f.id === root) throw new DriveError(422, 'validation', '저장소 루트는 보관할 수 없습니다.')
-  if (!(await ancestorIds(api, f, root)).has(root)) throw new DriveError(403, 'forbidden', 'MICE Communicator 폴더 밖의 폴더입니다.')
+  if (!(await ancestorIds(api, f, root)).has(root)) throw new DriveError(403, 'forbidden', '저장소 폴더 밖의 폴더입니다.')
   if (await ctx.store.projectByRoot(f.id)) throw new DriveError(409, 'conflict', '아직 행사가 쓰는 폴더입니다.')
   const { archive } = await ensureRootFolders(api, root)
   const stamp = new Date(ctx.now() + 9 * 3600 * 1000).toISOString().slice(2, 10).replace(/-/g, '')
@@ -622,7 +638,7 @@ export async function linkOp(
   let file: DriveFile | null = await api.getFile(parsed.id)
   if (file?.mimeType === SHORTCUT_MIME && file.shortcutDetails?.targetId) file = await api.getFile(file.shortcutDetails.targetId)
   if (!file) {
-    throw new DriveError(404, 'not_found', '파일을 찾을 수 없습니다 — 링크가 맞는지, MICE Communicator 폴더 안에 있는지 확인하세요.')
+    throw new DriveError(404, 'not_found', '파일을 찾을 수 없습니다 — 링크가 맞는지, 저장소 폴더 안에 있는지 확인하세요.')
   }
   if (file.mimeType === FOLDER_MIME) throw new DriveError(422, 'validation', '폴더 링크입니다 — 등록할 파일의 링크를 붙여 주세요.')
   if (file.trashed) throw new DriveError(409, 'conflict', '휴지통에 있는 파일입니다 — 복원한 뒤 다시 등록하세요.')
@@ -634,7 +650,7 @@ export async function linkOp(
     throw new DriveError(
       403,
       'forbidden',
-      'MICE Communicator 폴더 밖의 파일은 등록할 수 없습니다 — 먼저 행사 폴더에 올리거나 옮긴 뒤 링크를 붙여 주세요.',
+      '저장소 폴더 밖의 파일은 등록할 수 없습니다 — 먼저 행사 폴더에 올리거나 옮긴 뒤 링크를 붙여 주세요.',
     )
   }
   let fileId = file.id

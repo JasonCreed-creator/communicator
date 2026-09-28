@@ -1078,6 +1078,19 @@ ${assertSql(`position('reference_links' in client_status('${DEMO_TOKEN}')::text)
 ${assertSql(`position('reference_links' in client_queue('${DEMO_TOKEN}')::text) = 0`)}
 ${assertSql(`position('reference_links' in partner_portal('${PARTNER_TOKEN}')::text) = 0`)}`)
 
+  // 5o. 보관 분류 (Phase 6.10 · 설계서 v2.21.6 §7.1 · §4-1) — 열 1 + CHECK(4종·null) · Drive 판정 함수 4종이 kind·event_type·drive_category를 돌려준다
+  scenario('보관 분류: pm이 custom 저장 → 저장 · null(자동)로 되돌림', `
+update projects set drive_category = 'custom' where id='${PRJ}';
+${assertSql(`(select drive_category = 'custom' from projects where id='${PRJ}')`)}
+update projects set drive_category = null where id='${PRJ}';
+${assertSql(`(select drive_category is null from projects where id='${PRJ}')`)}`, { role: 'authenticated', sub: authId.pm })
+  scenario('보관 분류: 모르는 값은 CHECK 거부(projects_drive_category_check)', `update projects set drive_category = 'memo' where id='${PRJ}';`,
+    { role: 'authenticated', sub: authId.pm, expect: 'error', match: 'projects_drive_category_check' })
+  const catCheck = scenario('보관 분류: drive_project_file_check 응답에 kind·event_type·drive_category', `select drive_project_file_check('${PRJ}');`, { role: 'authenticated', sub: authId.pm })
+  record('drive_project_file_check 응답에 kind·event_type·drive_category 키', /"kind"/.test(catCheck) && /"event_type"/.test(catCheck) && /"drive_category"/.test(catCheck), catCheck.slice(0, 200))
+  const catUpload = scenario('보관 분류: drive_upload_check 응답의 project에 kind·drive_category', `select drive_upload_check('${designItem}');`, { role: 'authenticated', sub: authId.pm })
+  record('drive_upload_check project에 kind·drive_category 키', /"kind"/.test(catUpload) && /"drive_category"/.test(catUpload), catUpload.slice(0, 200))
+
   // 6. 시크릿 커밋 가드 (§8 DoD 9) — 실키 값 패턴이 레포 파일에 없는가
   const grep = spawnSync('grep', ['-rnE', 'sb_secret_[A-Za-z0-9_-]{10,}|sbp_[A-Za-z0-9]{20,}', 'src', 'supabase', 'scripts', '--include=*.ts', '--include=*.tsx', '--include=*.sql', '--include=*.mjs', '--include=*.md'], { encoding: 'utf8' })
   record('시크릿 커밋 가드: sb_secret_/sbp_ 실키 패턴 0건 (DoD 9)', grep.status === 1, grep.stdout)

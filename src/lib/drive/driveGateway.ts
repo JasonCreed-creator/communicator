@@ -45,14 +45,14 @@ export function driveReturnMessage(search: string): { ok: boolean; message: stri
   const q = new URLSearchParams(search)
   const drive = q.get('drive')
   if (!drive) return null
-  if (drive === 'connected') return { ok: true, message: 'Drive가 연결됐습니다 — 이제 올리는 파일이 MICE Communicator 폴더에 저장됩니다.' }
+  if (drive === 'connected') return { ok: true, message: 'Drive가 연결됐습니다 — 이제 올리는 파일이 저장소 폴더(분류 폴더/행사 ID)에 저장됩니다.' }
   const reason = q.get('reason') ?? ''
   const reasons: Record<string, string> = {
     denied: 'Google 동의 화면에서 허용하지 않았습니다 — 다시 연결을 눌러 허용해 주세요.',
     state: '연결 요청이 만료됐습니다(10분) — 다시 연결을 눌러 주세요.',
     code: 'Google이 인증 코드를 주지 않았습니다 — 다시 연결해 주세요.',
     no_refresh_token: 'Google이 갱신 토큰을 주지 않았습니다 — Google 계정의 "타사 앱 접근"에서 이 앱을 지운 뒤 다시 연결해 주세요.',
-    root_access: '이 계정은 저장 폴더(MICE Communicator)에 쓸 수 없습니다 — 폴더 편집 권한이 있는 계정으로 연결해 주세요.',
+    root_access: '이 계정은 저장소 폴더(DRIVE_ROOT_FOLDER_ID)에 쓸 수 없습니다 — 폴더 편집 권한이 있는 계정으로 연결해 주세요.',
     exchange: '연결을 마치지 못했습니다(인증 교환·저장 실패) — 잠시 후 다시 시도하세요.',
     google: 'Google이 오류를 돌려줬습니다 — 잠시 후 다시 시도하세요.',
   }

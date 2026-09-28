@@ -397,6 +397,7 @@ export default function SettingsPage() {
                   isPm={isPm}
                   isAdmin={currentUser.data?.app_role === 'admin'}
                   onChanged={handleSaved}
+                  project={project.data}
                 />
 
                 <SlackCard

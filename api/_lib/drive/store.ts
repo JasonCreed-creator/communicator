@@ -5,6 +5,7 @@
 // 테스트는 이 인터페이스의 메모리 구현으로 돈다(src/test/helpers/fakeDriveStore.ts).
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { primaryRole } from '../../../src/lib/roles.js'
+import type { DriveCategory } from '../../../src/types/enums'
 import { DriveError, type DriveErrorCode } from './errors.js'
 
 export type AppRole = 'admin' | 'sales' | 'staff'
@@ -19,6 +20,10 @@ export interface ProjectRow {
   event_date: string | null
   status: 'active' | 'closed'
   drive_root_folder_id: string | null
+  /** v2.21.6 Phase 6.10 — 분류 폴더 판정 재료(설계서 §7.1): 성격 · 유형 · 설정 ③에서 고른 보관 분류(null = 자동) */
+  kind: 'agency' | 'host'
+  event_type: 'general' | 'recruiting'
+  drive_category: DriveCategory | null
 }
 
 export interface DeliverableRow {
@@ -106,6 +111,8 @@ export interface DriveStore {
   /** 사용자 JWT(RLS)로 보이는 버전만 */
   visibleVersions(jwt: string, versionIds: string[]): Promise<{ id: string; drive_file_id: string; file_name: string }[]>
   setProjectRoot(projectId: string, folderId: string): Promise<void>
+  /** v2.21.6 Phase 6.10 — 기존 폴더 채택 때 분류 폴더에서 역추론한 보관 분류를 기록(사람이 고른 값과 같은 자리 · service) */
+  setProjectDriveCategory(projectId: string, category: DriveCategory): Promise<void>
   setItemFolder(deliverableId: string, folderId: string): Promise<void>
   /** 이 행사가 이미 아는 Drive 파일 id — 버전 + 인박스(처리됨 포함) */
   knownFileIds(projectId: string): Promise<Set<string>>
@@ -201,7 +208,7 @@ export function supabaseDriveStore(env: StoreEnv): DriveStore {
       return must(
         await admin
           .from('projects')
-          .select('id, code, name, organizer, event_date, status, drive_root_folder_id')
+          .select('id, code, name, organizer, event_date, status, drive_root_folder_id, kind, event_type, drive_category')
           .eq('id', projectId)
           .maybeSingle(),
       ) as ProjectRow | null
@@ -270,6 +277,9 @@ export function supabaseDriveStore(env: StoreEnv): DriveStore {
     },
     async setProjectRoot(projectId, folderId) {
       must(await admin.from('projects').update({ drive_root_folder_id: folderId }).eq('id', projectId))
+    },
+    async setProjectDriveCategory(projectId, category) {
+      must(await admin.from('projects').update({ drive_category: category }).eq('id', projectId))
     },
     async setItemFolder(deliverableId, folderId) {
       must(await admin.from('deliverables').update({ drive_folder_id: folderId }).eq('id', deliverableId))

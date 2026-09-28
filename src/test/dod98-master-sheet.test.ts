@@ -466,7 +466,7 @@ describe('DoD 98 · 서버 — 성공 경로', () => {
     expect(body.tabs).toEqual(TITLES)
     expect(body.file_name).toBe(`${projectLabel(s.source.project)}_마스터시트_${kstToday(s.now).replace(/-/g, '').slice(2)}`)
     expect(body.url).toBe(`https://docs.google.com/spreadsheets/d/${encodeURIComponent(body.spreadsheet_id)}/edit`)
-    // Drive: 행사 폴더(연도/행사 ID) → 04_WBS·운영계획 → 파일
+    // Drive: 행사 폴더(분류 폴더/행사 ID) → 04_WBS·운영계획 → 파일
     const rootId = s.db.projects.get(PRJ)!.drive_root_folder_id!
     const plan = s.drive.childNamed(rootId, PART.plan)!
     const file = s.drive.childrenOf(plan.id).find((f) => f.id === body.spreadsheet_id)!

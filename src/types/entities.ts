@@ -29,6 +29,7 @@ import type {
   QuoteStatus,
   ScenarioBlockKind,
   SheetConnectionState,
+  DriveCategory,
   SheetMappedField,
   WbsDirection,
   WbsSource,
@@ -119,6 +120,8 @@ export interface Project {
    * 행사당 상한 20. 내부 화면에만 — 발주처·파트너·랜딩 지면에는 싣지 않는다. 선택 필드 — 없는 행은 링크 없음과 같다
    */
   reference_links?: ReferenceLink[] | null
+  /** v2.21.6 Phase 6.10 — 보관 분류(Drive 분류 폴더). null = 자동(kind·event_type) · 설정 ③에서 고르면 그 값 */
+  drive_category?: DriveCategory | null
   /** v1.3 — S0 온보딩에서 선택. general이면 등록 모듈 경량 모드(표시 계층 토글) */
   event_type: EventType
   /** v2.6 §25 — 행사 유형 4분류. 시드이지 잠금이 아니다(이후 kind·event_type 독립 변경 가능) */

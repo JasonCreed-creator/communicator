@@ -69,7 +69,10 @@ export async function createMasterSheet(ctx: DriveCtx, jwt: string, projectId: s
   const api = driveApiFor(ctx)
   const token = await driveAccessToken(ctx.env, ctx.store, ctx.fetchImpl, ctx.now())
   const p = source.project
-  const row: ProjectRow = { id: p.id, code: p.code, name: p.name, organizer: p.organizer, event_date: p.event_date, status: p.status, drive_root_folder_id: p.drive_root_folder_id }
+  const row: ProjectRow = {
+    id: p.id, code: p.code, name: p.name, organizer: p.organizer, event_date: p.event_date, status: p.status, drive_root_folder_id: p.drive_root_folder_id,
+    kind: p.kind, event_type: p.event_type, drive_category: p.drive_category ?? null,
+  }
   const { rootId } = await ensureProjectRoot(api, ctx.store, ctx.env.DRIVE_ROOT_FOLDER_ID!, row)
   const folderId = await ensurePartPath(api, rootId, [PART.plan])
   const file = await api.createFile(sheet.title, GSHEET_MIME, folderId, { [APP_EXPORT_KEY]: 'master_sheet', communicator_project_id: p.id })

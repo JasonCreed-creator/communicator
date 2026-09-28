@@ -255,3 +255,9 @@ export const SHEET_FIELD_LABELS: Record<SheetMappedField, string> = {
   registered_at: '신청 일시',
   sheet_status: '신청 상태',
 }
+
+// ── v2.21.6 Phase 6.10 · 보관 분류(Drive 저장소 분류 폴더 — 설계서 §7.1) ─────────────
+// 저장소 루트 바로 아래 분류 폴더 4개 → 행사 ID 폴더. null = 자동(주최형 → own · 대행형 모객형 → solution_recruiting ·
+// 대행형 일반형 → solution_general) · 'custom'(일반행사)은 설정 ③에서 고를 때만. 이름·라벨·판정은 src/lib/driveCategory.ts
+export const DRIVE_CATEGORIES = ['solution_recruiting', 'solution_general', 'own', 'custom'] as const
+export type DriveCategory = (typeof DRIVE_CATEGORIES)[number]
