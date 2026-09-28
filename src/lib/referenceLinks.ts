@@ -1,9 +1,9 @@
 // 참고 문서 링크(projects.reference_links) 판정 — mock·실서버 공급자가 같은 규칙(Phase 6.11 PR-B · 설계서 v2.21 §27.3).
 // 마스터 시트 '개요' 탭의 킥오프·요청서·제안서·계약 링크 자리. 앱은 링크를 열기만 한다(파일을 읽지 않는다 — 저장소 밖 링크도 된다).
 // https 주소만 · 행사당 상한 20 · 내부 화면에만(발주처·파트너·랜딩 지면 0 · 홈 머리에도 두지 않는다).
-import { REFERENCE_LINK_KINDS, type ReferenceLinkKind } from '../types/enums'
+import { REFERENCE_LINK_KINDS, type ReferenceLinkKind } from '../types/enums.js'
 import type { ReferenceLink } from '../types/entities'
-import { isHttpsUrl } from './quoteAttachment'
+import { isHttpsUrl } from './quoteAttachment.js'
 
 export const REFERENCE_LINKS_MAX = 20
 

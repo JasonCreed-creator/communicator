@@ -12,6 +12,7 @@ import PlanCover from '../components/plan/PlanCover'
 import PlanPage from '../components/plan/PlanPage'
 import PlanPublishGate from '../components/plan/PlanPublishGate'
 import PlanTocRail from '../components/plan/PlanTocRail'
+import { useMasterSheet } from '../components/plan/useMasterSheet'
 import ProductionSection from '../components/plan/ProductionSection'
 import ProgramSection from '../components/plan/ProgramSection'
 import RegistrationSection from '../components/plan/RegistrationSection'
@@ -44,6 +45,8 @@ export default function PlanDocPage() {
   const { projectId } = useProject()
   const plan = useAsync(() => provider.getPlan(projectId), [projectId])
   const user = useAsync(() => provider.getCurrentUser(), [])
+  // v2.21 §27.5 — 마스터 시트 내보내기(클릭에만 · mock은 사실 안내)
+  const masterSheet = useMasterSheet(projectId)
   const [activeKey, setActiveKey] = useState<PlanSectionKey>('overview')
   const [showPageBreaks, setShowPageBreaks] = useState(true)
   // 출력일시는 이 화면을 연 시각으로 고정한다(리렌더마다 흔들리면 표지·푸터 값이 어긋난다)
@@ -83,6 +86,7 @@ export default function PlanDocPage() {
             printedAt={printedAt}
             authorLabel={authorLabel}
             onPrint={() => window.print()}
+            masterSheet={masterSheet}
           />
         )}
 

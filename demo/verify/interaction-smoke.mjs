@@ -28,6 +28,7 @@
 //       3.24 PR-C: 16:9 장표 — 운영계획서 → 장표(사이드바 없음 · 목차 쪽 번호 · 본문 넘침 0 · 16:9) → 인쇄 PDF 쪽 수·용지 960×540pt ·
 //       4.8: 협력사 견적서 PDF·사진 — 불러오기 대화상자(엑셀·PDF·사진 받음 · AI 안내) → PDF 고르기 → 'AI로 읽기' → mock 사실 안내 · 서버 요청 0 ·
 //       6.12: 견적 올렸는데 정산보드 반영 0 — 정산보드 빈 상태의 초안 견적 안내 상자 → '확정하고 정산 시작' → 보드(맨 뒤 블록 · 6.4 블록이 붙여 둔 초안) ·
+//       6.11 PR-G: 마스터 시트 내보내기 — 운영계획서 발행 줄 '마스터 시트 만들기' → mock 사실 안내(만들지 않음 · /api 요청 0 · 결과 줄 0) ·
 //       6.11 PR-B: 참고 문서 링크 — 설정 ① 카드(붙이기 → 요청서 배지 · 1/20 → 빼기) · 온보딩 ① 요청서 시트 붙여 넣기(탭 · 구분 열) → 기타 항목 3 · 시트 링크 → 참고 문서로 ·
 //       6.2: 행사 만들기 인테이크 — 세팅 미완료 행사 온보딩 ① → Slack 글 붙이기 → 라벨 규칙으로 채움(주황 · 배너 · 기록) → 행사 ID 줄(YYMMDD_고객사_행사명) →
 //            견적서 링크 붙이기 → 빼기 · 채운 버튼 1개 · /api 요청 0)
@@ -484,6 +485,28 @@ check(
   const docBefore = docRequests.length
   await tab.locator('aside nav a', { hasText: '운영계획서' }).first().click()
   await tab.waitForURL(/#\/plan$/, { timeout: 10_000 })
+  // ── ③ Phase 6.11 PR-G(2026-09-28) 마스터 시트 내보내기 — 발행 줄 '마스터 시트 만들기'(ghost · 채운 버튼은 컨펌 발송 하나) → mock은 만들지 않고
+  //     사실 안내 · /api 요청 0 · 결과 줄 0 · 전체 리로드 0. 실서버 경로(Drive · Sheets API)는 dod98 서버 계약 + 기획자님의 운영 1회 클릭이 검증한다.
+  {
+    const apiCalls = []
+    const onReq = (req) => {
+      if (/\/api\//.test(req.url())) apiCalls.push(req.url())
+    }
+    tab.on('request', onReq)
+    const msBtn = tab.getByTestId('master-sheet-create')
+    await msBtn.waitFor({ timeout: 10_000 })
+    check((await msBtn.innerText()).trim() === '마스터 시트 만들기' && /btn-ghost/.test((await msBtn.getAttribute('class')) ?? ''), "발행 줄 '마스터 시트 만들기' = ghost 단추")
+    const gateFilled = (await tab.locator('.ui-card.print-hidden .btn-accent, .ui-card.print-hidden .btn-primary').allInnerTexts()).map((t) => t.trim())
+    check(gateFilled.join('|') === '컨펌 발송', '발행 줄의 채운 버튼 = 컨펌 발송 하나', gateFilled.join(' · '))
+    await msBtn.click()
+    const msNotice = tab.getByTestId('master-sheet-notice')
+    await msNotice.waitFor({ timeout: 10_000 })
+    check((await msNotice.innerText()).includes('실서버(로그인) 모드'), 'mock = 만들지 않고 사실 안내', await msNotice.innerText())
+    check((await tab.getByTestId('master-sheet-result').count()) === 0, '결과 줄(가짜 링크) 0')
+    tab.off('request', onReq)
+    check(apiCalls.length === 0, '마스터 시트 단추에 /api 요청 0(데모)', apiCalls.join(', '))
+    await tab.screenshot({ path: resolve(SHOTS, '03-master-sheet-mock-notice.png') })
+  }
   await tab.getByRole('link', { name: '16:9 장표' }).click()
   await tab.waitForURL(/#\/plan\/deck$/, { timeout: 10_000 })
   const slides = tab.getByTestId('deck-slide')

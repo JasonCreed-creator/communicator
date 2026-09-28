@@ -28,6 +28,8 @@ export default defineConfig({
       { find: /^\.\/notifyClient$/, replacement: fileURLToPath(new URL('./demo/stubs/notifyClientStub.ts', import.meta.url)) },
       // Phase 6.2 행사 인테이크(api/intake 호출)도 싣지 않는다 — 게이트웨이(lib/intake/intakeGateway)가 mock이면 부르지 않는다.
       { find: /^\.\/intakeClient$/, replacement: fileURLToPath(new URL('./demo/stubs/intakeClientStub.ts', import.meta.url)) },
+      // Phase 6.11 PR-G 마스터 시트 내보내기(api/master-sheet 호출)도 싣지 않는다 — 게이트웨이(lib/masterSheet/masterSheetGateway)가 mock이면 부르지 않는다.
+      { find: /^\.\/masterSheetClient$/, replacement: fileURLToPath(new URL('./demo/stubs/masterSheetClientStub.ts', import.meta.url)) },
     ],
   },
   plugins: [inlineBrandAssets(), react(), tailwindcss(), singleFileArtifact()],

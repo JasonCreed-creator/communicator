@@ -1,7 +1,7 @@
 // UI 공용 어휘 — 상태·영역·역할의 한국어 라벨과 상태 뱃지 색.
 // 내부(B)·발주처(C) 화면이 동일 매핑을 쓰도록 여기서만 정의한다.
 // 상태 색은 시맨틱 고정: 색만으로 구분하지 않도록 항상 라벨 텍스트와 함께 쓴다.
-import { DELIVERABLE_STATUSES } from '../types/enums'
+import { DELIVERABLE_STATUSES } from '../types/enums.js'
 import type {
   DeliverableArea,
   DeliverableStatus,
