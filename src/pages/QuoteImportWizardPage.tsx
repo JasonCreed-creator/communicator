@@ -29,7 +29,8 @@ const FORMAT_GUIDE = [
   { code: '리멤버 견적서', desc: '이 시스템(견적 컨피규레이터)이 내보낸 견적서 — 섹션·총액·모객(RSVP/쇼업)까지 그대로 읽힘' },
   { code: 'A형', desc: '단가·수량·일수 열이 있는 세부 산출내역서' },
   { code: 'B형', desc: 'ITEM·금액 단식 + 섹션별 total 행' },
-  { code: 'C형', desc: 'UNIT PRICE·QTY·AMOUNT(·SELECT) 패키지 견적서' },
+  { code: 'C형', desc: 'UNIT PRICE·QTY·AMOUNT(·SELECT) 패키지 견적서 — 국문 선택(O/X) 열 포함' },
+  { code: 'P형(예산)', desc: '주최형 워킹버짓 — 지출 표(구분 A~J · 기준안 열)를 섹션으로 읽고, 수입 표(파트너 계약 매출)는 참고로 기록' },
   { code: 'PDF·사진', desc: 'AI(Claude)가 옮겨 적음 — 국문·영문 · 실서버에서만 · 한 사람 하루 횟수 제한' },
 ]
 
@@ -399,6 +400,27 @@ function WizardBody() {
               </div>
             </dl>
           </section>
+
+          {/* v2.22.1 P형 — 예산 워크북의 수입 표. 견적 금액에는 넣지 않는다(주최형 정산 참고) */}
+          {parsed.kind === 'budget' && parsed.revenue && parsed.revenue.length > 0 && (
+            <section className="ui-card p-5" data-testid="import-revenue">
+              <p className="t-card-title">수입 표 (파트너 계약 매출)</p>
+              <p className="mt-1 text-sm text-ink-sub">
+                예산 워크북의 수입 표입니다 — 견적 금액에는 넣지 않고 기록만 합니다(주최형 정산에서 수입 − 지출을 볼 때 참고).
+              </p>
+              <ul className="mt-3 space-y-1 text-sm">
+                {parsed.revenue.map((r, i) => (
+                  <li key={`${r.title}-${i}`} className="flex justify-between gap-3 border-b border-border py-1">
+                    <span className="text-ink">{r.title}</span>
+                    <span className="tabular-nums text-ink-sub">{fmtWon(r.amount, false)}</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-2 text-right text-sm font-semibold text-ink">
+                합계 {fmtWon(parsed.revenue.reduce((s, r) => s + r.amount, 0), false)}
+              </p>
+            </section>
+          )}
 
           {(failedChecks.length > 0 || parsed.warnings.length > 0) && (
             <section className="ui-card p-5">

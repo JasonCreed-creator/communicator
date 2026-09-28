@@ -911,8 +911,9 @@ ${assertSql(`(select feature = 'quote_import' and project_id is null from ai_usa
 select ai_usage_claim(null, 'quote_import', 2);
 select ai_usage_claim('${PRJ}', 'vendor_quote', 2);
 select ai_usage_claim(null, 'quote_import', 2);`, { role: 'authenticated', sub: authId.pm, expect: 'error', match: 'LIMIT' })
-  scenario('quote_imports.format: ai 허용 · 그 밖은 거부', `
+  scenario('quote_imports.format: ai·P(예산 워크북 — 38번째) 허용 · 그 밖은 거부', `
 insert into quote_imports (file_name, format, parsed) values ('x.pdf', 'ai', '{}');
+insert into quote_imports (file_name, format, parsed) values ('budget.xlsx', 'P', '{}');
 insert into quote_imports (file_name, format, parsed) values ('x.xlsx', 'D', '{}');`, { expect: 'error', match: 'quote_imports_format_check' })
   scenario('AI 한도: 모르는 기능 거부', `select ai_usage_claim('${PRJ}', 'plan_review', 30);`,
     { role: 'authenticated', sub: authId.pm, expect: 'error', match: '알 수 없는 AI 기능' })

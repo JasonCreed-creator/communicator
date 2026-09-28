@@ -11,10 +11,16 @@ import {
   B_EXPECTED,
   C_EXPECTED,
   D_EXPECTED,
+  E_EXPECTED,
+  F_EXPECTED,
+  P_EXPECTED,
+  syntheticBudgetP,
   syntheticQuoteA,
   syntheticQuoteB,
   syntheticQuoteC,
   syntheticQuoteD,
+  syntheticQuoteE,
+  syntheticQuoteF,
 } from './fixtures/syntheticQuotes'
 
 const itemCount = (doc: ParsedQuoteDoc) => doc.sections.reduce((sum, s) => sum + s.items.length, 0)
@@ -73,8 +79,9 @@ describe('A형(단가·수량·일수) 골든', () => {
 
   it('버킷 매핑: 키워드 1개 규칙만 맞으면 high, 무매칭은 custom + 저신뢰 1건', () => {
     const map = mapSectionsToBuckets(doc)
+    // v2.22.1 — '4. 현장 등록 · 명찰 발급'은 참관객 관리(at · 원가 있음)다. 전에는 등록 키워드가 모객(rc · 원가 없음)이라 명찰 협력사 발주가 막혔다
     expect(map.map((m) => m.bucket)).toEqual([
-      's1', 's2', 's2', 'recruit', 's3', 's4', 'custom', 'custom',
+      's1', 's2', 's2', 'attendee', 's3', 's4', 'custom', 'custom',
     ])
     expect(lowCount(doc)).toBe(1)
     expect(map[7]).toMatchObject({ section: '8. 행사 기록 · 홍보', bucket: 'custom', confidence: 'low' })
@@ -277,5 +284,172 @@ describe('단어 단위 키워드(v2.18) — 영문 부분 문자열 오탐 방�
     expect(matchesKeyword('lead generation', 'lead')).toBe(true)
     expect(mapSectionName('6. Travel & Accommodation')).toMatchObject({ bucket: 'custom', confidence: 'low' })
     expect(mapSectionName('2. 무대 시스템')).toMatchObject({ bucket: 's2', confidence: 'high' })
+  })
+})
+
+// ── v2.22.1 §22.1 E·F·P형(Phase 6.19 — 실파일 5종 실측 · 기획자님 #8 "다양한 견적서 형태를 파악하고 뿌릴 수 있도록") ──
+describe('E형(다자 발주 · [발주 구분] 태그 섹션 · 상단 요약표 · V.A.T 포함) 골든 — v2.22.1', () => {
+  let doc: ParsedQuoteDoc
+  beforeAll(async () => {
+    doc = parseQuoteWorkbook(await syntheticQuoteE(), '가상견적_E형.xlsx')
+  })
+
+  it('[태그] N. 제목이 섹션이고 발주 건마다 번호가 다시 시작해도 섹션 5 · 항목 7 — 첫 열이 빈 항목 줄은 세부 내용이 제목', () => {
+    expect(doc.format).toBe('A')
+    expect(doc.sections.map((s) => s.name)).toEqual([
+      '[총괄사] 1. 행사장 사용료',
+      '[총괄사] 2. 행사장 조성',
+      '[총괄사] 3. 등록 · 명찰',
+      '[발주처 ①] 1. 전시부스 (상향 사양)',
+      '[발주처 ②] 1. LED 영상장비',
+    ])
+    expect(itemCount(doc)).toBe(E_EXPECTED.items)
+    expect(doc.sections.map((s) => s.subtotal)).toEqual([10_000_000, 24_000_000, 1_600_000, 15_000_000, 13_400_000])
+    expect(doc.sections[1].items.map((i) => i.title)).toEqual(['부스', '휴게공간 조성'])
+    // 끝의 ※ 구조 안내표(금액 없음)는 항목이 아니다
+    expect(doc.sections[4].items).toHaveLength(2)
+  })
+
+  it('헤더 6필드 · 대표 금액 = "견적금액" 한글 금액 줄(1.1억) · "총 사업비 (V.A.T 포함)"로 부가세 포함 판정', () => {
+    expect(doc.header).toMatchObject({
+      event_name: '가상 교육 축제 2027 행사 위탁운영',
+      client: '가상교육청 창의과',
+      venue: '가상호텔 본관 2층 전관',
+      manager: '김기획',
+      total_amount: E_EXPECTED.headline,
+      vat_mode: 'included',
+    })
+    expect(doc.totals.items_sum).toBe(E_EXPECTED.itemsSum)
+    expect(doc.totals.grand_total).toBe(E_EXPECTED.headline)
+  })
+
+  it('총액 블록(발주 건별 정액)과 항목 표가 다른 기준 — 역산 부가세가 10%가 아니라는 사실을 검산·경고로 남기고 막지 않는다', () => {
+    expect(checkOf(doc, '부가세 10%')?.ok).toBe(false)
+    expect(doc.warnings.some((w) => w.includes('역산한 부가세'))).toBe(true)
+    expect(doc.checks.filter((c) => c.name.startsWith('섹션 소계')).every((c) => c.ok)).toBe(true)
+    expect(checkOf(doc, '단가×수량×일수')).toMatchObject({ expected: 7, actual: 7, ok: true })
+    expect(doc.warnings.some((w) => w.includes('인식하지 못한 헤더'))).toBe(false)
+  })
+
+  it('버킷 매핑은 [발주 구분] 태그를 떼고 본다 — 행사장 사용료 s1 · 등록·명찰 at · 부스·LED s2 · 행사장 조성만 저신뢰', () => {
+    const map = mapSectionsToBuckets(doc)
+    expect(map.map((m) => m.bucket)).toEqual(['s1', 'custom', 'attendee', 's2', 's2'])
+    expect(lowCount(doc)).toBe(1)
+    expect(map[1].confidence).toBe('low')
+  })
+})
+
+describe('F형(우리 견적서 변형 · O/X 선택 열 · 대표 총액 줄 둘 · 대행 수수료 섹션) 골든 — v2.22.1', () => {
+  let doc: ParsedQuoteDoc
+  beforeAll(async () => {
+    doc = parseQuoteWorkbook(await syntheticQuoteF(), '가상견적_F형.xlsx')
+  })
+
+  it("국문 '선택' 열은 선택 열(C형 판정) · 섹션 5 · 항목 10 — X 행은 담되 '(미선택 — 총액 미포함)' · [프로그램] 묶음 줄은 항목이 아니다", () => {
+    expect(doc.format).toBe('C')
+    expect(doc.sections).toHaveLength(F_EXPECTED.sections)
+    expect(itemCount(doc)).toBe(F_EXPECTED.items)
+    const venue = doc.sections[0]
+    expect(venue.items.map((i) => i.amount)).toEqual([9_000_000, 0])
+    expect(venue.items[1].note).toContain('미선택')
+    const optional = doc.sections[3]
+    expect(optional.name).toBe('4. 선택 항목 (Optional)')
+    expect(optional.items.map((i) => i.title)).toEqual(['◎ 참석 회신 접수·리마인드 지원', '전문 진행자', '포토월 (고급형)'])
+    expect(optional.subtotal).toBe(1_200_000)
+  })
+
+  it('대표 총액 줄이 둘이면 본문 합과 맞는 "선택 항목 포함" 줄이 대표 — 순서와 무관 · 그 줄의 VAT 포함 값이 총액', () => {
+    expect(doc.header.total_amount).toBe(F_EXPECTED.itemsSum)
+    expect(doc.header.vat_mode).toBe('excluded')
+    expect(doc.totals).toEqual({
+      items_sum: F_EXPECTED.itemsSum,
+      agency_fee: F_EXPECTED.agencyFee,
+      agency_fee_rate: 0.15,
+      vat: F_EXPECTED.vat,
+      grand_total: F_EXPECTED.grandTotal,
+    })
+    expect(doc.header.total_amount).not.toBe(F_EXPECTED.withoutOptions)
+  })
+
+  it("검산 전부 통과 — 조건부 안내('… 시 별도 견적')는 제외 표기가 아니고, X 행은 단가×수량 검산 대상이 아니며, 수수료 기준은 문서의 실행비 셀", () => {
+    expect(doc.checks.filter((c) => !c.ok)).toEqual([])
+    expect(checkOf(doc, '2. 영상·음향·조명 장비')).toMatchObject({ expected: 4_200_000, actual: 4_200_000, ok: true })
+    expect(checkOf(doc, '기획료 15%')).toMatchObject({ expected: 2_430_000, actual: 2_430_000, ok: true })
+    expect(checkOf(doc, '단가×수량×일수')).toMatchObject({ expected: 6, actual: 6, ok: true })
+    expect(checkOf(doc, '총액 체인')).toMatchObject({ expected: F_EXPECTED.grandTotal, actual: F_EXPECTED.grandTotal, ok: true })
+    expect(doc.warnings.some((w) => w.includes("'총액 미포함' 표기 항목 3건"))).toBe(true)
+    expect(doc.warnings.some((w) => w.includes('단가×수량과 금액이 다른'))).toBe(false)
+  })
+
+  it('버킷 매핑 전부 확신 — 장소 s1 · 장비 s2 · 운영인력·등록·보험 s4 · 선택 항목 ot · 대행 수수료 s5', () => {
+    const map = mapSectionsToBuckets(doc)
+    expect(map.map((m) => m.bucket)).toEqual(['s1', 's2', 's4', 'options', 's5'])
+    expect(lowCount(doc)).toBe(0)
+  })
+})
+
+describe('P형(예산 워크북 · 주최형 워킹버짓) 골든 — v2.22.1', () => {
+  let doc: ParsedQuoteDoc
+  beforeAll(async () => {
+    doc = parseQuoteWorkbook(await syntheticBudgetP(), '가상_워킹버짓.xlsx')
+  })
+
+  it("시트 4장 중 섹션 구조가 있는 '지출' 시트를 고른다 — 기준안 열이 금액 · 구분 A~J가 섹션 · 'A. 베뉴 소계' 줄이 이름 · 항목 10", () => {
+    expect(doc.format).toBe('P')
+    expect(doc.kind).toBe('budget')
+    expect(doc.sections.map((s) => s.name)).toEqual([
+      'A. 베뉴', 'B. 연출·진행', 'C. 등록·참관객', 'D. 부스·제작물', 'H. 모객·리드젠 (계약 이행)', 'J. 예비비',
+    ])
+    expect(doc.sections.map((s) => s.code)).toEqual(['A', 'B', 'C', 'D', 'H', 'J'])
+    expect(itemCount(doc)).toBe(P_EXPECTED.items)
+    expect(doc.sections[0].items[0]).toMatchObject({ title: '행사장 대관 (계약)', amount: 17_920_000, note: '대관계약 원본' })
+    // 계산되지 않은 소계(캐시값 0)는 소계로 쓰지 않는다 — 항목 합으로 파생
+    expect(doc.sections.every((s) => s.subtotal === undefined)).toBe(true)
+    expect(doc.warnings.some((w) => w.includes("'지출' 시트를 읽었습니다"))).toBe(true)
+  })
+
+  it('총액 = 지출 합(VAT 별도) · 부가세·총액 체인은 비워 둔다(확정은 items_sum이 공급가) · 수입 표 3건은 기록만', () => {
+    expect(doc.totals).toEqual({ items_sum: P_EXPECTED.itemsSum })
+    expect(doc.header.total_amount).toBe(P_EXPECTED.itemsSum)
+    expect(doc.header.vat_mode).toBe('excluded')
+    expect(doc.revenue).toHaveLength(P_EXPECTED.revenue)
+    expect(doc.revenue?.map((r) => r.title)).toEqual(['가상파트너A · DIAMOND', '가상파트너B · GOLD + Add-on', '가상파트너C · SILVER'])
+    expect(doc.revenue?.reduce((s, r) => s + r.amount, 0)).toBe(P_EXPECTED.revenueSum)
+    expect(doc.warnings.some((w) => w.includes('예산 워크북'))).toBe(true)
+    expect(doc.warnings.some((w) => w.includes('파트너 계약 매출 3건'))).toBe(true)
+    expect(doc.checks.every((c) => c.ok)).toBe(true)
+  })
+
+  it('버킷 매핑 — 베뉴 s1 · 연출 s2 · 등록·참관객 at · 모객·리드젠 rc · 예비비 custom(확신) · 부스·제작물만 저신뢰', () => {
+    const map = mapSectionsToBuckets(doc)
+    expect(map.map((m) => m.bucket)).toEqual(['s1', 's2', 'attendee', 'custom', 'recruit', 'custom'])
+    expect(lowCount(doc)).toBe(1)
+    expect(map[3]).toMatchObject({ section: 'D. 부스·제작물', confidence: 'low' })
+  })
+
+  it('견적서(A형)는 kind·revenue가 없다', async () => {
+    const quote = parseQuoteWorkbook(await syntheticQuoteA(), '가상견적_A형.xlsx')
+    expect(quote.kind).toBeUndefined()
+    expect(quote.revenue).toBeUndefined()
+  })
+})
+
+describe('섹션 이름 → 버킷 (v2.22.1 추가 규칙)', () => {
+  it("[발주 구분] 태그 무시 · 등록·명찰 = at · 수수료 = s5 · '선택 항목 (Optional)' = ot · '(총액 미포함)' 선택 옵션은 여전히 custom 저신뢰", async () => {
+    const { mapSectionName } = await import('../buckets')
+    expect(mapSectionName('[총괄사] 1. 행사장 사용료')).toEqual({ bucket: 's1', confidence: 'high' })
+    expect(mapSectionName('[발주처 ②] 1. LED 영상장비')).toEqual({ bucket: 's2', confidence: 'high' })
+    expect(mapSectionName('4. 현장 등록 · 명찰 발급 (확정 견적 No.1)')).toEqual({ bucket: 'attendee', confidence: 'high' })
+    expect(mapSectionName('C. 등록·참관객')).toEqual({ bucket: 'attendee', confidence: 'high' })
+    expect(mapSectionName('6. 대행 수수료 (실행비의 15%)')).toEqual({ bucket: 's5', confidence: 'high' })
+    expect(mapSectionName('6. 기획료 (PCO 기획료)')).toEqual({ bucket: 's5', confidence: 'high' })
+    expect(mapSectionName('5. 선택 항목 (Optional)')).toEqual({ bucket: 'options', confidence: 'high' })
+    expect(mapSectionName('5-1. 선택 옵션 (총액 미포함)')).toEqual({ bucket: 'custom', confidence: 'low' })
+    expect(mapSectionName('5. 기록·기념품 (필수) 및 선택 옵션')).toEqual({ bucket: 'custom', confidence: 'high' })
+    expect(mapSectionName('2. 공간 연출·시스템 구축')).toEqual({ bucket: 's2', confidence: 'high' })
+    expect(mapSectionName('3. 디자인·영상·제작물')).toEqual({ bucket: 's3', confidence: 'high' })
+    expect(mapSectionName('H. 모객·리드젠 (계약 이행)')).toEqual({ bucket: 'recruit', confidence: 'high' })
+    // 모객(rc)에는 더 이상 '등록'이 없다 — 등록만 있는 제목은 참관객 관리
+    expect(mapSectionName('7. 등록')).toEqual({ bucket: 'attendee', confidence: 'high' })
   })
 })

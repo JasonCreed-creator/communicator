@@ -84,7 +84,9 @@ describe('DoD 69 · ① 제안 — 행·버킷·부가세', () => {
   it('버킷 제안: 원가 없는 버킷(s5·rc·ld)은 절대 제안하지 않고 · 행사 추가 버킷 이름이 들어 있으면 그 버킷', async () => {
     const all = await buckets()
     expect(suggestBucket('6. PCO 기획료', '기획료', all)).toEqual({ bucket_code: null, confidence: 'low' })
-    expect(suggestBucket('등록', 'RSVP 운영', all).bucket_code).toBeNull()
+    expect(suggestBucket('모객', 'RSVP 운영', all).bucket_code).toBeNull()
+    // v2.22.1 — '등록·명찰'은 참관객 관리(at · 원가 있음)라 제안한다(전에는 '등록'이 모객(rc)이라 명찰 협력사 견적이 버킷 없이 남았다)
+    expect(suggestBucket('등록 · 명찰', '명찰 출력', all)).toEqual({ bucket_code: 'at', confidence: 'high' })
     const custom: SettlementBucket = { ...all[0], id: 'bkt-gift', code: 'gift', label: '기념품', source: 'custom', has_cost: true }
     expect(suggestBucket('1. 기념품 제작', '텀블러', [...all, custom])).toEqual({ bucket_code: 'gift', confidence: 'high' })
     expect(suggestBucket('1. 기념품 제작', '텀블러', all)).toEqual({ bucket_code: null, confidence: 'low' })

@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { MemoryRouter, Outlet, Route, Routes } from 'react-router-dom'
 import { ProjectProvider } from '../context/ProjectContext'
 import {
+  syntheticBudgetP,
   syntheticQuoteA,
   syntheticQuoteB,
   syntheticQuoteC,
@@ -204,6 +205,22 @@ describe('PDF·사진 (v2.18 §22.5 — DoD 89 화면 계약)', () => {
     expect(screen.getByLabelText('견적서 파일')).toBeTruthy() // 1단계 유지
     expect((await provider.listQuotes()).length).toBe(before.length)
   })
+})
+
+describe('P형 예산 워크북 (v2.22.1 §22.1 — Phase 6.19)', () => {
+  it("지출 시트를 섹션으로 읽고 배지 'P형(예산)' · 수입 표 3건은 별도 카드로 기록만(견적 총액은 지출 합 · 부가세 별도)", async () => {
+    renderAt('/quotes/import')
+    await upload(await syntheticBudgetP(), '가상_워킹버짓.xlsx')
+    await screen.findByText(/P형\(예산\) · 가상_워킹버짓\.xlsx/, {}, { timeout: 15_000 })
+    const revenue = screen.getByTestId('import-revenue')
+    expect(within(revenue).getByText('가상파트너A · DIAMOND')).toBeTruthy()
+    expect(within(revenue).getByText(/합계 152,000,000/)).toBeTruthy()
+    // 총액 = 지출 합(VAT 별도) · 섹션 6 · 매핑 표에 구분 이름
+    expect(screen.getByText(/43,905,400/)).toBeTruthy()
+    expect(screen.getByText(/부가세 별도/)).toBeTruthy()
+    expect(screen.getByRole('combobox', { name: 'A. 베뉴 버킷' })).toBeTruthy()
+    expect(screen.getByText(/예산 워크북\(지출 표\)을 읽었습니다/)).toBeTruthy()
+  }, 30_000)
 })
 
 describe('접근 권한 (§10 · DoD 25 관례 재사용)', () => {

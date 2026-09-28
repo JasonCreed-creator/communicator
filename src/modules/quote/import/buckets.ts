@@ -12,14 +12,21 @@ export const SECTION_BUCKET_RULES: { bucket: string; keywords: string[] }[] = [
   { bucket: 's1', keywords: ['베뉴', '대관', '장소', 'venue', 'rental', 'hall'] },
   {
     bucket: 's2',
-    keywords: ['무대', '시스템', 'av', 'led', '음향', '조명', '중계', '전기', '부스',
+    // v2.22.1 — '연출'(실사용 '공간 연출·시스템 구축' · 워킹버짓 'B. 연출·진행')
+    keywords: ['무대', '시스템', '연출', 'av', 'led', '음향', '조명', '중계', '전기', '부스',
       'stage', 'system', 'sound', 'audio', 'lighting', 'screen', 'streaming', 'broadcast', 'electric', 'booth', 'equipment'],
   },
-  { bucket: 's3', keywords: ['디자인', '브랜딩', '콘텐츠', '사인', 'design', 'branding', 'content', 'signage', 'graphic', 'creative'] },
+  // v2.22.1 — '제작물'·'인쇄'(실사용 '디자인·영상·제작물' · '디자인 · 인쇄')
+  { bucket: 's3', keywords: ['디자인', '브랜딩', '콘텐츠', '사인', '제작물', '인쇄', 'design', 'branding', 'content', 'signage', 'graphic', 'creative', 'print'] },
   { bucket: 's4', keywords: ['인력', '운영', '보험', 'mc', 'staff', 'staffing', 'operation', 'operations', 'insurance', 'manpower', 'personnel', 'security'] },
-  { bucket: 's5', keywords: ['대행료', '기획료', 'agency fee', 'management fee', 'service fee', 'pco', 'coordination'] },
-  { bucket: 'recruit', keywords: ['등록', 'rsvp', '모객', 'registration', 'recruit', 'lead', 'leads', 'marketing', 'promotion'] },
-  { bucket: 'custom', keywords: ['기념품', '경품', 'f&b', '웰컴', '애드온', 'gift', 'souvenir', 'giveaway', 'catering', 'welcome', 'add-on', 'add-ons', 'addon', 'addons', 'option', 'options', 'optional'] },
+  // v2.22.1 — '수수료'(실사용 만찬 견적서 '대행 수수료 (실행비의 15%)')·commission·handling/planning fee
+  { bucket: 's5', keywords: ['대행료', '기획료', '수수료', 'agency fee', 'management fee', 'service fee', 'planning fee', 'handling fee', 'commission', 'pco', 'coordination'] },
+  // v2.22.1 — 모객(rc)은 RSVP·리드젠·쇼업 낱말만. '등록'·registration은 아래 참관객 관리(at)로 옮겼다 —
+  // 현장 등록·명찰 발급은 원가가 있는 참관객 관리 버킷이지 원가 없는 모객 버킷이 아니다(실사용: 명찰 협력사 발주가 rc에 묶여 발주 입력이 막혔다)
+  { bucket: 'recruit', keywords: ['rsvp', '모객', '리드젠', '쇼업', 'recruit', 'lead', 'leads', 'marketing', 'promotion'] },
+  { bucket: 'attendee', keywords: ['등록', '명찰', '참관객', '참가자 관리', '참가 인원', '체크인', 'registration', 'badge', 'attendee', 'check-in', 'checkin'] },
+  // v2.22.1 — '예비비'(워킹버짓 J)
+  { bucket: 'custom', keywords: ['기념품', '경품', '예비비', 'f&b', '웰컴', '애드온', 'gift', 'souvenir', 'giveaway', 'catering', 'welcome', 'add-on', 'add-ons', 'addon', 'addons', 'option', 'options', 'optional'] },
 ]
 
 /** 키워드 매칭 — 국문은 부분 일치, 영문(ASCII)은 단어 단위 */
@@ -53,19 +60,30 @@ export function bucketLabel(code: string): string {
  * 국문·영문 제목 모두 — 제목 뒤의 꼬리("(100명 기준)"·"[게런티 40명]"·"[예상치 · 확정 아님]")는 무시한다.
  */
 export const KNOWN_SECTION_BUCKETS: { bucket: string; pattern: RegExp }[] = [
-  { bucket: 's1', pattern: /베뉴\s*사용료|venue\s*rental/i },
+  { bucket: 's1', pattern: /베뉴\s*사용료|행사장\s*(사용료|대관)|venue\s*rental/i }, // v2.22.1 — '행사장 사용료'(다자 발주 견적서)
   { bucket: 's2', pattern: /시스템\s*구축|system\s*\/?\s*av\b/i },
   { bucket: 's3', pattern: /디자인\s*[·/]\s*브랜딩|design\s*\/?\s*branding/i },
   { bucket: 's4', pattern: /운영\s*인력\s*[·/]\s*등록\s*[·/]\s*보험|운영\s*[·/]\s*등록\s*[·/]\s*보험|operations?\s*[·/]\s*staff\s*[·/]\s*insurance/i },
   { bucket: 'options', pattern: /추가\s*옵션|^\s*\d*[.)]?\s*add-?ons?\s*$/i }, // 영문은 제목이 'N. Add-ons'뿐일 때만(리멤버 영문 견적서) — 'Optional Add-ons (not included)' 같은 남의 제목은 §22.2-6 custom 규칙 그대로
-  { bucket: 's5', pattern: /pco\s*(기획료|planning\s*fee)/i },
+  // v2.22.1 — 우리 견적서 변형의 O/X 선택 섹션('5. 선택 항목 (Optional)' · '4. 선택 옵션') = 추가옵션(ot). 제목이 '선택 …'으로 시작할 때만 —
+  // '기록·기념품 (필수) 및 선택 옵션'처럼 필수가 섞인 제목은 키워드 규칙으로. '(총액 미포함)' 꼬리가 있으면 여기서 잡지 않는다(mapSectionName)
+  { bucket: 'options', pattern: /^\s*\d*(?:[-.]\d+)*\s*[.)．]?\s*(?:선택\s*(?:항목|옵션)|optional)/i },
+  { bucket: 's5', pattern: /pco\s*(기획료|planning\s*fee)|대행\s*수수료/i }, // v2.22.1 — '대행 수수료'
   { bucket: 'recruit', pattern: /모객\s*솔루션|audience\s*recruitment/i },
   { bucket: 'attendee', pattern: /참가\s*인원\s*관리|참관객\s*관리|attendee\s*management/i },
 ]
 
+/** v2.22.1 — 다자 발주 견적서의 섹션 제목 앞 `[발주 구분]` 태그는 버킷 판정에서 뗀다('[총괄사] 1. 행사장 사용료') */
+function stripPartyTag(name: string): string {
+  return name.replace(/^\s*\[[^\]]*\]\s*/, '')
+}
+
 /** 섹션명 하나를 버킷으로 — 우리 견적서 제목은 확신 · 키워드 규칙 하나면 확신 · 여러 규칙이면 키워드 적중이 뚜렷이 많은 쪽 · 그 밖은 custom + 저신뢰 */
-export function mapSectionName(name: string): { bucket: string; confidence: 'high' | 'low' } {
-  const known = KNOWN_SECTION_BUCKETS.find((k) => k.pattern.test(name))
+export function mapSectionName(rawName: string): { bucket: string; confidence: 'high' | 'low' } {
+  const name = stripPartyTag(rawName)
+  // '(총액 미포함)'·'not included' 섹션은 총액 밖이라 추가옵션(ot)으로 확신하지 않는다 — 키워드 규칙(custom)으로 내려 사람이 본다
+  const notIncluded = /미포함|제외|not\s+included/i.test(name)
+  const known = KNOWN_SECTION_BUCKETS.find((k) => k.pattern.test(name) && !(k.bucket === 'options' && notIncluded))
   if (known) return { bucket: known.bucket, confidence: 'high' }
   const lower = name.toLowerCase()
   const scored = SECTION_BUCKET_RULES.map((r) => ({ bucket: r.bucket, hits: r.keywords.filter((k) => matchesKeyword(lower, k)).length })).filter(
