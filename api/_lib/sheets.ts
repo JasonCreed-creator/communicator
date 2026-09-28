@@ -1,6 +1,6 @@
 // 등록 명단 구글 시트 읽기(설계서 §24 — 시트 → 앱 단방향, 앱은 시트에 쓰지 않는다 §24.6).
 // Vercel Function(api/sheets.ts)이 감싼다. 세 작업: probe(문서·탭) · preview(컬럼 미리보기, 연락처 마스킹) · rows(원본 행).
-// 자격증명(서비스 계정 JSON) 이 없으면 mock과 같은 **결정적 데모 값**을 돌려준다 — 코드 완성·자격증명 최후(CLAUDE.md §2 Phase 5 원칙 준용).
+// 읽는 계정 = 서비스 계정 JSON → (없으면) Drive 저장소에 연결된 OAuth 계정(Phase 6.15) → (SHEETS_DEMO=1일 때만) 결정적 시험 명단 → 그 밖은 503(Phase 6.14).
 // 인증: 사용자 JWT → 프로필 → 그 행사의 멤버인지 확인(publishable+secret 키는 서버 env).
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { createSign } from 'node:crypto'
@@ -14,6 +14,8 @@ import {
   suggestField,
 } from '../../src/providers/mock/sheetSync.js'
 import type { SheetColumnMapping } from '../../src/types/entities'
+import { driveAccessToken, driveConfigured, NOT_CONFIGURED_MESSAGE, NOT_CONNECTED_MESSAGE, type DriveAuthEnv } from './drive/auth.js'
+import { supabaseDriveStore, type DriveStore } from './drive/store.js'
 import type { SheetColumnPreview, SheetProbe, SheetTabInfo } from '../../src/types/views'
 import type { SheetMappedField } from '../../src/types/enums'
 
@@ -37,6 +39,12 @@ export interface SheetsEnv {
   GOOGLE_SHEETS_SA_JSON?: string
   /** '1'이면 자격증명 없이 결정적 시험 명단(12행)을 돌려준다 — 로컬·시험 배포 전용. 운영에서는 두지 않는다 */
   SHEETS_DEMO?: string
+  /** Phase 6.15 — 서비스 계정 키가 없으면 Drive 저장소에 연결된 계정(OAuth · scope drive)으로 읽는다. Drive와 같은 env */
+  DRIVE_AUTH?: string
+  DRIVE_ROOT_FOLDER_ID?: string
+  GOOGLE_OAUTH_CLIENT_ID?: string
+  GOOGLE_OAUTH_CLIENT_SECRET?: string
+  GOOGLE_DRIVE_REFRESH_TOKEN?: string
 }
 
 /**
@@ -44,7 +52,33 @@ export interface SheetsEnv {
  * 행사명으로 만든 가짜 시트(탭·418행·12행 명단)를 돌려줘 '연결됨 · 원본과 일치'로 보였다. 자격증명이 없으면 사실대로 503.
  */
 export const SHEETS_NO_CREDENTIALS_MESSAGE =
-  '구글 시트 서비스 계정 키(GOOGLE_SHEETS_SA_JSON)가 서버에 없어 시트를 읽을 수 없습니다 — Vercel 환경 변수에 서비스 계정 JSON을 넣고 재배포한 뒤, 시트를 그 서비스 계정 이메일에 뷰어로 공유하고 다시 연결하세요.'
+  '시트를 읽을 계정이 서버에 없습니다 — 행사 설정 ③에서 Drive를 연결하면 그 계정으로 읽고(시트가 그 계정에 보여야 합니다), 또는 Vercel 환경 변수 GOOGLE_SHEETS_SA_JSON에 서비스 계정 JSON을 넣고 재배포한 뒤 시트를 그 서비스 계정 이메일에 뷰어로 공유하세요.'
+
+/** Phase 6.15 — Drive 저장소(OAuth)에 연결된 계정으로 읽을 수 있으면 그 토큰과 계정 이메일. 설정·연결이 없으면 null(갱신 실패는 503으로 알린다) */
+export async function driveReaderFor(
+  env: SheetsEnv,
+  fetchImpl: typeof fetch,
+  deps: SheetsDeps,
+): Promise<{ token: string; email: string | null } | null> {
+  const authEnv = env as DriveAuthEnv
+  if (!driveConfigured(authEnv)) return null
+  const store = deps.driveStore ?? supabaseDriveStore(env as Parameters<typeof supabaseDriveStore>[0])
+  let token: string
+  try {
+    token = await driveAccessToken(authEnv, store, fetchImpl, (deps.now ?? Date.now)())
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e)
+    if (message === NOT_CONFIGURED_MESSAGE || message === NOT_CONNECTED_MESSAGE) return null
+    throw new SheetsError(503, 'unavailable', `Drive 계정으로 시트를 읽지 못했습니다 — ${message}`)
+  }
+  let email: string | null = null
+  try {
+    email = (await store.connectionInfo())?.account_email ?? null
+  } catch {
+    /* 계정 이름은 안내용 — 못 읽어도 읽기는 진행 */
+  }
+  return { token, email }
+}
 
 /** 서버가 적재하는 원본 행 — DB sheet_source_rows와 1:1 (registration 도메인이 RPC에 그대로 넘긴다) */
 export interface SourceRowOut {
@@ -83,6 +117,9 @@ export function parseBearer(header: string | null | undefined): string {
 export interface SheetsDeps {
   userClient?: (url: string, publishable: string) => SupabaseClient
   adminClient?: (url: string, secret: string) => SupabaseClient
+  /** Phase 6.15 — Drive 연결(갱신 토큰·계정) 저장소. 테스트는 가짜를 넣는다 */
+  driveStore?: Pick<DriveStore, 'readRefreshToken' | 'recordConnectionError' | 'connectionInfo'>
+  now?: () => number
 }
 
 /**
@@ -274,7 +311,9 @@ export async function handleSheets(
   const { data: project } = await admin.from('projects').select('name').eq('id', body.project_id).maybeSingle()
   const sa = env.GOOGLE_SHEETS_SA_JSON ? (JSON.parse(env.GOOGLE_SHEETS_SA_JSON) as ServiceAccount) : null
 
-  if (!sa) {
+  // Phase 6.15 — 읽는 계정의 우선순위: 서비스 계정 키 → Drive 저장소에 연결된 계정(OAuth) → (SHEETS_DEMO=1) 시험 명단 → 503
+  const oauth = sa ? null : await driveReaderFor(env, fetchImpl, deps)
+  if (!sa && !oauth) {
     // Phase 6.14 — 자격증명이 없으면 가짜 명단을 만들지 않는다. 시험 데이터는 SHEETS_DEMO=1을 명시한 환경에서만
     if (env.SHEETS_DEMO !== '1') throw new SheetsError(503, 'unavailable', SHEETS_NO_CREDENTIALS_MESSAGE)
     // ── 데모 모드(SHEETS_DEMO=1 · 자격증명 없음): mock과 같은 결정적 값. 서비스 계정 주소는 sheetSync의 합성 주소 ──
@@ -297,10 +336,10 @@ export async function handleSheets(
     return { rows, source_modified_at: probe.source_modified_at, demo: true }
   }
 
-  // ── 실모드: 서비스 계정으로 읽기 ──
-  const token = await googleAccessToken(sa, fetchImpl)
+  // ── 실모드: 서비스 계정 또는 Drive 연결 계정으로 읽기 ──
+  const token = sa ? await googleAccessToken(sa, fetchImpl) : oauth!.token
   const probe = await realProbe(token, body.url, fetchImpl)
-  probe.service_account = sa.client_email
+  probe.service_account = sa ? sa.client_email : (oauth!.email ?? '')
   const { _tabs, ...probeOut } = probe
   if (body.op === 'probe') return { probe: probeOut }
   const tab = probeOut.tabs.find((t) => t.name === body.tab_name)

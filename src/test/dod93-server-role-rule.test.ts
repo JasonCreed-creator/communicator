@@ -132,6 +132,51 @@ describe('DoD 93 ② sheets 서버 — 프로필 권한 + 여러 역할', () => 
     expect(multi).toMatchObject({ demo: true })
     await expect(handleSheets(body, 'tok', env, fetch, clients(null, []))).rejects.toMatchObject({ status: 403 })
   })
+
+  // Phase 6.15(2026-09-28 "이것좀 자동으로 해줘") — 서비스 계정 키가 없어도 Drive 저장소에 연결된 계정(OAuth · scope drive)으로 시트를 읽는다
+  it('서비스 계정 키 없음 + Drive 연결 있음 → OAuth 토큰으로 실제 시트를 읽고 읽는 계정 = 연결 계정 · 연결 없음 → 503', async () => {
+    const { handleSheets } = await import('../../api/_lib/sheets')
+    const { clearTokenCache } = await import('../../api/_lib/drive/auth')
+    clearTokenCache()
+    const oauthEnv = {
+      SUPABASE_URL: 'https://x.supabase.co',
+      SUPABASE_SECRET_KEY: 'sb_secret_test',
+      VITE_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test',
+      DRIVE_ROOT_FOLDER_ID: 'root-1',
+      GOOGLE_OAUTH_CLIENT_ID: 'cid',
+      GOOGLE_OAUTH_CLIENT_SECRET: 'csecret',
+    }
+    const calls: string[] = []
+    const json = (b: unknown) => new Response(JSON.stringify(b), { status: 200, headers: { 'content-type': 'application/json' } })
+    const fetchImpl = (async (input: RequestInfo | URL) => {
+      const url = String(input)
+      calls.push(url)
+      if (url.startsWith('https://oauth2.googleapis.com/token')) return json({ access_token: 'oa-token', expires_in: 3600 })
+      if (/spreadsheets\/1AbC\?fields/.test(url)) return json({ properties: { title: '가상 명단 시트' }, sheets: [{ properties: { title: '참가자' } }] })
+      if (/drive\/v3\/files\/1AbC/.test(url)) return json({ modifiedTime: '2026-09-28T01:00:00Z' })
+      if (/\/values\//.test(url)) return json({ values: [['성명', '이메일'], ['가상 참가자', 'guest@example.com']] })
+      return new Response('nf', { status: 404 })
+    }) as typeof fetch
+    const store = {
+      readRefreshToken: async () => 'refresh-phase-6-15',
+      recordConnectionError: async () => undefined,
+      connectionInfo: async () => ({ account_email: 'drive-owner@example.com' }),
+    }
+    const res = (await handleSheets(body, 'tok', oauthEnv, fetchImpl, { ...clients({ id: 'p-admin', app_role: 'admin' }, []), driveStore: store as never })) as {
+      probe: { title: string; service_account: string; tabs: { name: string; selectable: boolean }[] }
+      demo?: boolean
+    }
+    expect(res.demo).toBeUndefined()
+    expect(res.probe.title).toBe('가상 명단 시트')
+    expect(res.probe.service_account).toBe('drive-owner@example.com')
+    expect(res.probe.tabs.map((t) => t.name)).toEqual(['참가자'])
+    expect(calls.some((u) => u.startsWith('https://oauth2.googleapis.com/token'))).toBe(true)
+    // 연결(갱신 토큰)이 없으면 OAuth 경로는 비고, SHEETS_DEMO도 없으니 503
+    const none = { ...store, readRefreshToken: async () => null }
+    await expect(
+      handleSheets(body, 'tok', oauthEnv, fetchImpl, { ...clients({ id: 'p-admin', app_role: 'admin' }, []), driveStore: none as never }),
+    ).rejects.toMatchObject({ status: 503, code: 'unavailable' })
+  })
 })
 
 describe('DoD 93 ③ Supabase 저장소 — 여러 역할 행 → 대표 역할 · 알림 authProfile = id + app_role', () => {
