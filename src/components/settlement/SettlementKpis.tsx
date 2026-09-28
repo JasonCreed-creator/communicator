@@ -3,7 +3,7 @@
 // 3.17b의 '마진 구성 · 검산' 카드를 KPI 안으로 합쳤다:
 //   · 검산 = 최종 마진 칸의 배지(항등식 `마진 기준 계약액 − Σ실집행 = 최종 마진` — lib/settlement.identityOk 그대로).
 //     첫 칸 − 둘째 칸 = 셋째 칸이 화면 숫자로 바로 읽힌다
-//   · 구성 = 그 칸의 6px 막대(마크업 · PCO · RSVP). **주황을 쓰지 않는다** — 금액 구성은 강조가 아니라서
+//   · 구성 = 그 칸의 6px 막대(마크업 · PCO — v2.22.2부터 RSVP 운영비는 원가 버킷이라 마크업 쪽). **주황을 쓰지 않는다** — 금액 구성은 강조가 아니라서
 //     brown · steel · border-strong(기존 토큰)으로 나눈다. 음수 변동분은 폭 0 + 캡션의 음수로 알린다
 //   · 마진율 = 참고 범위 밴드(positive-tint) 위 마커 — 범위 밖이어도 **판정하지 않고 위치만**(§19.1)
 // **마진 식은 여기서 계산하지 않는다** — computeTotals가 준 값을 배치만 한다.
@@ -19,7 +19,7 @@ export const MARGIN_BAND = { low: 0.275, high: 0.69 }
 /** 마진 구성 막대 — 주황 없이 세 단(4번째부터는 순환) */
 const SEGMENT_CLASSES = ['bg-brown', 'bg-steel', 'bg-border-strong'] as const
 
-/** 캡션용 짧은 이름 — 원가 없는 기본 버킷 두 개만 줄인다(나머지는 버킷 이름 그대로) */
+/** 캡션용 짧은 이름 — 기본 버킷만 줄인다(나머지는 버킷 이름 그대로 · rc는 옛 보드(원가 없음)를 위해 남긴다) */
 const SHORT_LABEL: Record<string, string> = { s5: 'PCO', rc: 'RSVP' }
 
 export interface MarginSegment {

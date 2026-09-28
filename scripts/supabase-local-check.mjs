@@ -173,6 +173,10 @@ async function main() {
   scenario('정산 R-S4: has_cost=false 버킷(ld)에 발주액 거부', `insert into settlement_items (board_id, bucket_id, title, ordered_amount) select board_id, id, 'x', 1000 from settlement_buckets where code='ld' limit 1;`,
     { expect: 'error', match: 'SETTLEMENT_BUCKET_HAS_NO_COST' })
   scenario('정산 R-S4: has_cost=true 버킷(s1)에 발주액 허용', `insert into settlement_items (board_id, bucket_id, title, ordered_amount) select board_id, id, 'x', 1000 from settlement_buckets where code='s1' limit 1;`)
+  // v2.22.2(Phase 6.18) — RSVP 운영비(rc)는 원가 버킷: 발주액 허용(39번째 마이그레이션이 옛 보드의 rc를 켠다 · 시드는 스펙에서 이미 true)
+  const rcCost = psql(['-c', `select bool_and(has_cost) from settlement_buckets where code='rc'`]).out
+  record('정산 v2.22.2: rc 버킷 has_cost=true', rcCost === 't', `bool_and ${rcCost}`)
+  scenario('정산 v2.22.2: rc(RSVP 운영비)에 발주액 허용', `insert into settlement_items (board_id, bucket_id, title, ordered_amount) select board_id, id, 'RSVP 콜', 1000 from settlement_buckets where code='rc' limit 1;`)
   scenario('종료 행사 가드: authenticated pm의 마일스톤 추가 거부', `insert into milestones (project_id, title, due_date) values ('${PRJ_CLOSED}','x','2026-12-01');`,
     { role: 'authenticated', sub: authId.pm, expect: 'error', match: 'PROJECT_CLOSED' })
   scenario('종료 행사 가드: 서비스 경로는 통과', `insert into milestones (project_id, title, due_date) values ('${PRJ_CLOSED}','x','2026-12-01');`)

@@ -28,8 +28,8 @@ import { exportEstimate } from '../../modules/quote/export/exportEstimate'
 import { quoteToProjectDraft } from '../../modules/quote/handoff'
 import { parseQuoteWorkbook } from '../../modules/quote/import/parser'
 import { mapSectionsToBuckets } from '../../modules/quote/import/buckets'
-import { splitRecruit } from '../../modules/quote/import/recruitSplit'
 import { quoteImportFormatLabel } from '../../modules/quote/import/types'
+import { buildImportedBreakdown } from '../../modules/quote/import/importedBreakdown'
 import { QUOTE_IMPORT_AI_MOCK_MESSAGE } from '../../lib/quoteImportAi'
 import type { ParsedQuoteDoc, SectionMapping } from '../../modules/quote/import/types'
 import type {
@@ -3746,59 +3746,8 @@ export class MockProvider implements DataProvider {
     parsed: ParsedQuoteDoc,
     mapping: SectionMapping[],
   ): { breakdown: QuoteBreakdown; total_amount: number } {
-    const STANDARD = ['s1', 's2', 's3', 's4', 's5', 'options', 'recruit', 'attendee'] as const
-    const sums: Record<(typeof STANDARD)[number], number> = {
-      s1: 0, s2: 0, s3: 0, s4: 0, s5: 0, options: 0, recruit: 0, attendee: 0,
-    }
-    const customByCode = new Map<string, { code: string; label: string; amount: number }>()
-
-    for (const row of mapping) {
-      const section = parsed.sections.find((s) => s.name === row.section)
-      if (!section) continue
-      const amount = section.subtotal ?? section.items.reduce((s, it) => s + (it.amount || 0), 0)
-      if ((STANDARD as readonly string[]).includes(row.bucket)) {
-        sums[row.bucket as (typeof STANDARD)[number]] += amount
-      } else {
-        // 'custom' 자체는 여러 섹션이 공유하는 잠정 배정일 수 있어 섹션별로 분리 보존한다
-        const code = row.bucket === 'custom' ? `custom:${section.name}` : row.bucket
-        const prev = customByCode.get(code)
-        customByCode.set(code, { code, label: section.name, amount: (prev?.amount ?? 0) + amount })
-      }
-    }
-
-    const mappedTotal =
-      Object.values(sums).reduce((s, v) => s + v, 0) +
-      [...customByCode.values()].reduce((s, v) => s + v.amount, 0)
-    const totals = parsed.totals
-    const subtotal =
-      totals.grand_total != null
-        ? totals.vat != null
-          ? totals.grand_total - totals.vat
-          : toVatExcluded(totals.grand_total, true)
-        : totals.items_sum ?? mappedTotal
-    const vat = Math.round(subtotal * 0.1)
-
-    const breakdown: QuoteBreakdown = {
-      s1: sums.s1,
-      s2: sums.s2,
-      s3: sums.s3,
-      s4: sums.s4,
-      s5: sums.s5,
-      options: sums.options,
-      recruit: sums.recruit,
-      attendee: sums.attendee,
-      subtotal,
-      vat,
-      total: subtotal + vat,
-      custom_sections: [...customByCode.values()],
-    }
-    // v2.20.2 — 모객 섹션을 rc·ld로 나눠 기록(정산보드 스냅숏이 엔진 값 대신 쓴다)
-    const split = splitRecruit(parsed, mapping)
-    if (split) {
-      breakdown.recruit_rsvp = split.rsvp
-      breakdown.recruit_showup = split.showup
-    }
-    return { breakdown, total_amount: subtotal }
+    // v2.22.2 — 정본은 modules/quote/import/importedBreakdown(supabase provider와 공용 · 정산 스냅숏도 같은 함수)
+    return buildImportedBreakdown(parsed, mapping)
   }
 
   /** 파싱 헤더 요약을 QuoteInput 형태로 옮긴다 — §16 핸드오프가 그대로 읽을 수 있게 하기 위함 */
@@ -4486,11 +4435,14 @@ export class MockProvider implements DataProvider {
    * v2.20.2 — 가져온 견적인데 모객 분할이 기록되기 전(옛 임포트)이면 가져오기 기록에서 다시 나눈다(값을 지어내지 않는다).
    * 기록이 없으면 breakdown 그대로(엔진 값 0 — 화면에서 버킷 견적 금액을 손으로 고칠 수 있다 §19.2).
    */
+  /**
+   * v2.22.2 — 가져온 견적은 가져오기 기록(parsed·mapping)에서 **지금 규칙으로** breakdown을 다시 만든다(총액 블록 대행료 → s5 ·
+   * custom 섹션 · 모객 rc/ld 분할 — 확정과 같은 함수). 옛 임포트도 '기준 견적 갱신' 한 번으로 바로잡힌다. 기록이 없으면 breakdown 그대로
+   */
   private breakdownForSnapshot(quote: Quote): QuoteBreakdown {
-    if (quote.source !== 'imported' || quote.breakdown.recruit_rsvp !== undefined || !quote.breakdown.recruit) return quote.breakdown
+    if (quote.source !== 'imported') return quote.breakdown
     const imp = this.state.quote_imports.find((x) => x.quote_id === quote.id)
-    const split = imp ? splitRecruit(imp.parsed, imp.mapping) : null
-    return split ? { ...quote.breakdown, recruit_rsvp: split.rsvp, recruit_showup: split.showup } : quote.breakdown
+    return imp ? buildImportedBreakdown(imp.parsed, imp.mapping).breakdown : quote.breakdown
   }
 
   /**

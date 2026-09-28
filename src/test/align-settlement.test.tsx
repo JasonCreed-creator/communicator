@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 // 시안 정렬(S-10 정산보드) — 3.17b '정산보드.dc.html' → **Phase 3.23 PR-7 캔버스 '정산보드 — 금액 색은 의미대로'**
 // (디자인지시서 v1.4 §7-2.11) + 패턴 기준 시트 §05·§07. 핵심 계약만 단언한다:
-//  ① KPI 4장 = 캡션 · 숫자 · 보조 한 줄(계약 − 마진 밖(리드젠) / 발주 중 n% 집행 / 마크업·PCO·RSVP / 참고 범위 안·밖)
+//  ① KPI 4장 = 캡션 · 숫자 · 보조 한 줄(계약 − 마진 밖(리드젠) / 발주 중 n% 집행 / 마크업·PCO(v2.22.2 — RSVP는 원가 버킷이라 마크업 쪽) / 참고 범위 안·밖)
 //  ② 마진율 밴드 = 막대 위 마커. 밴드 밖이어도 **경고하지 않고 위치만** 표시(§19.1 유지)
 //  ③ 옛 '마진 구성 · 검산' 카드 퇴역 — 검산 = 최종 마진 칸 배지, 구성 = 그 칸의 막대(주황 없음) ·
 //     초과 경보 = 머리 아래 알림(버킷마다) → '항목 보기'가 그 버킷을 편다
@@ -29,7 +29,7 @@ describe('S-10 KPI · 마진율 밴드', () => {
 
     expect(screen.getByTestId('kpi-support-contract').textContent).toMatch(/^계약 [\d,]+ − 마진 밖\(리드젠\) [\d,]+$/)
     expect(screen.getByTestId('kpi-support-spent').textContent).toMatch(/^발주 [\d,]+원 중 [\d.]+% 집행$/)
-    expect(screen.getByTestId('kpi-support-margin').textContent).toMatch(/^마크업 -?[\d,]+ · PCO [\d,]+ · RSVP [\d,]+$/)
+    expect(screen.getByTestId('kpi-support-margin').textContent).toMatch(/^마크업 -?[\d,]+ · PCO [\d,]+$/)
     expect(screen.getByTestId('kpi-support-rate').textContent).toMatch(/^참고 범위 27\.5~69\.0% (안|밖) · 판정 아님$/)
   })
 
@@ -55,8 +55,9 @@ describe('S-10 검산 · 구성 — 최종 마진 칸 / 초과 경보 — 머리
     expect(screen.queryByTestId('margin-summary-card')).toBeNull()
 
     expect(within(screen.getByTestId('margin-identity')).getByText('검산 일치')).toBeTruthy()
-    const segs = ['variable', 's5', 'rc'].map((k) => screen.getByTestId(`margin-seg-${k}`))
-    expect(segs.map((el) => el.className)).toEqual(['bg-brown', 'bg-steel', 'bg-border-strong'])
+    const segs = ['variable', 's5'].map((k) => screen.getByTestId(`margin-seg-${k}`))
+    expect(segs.map((el) => el.className)).toEqual(['bg-brown', 'bg-steel'])
+    expect(screen.queryByTestId('margin-seg-rc')).toBeNull() // v2.22.2 — RSVP 운영비는 원가 버킷(마크업 쪽)
     // 금액 구성은 강조가 아니다 — 막대에 주황 계열 0
     expect(segs.some((el) => /accent|role-reg/.test(el.className))).toBe(false)
   })

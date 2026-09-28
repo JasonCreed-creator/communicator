@@ -80,7 +80,9 @@ describe('DoD-29 ③ 원가 없는 버킷은 금액을 받지 않는다', () => 
   it('has_cost=false 버킷에 발주·실비를 넣으면 422', async () => {
     const provider = mockProvider()
     const view = (await provider.getSettlementBoard(SAMPLE))!
-    for (const code of ['s5', 'rc', 'ld']) {
+    // v2.22.2(Phase 6.18) — RSVP 운영비(rc)는 원가 버킷이 됐다(기획자님 #7). 원가 없는 기본 버킷은 s5·ld 둘
+    expect(view.buckets.find((b) => b.bucket.code === 'rc')!.bucket.has_cost).toBe(true)
+    for (const code of ['s5', 'ld']) {
       const bucket = view.buckets.find((b) => b.bucket.code === code)!.bucket
       expect(bucket.has_cost).toBe(false)
       await expect(
@@ -203,7 +205,7 @@ describe('DoD-29 ⑥ 원가 끄기 차단 — 항등식이 못 잡는 구멍(R-S
 })
 
 // 주의: 한 파일 안의 테스트는 같은 MockProvider 상태를 공유한다(testUtils 주석 참조).
-// ⑦은 앞선 케이스가 건드리지 않은 `rc`(RSVP 운영비)를 목적지로 써서 has_cost=false를 보장한다.
+// ⑦은 앞선 케이스가 건드리지 않은 `ld`(리드젠)를 목적지로 써서 has_cost=false를 보장한다(v2.22.2부터 rc는 원가 버킷).
 describe('DoD-29 ⑦ 항목 이동 차단 — 같은 실패 모드의 다른 문(R-S4 병합 판정)', () => {
   // 판정 대상은 patch가 아니라 **patch를 적용한 뒤 항목의 최종 상태**다.
   // bucket_id만 바꾸는 patch는 금액을 건드리지 않으므로, patch만 보면 그대로 통과한다.
@@ -211,7 +213,7 @@ describe('DoD-29 ⑦ 항목 이동 차단 — 같은 실패 모드의 다른 문
     const provider = mockProvider()
     const view = (await provider.getSettlementBoard(SAMPLE))!
     const s1 = view.buckets.find((b) => b.bucket.code === 's1')!
-    const rc = view.buckets.find((b) => b.bucket.code === 'rc')!
+    const rc = view.buckets.find((b) => b.bucket.code === 'ld')!
     const item = s1.items.find((i) => i.actual_amount !== null)!
 
     await expect(
@@ -228,7 +230,7 @@ describe('DoD-29 ⑦ 항목 이동 차단 — 같은 실패 모드의 다른 문
     const provider = mockProvider()
     const view = (await provider.getSettlementBoard(SAMPLE))!
     const s4 = view.buckets.find((b) => b.bucket.code === 's4')!
-    const rc = view.buckets.find((b) => b.bucket.code === 'rc')!
+    const rc = view.buckets.find((b) => b.bucket.code === 'ld')!
     const empty = s4.items.find((i) => i.ordered_amount === null && i.actual_amount === null)!
 
     const moved = await provider.updateSettlementItem(empty.id, { bucket_id: rc.bucket.id })
@@ -239,7 +241,7 @@ describe('DoD-29 ⑦ 항목 이동 차단 — 같은 실패 모드의 다른 문
     const provider = mockProvider()
     const view = (await provider.getSettlementBoard(SAMPLE))!
     const s1 = view.buckets.find((b) => b.bucket.code === 's1')!
-    const rc = view.buckets.find((b) => b.bucket.code === 'rc')!
+    const rc = view.buckets.find((b) => b.bucket.code === 'ld')!
     const item = s1.items.find((i) => i.actual_amount !== null)!
 
     await provider.updateSettlementItem(item.id, { status: 'cancelled' })
@@ -252,7 +254,7 @@ describe('DoD-29 ⑦ 항목 이동 차단 — 같은 실패 모드의 다른 문
     const provider = mockProvider()
     const view = (await provider.getSettlementBoard(SAMPLE))!
     const s2 = view.buckets.find((b) => b.bucket.code === 's2')!
-    const rc = view.buckets.find((b) => b.bucket.code === 'rc')!
+    const rc = view.buckets.find((b) => b.bucket.code === 'ld')!
     const item = s2.items.find((i) => i.actual_amount !== null)!
 
     const moved = await provider.updateSettlementItem(item.id, {

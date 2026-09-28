@@ -7,12 +7,10 @@ import type { DataProvider } from '../../DataProvider'
 import { SupabaseCtx, normalizeRow, nowIso } from '../ctx'
 import { driveFor } from '../drive'
 import { ProviderError, type ErrorCode } from '../../../lib/errors'
-import { toVatExcluded } from '../../../lib/settlement'
 import type {
   Deliverable,
   Project,
   Quote,
-  QuoteBreakdown,
   QuoteImport,
   QuoteInput,
   UUID,
@@ -31,7 +29,7 @@ import { exportEstimate } from '../../../modules/quote/export/exportEstimate'
 import { quoteToProjectDraft } from '../../../modules/quote/handoff'
 import { parseQuoteWorkbook } from '../../../modules/quote/import/parser'
 import { mapSectionsToBuckets } from '../../../modules/quote/import/buckets'
-import { splitRecruit } from '../../../modules/quote/import/recruitSplit'
+import { buildImportedBreakdown } from '../../../modules/quote/import/importedBreakdown'
 import { quoteImportFormatLabel } from '../../../modules/quote/import/types'
 import { aiMediaTypeFor } from '../../../lib/vendorQuoteAi'
 import { prepareAiFile } from '../../../lib/ai/prepareAiFile'
@@ -207,69 +205,7 @@ function defaultSectionMapping(parsed: ParsedQuoteDoc): SectionMapping[] {
   return mapSectionsToBuckets(parsed)
 }
 
-/**
- * 확인된 매핑으로 버킷별 합산 — engine-shape 8키(s1~s5·options·recruit·attendee) +
- * custom_sections(§22.4). 부가세 별도 총액은 grand_total에서 vat를 뺀 값을 우선하고,
- * vat 자체가 없으면 §19.4와 동일한 round(v/1.1)로 역산한다.
- */
-function buildImportedBreakdown(
-  parsed: ParsedQuoteDoc,
-  mapping: SectionMapping[],
-): { breakdown: QuoteBreakdown; total_amount: number } {
-  const STANDARD = ['s1', 's2', 's3', 's4', 's5', 'options', 'recruit', 'attendee'] as const
-  const sums: Record<(typeof STANDARD)[number], number> = {
-    s1: 0, s2: 0, s3: 0, s4: 0, s5: 0, options: 0, recruit: 0, attendee: 0,
-  }
-  const customByCode = new Map<string, { code: string; label: string; amount: number }>()
-
-  for (const row of mapping) {
-    const section = parsed.sections.find((s) => s.name === row.section)
-    if (!section) continue
-    const amount = section.subtotal ?? section.items.reduce((s, it) => s + (it.amount || 0), 0)
-    if ((STANDARD as readonly string[]).includes(row.bucket)) {
-      sums[row.bucket as (typeof STANDARD)[number]] += amount
-    } else {
-      // 'custom' 자체는 여러 섹션이 공유하는 잠정 배정일 수 있어 섹션별로 분리 보존한다
-      const code = row.bucket === 'custom' ? `custom:${section.name}` : row.bucket
-      const prev = customByCode.get(code)
-      customByCode.set(code, { code, label: section.name, amount: (prev?.amount ?? 0) + amount })
-    }
-  }
-
-  const mappedTotal =
-    Object.values(sums).reduce((s, v) => s + v, 0) +
-    [...customByCode.values()].reduce((s, v) => s + v.amount, 0)
-  const totals = parsed.totals
-  const subtotal =
-    totals.grand_total != null
-      ? totals.vat != null
-        ? totals.grand_total - totals.vat
-        : toVatExcluded(totals.grand_total, true)
-      : totals.items_sum ?? mappedTotal
-  const vat = Math.round(subtotal * 0.1)
-
-  const breakdown: QuoteBreakdown = {
-    s1: sums.s1,
-    s2: sums.s2,
-    s3: sums.s3,
-    s4: sums.s4,
-    s5: sums.s5,
-    options: sums.options,
-    recruit: sums.recruit,
-    attendee: sums.attendee,
-    subtotal,
-    vat,
-    total: subtotal + vat,
-    custom_sections: [...customByCode.values()],
-  }
-  // v2.20.2 — 모객 섹션을 rc·ld로 나눠 기록(정산보드 스냅숏이 엔진 값 대신 쓴다)
-  const split = splitRecruit(parsed, mapping)
-  if (split) {
-    breakdown.recruit_rsvp = split.rsvp
-    breakdown.recruit_showup = split.showup
-  }
-  return { breakdown, total_amount: subtotal }
-}
+// v2.22.2 — 확인된 매핑 → breakdown은 정본 한 곳(modules/quote/import/importedBreakdown — mock과 공용 · 정산 스냅숏도 같은 함수)
 
 /** 파싱 헤더 요약을 QuoteInput 형태로 옮긴다 — §16 핸드오프가 그대로 읽을 수 있게 하기 위함 */
 function buildImportedQuoteInput(imp: QuoteImport): QuoteInput {
