@@ -100,6 +100,7 @@ describe('DoD 68 · ② 사건 지점이 신호를 보낸다(소스 가드)', ()
   it.each([
     ['deliverables.ts', 'async uploadVersion', 'notifyFor(ctx).ping()', 3],
     ['deliverables.ts', 'async createDeliverable', 'notifyFor(ctx).ping()', 1],
+    ['deliverables.ts', 'async transitionStatus', 'notifyFor(ctx).ping()', 1], // Phase 6.13 — 내부검토 요청(PM 검토 카드 + 멘션)
     ['program.ts', 'async requestApproval', 'notifyFor(ctx).ping()', 1],
     ['clientPortal.ts', 'async submitClientDecision', 'notifyFor(ctx).pingToken(token)', 1],
     ['partners.ts', 'async submitPartnerItem', 'notifyFor(ctx).pingToken(token)', 1],

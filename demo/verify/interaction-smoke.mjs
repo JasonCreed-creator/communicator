@@ -729,6 +729,9 @@ check(
   const card = tab.getByTestId('slack-card')
   await card.waitFor({ timeout: 10_000 })
   check(/스레드에 답글로 남기고, 할 일이 생긴 사람을 멘션합니다/.test(await card.innerText()), 'Slack 카드: 행사 스레드 · 멘션 안내')
+  // Phase 6.13(2026-09-28) — 멘션 규칙 안내(주소록 Slack ID → 이메일 조회 users:read.email → (Slack 미연결) · 새 버전 줄은 멘션 없음)
+  const mentionHint = await card.getByTestId('slack-mention-hint').innerText()
+  check(mentionHint.includes('users:read.email') && mentionHint.includes('(Slack 미연결)') && mentionHint.includes('새 버전 올림'), 'Slack 카드: 멘션 규칙 안내(스코프 · 미연결 표시 · 멘션 없는 줄)', mentionHint.slice(0, 80))
   const threadInput = card.getByLabel('Slack 스레드 링크')
   await threadInput.fill('https://acme.slack.com/archives/D0DMCHAN1/p1727251234567890')
   check(

@@ -19,6 +19,9 @@ const provider = getDataProvider()
 /** 무엇이 언제 가는가 — 화면 안내(정본은 설계서 §9 매트릭스) */
 export const SLACK_EVENTS_NOW = '새 지시 · 새 버전 · 내부검토 요청 · 컨펌 발송 · 발주처 승인·수정요청 · 납품(확정본 저장) · 파트너 제출'
 export const SLACK_EVENTS_DAILY = '컨펌 기한 D-1 · 항목·마일스톤 D-1 · 파트너 마감 D-1 · 확인 없는 요청 · 미등록 파일 묶음'
+/** Phase 6.13 — 멘션이 붙는 조건(실사용 "알림은 가는데 멘션이 안 걸림") */
+export const SLACK_MENTION_HINT =
+  '멘션은 담당자 화면(주소록)의 Slack ID로 붙고, 비어 있으면 이메일로 Slack 계정을 찾아 적어 둡니다(봇 스코프 users:read.email 필요). 못 찾으면 이름 뒤에 (Slack 미연결)로 남습니다. 새 버전 올림·컨펌 발송·미등록 파일 줄에는 멘션이 없습니다.'
 
 function Chip({ tone, children }: { tone: 'ok' | 'off' | 'warn'; children: string }) {
   const cls =
@@ -271,6 +274,9 @@ export default function SlackCard({
           &lsquo;확인했어요&rsquo; 버튼이 붙습니다. 바로: {SLACK_EVENTS_NOW}. 매일 오전 9시대: {SLACK_EVENTS_DAILY}. 알림이
           실패해도 화면 동작은 그대로입니다. 문구 앞에는 운영 규칙의 댓글 태그([의뢰] [시안] [확정] [납품] · [제작] [결정] [WBS])가
           붙습니다.
+        </p>
+        <p className="text-xs leading-relaxed text-ink-cap" data-testid="slack-mention-hint">
+          {SLACK_MENTION_HINT}
         </p>
 
         {/* ① 행사 스레드(운영 채널 · 봇) — 기본 경로 */}
