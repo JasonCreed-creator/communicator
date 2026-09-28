@@ -146,6 +146,7 @@ export default function SettlementPage() {
   }, [quotes.data, projectId])
 
   const [pickedQuote, setPickedQuote] = useState('')
+  const [unlinkedOpen, setUnlinkedOpen] = useState(false)
   const [rebasing, setRebasing] = useState(false)
   const [expanded, setExpanded] = useState<string | null>(null)
   const [addingBucket, setAddingBucket] = useState(false)
@@ -200,8 +201,13 @@ export default function SettlementPage() {
 
   // ── 빈 상태 — 확정 견적을 불러오는 것이 시작점이다(R-S2) ─────────────
   if (!board.loading && !view) {
-    // Phase 6.12 — 이 행사에 연결된 초안이 있고 고를 확정 견적이 없으면 빈 셀렉트 대신 '확정하고 정산 시작'이 채운 버튼
-    const draftOnly = !!latestDraft && finalQuotes.length === 0
+    // Phase 6.12 — 이 행사에 연결된 초안이 있으면 '확정하고 정산 시작'이 주 동작.
+    // Phase 6.14(2026-09-28 실사용 재확인 "견적을 올렸는데 정산보드에 반영 안 됨" — 운영 실측): 다른 행사에 연결되지 않은 확정 견적이
+    // 한 건이라도 있으면 그 셀렉트가 앞에 서고 이 행사의 초안 상자는 ghost로 밀렸다(첫 선택지 = 남의 행사 견적 — 고르면 이 행사에 붙는다).
+    // 이 행사에 연결된 확정 견적이 없고 초안이 있으면 초안 상자가 주 동작이고, 미연결 확정 견적은 접힌 보조 경로 + '행사 미연결' 표시.
+    const linkedFinals = finalQuotes.filter((q) => q.project_id === projectId)
+    const unlinkedFinals = finalQuotes.filter((q) => q.project_id === null)
+    const draftPrimary = !!latestDraft && linkedFinals.length === 0
     const draftBox =
       canEdit && canQuotes && latestDraft ? (
         <div className="mx-auto max-w-xl rounded-md border border-border bg-canvas p-4 text-left text-sm" data-testid="settlement-draft-quote">
@@ -218,7 +224,7 @@ export default function SettlementPage() {
           </p>
           <button
             type="button"
-            className={`btn btn-sm mt-3 ${draftOnly ? 'btn-primary' : 'btn-ghost'}`}
+            className={`btn btn-sm mt-3 ${draftPrimary ? 'btn-primary' : 'btn-ghost'}`}
             disabled={finalizeAndStart.pending || createBoard.pending}
             onClick={async () => {
               const ok = await finalizeAndStart.run(latestDraft.id)
@@ -229,6 +235,37 @@ export default function SettlementPage() {
           </button>
         </div>
       ) : null
+    // 기준 견적 고르기 — 이 행사 것이 앞, 미연결은 뒤 + 표시. 초안이 주 동작일 때는 미연결 확정 견적만 보조 경로로
+    const pickable = draftPrimary ? unlinkedFinals : [...linkedFinals, ...unlinkedFinals]
+    const picker = (primary: boolean) => (
+      <div className="flex flex-wrap items-center justify-center gap-2">
+        <select
+          aria-label="기준 견적"
+          className="ui-input ui-select"
+          value={pickedQuote}
+          onChange={(e) => setPickedQuote(e.target.value)}
+        >
+          <option value="">확정 견적 선택</option>
+          {pickable.map((q) => (
+            <option key={q.id} value={q.id}>
+              {q.title} v{q.version}
+              {q.project_id === null ? ' · 행사 미연결' : ''}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          className={primary ? 'btn btn-primary' : 'btn btn-ghost'}
+          disabled={!pickedQuote || createBoard.pending}
+          onClick={async () => {
+            const ok = await createBoard.run(pickedQuote)
+            if (ok) board.reload()
+          }}
+        >
+          정산 시작
+        </button>
+      </div>
+    )
     return (
       <div className="flex flex-col gap-6 p-4 md:p-6">
         {header()}
@@ -236,39 +273,19 @@ export default function SettlementPage() {
           <EmptyState
             message="확정 견적을 불러와 정산을 시작합니다."
             action={
-              canEdit && draftOnly ? (
-                draftBox
-              ) : canEdit ? (
-                <div className="flex flex-wrap items-center justify-center gap-2">
-                  <select
-                    aria-label="기준 견적"
-                    className="ui-input ui-select"
-                    value={pickedQuote}
-                    onChange={(e) => setPickedQuote(e.target.value)}
-                  >
-                    <option value="">확정 견적 선택</option>
-                    {finalQuotes.map((q) => (
-                      <option key={q.id} value={q.id}>
-                        {q.title} v{q.version}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    disabled={!pickedQuote || createBoard.pending}
-                    onClick={async () => {
-                      const ok = await createBoard.run(pickedQuote)
-                      if (ok) board.reload()
-                    }}
-                  >
-                    정산 시작
-                  </button>
-                </div>
-              ) : (
+              !canEdit ? (
                 <p className="text-sm text-ink-sub">
                   {readOnly ? '종료된 행사입니다.' : 'PM이 기준 견적을 불러오면 시작됩니다.'}
                 </p>
+              ) : !canQuotes ? (
+                // 견적은 영업·관리자 권한(§6.1)이라 PM이어도 견적 목록을 볼 수 없으면 빈 셀렉트는 막다른 길이다 — 사실을 말한다
+                <p className="text-sm text-ink-sub" data-testid="settlement-quote-role-note">
+                  견적은 영업·관리자 권한이 다룹니다 — 이 행사의 견적을 확정해 달라고 요청하면 여기서 정산을 시작할 수 있습니다.
+                </p>
+              ) : draftPrimary ? (
+                draftBox
+              ) : (
+                picker(true)
               )
             }
           />
@@ -287,8 +304,27 @@ export default function SettlementPage() {
               이 행사에 연결된 확정 견적이 없습니다 — 견적 화면에서 확정하거나 '기존 행사에 연결'로 이 행사에 붙인 뒤 다시 시도하세요.
             </p>
           )}
+          {/* Phase 6.14 — 초안이 주 동작일 때 미연결 확정 견적은 접힌 보조 경로(펼쳐야 셀렉트가 보인다) */}
+          {canEdit && canQuotes && draftPrimary && unlinkedFinals.length > 0 && (
+            <div className="mt-4 text-center" data-testid="settlement-unlinked-picker">
+              <button
+                type="button"
+                className="btn-ghost btn-sm"
+                aria-expanded={unlinkedOpen}
+                onClick={() => setUnlinkedOpen((v) => !v)}
+              >
+                다른 확정 견적을 기준으로 쓰기 — 행사에 연결되지 않은 확정 견적 {unlinkedFinals.length}건
+              </button>
+              {unlinkedOpen && (
+                <div className="mt-3">
+                  <p className="mb-2 text-xs text-ink-cap">정산을 시작하면 고른 견적이 이 행사에 연결됩니다 — 이 행사 견적서가 맞는지 확인하세요.</p>
+                  {picker(false)}
+                </div>
+              )}
+            </div>
+          )}
           {/* Phase 6.12 — 고를 확정 견적이 있어도 뒤에 초안이 남아 있으면 그 초안을 확정해 기준으로 쓰는 길을 함께 보인다 */}
-          {!draftOnly && draftBox && <div className="mt-4">{draftBox}</div>}
+          {!draftPrimary && draftBox && <div className="mt-4">{draftBox}</div>}
           {/* v16 §16.4 — 행사 없는 확정 견적은 정산 시작과 함께 이 행사에 연결된다 */}
           {isPm && canQuotes && !!pickedQuote && finalQuotes.find((q) => q.id === pickedQuote)?.project_id === null && (
             <p className="mt-2 text-center text-sm text-ink-sub" data-testid="settlement-link-note">
