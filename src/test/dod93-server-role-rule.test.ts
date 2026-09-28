@@ -83,7 +83,8 @@ describe('DoD 93 ① Drive 서버 — 전역 admin = pm(멤버 아니어도)', (
 })
 
 describe('DoD 93 ② sheets 서버 — 프로필 권한 + 여러 역할', () => {
-  const env = { SUPABASE_URL: 'https://x.supabase.co', SUPABASE_SECRET_KEY: 'sb_secret_test', VITE_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test' }
+  // Phase 6.14 — 시험 명단(demo)은 SHEETS_DEMO=1을 명시한 환경에서만
+  const env = { SUPABASE_URL: 'https://x.supabase.co', SUPABASE_SECRET_KEY: 'sb_secret_test', VITE_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test', SHEETS_DEMO: '1' }
   const body = { op: 'probe' as const, project_id: PRJ, url: 'https://docs.google.com/spreadsheets/d/1AbC/edit' }
 
   function clients(profile: { id: string; app_role: 'admin' | 'sales' | 'staff' } | null, memberRows: { role: string }[]) {
@@ -113,7 +114,14 @@ describe('DoD 93 ② sheets 서버 — 프로필 권한 + 여러 역할', () => 
   }
 
   it('admin(멤버 행 0) → 판정 통과 · staff(멤버 행 0) → 403 · staff 여러 역할(행 2개) → 통과 · 프로필 없음 → 403', async () => {
-    const { handleSheets } = await import('../../api/_lib/sheets')
+    const { handleSheets, SHEETS_NO_CREDENTIALS_MESSAGE } = await import('../../api/_lib/sheets')
+    // Phase 6.14 — 자격증명 없음 + SHEETS_DEMO 없음 = 503(가짜 명단 0) · SHEETS_DEMO=1이어야 시험 명단
+    const { SHEETS_DEMO: _demo, ...noDemo } = env
+    await expect(handleSheets(body, 'tok', noDemo, fetch, clients({ id: 'p-admin', app_role: 'admin' }, []))).rejects.toMatchObject({
+      status: 503,
+      code: 'unavailable',
+      message: SHEETS_NO_CREDENTIALS_MESSAGE,
+    })
     const admin = await handleSheets(body, 'tok', env, fetch, clients({ id: 'p-admin', app_role: 'admin' }, []))
     expect(admin).toMatchObject({ demo: true })
     await expect(handleSheets(body, 'tok', env, fetch, clients({ id: 'p-out', app_role: 'staff' }, []))).rejects.toMatchObject({

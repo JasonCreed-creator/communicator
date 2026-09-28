@@ -6,6 +6,7 @@
 //      → 보드 없는 행사에 기본값 그대로 분배 = 견적 확정 + 보드 생성
 //   ③ 위저드 완료(정산 기준 끔): '정산보드에서 확정하고 시작' → 정산보드 빈 상태의 초안 상자
 //   ④ design(비 pm)에게는 상자 0 · 종료 행사 0
+//   ⑤ (Phase 6.14) 미연결 확정 견적이 있어도 이 행사의 초안이 주 동작 · 미연결은 접힌 보조 경로 + '행사 미연결' · 견적 권한 없는 pm = 사실 안내
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -93,6 +94,40 @@ describe('DoD 99 ① 정산보드 빈 상태 — 연결된 초안 견적을 확�
       const board = await provider.getSettlementBoard(PROJECT_ID_PARTNER)
       expect(board?.board.quote_id).toBe(q.id)
     })
+    expect(screen.queryByTestId('settlement-draft-quote')).toBeNull()
+  })
+
+  // Phase 6.14(2026-09-28 운영 실측) — 다른 행사에 연결되지 않은 확정 견적이 있어도 이 행사의 초안이 주 동작이고, 미연결 견적은 접힌 보조 경로
+  it('미연결 확정 견적이 있어도 이 행사의 초안 상자가 주 동작(채운 버튼 1) · 미연결 견적은 접힌 보조 경로 + "행사 미연결" 표시', async () => {
+    const stray = await newDraft('미연결 확정 시험')
+    await provider.finalizeQuote(stray.id)
+    expect((await provider.getQuote(stray.id)).project_id).toBeNull()
+    // 픽스처의 prj-rebuild27은 초안 v2(RE:BUILD 27)가 연결돼 있고 확정 견적은 없다
+    localStorage.setItem('communicator.currentProjectId', NO_BOARD_A)
+    renderRoute('/settlement')
+    const box = await screen.findByTestId('settlement-draft-quote')
+    expect(box.textContent).toContain('RE:BUILD 27 v2')
+    // 셀렉트는 접혀 있고(펼치기 전 0), 채운 버튼은 초안 상자의 것 하나
+    expect(screen.queryByLabelText('기준 견적')).toBeNull()
+    const primaries = () => screen.getAllByRole('button').filter((b) => /\bbtn-(primary|accent)\b/.test(b.className))
+    expect(primaries().map((b) => b.textContent)).toEqual(['v2 확정하고 정산 시작'])
+
+    const toggle = within(screen.getByTestId('settlement-unlinked-picker')).getByRole('button', { name: /행사에 연결되지 않은 확정 견적 1건/ })
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    await userEvent.click(toggle)
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    const select = screen.getByLabelText('기준 견적') as HTMLSelectElement
+    expect(Array.from(select.options).map((o) => o.textContent)).toEqual(['확정 견적 선택', '미연결 확정 시험 v1 · 행사 미연결'])
+    // 펼쳐도 채운 버튼은 여전히 초안 상자 하나(보조 경로의 정산 시작은 ghost)
+    expect(primaries().map((b) => b.textContent)).toEqual(['v2 확정하고 정산 시작'])
+  })
+
+  it('견적 권한이 없는 pm(staff)에게는 빈 셀렉트 대신 사실 안내', async () => {
+    provider.setAppRole('staff')
+    localStorage.setItem('communicator.currentProjectId', NO_BOARD_B)
+    renderRoute('/settlement')
+    expect((await screen.findByTestId('settlement-quote-role-note')).textContent).toContain('영업·관리자 권한')
+    expect(screen.queryByLabelText('기준 견적')).toBeNull()
     expect(screen.queryByTestId('settlement-draft-quote')).toBeNull()
   })
 

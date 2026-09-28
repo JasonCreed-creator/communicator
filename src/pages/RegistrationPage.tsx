@@ -274,7 +274,13 @@ function RsvpTab({ sheetConnected }: { sheetConnected: boolean }) {
 
       <Card title="RSVP 리스트">
         {rsvps.loading && <p className="text-sm text-ink-cap">불러오는 중…</p>}
-        {rsvps.data && rsvps.data.length === 0 && <p className="text-sm text-ink-cap">등록된 대상이 없습니다.</p>}
+        {rsvps.data && rsvps.data.length === 0 && (
+          <p className="text-sm text-ink-cap">
+            등록된 대상이 없습니다.
+            {/* Phase 6.14 — 시트 연결 중에는 위 KPI가 시트 명단인데 이 목록이 비어 '반영 안 됨'으로 읽혔다(실사용 2026-09-28). 명단이 어느 탭인지 말한다 */}
+            {sheetConnected && <span data-testid="rsvp-sheet-hint"> 시트 명단은 ‘참관객’ 탭에 있습니다 — RSVP 리스트는 앱에서 보내는 초청 대상만 셉니다.</span>}
+          </p>
+        )}
         {rsvps.data && rsvps.data.length > 0 && filtered.length === 0 && (
           <p className="text-sm text-ink-cap">검색·필터 조건에 맞는 대상이 없습니다.</p>
         )}
