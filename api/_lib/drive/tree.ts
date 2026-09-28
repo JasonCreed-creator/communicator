@@ -52,6 +52,8 @@ export const APP_PROJECT_KEY = 'communicator_project_id'
 export const APP_DELIVERABLE_KEY = 'communicator_deliverable_id'
 export const APP_UPLOAD_KEY = 'communicator_upload'
 export const APP_SNAPSHOT_KEY = 'communicator_snapshot'
+/** v2.21 §27.5 — 앱이 내보낸 산출물(마스터 시트) 표식. 인박스 스캔이 미등록 파일로 올리지 않는다 */
+export const APP_EXPORT_KEY = 'communicator_export'
 
 /** Drive 이름 정리 — 경로 구분자·제어문자 제거, 공백 정리, 길이 상한. 빈 값은 '이름 없음' */
 export function sanitizeName(s: string, max = 120): string {

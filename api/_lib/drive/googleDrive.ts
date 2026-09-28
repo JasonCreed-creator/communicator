@@ -129,6 +129,16 @@ export class DriveApi {
     return this.jsonOrThrow(res, `폴더(${name})를 만들지 못했습니다`)
   }
 
+  /** 메타데이터만으로 파일 만들기(구글 문서·시트 같은 네이티브 파일 — 본문 없음). v2.21 §27.5 마스터 시트가 쓴다 */
+  async createFile(name: string, mimeType: string, parentId: string, appProperties?: Record<string, string>): Promise<DriveFile> {
+    const res = await this.call(`${DRIVE_API}/files?supportsAllDrives=true&fields=${enc(FILE_FIELDS)}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json; charset=UTF-8' },
+      body: JSON.stringify({ name, mimeType, parents: [parentId], ...(appProperties ? { appProperties } : {}) }),
+    })
+    return this.jsonOrThrow(res, `파일(${name})을 만들지 못했습니다`)
+  }
+
   async update(
     id: string,
     body: { name?: string; appProperties?: Record<string, string>; trashed?: boolean; description?: string },

@@ -30,6 +30,7 @@ import type { DriveStore, MemberRole, SnapshotTarget, StoreEnv, VersionRow } fro
 import {
   ancestorIds,
   APP_DELIVERABLE_KEY,
+  APP_EXPORT_KEY,
   APP_PROJECT_KEY,
   APP_SNAPSHOT_KEY,
   APP_UPLOAD_KEY,
@@ -135,7 +136,7 @@ function requireAdmin(user: CallerIdentity, what = 'Drive 연결'): void {
 }
 
 /** 행사 안 역할 — 전역 admin은 멤버가 아니어도 pm(Phase 6.5 · SQL `app.member_role()`과 같은 규칙). 실사용 2026-09-27: 서버 함수만 이 규칙을 빼먹어 admin이 403을 받았다 */
-async function requireMember(ctx: DriveCtx, user: CallerIdentity, projectId: string): Promise<MemberRole> {
+export async function requireMember(ctx: DriveCtx, user: CallerIdentity, projectId: string): Promise<MemberRole> {
   if (user.appRole === 'admin') return 'pm'
   const role = await ctx.store.memberRole(user.profileId, projectId)
   if (!role) throw new DriveError(403, 'forbidden', '프로젝트 멤버가 아닙니다.')
@@ -850,7 +851,8 @@ export async function scanOp(ctx: DriveCtx, user: CallerIdentity, projectId: str
         queue.push({ id: f.id, path: childPath })
         continue
       }
-      if (f.mimeType === SHORTCUT_MIME || f.appProperties?.[APP_SNAPSHOT_KEY]) continue
+      // 바로가기 · 납품 스냅숏 사본 · 앱이 내보낸 산출물(마스터 시트 — v2.21 §27.5)은 인박스 대상이 아니다
+      if (f.mimeType === SHORTCUT_MIME || f.appProperties?.[APP_SNAPSHOT_KEY] || f.appProperties?.[APP_EXPORT_KEY]) continue
       seen.add(f.id)
       if (known.has(f.id)) continue
       const inflight = f.appProperties?.[APP_UPLOAD_KEY] && Date.parse(f.createdTime ?? '') > ctx.now() - INFLIGHT_GRACE_MS
