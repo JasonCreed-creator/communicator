@@ -194,10 +194,42 @@ export function spreadsheetIdFrom(url: string): string {
   return m[1]
 }
 
+/** Google API 오류 본문 — 마스터 시트 서버(masterSheet/sheets.ts)와 같은 분류: API 꺼짐 · 스코프 부족 · 그 밖(접근 불가) */
+interface GoogleErrorBody {
+  error?: {
+    message?: string
+    status?: string
+    details?: { reason?: string; metadata?: { activationUrl?: string } }[]
+    errors?: { reason?: string }[]
+  }
+}
+
 async function gget<T>(token: string, url: string, fetchImpl: typeof fetch): Promise<T> {
   const res = await fetchImpl(url, { headers: { authorization: `Bearer ${token}` } })
   if (res.status === 403 || res.status === 404) {
-    throw new SheetsError(403, 'forbidden', '시트에 접근할 수 없습니다 — 서비스 계정을 뷰어로 초대했는지 확인하세요.')
+    // Phase 6.15 — 403의 사유를 구분해 조치 문구로. 운영 실측: 시트를 공유한 뒤에도 403이 이어져 사유가 가려져 있었다
+    let body: GoogleErrorBody = {}
+    try {
+      body = (await res.json()) as GoogleErrorBody
+    } catch {
+      /* 본문 없음 */
+    }
+    const e = body.error ?? {}
+    const reasons = [...(e.details ?? []).map((d) => d.reason ?? ''), ...(e.errors ?? []).map((d) => d.reason ?? '')]
+    const message = e.message ?? ''
+    const activation =
+      (e.details ?? []).map((d) => d.metadata?.activationUrl).find(Boolean) ?? message.match(/https:\/\/console\.(?:developers|cloud)\.google\.com\S+/)?.[0] ?? null
+    if (reasons.includes('SERVICE_DISABLED') || reasons.includes('accessNotConfigured') || /has not been used|is disabled|not enabled/i.test(message)) {
+      throw new SheetsError(
+        503,
+        'unavailable',
+        `구글 클라우드 프로젝트에서 Google Sheets API가 꺼져 있어 시트를 읽을 수 없습니다 — 켠 뒤(반영까지 몇 분) 다시 시도하세요.${activation ? ` ${activation}` : ''}`,
+      )
+    }
+    if (reasons.includes('ACCESS_TOKEN_SCOPE_INSUFFICIENT') || /insufficient authentication scopes|insufficientPermissions/i.test(message)) {
+      throw new SheetsError(503, 'unavailable', 'Drive 연결 계정의 권한 범위가 시트 읽기에 부족합니다 — 행사 설정 ③에서 Drive를 연결 해제하고 다시 연결하세요.')
+    }
+    throw new SheetsError(403, 'forbidden', `시트에 접근할 수 없습니다 — 서비스 계정을 뷰어로 초대했는지 확인하세요.${message ? ` (구글: ${message.slice(0, 160)})` : ''}`)
   }
   if (!res.ok) throw new SheetsError(502, 'validation', `구글 시트 API 오류 (${res.status})`)
   return (await res.json()) as T
