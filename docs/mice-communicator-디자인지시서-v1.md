@@ -576,6 +576,14 @@ track 면 + ink-cap) · 읽기 전용(`.ui-input-readonly` — 면·보더 없�
 - **결과 줄(`master-sheet-result`)** — 카드 아래 `border-t` · `bg-positive-tint` · 13px: `마스터 시트가 만들어졌습니다`(positive · 굵게) ` — {파일 이름}`(ink-sub) ` · 행사 폴더 04_WBS·운영계획 · 탭 {탭 이름들}`(ink-cap) + `새 탭에서 열기 ↗`(btn-ghost btn-sm · `target=_blank rel=noopener`) + `링크 복사`(→ 2초 `복사됨`). `role=status`.
 - **안내·오류** — mock: `master-sheet-notice`(canvas 면 · ink-sub 13px — 만들지 않았다는 사실 안내) · 서버 오류: `master-sheet-error`(`role=alert` · negative-tint · negative 13px — 서버의 조치 문구 그대로 · 다시 누르면 재시도). 결과·안내·오류는 한 번에 하나.
 
+### 7-2.20 행사 설정 ③ Drive 카드 — 보관 분류 칸 (Phase 6.10, v1.7)
+
+정본 = 설계서 v2.21.6 §7.1 · §7.1b. 새 색 토큰·새 의존성 없음.
+
+- **보관 분류 칸(`drive-category`)** — Drive 카드 안, 표준 트리 안내(`TreePreview`) 바로 위(mock·실서버 같은 자리 · 행사 재료가 없으면 그리지 않음). 라벨 `보관 분류`(t-caption) + `ui-select`(`w-full max-w-md` · `#drive-category-select`). 첫 선택지 = `자동 — {판정 라벨}`(성격·유형에서 — 예 `자동 — MICE Solution · 모객`) · 그 아래 4종(`MICE Solution · 모객` · `MICE Solution · 비모객` · `자체행사(Remember titled)` · `일반행사(Customized)` — 사용자 실물 폴더 이름). 고르면 바로 저장(`updateProject` — 저장 단추 없음 · 저장 중 disabled) → 부모 카드 `onChanged`. pm이 아니면 disabled(값은 보인다).
+- **폴더 안내 줄(`drive-category-folder`)** — 12px ink-cap: `폴더: 저장소/{분류 폴더 실물 이름}/{행사 ID}/` + pm에게만 ` — 바꾸면 다음 폴더 보장 때 그 분류 폴더로 옮겨집니다(하위 폴더·파일 그대로).` 저장 실패는 아래 `ErrorAlert`.
+- **표준 트리 안내** — 첫 줄 `행사 폴더 표준 구조(자동 생성) — 저장소/분류/행사 ID/`(v2.17의 `저장소/연도/행사 ID/` 대체). 기존 폴더 지정 힌트·게이트웨이·업로드 카드 문구의 고정 폴더 이름(`MICE Communicator`)은 `저장소 폴더`로 — 루트가 팀 폴더가 된다.
+
 ## 8. 실행·완료 기준 (전부 충족 후 체크아웃)
 
 1. 토큰 파일 1곳 정의 → 전 컴포넌트 치환, `grep -r "gray-\|slate-"` 결과 0건

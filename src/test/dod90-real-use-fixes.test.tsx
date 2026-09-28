@@ -160,6 +160,18 @@ describe('DoD 90 ② 개요 저장 뒤 Drive 행사 폴더 자리·이름 맞춤
     expect(ensureTreeQuietly).toHaveBeenCalledWith('prj-1')
   })
 
+  it('(v2.21.6 Phase 6.10) 성격·유형·보관 분류가 바뀌어도 신호한다 — 분류 폴더 자리가 바뀐다', async () => {
+    const { projectsDomain } = await import('../providers/supabase/domains/projects')
+    const { ctx } = fakeCtx(baseRow)
+    const domain = projectsDomain(ctx as never)
+    await domain.updateProject('prj-1', { kind: 'host' })
+    await domain.updateProject('prj-1', { event_type: 'recruiting' })
+    await domain.updateProject('prj-1', { drive_category: 'custom' })
+    expect(ensureTreeQuietly).toHaveBeenCalledTimes(3)
+    await expect(domain.updateProject('prj-1', { drive_category: 'memo' as never })).rejects.toMatchObject({ code: 'validation' })
+    expect(ensureTreeQuietly).toHaveBeenCalledTimes(3)
+  })
+
   it('행사 ID와 무관한 칸(장소·인원)만 바뀌면 신호하지 않는다 · 개요 편집(pm·ops)의 행사일은 신호한다', async () => {
     const { projectsDomain } = await import('../providers/supabase/domains/projects')
     const { ctx } = fakeCtx(baseRow)

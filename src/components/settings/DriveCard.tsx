@@ -1,5 +1,6 @@
 // 행사 설정 ③ Drive 카드 — 설계서 v2.9 §7 · §10 S6 ③ "유형·연동: Drive".
-// 보여 주는 것: 연결 상태(계정·시각·마지막 오류) · 저장소 루트 열기 · 이 행사 폴더 열기/만들기/기존 폴더 지정 · 표준 트리.
+// 보여 주는 것: 연결 상태(계정·시각·마지막 오류) · 저장소 루트 열기 · 이 행사 폴더 열기/만들기/기존 폴더 지정 · **보관 분류**(v2.21.6 Phase 6.10 —
+// 자동 + 고침 · 폴더 = 저장소/{분류 폴더}/{행사 ID}) · 표준 트리.
 // 권한: 연결·해제 = 관리자(admin) — 저장소 전체에 걸리는 조작이라 전역 권한 / 행사 폴더 만들기·지정 = 그 행사 pm.
 // mock: 서버가 없어 연결·폴더 작업을 흉내 내지 않는다 — 무엇이 좋아지는지와 언제 열리는지를 적는다(빈 상태 정본 ②,
 // accent CTA 없음 · 게이트 뒤에 숨기지 않음 §10 진입점 원칙).
@@ -9,9 +10,21 @@ import ErrorAlert from '../internal/ErrorAlert'
 import { driveFolderUrl, looksLikeDriveFileId, parseDriveLink } from '../../lib/driveLink'
 import { driveReturnMessage, getDriveGateway, goToDriveConsent } from '../../lib/drive/driveGateway'
 import { useDriveStatus } from '../../lib/drive/useDriveStatus'
+import { useMutation } from '../../hooks/useAsync'
+import {
+  autoDriveCategory,
+  DRIVE_CATEGORIES,
+  DRIVE_CATEGORY_FOLDERS,
+  DRIVE_CATEGORY_LABELS,
+  resolveDriveCategory,
+  type DriveCategory,
+} from '../../lib/driveCategory'
 import { formatDateTime } from '../../lib/labels'
+import { projectLabel } from '../../lib/projectLabel'
+import { getDataProvider } from '../../providers'
+import type { Project } from '../../types/entities'
 
-/** 설계서 v2.17 §7.1 표준 트리(운영 프로토콜 v1.0) — 화면 안내용(실제 이름은 서버 tree.ts가 정본) · 행사 폴더는 저장소/{연도}/{행사 ID}/ */
+/** 설계서 v2.21.6 §7.1 표준 트리(운영 프로토콜 v1.0) — 화면 안내용(실제 이름은 서버 tree.ts가 정본) · 행사 폴더는 저장소/{분류 폴더}/{행사 ID}/ */
 export const STANDARD_TREE: readonly string[] = [
   '01_견적',
   '02_계약',
@@ -28,10 +41,54 @@ function Chip({ tone, children }: { tone: 'ok' | 'off' | 'warn'; children: strin
   return <span className={`inline-flex shrink-0 items-center whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${cls}`}>{children}</span>
 }
 
+/** 보관 분류 칸 — 자동(성격·유형) + 설정에서 고침. mock에서도 값은 저장된다(폴더 이동은 실서버의 다음 보장 때) */
+export type DriveCategoryProject = Pick<Project, 'kind' | 'event_type' | 'drive_category' | 'name' | 'organizer' | 'event_date'>
+
+function DriveCategoryField({ projectId, project, readOnly, onChanged }: { projectId: string; project: DriveCategoryProject; readOnly: boolean; onChanged: () => void }) {
+  const provider = getDataProvider()
+  const auto = autoDriveCategory(project)
+  const resolved = resolveDriveCategory(project)
+  const save = useMutation(async (next: DriveCategory | null) => {
+    await provider.updateProject(projectId, { drive_category: next })
+    return true as const
+  })
+  return (
+    <div className="space-y-1.5" data-testid="drive-category">
+      <label className="flex flex-col gap-1 t-caption" htmlFor="drive-category-select">
+        보관 분류
+        <select
+          id="drive-category-select"
+          className="ui-select w-full max-w-md"
+          value={project.drive_category ?? ''}
+          disabled={readOnly || save.pending}
+          data-testid="drive-category-select"
+          onChange={async (e) => {
+            const v = e.target.value
+            const ok = await save.run(v ? (v as DriveCategory) : null)
+            if (ok) onChanged()
+          }}
+        >
+          <option value="">자동 — {DRIVE_CATEGORY_LABELS[auto]}</option>
+          {DRIVE_CATEGORIES.map((c) => (
+            <option key={c} value={c}>
+              {DRIVE_CATEGORY_LABELS[c]}
+            </option>
+          ))}
+        </select>
+      </label>
+      <p className="text-xs leading-relaxed text-ink-cap" data-testid="drive-category-folder">
+        폴더: 저장소/{DRIVE_CATEGORY_FOLDERS[resolved]}/{projectLabel(project)}/
+        {readOnly ? '' : ' — 바꾸면 다음 폴더 보장 때 그 분류 폴더로 옮겨집니다(하위 폴더·파일 그대로).'}
+      </p>
+      <ErrorAlert message={save.error} />
+    </div>
+  )
+}
+
 function TreePreview() {
   return (
     <div className="rounded-md bg-canvas px-3 py-2.5">
-      <p className="mb-1.5 text-xs font-medium text-ink-sub">행사 폴더 표준 구조(자동 생성) — 저장소/연도/행사 ID/</p>
+      <p className="mb-1.5 text-xs font-medium text-ink-sub">행사 폴더 표준 구조(자동 생성) — 저장소/분류/행사 ID/</p>
       <ul className="grid grid-cols-1 gap-x-4 gap-y-0.5 text-xs text-ink-sub sm:grid-cols-2">
         {STANDARD_TREE.map((p) => (
           // 하위 폴더까지 적은 줄(03)은 두 열 폭을 다 쓴다 — nowrap 두 열에서 옆 칸 위로 겹쳤다(2026-09-27 실사용 지적)
@@ -50,12 +107,15 @@ export default function DriveCard({
   isPm,
   isAdmin,
   onChanged,
+  project,
 }: {
   projectId: string
   driveRootFolderId: string | null
   isPm: boolean
   isAdmin: boolean
   onChanged: () => void
+  /** v2.21.6 — 보관 분류 칸의 재료(성격·유형·고른 분류·행사 ID 칸). 없으면 칸을 그리지 않는다 */
+  project?: DriveCategoryProject
 }) {
   const gateway = getDriveGateway()
   const drive = useDriveStatus()
@@ -92,6 +152,7 @@ export default function DriveCard({
             <li>행사 폴더에 직접 올린 파일은 홈의 미등록 인박스에 잡힙니다</li>
             <li>발주처가 승인한 버전은 03_제작·키비주얼/납품에 사본이 남은 뒤 확정됩니다</li>
           </ul>
+          {project && <DriveCategoryField projectId={projectId} project={project} readOnly={!isPm} onChanged={onChanged} />}
           <TreePreview />
           <p className="text-xs text-ink-cap">데모에서는 올린 파일이 브라우저에만 임시 보관됩니다 — Supabase 실서버 전환 후 연결됩니다.</p>
         </div>
@@ -272,7 +333,7 @@ export default function DriveCard({
                 </label>
                 {adoptHint && <p className="text-xs text-negative">{adoptHint}</p>}
                 <p className="text-xs text-ink-cap">
-                  Drive에서 먼저 만들어 둔 폴더가 있으면 링크로 지정하세요(MICE Communicator 안이어야 합니다) — 빠진 파트 폴더만
+                  Drive에서 먼저 만들어 둔 폴더가 있으면 링크로 지정하세요(저장소 폴더 안이어야 합니다) — 빠진 파트 폴더만
                   그 안에 채웁니다.
                 </p>
               </div>
@@ -280,6 +341,11 @@ export default function DriveCard({
           </div>
         )}
 
+        {project && (
+          <div className="border-t border-border pt-3">
+            <DriveCategoryField projectId={projectId} project={project} readOnly={!isPm} onChanged={onChanged} />
+          </div>
+        )}
         <TreePreview />
 
         {status?.configured && status.connected && isAdmin && status.mode === 'oauth' && status.token_source === 'vault' && (

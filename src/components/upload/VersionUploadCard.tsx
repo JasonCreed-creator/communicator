@@ -399,7 +399,7 @@ export default function VersionUploadCard({
               </button>
             </div>
             <p className="t-caption max-w-xl leading-relaxed">
-              MICE Communicator 폴더 안에 있는 파일만 등록됩니다. 이 행사 폴더 안의 파일은 그대로 연결하고, 저장소의 다른
+              저장소 폴더 안에 있는 파일만 등록됩니다. 이 행사 폴더 안의 파일은 그대로 연결하고, 저장소의 다른
               곳에 있는 파일은 이 항목 폴더로 복사해 등록합니다. 저장소 밖(개인 드라이브 등)의 파일은 먼저 행사 폴더로
               옮겨 주세요. 행사 폴더에 직접 올린 파일은 홈의 미등록 인박스에도 잡힙니다.
             </p>

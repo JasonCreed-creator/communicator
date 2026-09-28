@@ -144,6 +144,9 @@ export function createFakeDriveStore() {
     async setProjectRoot(projectId, folderId) {
       projects.get(projectId)!.drive_root_folder_id = folderId
     },
+    async setProjectDriveCategory(projectId, category) {
+      projects.get(projectId)!.drive_category = category
+    },
     async setItemFolder(deliverableId, folderId) {
       deliverables.get(deliverableId)!.drive_folder_id = folderId
     },
@@ -267,8 +270,8 @@ export function createFakeDriveStore() {
       users.set(u.jwt, u)
       return u
     },
-    addProject(p: Omit<ProjectRow, 'organizer'> & { organizer?: string | null }) {
-      const row: ProjectRow = { organizer: null, ...p }
+    addProject(p: Omit<ProjectRow, 'organizer' | 'kind' | 'event_type' | 'drive_category'> & Partial<Pick<ProjectRow, 'organizer' | 'kind' | 'event_type' | 'drive_category'>>) {
+      const row: ProjectRow = { organizer: null, kind: 'agency', event_type: 'general', drive_category: null, ...p }
       projects.set(p.id, row)
       return row
     },

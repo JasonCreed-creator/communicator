@@ -12,6 +12,7 @@ import { isPm } from '../../../lib/roles'
 import { normalizeSlackWebhook, SLACK_WEBHOOK_INVALID_MESSAGE } from '../../../lib/slackWebhook'
 import { sameSlackThread, SLACK_DESIGN_THREAD_SAME_MESSAGE, normalizeSlackThreadLink, normalizeSlackUserId, SLACK_THREAD_INVALID_MESSAGE, SLACK_USER_ID_INVALID_MESSAGE } from '../../../lib/slackThread'
 import { normalizeQuoteAttachment, QUOTE_ATTACHMENT_INVALID_MESSAGE } from '../../../lib/quoteAttachment'
+import { DRIVE_CATEGORY_INVALID_MESSAGE, isDriveCategory } from '../../../lib/driveCategory'
 import { normalizeReferenceLinks, REFERENCE_LINK_INVALID_MESSAGE, REFERENCE_LINKS_LIMIT_MESSAGE } from '../../../lib/referenceLinks'
 import { isDelayed, toIsoDate } from '../../../lib/wbs'
 import type { ClientContact, ClientToken, Project, UUID, WbsTask } from '../../../types/entities'
@@ -130,8 +131,11 @@ function generateProjectCode(): string {
   return `EVT-${Date.now().toString(36).toUpperCase()}`
 }
 
-/** 행사 ID(`projectLabel`)를 이루는 칸 — 바뀌면 Drive 행사 폴더 이름·연도 자리를 다시 맞춘다 */
-const LABEL_KEYS = ['name', 'event_date', 'organizer'] as const
+/**
+ * Drive 행사 폴더의 이름·자리를 정하는 칸 — 행사 ID(`projectLabel` = 행사명·행사일·고객사) + 보관 분류(v2.21.6 Phase 6.10 —
+ * 성격·유형·설정 ③에서 고른 분류). 바뀌면 다음 보장(ensure-tree → syncProjectRootPlacement)이 이름·분류 폴더 자리를 다시 맞춘다
+ */
+const LABEL_KEYS = ['name', 'event_date', 'organizer', 'kind', 'event_type', 'drive_category'] as const
 
 export function projectsDomain(ctx: SupabaseCtx): ProjectsDomain {
   /**
@@ -445,6 +449,11 @@ export function projectsDomain(ctx: SupabaseCtx): ProjectsDomain {
         if (links === 'invalid') throw new ProviderError('validation', REFERENCE_LINK_INVALID_MESSAGE)
         if (links === 'limit') throw new ProviderError('validation', REFERENCE_LINKS_LIMIT_MESSAGE)
         row.reference_links = links
+      }
+      // v2.21.6(Phase 6.10) — 보관 분류(Drive 분류 폴더). null = 자동 · 분류 4종만(그 밖 422 — DB CHECK와 같은 목록)
+      if (patch.drive_category !== undefined) {
+        if (patch.drive_category !== null && !isDriveCategory(patch.drive_category)) throw new ProviderError('validation', DRIVE_CATEGORY_INVALID_MESSAGE)
+        row.drive_category = patch.drive_category
       }
       // v2.0 — "견적 연결" 액션: app_role admin·sales 전용 (§6.1·§10), 상호 링크 동기화
       if (patch.quote_id !== undefined) {
