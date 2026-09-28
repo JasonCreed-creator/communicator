@@ -63,8 +63,9 @@ describe('DoD 94 ① 내보내기 → 파서 왕복', () => {
     expect(doc.sections.map((s) => s.subtotal)).toEqual([p.s1, p.s2, p.s3, p.s4, p.ot, p.s5, p.rsvpPkg + p.showup])
     expect(doc.sections[0].items).toHaveLength(1) // ⚠️ 안내 줄·F&B 안내 줄은 항목이 아니다
     expect(doc.header).toMatchObject({ event_name: '샘플 테크 컨퍼런스 2026', venue: '가상컨벤션센터 3F 그랜드볼룸', total_amount: p.pk, vat_mode: 'excluded' })
-    expect(doc.totals).toEqual({ items_sum: p.pk, agency_fee: p.s5, vat: Math.round(p.pk * 0.1), grand_total: Math.round(p.pk * 1.1) })
-    expect(doc.totals.agency_fee_rate).toBeUndefined() // 머리 "KPI 달성선 (85% 인정)"은 기획료 비율이 아니다
+    // v2.22.1 — 기획료 비율 25%는 기획료 줄의 기준·요율 셀에서 읽는다(머리 "KPI 달성선 (85% 인정)"은 여전히 비율이 아니다)
+    expect(doc.totals).toEqual({ items_sum: p.pk, agency_fee: p.s5, agency_fee_rate: 0.25, vat: Math.round(p.pk * 0.1), grand_total: Math.round(p.pk * 1.1) })
+    expect(doc.checks.find((c) => c.name.startsWith('기획료 25%'))?.ok).toBe(true)
     expect(doc.checks.filter((c) => !c.ok)).toEqual([])
     expect(doc.warnings.filter((w) => w.includes('총액') || w.includes('부가세') || w.includes('기획료'))).toEqual([])
     expect(splitRecruit(doc, mapSectionsToBuckets(doc))).toEqual({ rsvp: p.rsvpPkg, showup: p.showup })
@@ -87,7 +88,7 @@ describe('DoD 94 ① 내보내기 → 파서 왕복', () => {
     expect(doc.header.date_range).toBeUndefined()
     expect(doc.header.quoted_at).toBeTruthy()
     expect(doc.header.currency).toBeUndefined() // KRW 표기 = 원화 — 통화 경고 없음
-    expect(doc.totals).toEqual({ items_sum: p.pk, agency_fee: p.s5, vat: Math.round(p.pk * 0.1), grand_total: Math.round(p.pk * 1.1) })
+    expect(doc.totals).toEqual({ items_sum: p.pk, agency_fee: p.s5, agency_fee_rate: 0.25, vat: Math.round(p.pk * 0.1), grand_total: Math.round(p.pk * 1.1) })
     expect(doc.checks.filter((c) => !c.ok)).toEqual([])
     expect(splitRecruit(doc, mapSectionsToBuckets(doc))).toEqual({ rsvp: p.rsvpPkg, showup: p.showup })
   })
@@ -97,7 +98,7 @@ describe('DoD 94 ① 내보내기 → 파서 왕복', () => {
     expect(doc.sections).toHaveLength(6)
     expect(bucketOf(doc)).toEqual(['s1', 's2', 's3', 's4', 's5', 'recruit'])
     expect(lowCount(doc)).toBe(0)
-    expect(doc.totals).toEqual({ items_sum: p.pk, agency_fee: p.s5, vat: Math.round(p.pk * 0.1), grand_total: Math.round(p.pk * 1.1) })
+    expect(doc.totals).toEqual({ items_sum: p.pk, agency_fee: p.s5, agency_fee_rate: 0.25, vat: Math.round(p.pk * 0.1), grand_total: Math.round(p.pk * 1.1) })
     expect(doc.checks.filter((c) => !c.ok)).toEqual([])
     expect(splitRecruit(doc, mapSectionsToBuckets(doc))).toEqual({ rsvp: p.rsvpPkg, showup: p.showup })
   })
@@ -121,9 +122,11 @@ describe('DoD 94 ② R형 골든(옛 Configurator 모양)', () => {
     expect(doc.totals).toEqual({
       items_sum: R_EXPECTED.itemsSum,
       agency_fee: R_EXPECTED.agencyFee,
+      agency_fee_rate: 0.25, // v2.22.1 — 기획료 줄 "19,200,000 × 0.25 = 4,800,000"에서 기준·비율을 되짚는다
       vat: R_EXPECTED.vat,
       grand_total: R_EXPECTED.grandTotal,
     })
+    expect(doc.checks.find((c) => c.name.startsWith('기획료 25%'))).toMatchObject({ expected: R_EXPECTED.agencyFee, ok: true })
     expect(bucketOf(doc)).toEqual(['s1', 's2', 's3', 's4', 's5', 'recruit'])
     expect(lowCount(doc)).toBe(0)
     // 검산 — 소계·항목 합·부가세·총액 체인 전부 통과. 단가×수량 검산만 할인 0원 줄 1건으로 어긋나고 경고로 알린다

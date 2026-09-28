@@ -38,6 +38,14 @@ export interface ParsedQuoteSection {
   order: number
   items: ParsedQuoteItem[]
   subtotal?: number
+  /** v2.22.1 P형(예산 워크북) — 지출 구분 코드(A~J). 다른 서식은 없음 */
+  code?: string
+}
+
+/** v2.22.1 P형 — 수입 표(파트너 계약 매출) 한 줄. 견적 금액에는 넣지 않는다(주최형 정산 참고 · §19.6) */
+export interface ParsedRevenueRow {
+  title: string
+  amount: number
 }
 
 /** §22.2-4 — 합계 체계(항목합·대행료·절사·VAT·총액) */
@@ -60,12 +68,14 @@ export interface ParsedQuoteCheck {
 
 import type { QuoteImportFormat } from '../../../types/enums'
 
-/** 견적서 서식 — A·B·C = 엑셀 파서 판정(§22.1) · 'ai' = PDF·사진을 AI가 읽음(v2.18 §22.5 — 서식 판정 없음). 정본 = types/enums QUOTE_IMPORT_FORMATS */
+/** 견적서 서식 — A·B·C = 엑셀 파서 판정(§22.1) · P = 예산 워크북(v2.22.1) · 'ai' = PDF·사진을 AI가 읽음(v2.18 §22.5 — 서식 판정 없음). 정본 = types/enums QUOTE_IMPORT_FORMATS */
 export type { QuoteImportFormat }
 
-/** 화면·메모용 서식 이름 — 'A형' · 'AI 읽음' */
+/** 화면·메모용 서식 이름 — 'A형' · 'P형(예산)' · 'AI 읽음' */
 export function quoteImportFormatLabel(format: QuoteImportFormat): string {
-  return format === 'ai' ? 'AI 읽음' : `${format}형`
+  if (format === 'ai') return 'AI 읽음'
+  if (format === 'P') return 'P형(예산)'
+  return `${format}형`
 }
 
 /** 파서(parseQuoteWorkbook) 산출 — quote_imports.parsed에 원본 스냅숏으로 그대로 저장된다(R-Q2) */
@@ -76,6 +86,10 @@ export interface ParsedQuoteDoc {
   totals: ParsedQuoteTotals
   checks: ParsedQuoteCheck[]
   warnings: string[]
+  /** v2.22.1 — 'budget' = 예산 워크북(P형 · 지출 표가 섹션). 없으면 견적서 */
+  kind?: 'quote' | 'budget'
+  /** v2.22.1 — 예산 워크북의 수입 표(파트너 계약 매출). 견적 금액과 무관 · 주최형 정산 참고 */
+  revenue?: ParsedRevenueRow[]
 }
 
 /**
