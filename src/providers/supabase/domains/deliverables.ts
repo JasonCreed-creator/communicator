@@ -379,11 +379,16 @@ export function deliverablesDomain(ctx: SupabaseCtx): DeliverablesDomain {
       if (rule.requires_comment && !opts?.comment?.trim()) {
         throw new ProviderError('validation', '반려 사유 코멘트가 필요합니다.')
       }
-      return ctx.rpc<Deliverable>('transition_deliverable', {
+      const next = await ctx.rpc<Deliverable>('transition_deliverable', {
         p_deliverable: deliverableId,
         p_to: to,
         p_comment: opts?.comment ?? null,
       })
+      // Phase 6.13(2026-09-28 실사용 "슬랙 알림은 가는데 멘션이 안 걸림") — 내부검토 요청은 §9 알릴 사건(PM 검토 카드 + 멘션)인데
+      // 앱이 여기서 신호를 보내지 않아 다음 사건(업로드 등)이 올 때까지 선점되지 않았다. 서버 선점은 to=internal_review만 고르므로
+      // 그 전이에서만 신호한다(기다리지 않는다 — §9).
+      if (to === 'internal_review') notifyFor(ctx).ping()
+      return next
     },
 
     async uploadVersion(deliverableId, input) {
