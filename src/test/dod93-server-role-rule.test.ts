@@ -177,6 +177,68 @@ describe('DoD 93 ② sheets 서버 — 프로필 권한 + 여러 역할', () => 
       handleSheets(body, 'tok', oauthEnv, fetchImpl, { ...clients({ id: 'p-admin', app_role: 'admin' }, []), driveStore: none as never }),
     ).rejects.toMatchObject({ status: 503, code: 'unavailable' })
   })
+
+  // Phase 6.15.1(2026-09-28 운영 실측) — 시트를 공유한 뒤에도 403이 이어졌는데 문구가 '뷰어로 초대했는지'뿐이라 사유가 가려졌다.
+  // 구글 403의 사유를 구분한다: Sheets API 꺼짐 → 503 + 켜는 링크 · 스코프 부족 → 503 다시 연결 · 그 밖 → 403 + 구글 문구
+  it('구글 403 사유 구분 — SERVICE_DISABLED = 503 + activationUrl · 스코프 부족 = 503 다시 연결 · 그 밖 = 403 공유 안내 + 구글 문구', async () => {
+    const { handleSheets } = await import('../../api/_lib/sheets')
+    const { clearTokenCache } = await import('../../api/_lib/drive/auth')
+    clearTokenCache()
+    const oauthEnv = {
+      SUPABASE_URL: 'https://x.supabase.co',
+      SUPABASE_SECRET_KEY: 'sb_secret_test',
+      VITE_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test',
+      DRIVE_ROOT_FOLDER_ID: 'root-1',
+      GOOGLE_OAUTH_CLIENT_ID: 'cid',
+      GOOGLE_OAUTH_CLIENT_SECRET: 'csecret',
+    }
+    const store = {
+      readRefreshToken: async () => 'refresh-phase-6-15-1',
+      recordConnectionError: async () => undefined,
+      connectionInfo: async () => ({ account_email: 'drive-owner@example.com' }),
+    }
+    const deps = () => ({ ...clients({ id: 'p-admin', app_role: 'admin' }, []), driveStore: store as never })
+    const withSheetsError = (status: number, error: unknown) =>
+      (async (input: RequestInfo | URL) => {
+        const url = String(input)
+        if (url.startsWith('https://oauth2.googleapis.com/token')) return new Response(JSON.stringify({ access_token: 'oa-token', expires_in: 3600 }), { status: 200 })
+        if (/spreadsheets\/1AbC\?fields/.test(url)) return new Response(JSON.stringify({ error }), { status, headers: { 'content-type': 'application/json' } })
+        return new Response('nf', { status: 404 })
+      }) as typeof fetch
+    // ① Sheets API가 OAuth 클라이언트의 GCP 프로젝트에서 꺼짐 — 공유와 무관 · 켜는 링크를 그대로 전한다
+    await expect(
+      handleSheets(
+        body,
+        'tok',
+        oauthEnv,
+        withSheetsError(403, {
+          code: 403,
+          message: 'Google Sheets API has not been used in project 123 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/sheets.googleapis.com/overview?project=123 then retry.',
+          status: 'PERMISSION_DENIED',
+          details: [{ reason: 'SERVICE_DISABLED', metadata: { activationUrl: 'https://console.developers.google.com/apis/api/sheets.googleapis.com/overview?project=123' } }],
+        }),
+        deps(),
+      ),
+    ).rejects.toMatchObject({
+      status: 503,
+      code: 'unavailable',
+      message: expect.stringMatching(/Google Sheets API가 꺼져 있어.*https:\/\/console\.developers\.google\.com\/apis\/api\/sheets\.googleapis\.com\/overview\?project=123/),
+    })
+    // ② 토큰 스코프 부족 — 다시 연결 안내
+    await expect(
+      handleSheets(body, 'tok', oauthEnv, withSheetsError(403, { code: 403, message: 'Request had insufficient authentication scopes.', status: 'PERMISSION_DENIED', details: [{ reason: 'ACCESS_TOKEN_SCOPE_INSUFFICIENT' }] }), deps()),
+    ).rejects.toMatchObject({ status: 503, code: 'unavailable', message: expect.stringContaining('다시 연결') })
+    // ③ 그 밖(진짜 공유 안 됨) — 기존 403 + 구글 문구 꼬리
+    await expect(
+      handleSheets(body, 'tok', oauthEnv, withSheetsError(403, { code: 403, message: 'The caller does not have permission', status: 'PERMISSION_DENIED' }), deps()),
+    ).rejects.toMatchObject({ status: 403, code: 'forbidden', message: expect.stringMatching(/뷰어로 초대했는지 확인하세요\. \(구글: The caller does not have permission\)/) })
+    // ④ 본문 없는 404 — 기존 문구 그대로(꼬리 없음)
+    await expect(handleSheets(body, 'tok', oauthEnv, withSheetsError(404, undefined), deps())).rejects.toMatchObject({
+      status: 403,
+      code: 'forbidden',
+      message: '시트에 접근할 수 없습니다 — 서비스 계정을 뷰어로 초대했는지 확인하세요.',
+    })
+  })
 })
 
 describe('DoD 93 ③ Supabase 저장소 — 여러 역할 행 → 대표 역할 · 알림 authProfile = id + app_role', () => {
