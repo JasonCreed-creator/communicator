@@ -69,6 +69,10 @@ function setup(opts: { events?: EventRow[]; reminders?: ReminderRow[]; manual?: 
       manual = null
       return out
     },
+    async claimRelay() {
+      return null
+    },
+    async markRelayed() {},
     async mark(keys, status, error) {
       marks.push({ keys, status, error })
     },

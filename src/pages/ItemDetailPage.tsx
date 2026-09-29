@@ -209,6 +209,9 @@ function ItemDetail({ itemId }: { itemId: string }) {
       memberName={memberName}
       hasPartner={hasPartner}
       onAdded={detail.reload}
+      projectId={d.project_id}
+      area={d.area}
+      members={members.data ?? []}
     />
   )
 

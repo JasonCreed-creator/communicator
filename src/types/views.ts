@@ -350,6 +350,12 @@ export interface AddCommentInput {
   visibility?: CommentVisibility
 }
 
+/** v2.22.3 §4-25(v18) — 등록 탭 소통 메모 입력. mention_ids는 이 행사 멤버만 남는다(최대 10) */
+export interface RegistrationNoteInput {
+  body: string
+  mention_ids?: UUID[]
+}
+
 export interface MilestoneInput {
   title: string
   area?: DeliverableArea | null

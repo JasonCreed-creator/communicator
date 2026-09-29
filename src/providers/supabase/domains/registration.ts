@@ -11,6 +11,7 @@ import { SupabaseCtx, nowIso } from '../ctx'
 import { ProviderError, type ErrorCode } from '../../../lib/errors'
 import type {
   Attendee,
+  RegistrationNote,
   RsvpContact,
   SheetColumnMapping,
   SheetConnection,
@@ -32,6 +33,7 @@ import type {
 } from '../../../types/views'
 import { SHEET_FIELD_LABELS, SHEET_REQUIRED_FIELDS, type SheetInvalidReason } from '../../../types/enums'
 import { computeSheetDiffRows, mappedFields } from '../../mock/sheetSync'
+import { RELAY_BODY_MAX, normalizeMentionIds } from '../../../lib/slackRelay'
 
 type RegistrationMethods = Pick<
   DataProvider,
@@ -52,6 +54,8 @@ type RegistrationMethods = Pick<
   | 'getSheetDiff'
   | 'applySheetDiff'
   | 'getSheetRegistrationStats'
+  | 'listRegistrationNotes'
+  | 'createRegistrationNote'
 >
 
 const SHEET_URL_RE = /^https?:\/\/\S+$/
@@ -647,6 +651,42 @@ export function registrationDomain(ctx: SupabaseCtx): RegistrationMethods {
         pending_removed: conn.pending_removed,
         excluded_rows: excludedRows,
       }
+    },
+
+    // ── v2.22.3 §4-25(v18) 등록 탭 담당자 소통 메모 — Phase 6.17 ─────────────
+    // 읽기 = RLS(registration_notes_select = 멤버) · 쓰기 = RLS insert(멤버 + 작성자 본인) — 열람자는 0행·거부. mock과 같은 검증 순서
+    async listRegistrationNotes(projectId) {
+      await ctx.project(projectId)
+      await ctx.assertMember(projectId)
+      return ctx.q(
+        await ctx.sb.from('registration_notes').select('*').eq('project_id', projectId).order('created_at').order('id'),
+      ) as RegistrationNote[]
+    },
+
+    async createRegistrationNote(projectId, input) {
+      await ctx.assertMember(projectId)
+      await ctx.assertWritable(projectId)
+      const body = input.body.trim()
+      if (!body) throw new ProviderError('validation', '메모 내용이 비어 있습니다.')
+      if (body.length > RELAY_BODY_MAX) throw new ProviderError('validation', `메모는 ${RELAY_BODY_MAX}자까지 남길 수 있습니다.`)
+      const me = await ctx.me()
+      // 멘션은 이 행사 멤버만 남긴다(서버 SQL notify_claim_relay도 같은 규칙으로 다시 거른다)
+      const wanted = normalizeMentionIds(input.mention_ids)
+      let mention_ids: UUID[] = []
+      if (wanted.length) {
+        const rows = ctx.q(
+          await ctx.sb.from('project_members').select('user_id').eq('project_id', projectId).in('user_id', wanted),
+        ) as { user_id: UUID }[]
+        const allowed = new Set(rows.map((r) => r.user_id))
+        mention_ids = wanted.filter((id) => allowed.has(id))
+      }
+      return ctx.q(
+        await ctx.sb
+          .from('registration_notes')
+          .insert({ project_id: projectId, author_id: me.id, body, mention_ids })
+          .select('*')
+          .single(),
+      ) as RegistrationNote
     },
   }
 }

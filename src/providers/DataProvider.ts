@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────
-// DataProvider 인터페이스 v17 — 2026-09-28 재동결 (설계서 v2.21 §27.4) — 135메서드
+// DataProvider 인터페이스 v18 — 2026-09-29 재동결 (설계서 v2.22.3 §4-25) — 137메서드
 //   (아래 이력 전체를 유지한다. v7 표기는 2026-08-23 시점의 스냅숏이었다 — v8·v8.1·v9은
 //   그 뒤에 이어 붙은 것이므로 제목 줄만 최신으로 갱신한다.)
 //   v1: 2026-08-19 동결(35메서드). v2: v1.2 승인 근거로 41메서드 재동결.
@@ -104,6 +104,9 @@
 //   대체 · WBS 실무화)를 근거로 동결 해제 → **createWbsTask·deleteWbsTask·updateRoleCharter 3메서드 추가 = 135메서드**.
 //   **기존 132메서드 시그니처 불변** 후 재동결. WbsTask.assignee_id·group_name·source · RoleCharter.people · WbsTaskPatch
 //   (assignee_id·group_name·target) · PlanData.role_charters는 필드 추가. 배정 ≠ 권한(R-M6) — status 변경·편집 권한은 §6.1 그대로.
+//   v18: 사용자 버튼 승인(2026-09-29 — "6.17 전체 착수 — v18 +2 승인") + 설계서 v2.22.3 §4-25(Phase 6.17 등록 탭 담당자 소통)을 근거로
+//   동결 해제 → **listRegistrationNotes·createRegistrationNote 2메서드 추가 = 137메서드**. **기존 135메서드 시그니처 불변** 후 재동결.
+//   Comment.slack_posted_at·RegistrationNote.slack_posted_at은 필드. Slack에 올리기는 알림 연동 층(notifyClient.relay — 메서드 아님 · 사람이 누른다).
 //   **다음 예약 슬롯 없음** — 새 메서드는 사용자 승인부터.
 //
 // 프로젝트 스코프 규칙(설계서 v2.1 §4-21 R-L1): 프로젝트 단위 조회·생성 메서드는 projectId를
@@ -134,6 +137,7 @@ import type {
   PartnerTier,
   PartnerToken,
   QuoteImport,
+  RegistrationNote,
   ScenarioBlock,
   SettlementBucket,
   SettlementItem,
@@ -197,6 +201,7 @@ import type {
   QuoteImportConfirmInput,
   QuoteImportDistributeInput,
   QuoteImportDistributeResult,
+  RegistrationNoteInput,
   RegistrationStats,
   RequestApprovalInput,
   RsvpContactPatch,
@@ -349,6 +354,13 @@ export interface DataProvider {
   toggleCheckin(attendeeId: UUID): Promise<Attendee>
   convertRsvpToAttendee(rsvpId: UUID): Promise<Attendee>
   getRegistrationStats(projectId: UUID): Promise<RegistrationStats>
+  /** v2.22.3 §4-25(v18) — 등록 탭 담당자 소통 메모 · 오래된 순. 담당자(멤버)만(RLS — Phase 6.16 등록 데이터 규칙 그대로 · 열람자 403) */
+  listRegistrationNotes(projectId: UUID): Promise<RegistrationNote[]>
+  /**
+   * v2.22.3(v18) — 메모 남기기(멤버 · 종료 행사 409 · 빈 글 422 · 4000자). mention_ids는 이 행사 멤버만 남긴다(최대 10).
+   * Slack에 올리는 것은 이 메서드가 아니라 알림 연동 층(`notifyClient.relay` — 사람이 누른다 §9). 자동 전송 0
+   */
+  createRegistrationNote(projectId: UUID, input: RegistrationNoteInput): Promise<RegistrationNote>
 
   // ── 설정 (S6, pm 전용) ────────────────────────────────────────────
   listClientContacts(projectId: UUID): Promise<ClientContact[]>

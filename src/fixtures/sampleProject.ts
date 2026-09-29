@@ -21,6 +21,7 @@ import type {
   ProjectMember,
   Quote,
   QuoteImport,
+  RegistrationNote,
   RoleCharter,
   RsvpContact,
   ScenarioBlock,
@@ -120,6 +121,8 @@ export interface MockState {
   partner_tokens: PartnerToken[]
   // v2.4 §22 — 견적서 임포트
   quote_imports: QuoteImport[]
+  /** v2.22.3 §4-25 — 등록 탭 담당자 소통 메모(픽스처 0건 — 화면·테스트가 쌓는다) */
+  registration_notes: RegistrationNote[]
   // v2.5 §23 — 운영보드 재구성(시나리오·운영가이드)
   scenario_blocks: ScenarioBlock[]
   guide_sections: GuideSection[]
@@ -626,6 +629,7 @@ const FIXTURE: MockState = {
   partners: [],
   partner_tokens: [],
   quote_imports: [],
+  registration_notes: [],
 
   // v2.5 §23 — createFixtureState()에서 rebuildFixtures 시드로 채움(RE:BUILD 27)
   scenario_blocks: [],
@@ -1026,6 +1030,7 @@ export function createEmptyState(): MockState {
     partners: [],
     partner_tokens: [],
     quote_imports: [],
+    registration_notes: [],
     scenario_blocks: [],
     guide_sections: [],
     sheet_connections: [],

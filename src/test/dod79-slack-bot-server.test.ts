@@ -103,6 +103,10 @@ function fakeStore(opts: { events?: EventRow[]; reminders?: ReminderRow[]; proje
     async claimManual() {
       return null
     },
+    async claimRelay() {
+      return null
+    },
+    async markRelayed() {},
     async mark(keys, status, error) {
       marks.push({ keys, status, error })
     },

@@ -113,7 +113,8 @@ describe('DoD 66 · ①′ 업로드 카드 — 막힌 상태는 고르기·업�
     expect(container.querySelectorAll('input[type="file"]')).toHaveLength(0)
     expect(screen.queryByTestId('upload-dropzone')).toBeNull()
     expect(screen.queryByRole('button', { name: '업로드' })).toBeNull()
-    expect(screen.queryByRole('button', { name: /올리기|새 버전 업로드/ })).toBeNull()
+    // v2.22.3 — 코멘트의 'Slack에 올리기'(Phase 6.17)는 업로드가 아니다
+    expect(screen.queryAllByRole('button', { name: /올리기|새 버전 업로드/ }).filter((b) => !/Slack/.test(b.textContent ?? ''))).toHaveLength(0)
     expect(container.textContent).not.toMatch(/pending_approval/)
   })
 
