@@ -5,6 +5,8 @@
 //   POST {action:'drain'} + 로그인 세션 | {token} → 앱이 사건 직후 보내는 신호 — 밀린 사건만 보낸다(누가 불러도 한 번만)
 //   POST {action:'test', project_id}  (pm)      → 행사 스레드(봇) → 행사 채널 → 공용 채널로 시험 한 줄
 //   POST {action:'remind', project_id, target} (멤버) → 홈 '리마인드' — 지연 태스크·컨펌 대기 목록(한 시간에 한 번)
+//   POST {action:'relay', project_id, kind:'comment'|'note', id, mention_ids[], tag?} (멤버) → v2.22.3(Phase 6.17) 사람이 누른 코멘트·등록 메모를
+//        행사 스레드에 답글로(design 항목 코멘트는 디자인 스레드) + 고른 담당자 멘션(이 행사 멤버만 · 최대 10) + 프로토콜 댓글 태그. 자동 전송 없음
 //
 // 원칙(§9 v2.3): 알림은 본 동작을 막지 않는다 — 앱은 신호를 보내고 기다리지 않으며, 보낼 곳이 없으면 no-op(선점 행 'skipped').
 // 금액은 싣지 않는다(§19.7 — format.ts 화이트리스트).
@@ -15,12 +17,14 @@
 // 서버가 요청하는 곳은 `https://slack.com/api/…`(봇) · `https://hooks.slack.com/services/…`(웹훅) 둘뿐이다.
 import { randomUUID } from 'node:crypto'
 import { parseSlackThreadLink, type SlackThreadRef } from '../../../src/lib/slackThread.js'
+import { normalizeMentionIds, type RelayChannel } from '../../../src/lib/slackRelay.js'
 import { cardMessage, mentionText, type Recipient } from './cards.js'
 import {
   appBaseUrl,
   eventUnits,
   isSlackWebhookUrl,
   manualUnit,
+  relayUnit,
   reminderUnits,
   slackEscape,
   slackPayload,
@@ -362,6 +366,38 @@ export async function handleNotifyRequest(request: Request, env: NotifyEnv, deps
       const summary = await deliver([manualUnit(row, appBaseUrl(env, request.url))], env, store, fetchImpl, now)
       if (summary.failed) throw new NotifyError(502, 'conflict', 'Slack이 받지 않았습니다 — 행사 설정 ③의 스레드 링크·웹훅 주소를 확인하세요.')
       return json(200, { sent: true, total: row.total })
+    }
+
+    if (action === 'relay') {
+      // v2.22.3(Phase 6.17) — 사람이 누른 코멘트·등록 메모 한 건. 선점 키는 늘 새 것(같은 글을 두 번 올리는 것도 사람의 선택)
+      const kind = body.kind === 'comment' || body.kind === 'note' ? body.kind : null
+      const id = typeof body.id === 'string' ? body.id.trim() : ''
+      if (!kind || !id) throw new NotifyError(400, 'validation', '올릴 글(kind: comment|note · id)이 필요합니다.')
+      await requireMember(store, jwt, projectId)
+      const project = await store.project(projectId)
+      if (!project) throw new NotifyError(404, 'not_found', '프로젝트를 찾을 수 없습니다.')
+      if (!threadFor(project.thread, env) && !destinationFor(project.webhook, env)) throw new NotifyError(409, 'conflict', NO_CHANNEL)
+      const row = await store.claimRelay(kind, id, normalizeMentionIds(body.mention_ids), typeof body.tag === 'string' ? body.tag : '')
+      if (!row) throw new NotifyError(404, 'not_found', kind === 'note' ? '메모를 찾을 수 없습니다.' : '코멘트를 찾을 수 없습니다.')
+      if (row.project_id !== projectId) {
+        await store.mark([row.key], 'skipped')
+        throw new NotifyError(403, 'forbidden', '이 행사의 글이 아닙니다.')
+      }
+      const unit = relayUnit(row, appBaseUrl(env, request.url))
+      const summary = await deliver([unit], env, store, fetchImpl, now)
+      if (summary.failed || summary.sent === 0) {
+        throw new NotifyError(502, 'conflict', 'Slack이 받지 않았습니다 — 행사 설정 ③의 스레드 링크·웹훅 주소를 확인하세요.')
+      }
+      await store.markRelayed(kind, id).catch((e) => console.warn(`[notify] 올린 시각 기록 실패: ${e instanceof Error ? e.message : e}`))
+      const ref = threadFor(unit.thread, env)
+      const channel: RelayChannel = ref
+        ? unit.thread && unit.thread === (row.design_thread ?? null) && unit.thread !== (row.thread ?? null)
+          ? 'design'
+          : 'thread'
+        : isSlackWebhookUrl(project.webhook)
+          ? 'project'
+          : 'global'
+      return json(200, { sent: true, channel, mentioned: row.mentions.length })
     }
 
     return json(400, { error: { code: 'validation', message: `알 수 없는 작업입니다: ${action || '(없음)'}` } })

@@ -10,6 +10,7 @@ import TableSkeleton from '../components/internal/TableSkeleton'
 import { LevelBadge } from '../components/internal/StatusBadge'
 import { downloadCsv, parseCsv, toCsv } from '../components/internal/csvUtils'
 import PaginationBar from '../components/registration/PaginationBar'
+import RegistrationNotes from '../components/registration/RegistrationNotes'
 import RegistrationSearchBar from '../components/registration/RegistrationSearchBar'
 import SheetConnectionCard from '../components/registration/SheetConnectionCard'
 import InfoTip from '../components/internal/InfoTip'
@@ -55,11 +56,13 @@ const SHEET_STATUS_LEVEL: Record<AttendeeSheetStatus, 'neutral' | 'progress' | '
 
 // v2.6 §10 — 체크인 조작은 S-12 현장 체크인(/checkin) 한 곳으로 단일화한다(3.17.1 T1).
 // 여기서는 체크인 **상태만** 읽는다.
-type Tab = 'rsvp' | 'attendees' | 'stats'
+// v2.22.3(Phase 6.17) — '소통' 탭 = 등록 담당자 메모(+ Slack에 올리기). 기획자님 #5 "등록탭 안에서도 담당자간 소통"
+type Tab = 'rsvp' | 'attendees' | 'stats' | 'notes'
 const TABS: { id: Tab; label: string }[] = [
   { id: 'rsvp', label: 'RSVP' },
   { id: 'attendees', label: '참관객' },
   { id: 'stats', label: '통계' },
+  { id: 'notes', label: '소통' },
 ]
 
 export default function RegistrationPage() {
@@ -211,6 +214,7 @@ export default function RegistrationPage() {
       {activeTab === 'stats' && (
         <StatsTab showRsvp={!isGeneral} stats={stats.data} loading={stats.loading} error={stats.error} />
       )}
+      {activeTab === 'notes' && <RegistrationNotes projectId={projectId} />}
 
       {excludedOpen && sheetStats.data && (
         <SheetExcludedDialog

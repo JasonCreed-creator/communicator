@@ -148,6 +148,44 @@ async function main() {
   scenario('RLS③ anon → deliverables 권한 없음', `select count(*) from deliverables;`, { role: 'anon', expect: 'error', match: 'permission denied' })
   scenario('RLS③ anon → settlement_items 권한 없음 (§19.7)', `select count(*) from settlement_items;`, { role: 'anon', expect: 'error', match: 'permission denied' })
 
+  // v2.22.3(Phase 6.17) — 코멘트·등록 메모 Slack 올리기 + 등록 탭 소통 메모(40번째 마이그레이션)
+  const relayCol = psql(['-c', `select count(*) from information_schema.columns where table_name = 'comments' and column_name = 'slack_posted_at'`]).out
+  record('6.17: comments.slack_posted_at 열', relayCol === '1', `열 ${relayCol}`)
+  const pmProfileId = psql(['-c', `select id from profiles where auth_user_id = '${authId.pm}'`]).out
+  scenario('6.17 등록 메모: 멤버(pm)가 남긴다(RLS insert = 멤버 + 작성자 본인)',
+    `insert into registration_notes (project_id, author_id, body, mention_ids) values ('${PRJ}', '${pmProfileId}', '명단 확정 전 확인 부탁', array['${viewerProfile}']::uuid[]);`,
+    { role: 'authenticated', sub: authId.pm })
+  scenario('6.17 등록 메모: 남의 이름으로는 못 남긴다(author_id ≠ 본인)',
+    `insert into registration_notes (project_id, author_id, body) values ('${PRJ}', '${viewerProfile}', 'x');`,
+    { role: 'authenticated', sub: authId.pm, expect: 'error', match: 'row-level security' })
+  scenario('6.17 등록 메모: 비멤버(design → 종료 행사)는 insert 거부',
+    `insert into registration_notes (project_id, author_id, body) values ('${PRJ_CLOSED}', '${viewerProfile}', 'x');`,
+    { role: 'authenticated', sub: authId.design, expect: 'error', match: 'row-level security' })
+  psql(['-c', `insert into registration_notes (project_id, author_id, body) values ('${PRJ_CLOSED}', '${pmProfileId}', '종료 행사 메모')`])
+  const noteHidden = scenario('6.17 등록 메모: 비멤버(design) → 종료 행사 메모 0행', `select count(*) from registration_notes where project_id = '${PRJ_CLOSED}';`, { role: 'authenticated', sub: authId.design })
+  record('6.17 담당만: 비멤버 등록 메모 0행', noteHidden === '0', `보인 행 ${noteHidden}`)
+  const noteSeen = scenario('6.17 등록 메모: 멤버(pm) → 종료 행사 메모 1행', `select count(*) from registration_notes where project_id = '${PRJ_CLOSED}';`, { role: 'authenticated', sub: authId.pm })
+  record('6.17 담당만: 멤버 등록 메모 1행', noteSeen === '1', `보인 행 ${noteSeen}`)
+  scenario('6.17 등록 메모: 빈 글은 CHECK 거부', `insert into registration_notes (project_id, author_id, body) values ('${PRJ}', '${pmProfileId}', '   ');`,
+    { role: 'authenticated', sub: authId.pm, expect: 'error', match: 'check constraint' })
+  const relayCmt = psql(['-c', `select c.id from comments c join deliverables d on d.id = c.deliverable_id where d.project_id = '${PRJ}' order by c.created_at limit 1`]).out
+  const relayRow = scenario('6.17 notify_claim_relay(comment): 키 rel:comment · 멘션은 이 행사 멤버만 · 금액 키 0',
+    `select (r->>'key') like 'rel:comment:%' and (r->>'kind') = 'relay_comment' and (r->>'project_id') = '${PRJ}' and jsonb_array_length(r->'mentions') = 1
+            and (r->'mentions'->0->>'id') = '${pmProfileId}' and (r ? 'total_amount') = false and (r->>'author') <> '' and length(r->>'body') > 0
+       from public.notify_claim_relay('comment', '${relayCmt}', array['${pmProfileId}', '00000000-0000-4000-8000-000000000000']::uuid[], '[피드백]') r;`)
+  record('6.17 notify_claim_relay(comment) 결과 확인', relayRow === 't', `결과 ${relayRow}`)
+  const relayNote = scenario('6.17 notify_claim_relay(note): 등록 메모 → area registration · 없는 글 null',
+    `with n as (insert into registration_notes (project_id, author_id, body) values ('${PRJ}', '${pmProfileId}', '메모') returning id)
+     select ((r->>'area') = 'registration' and (r->>'kind') = 'relay_note') and (public.notify_claim_relay('note', '00000000-0000-4000-8000-000000000000', '{}'::uuid[], '') is null)
+       from n, lateral public.notify_claim_relay('note', n.id, '{}'::uuid[], '[등록]') r;`)
+  record('6.17 notify_claim_relay(note) 결과 확인', relayNote === 't', `결과 ${relayNote}`)
+  const relayMark = scenario('6.17 notify_mark_relayed(comment) → slack_posted_at 기록',
+    `select public.notify_mark_relayed('comment', '${relayCmt}'); select slack_posted_at is not null from comments where id = '${relayCmt}';`)
+  record('6.17 notify_mark_relayed 기록 확인', relayMark.endsWith('t'), `결과 ${relayMark}`)
+  scenario('6.17 notify_claim_relay는 authenticated가 못 부른다(service 전용)', `select public.notify_claim_relay('comment', '${relayCmt}', '{}'::uuid[], '');`,
+    { role: 'authenticated', sub: authId.pm, expect: 'error', match: 'permission denied' })
+  psql(['-c', `delete from registration_notes where project_id = '${PRJ_CLOSED}'`])
+
   // 4. 역할-영역 (§6.1)
   scenario('역할-영역: reg의 deliverable 생성 거부', `insert into deliverables (project_id, area, category, title) values ('${PRJ}','design','키비주얼','x');`,
     { role: 'authenticated', sub: authId.reg, expect: 'error', match: 'row-level security' })

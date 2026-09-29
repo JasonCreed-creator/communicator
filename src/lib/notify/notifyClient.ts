@@ -3,6 +3,15 @@
 // DataProvider 인터페이스 밖의 연동 층이다(driveClient와 같은 자리). 데모 아티팩트에는 싣지 않는다 — vite.demo.config.ts 스텁.
 import { defaultApiBase as apiBaseFor } from '../basePath'
 import { ProviderError, type ErrorCode } from '../errors'
+import type { RelayChannel, RelayKind } from '../slackRelay'
+
+/** v2.22.3 — 사람이 올린 글 한 건의 결과 */
+export interface RelayResult {
+  sent: true
+  channel: RelayChannel
+  /** 서버가 인정한 멘션 수(이 행사 멤버만) */
+  mentioned: number
+}
 
 export interface NotifyStatus {
   /** 공용 채널(서버 env SLACK_WEBHOOK_URL)이 설정됐는가 */
@@ -85,6 +94,11 @@ export function createNotifyClient(opts: NotifyClientOptions) {
 
     remind(projectId: string, target: 'delayed' | 'approval'): Promise<{ sent: boolean; total: number }> {
       return call({ action: 'remind', project_id: projectId, target })
+    },
+
+    /** v2.22.3(Phase 6.17) — 코멘트·등록 메모를 이 행사 Slack 스레드에 올린다(사람이 누른다 · 멘션 = 이 행사 멤버 · 태그 = 프로토콜 어휘) */
+    relay(input: { project_id: string; kind: RelayKind; id: string; mention_ids: string[]; tag?: string }): Promise<RelayResult> {
+      return call({ action: 'relay', ...input })
     },
   }
 }

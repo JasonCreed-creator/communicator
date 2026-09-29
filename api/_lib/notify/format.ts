@@ -10,6 +10,7 @@
 import { normalizeBasePath } from '../../../src/lib/basePath.js'
 import { parseSlackThreadLink, slackMessageLink } from '../../../src/lib/slackThread.js'
 import { isSlackWebhookUrl } from '../../../src/lib/slackWebhook.js'
+import { normalizeRelayTag, relayAreaOf, type RelayKind } from '../../../src/lib/slackRelay.js'
 import type { CardSpec, Recipient, WorkCardItem } from './cards.js'
 
 export { isSlackWebhookUrl }
@@ -441,6 +442,54 @@ export function manualUnit(row: ManualRow, base: string | null): MessageUnit {
 }
 
 /** 설정 화면 '테스트 보내기' 한 줄 — 스레드(봇)면 '이 스레드로', 웹훅이면 '이 채널로' */
+/** notify_claim_relay 결과 — 사람이 코멘트·등록 메모를 Slack에 올릴 때(v2.22.3 · Phase 6.17). 금액 없음 · 이메일은 멘션 조회에만 */
+export interface RelayRow {
+  key: string
+  kind: 'relay_comment' | 'relay_note' | string
+  project_id: string
+  project_code: string
+  project_name: string
+  webhook: string | null
+  thread?: string | null
+  design_thread?: string | null
+  /** 코멘트 = 항목 영역(design·ops·common) · 등록 메모 = 'registration' */
+  area: string | null
+  deliverable_id: string | null
+  title: string | null
+  author: string
+  body: string
+  created_at?: string | null
+  tag: string
+  mentions: Recipient[]
+}
+
+/**
+ * 사람이 올리는 글 → 메시지 단위(줄 + 인용 + 멘션). 줄 = `[행사명] [태그] 항목 — 코멘트 · 작성자 (열기)`.
+ * 보낼 스레드 = 코멘트는 항목 영역 규칙(design → 디자인 스레드), 등록 메모는 운영 스레드. 자동 전송이 아니라 선점 키가 늘 새 것이다.
+ */
+export function relayUnit(row: RelayRow, base: string | null): MessageUnit {
+  const kind: RelayKind = row.kind === 'relay_note' ? 'note' : 'comment'
+  const area = relayAreaOf(kind, row.area)
+  const tag = normalizeRelayTag(area, row.tag)
+  const url =
+    kind === 'note'
+      ? appLink(base, 'registration', row.project_id)
+      : row.deliverable_id
+        ? appLink(base, `items/${row.deliverable_id}`, row.project_id)
+        : null
+  const subject = kind === 'note' ? '등록 메모' : slackEscape(row.title ?? '항목')
+  const what = kind === 'note' ? '메모' : '코멘트'
+  return {
+    keys: [row.key],
+    line: withLink(`${head(row)} ${tag} ${subject} — ${what} · ${slackEscape(row.author)}`, url),
+    webhook: row.webhook,
+    thread: routeThread({ thread: row.thread, design_thread: row.design_thread, area: kind === 'note' ? 'ops' : row.area }),
+    project_id: row.project_id,
+    mentions: row.mentions,
+    quote: row.body,
+  }
+}
+
 export function testLine(project: { project_code: string; project_name: string }, where: 'channel' | 'thread' | 'design' = 'channel'): string {
   const name = slackEscape(project.project_name || '행사')
   if (where === 'design') return `[${name}] 알림 테스트 — 이 행사의 디자인 알림(의뢰·시안·검토요청·피드백·확정·납품)이 이 스레드로 옵니다.`

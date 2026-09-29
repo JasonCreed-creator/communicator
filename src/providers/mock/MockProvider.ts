@@ -31,6 +31,7 @@ import { mapSectionsToBuckets } from '../../modules/quote/import/buckets'
 import { quoteImportFormatLabel } from '../../modules/quote/import/types'
 import { buildImportedBreakdown } from '../../modules/quote/import/importedBreakdown'
 import { QUOTE_IMPORT_AI_MOCK_MESSAGE } from '../../lib/quoteImportAi'
+import { RELAY_BODY_MAX, normalizeMentionIds } from '../../lib/slackRelay'
 import type { ParsedQuoteDoc, SectionMapping } from '../../modules/quote/import/types'
 import type {
   ActivityLogEntry,
@@ -70,6 +71,7 @@ import type {
   UUID,
   Version,
   WbsTask,
+  RegistrationNote,
 } from '../../types/entities'
 import type {
   AppRole,
@@ -168,6 +170,7 @@ import type {
   WbsTaskFilter,
   WbsTaskPatch,
   SettlementBoardView,
+  RegistrationNoteInput,
 } from '../../types/views'
 import type {
   DataProvider,
@@ -1436,6 +1439,46 @@ export class MockProvider implements DataProvider {
     if (patch.group_tag !== undefined) r.group_tag = patch.group_tag
     if (patch.memo !== undefined) r.memo = patch.memo
     return r
+  }
+
+  // ── v2.22.3 §4-25(v18) 등록 탭 담당자 소통 메모 — Phase 6.17 ─────────────
+  /** 이 행사의 담당자(멤버)인가 — 전역 admin 포함. 열람자(Phase 6.16)는 등록 데이터처럼 403 */
+  private assertNoteMember(projectId: UUID): CurrentUser {
+    const user = this.currentUser()
+    const member = user.app_role === 'admin' || this.state.members.some((m) => m.project_id === projectId && m.user_id === user.id)
+    if (!member) throw new ProviderError('forbidden', '등록 소통은 이 행사의 담당자만 볼 수 있습니다.')
+    return user
+  }
+
+  async listRegistrationNotes(projectId: UUID): Promise<RegistrationNote[]> {
+    this.mustFindProject(projectId)
+    this.assertNoteMember(projectId)
+    return this.state.registration_notes
+      .filter((n) => n.project_id === projectId)
+      .sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id))
+  }
+
+  async createRegistrationNote(projectId: UUID, input: RegistrationNoteInput): Promise<RegistrationNote> {
+    this.mustFindProject(projectId)
+    const user = this.assertNoteMember(projectId)
+    this.assertWritable(projectId)
+    const body = input.body.trim()
+    if (!body) throw new ProviderError('validation', '메모 내용이 비어 있습니다.')
+    if (body.length > RELAY_BODY_MAX) throw new ProviderError('validation', `메모는 ${RELAY_BODY_MAX}자까지 남길 수 있습니다.`)
+    // 멘션은 이 행사 멤버만 남긴다(주소록 밖·다른 행사 사람은 조용히 뺀다 — 서버 SQL도 같은 규칙)
+    const memberIds = new Set(this.state.members.filter((m) => m.project_id === projectId).map((m) => m.user_id))
+    const mention_ids = normalizeMentionIds(input.mention_ids).filter((id) => memberIds.has(id))
+    const note: RegistrationNote = {
+      id: this.nextId('rnt'),
+      project_id: projectId,
+      author_id: user.id,
+      body,
+      mention_ids,
+      slack_posted_at: null,
+      created_at: nowIso(),
+    }
+    this.state.registration_notes.push(note)
+    return note
   }
 
   async listAttendees(projectId: UUID): Promise<AttendeeWithRsvp[]> {

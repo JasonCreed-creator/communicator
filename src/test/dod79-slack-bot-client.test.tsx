@@ -32,6 +32,7 @@ function fakeClient(over: Partial<NotifyClient> = {}): NotifyClient {
     pingToken: () => undefined,
     test: async () => ({ sent: true, channel: 'thread' }),
     remind: async () => ({ sent: true, total: 1 }),
+    relay: async () => ({ sent: true, channel: 'thread', mentioned: 0 }),
     ...over,
   }
 }

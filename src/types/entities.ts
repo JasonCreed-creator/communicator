@@ -295,6 +295,22 @@ export interface Comment {
   visibility: CommentVisibility
   body: string
   created_at: IsoDateTime
+  /** v2.22.3 §4-25 — 사람이 'Slack에 올리기'를 눌러 마지막으로 올린 시각(서버가 적는다 · 자동 전송 없음). 없으면 null */
+  slack_posted_at?: IsoDateTime | null
+}
+
+// §4-25 registration_notes (v2.22.3 · Phase 6.17) — 등록 탭 담당자 소통 메모. 담당자(멤버)만(RLS) · 개인 명단은 싣지 않는다
+export interface RegistrationNote {
+  id: UUID
+  project_id: UUID
+  /** 주소록 사람 — 사람이 지워지면 null */
+  author_id: UUID | null
+  body: string
+  /** 남길 때 멘션한 담당자(이 행사 멤버만) — Slack 올리기의 기본 선택 */
+  mention_ids: UUID[]
+  /** 사람이 'Slack에 올리기'를 눌러 마지막으로 올린 시각 */
+  slack_posted_at: IsoDateTime | null
+  created_at: IsoDateTime
 }
 
 // §4-8 milestones

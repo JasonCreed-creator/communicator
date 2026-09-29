@@ -1,16 +1,20 @@
 // 항목 상세 코멘트 — 디자인지시서 v1.4 §7-2.7 (캔버스 항목 상세). 옛 체크박스 "발주처에 공유(shared)"를
 // 두 갈래 토글(내부 메모 · 발주처와 공유)로 바꿨다 — 누가 보는지를 쓰기 전에 고르고, 기본은 내부 메모(CLAUDE.md §6).
 // 목록은 칩으로 거른다(전체 · 내부 메모 · 발주처와 공유). 공유 건은 steel 틴트 면 — 발주처 화면에도 보이는 글이다.
+// v2.22.3(Phase 6.17) — 코멘트마다 'Slack에 올리기'(SlackRelayPanel — 사람이 누른다 · 다중 멘션 · 태그). 자동 전송 없음(기획자님 #1).
 import { useState, type FormEvent } from 'react'
 import ErrorAlert from '../internal/ErrorAlert'
 import FilterChip from '../internal/FilterChip'
 import SegmentedToggle from '../internal/SegmentedToggle'
+import SlackRelayPanel from '../internal/SlackRelayPanel'
 import { LevelBadge } from '../internal/StatusBadge'
 import { useMutation } from '../../hooks/useAsync'
 import { formatDateTime } from '../../lib/labels'
+import { relayAreaOf } from '../../lib/slackRelay'
 import { getDataProvider } from '../../providers'
 import type { Comment } from '../../types/entities'
-import type { CommentVisibility } from '../../types/enums'
+import type { CommentVisibility, DeliverableArea } from '../../types/enums'
+import type { MemberWithProfile } from '../../types/views'
 
 const provider = getDataProvider()
 
@@ -22,6 +26,9 @@ export default function CommentThread({
   memberName,
   hasPartner = false,
   onAdded,
+  projectId,
+  area,
+  members,
 }: {
   deliverableId: string
   comments: Comment[]
@@ -29,6 +36,10 @@ export default function CommentThread({
   /** 파트너 제출 항목 — 공유 상대가 발주처가 아니라 파트너다 */
   hasPartner?: boolean
   onAdded: () => void
+  /** v2.22.3 — 있으면 코멘트마다 'Slack에 올리기'(행사 스레드 · 멘션 = 이 행사 멤버). 없으면 옛 화면 그대로 */
+  projectId?: string
+  area?: DeliverableArea
+  members?: readonly MemberWithProfile[]
 }) {
   const who = hasPartner ? '파트너' : '발주처'
   const sharedLabel = `${who}와 공유`
@@ -95,6 +106,17 @@ export default function CommentThread({
                     <span className="t-caption">{formatDateTime(c.created_at)}</span>
                   </div>
                   <p className="mt-1 whitespace-pre-wrap text-sm leading-5 text-ink">{c.body}</p>
+                  {projectId && (
+                    <SlackRelayPanel
+                      projectId={projectId}
+                      kind="comment"
+                      targetId={c.id}
+                      area={relayAreaOf('comment', area)}
+                      members={members ?? []}
+                      postedAt={c.slack_posted_at ?? null}
+                      onPosted={onAdded}
+                    />
+                  )}
                 </div>
               </li>
             )

@@ -4,7 +4,8 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { primaryRole } from '../../../src/lib/roles.js'
 import type { MemberRole } from '../../../src/types/enums.js'
-import type { EventRow, ManualRow, ReminderRow } from './format.js'
+import type { RelayKind } from '../../../src/lib/slackRelay.js'
+import type { EventRow, ManualRow, RelayRow, ReminderRow } from './format.js'
 
 /** 봇이 올린 의뢰 카드 한 장의 기록(항목마다 한 행) */
 export interface CardRecord {
@@ -62,6 +63,11 @@ export interface NotifyStore {
   /** Slack ID·이메일 → 주소록 사람 */
   profileBySlack(slackUserId: string): Promise<{ id: string; name: string } | null>
   profileByEmail(email: string): Promise<{ id: string; name: string } | null>
+  // ── v2.22.3 사람이 올리는 글(Phase 6.17) ──
+  /** 코멘트·등록 메모 한 건 선점 + 글·작성자·스레드·멘션(이 행사 멤버만) — 없으면 null */
+  claimRelay(kind: RelayKind, id: string, mentionIds: string[], tag: string): Promise<RelayRow | null>
+  /** 보낸 뒤 slack_posted_at 기록(화면 배지) */
+  markRelayed(kind: RelayKind, id: string): Promise<void>
 }
 
 export function notifyStoreConfigured(env: NotifyStoreEnv): boolean {
@@ -165,6 +171,20 @@ export function createSupabaseNotifyStore(env: NotifyStoreEnv): NotifyStore {
       const { data } = await admin.from('profiles').select('id, display_name').ilike('email', email.replace(/[%_\\]/g, '\\$&')).limit(1).maybeSingle()
       const row = data as { id: string; display_name: string } | null
       return row ? { id: row.id, name: row.display_name } : null
+    },
+    async claimRelay(kind, id, mentionIds, tag) {
+      if (!UUID_RE.test(id)) return null
+      const row = await rpc<RelayRow | null>('notify_claim_relay', {
+        p_kind: kind,
+        p_id: id,
+        p_mentions: mentionIds.filter((m) => UUID_RE.test(m)),
+        p_tag: tag,
+      })
+      return row ?? null
+    },
+    async markRelayed(kind, id) {
+      if (!UUID_RE.test(id)) return
+      await rpc<void>('notify_mark_relayed', { p_kind: kind, p_id: id })
     },
   }
 }
