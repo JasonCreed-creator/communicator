@@ -81,10 +81,12 @@ describe('DoD 69 · ① 제안 — 행·버킷·부가세', () => {
     expect(parsed.rows.find((r) => r.section.includes('기획료'))?.bucket_code).toBeNull()
   })
 
-  it('버킷 제안: 원가 없는 버킷(s5·rc·ld)은 절대 제안하지 않고 · 행사 추가 버킷 이름이 들어 있으면 그 버킷', async () => {
+  it('버킷 제안: 원가 없는 버킷(s5·ld)은 절대 제안하지 않고(v2.22.2 — rc는 원가 버킷) · 행사 추가 버킷 이름이 들어 있으면 그 버킷', async () => {
     const all = await buckets()
     expect(suggestBucket('6. PCO 기획료', '기획료', all)).toEqual({ bucket_code: null, confidence: 'low' })
-    expect(suggestBucket('모객', 'RSVP 운영', all).bucket_code).toBeNull()
+    // v2.22.2 — RSVP 운영비(rc)는 원가 버킷이라 모객·RSVP 행을 제안한다(전에는 원가 없음이라 제안하지 않았다)
+    expect(suggestBucket('모객', 'RSVP 운영', all)).toEqual({ bucket_code: 'rc', confidence: 'high' })
+    expect(suggestBucket('리드젠', '쇼업 보장', all).bucket_code).toBeNull()
     // v2.22.1 — '등록·명찰'은 참관객 관리(at · 원가 있음)라 제안한다(전에는 '등록'이 모객(rc)이라 명찰 협력사 견적이 버킷 없이 남았다)
     expect(suggestBucket('등록 · 명찰', '명찰 출력', all)).toEqual({ bucket_code: 'at', confidence: 'high' })
     const custom: SettlementBucket = { ...all[0], id: 'bkt-gift', code: 'gift', label: '기념품', source: 'custom', has_cost: true }
@@ -241,7 +243,9 @@ describe('DoD 69 · ④ 화면 — 정산보드에서 불러오기', () => {
     const dialog = await screen.findByTestId('vendor-quote-dialog')
     const options = within(within(dialog).getByLabelText('1번 버킷')).getAllByRole('option').map((o) => o.textContent)
     expect(options).not.toContain('PCO 기획료')
-    expect(options).not.toContain('RSVP 운영비')
+    expect(options).not.toContain('리드젠(쇼업 보장)')
+    // v2.22.2 — RSVP 운영비는 원가 버킷이라 선택지에 있다(기획자님 #7 "RSVP 비용도 발주처럼")
+    expect(options).toContain('RSVP 운영비')
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     await userEvent.click(within(dialog).getByRole('button', { name: '버리기' }))
     await waitFor(() => expect(screen.queryByTestId('vendor-quote-dialog')).toBeNull())

@@ -1,6 +1,6 @@
 -- ═══════════════════════════════════════════════════════════════════════
 -- MICE 커뮤니케이터 · Supabase setup.sql (생성물 — 직접 편집 금지)
--- 원본: supabase/migrations/ 38개 파일을 파일명 순으로 이어 붙였다.
+-- 원본: supabase/migrations/ 39개 파일을 파일명 순으로 이어 붙였다.
 -- 재생성: node scripts/supabase-build-setup.mjs
 --
 -- 사용법(설계서 §18-3 · §20 T1): 새 Supabase 프로젝트 → SQL Editor → 이 파일 전문을 붙여 넣고 Run 1회.
@@ -5367,6 +5367,18 @@ create policy request_acks_select on request_acks for select to authenticated us
 alter table quote_imports drop constraint if exists quote_imports_format_check;
 alter table quote_imports add constraint quote_imports_format_check check (format in ('A','B','C','P','ai'));
 -- <<< 20260928000600_quote_import_budget_format.sql
+
+-- >>> 20260928000700_rsvp_cost_bucket.sql
+-- ─────────────────────────────────────────────────────────────────────
+-- 20260928000700 · 정산 RSVP 운영비(rc) = 원가 버킷 (설계서 v2.22.2 §19.1·§19.2 · Phase 6.18, 2026-09-28 —
+--   기획자님 #7 "정산에서 RSVP에 소요되는 비용도 발주처럼 만들어줄 것")
+--
+--   · 기존 보드의 rc 버킷 has_cost=false → true (발주·실비 입력 허용 · 트리거 app.guard_settlement_item_cost는 그대로 플래그를 읽는다 ·
+--     새 보드는 앱 스냅숏(quoteBucketSpec)이 처음부터 true로 만든다)
+--   · 마진 식 불변 — 실비가 없으면 마크업 = 견적액 전액(전과 같은 값) · 금액·항목·정책·RPC 불변 · 파괴적 문장 0(플래그 갱신 1문장)
+
+update settlement_buckets set has_cost = true where code = 'rc' and has_cost = false;
+-- <<< 20260928000700_rsvp_cost_bucket.sql
 
 -- ═══════════════════════════════════════════════════════════════════════
 -- setup.sql 끝. 다음 두 줄은 필요할 때만 본인 값으로 바꿔 실행한다(§18-2 · §20 T1).

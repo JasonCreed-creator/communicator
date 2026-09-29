@@ -19,6 +19,7 @@ import ErrorAlert from '../components/internal/ErrorAlert'
 import { LevelBadge } from '../components/internal/StatusBadge'
 import { canUseQuotes } from '../components/quote/QuoteGate'
 import { ActionIcon } from '../components/quote/quoteIcons'
+import HostProfitCard from '../components/settlement/HostProfitCard'
 import SettlementBucketTable from '../components/settlement/SettlementBucketTable'
 import SettlementItems from '../components/settlement/SettlementItems'
 import SettlementKpis from '../components/settlement/SettlementKpis'
@@ -32,7 +33,7 @@ import { computeQuoteOutputs } from '../modules/quote/engine/quoteInput'
 import { getDataProvider } from '../providers'
 import type { SettlementItemInput } from '../providers/DataProvider'
 import type { Quote } from '../types/entities'
-import type { VendorQuoteImportView } from '../types/views'
+import type { PartnerWithProgress, VendorQuoteImportView } from '../types/views'
 import type { ReactNode } from 'react'
 
 const provider = getDataProvider()
@@ -122,6 +123,12 @@ export default function SettlementPage() {
   const vendors = useAsync(() => provider.listVendors(), [])
   const members = useAsync(() => provider.listMembers(projectId), [projectId])
   const hasBoard = !!board.data
+  // v2.22.2(Phase 6.18) — 주최형은 파트너 계약액(수입) − 지출이 관심사(§19.9). 파트너 목록은 주최형에서만 읽는다(내부 전용 카드)
+  const isHost = summary?.kind === 'host'
+  const partners = useAsync(
+    () => (isHost ? provider.listPartners(projectId) : Promise.resolve([] as PartnerWithProgress[])),
+    [projectId, isHost],
+  )
   // 협력사 견적서는 정산보드에 붙는다 — 보드가 생기면 다시 읽는다
   const vqImports = useAsync(() => provider.listVendorQuoteImports(projectId), [projectId, hasBoard])
   // 견적 목록은 app_role 게이트 대상이라(§6.1) 권한 있는 사용자에게만 부른다.
@@ -537,6 +544,11 @@ export default function SettlementPage() {
           )}
           <ErrorAlert message={rebase.error} />
         </section>
+      )}
+
+      {/* v2.22.2 — 주최형 손익(§19.9): 수입(파트너 계약액) − 지출. 마진 식·버킷에는 손대지 않는다 */}
+      {isHost && (
+        <HostProfitCard partners={partners.data ?? []} buckets={view.buckets.map((b) => b.bucket)} totals={totals} loading={partners.loading} />
       )}
 
       {/* KPI 4 (§19.1) — 검산 배지·마진 구성 막대는 최종 마진 칸 */}

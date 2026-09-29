@@ -4,12 +4,14 @@
 // "읽은 결과는 항상 담당자 확인을 거쳐 저장한다(오독이 곧 정산 오류가 된다)." 그래서 여기서는 **제안만** 만든다.
 //   · 행: 견적서의 항목 행 전부 + (항목 밖에 있을 때) 협력사 대행료·관리비 + 절사·조정. 행 합 = 공급가(부가세 전)
 //   · 버킷: ① 행사별 추가 버킷 이름이 그대로 들어 있으면 그 버킷 ② 섹션 이름 ③ 항목 이름 — 키워드 규칙은 견적서 임포트(§22.2-6)
-//     정본(`mapSectionName`)을 그대로 쓴다. **원가 버킷(has_cost)만** 제안한다 — s5(PCO 기획료)·rc·ld는 원가가 없어
-//     협력사 비용을 담을 수 없다(R-S4). 못 고르면 null(확인 큐가 묻는다)
+//     정본(`mapSectionName`)을 그대로 쓴다. **원가 버킷(has_cost)만** 제안한다 — s5(PCO 기획료)·ld(리드젠)는 원가가 없어
+//     협력사 비용을 담을 수 없다(R-S4). (v2.22.2) rc(RSVP 운영비)는 원가 버킷 — 모객 행 중 쇼업·리드젠 표기(§19.2 분할 규칙)만 뺀다.
+//     못 고르면 null(확인 큐가 묻는다)
 //   · 부가세: 부가세 줄이 따로 있으면 항목은 별도(확실) · '별도' 표기면 별도(확실) · '포함' 표기뿐이면 포함으로 제안하되 묻는다 ·
 //     아무 표기도 없으면 제안 없이 묻는다(추측 금지)
 // 파서는 견적서 임포트와 같은 것(`parseQuoteWorkbook` — A·B·C형)을 쓴다. 실서식 보정은 사용자 실샘플을 받은 뒤(가정 — §19.5 v2.11).
 import { mapSectionName } from '../modules/quote/import/buckets'
+import { RECRUIT_SHOWUP_HINT } from '../modules/quote/import/recruitSplit'
 import { parseQuoteWorkbook } from '../modules/quote/import/parser'
 import { ProviderError } from './errors'
 import type { ParsedQuoteCheck, ParsedQuoteDoc, ParsedQuoteTotals } from '../modules/quote/import/types'
@@ -69,7 +71,8 @@ const ENGINE_TO_BUCKET: Record<string, string | null> = {
   options: 'ot',
   attendee: 'at',
   s5: null,
-  recruit: null,
+  // v2.22.2 — RSVP 운영비(rc)는 원가 버킷(§19.2 · 기획자님 #7) — 모객·RSVP 협력사 견적 행을 제안할 수 있다
+  recruit: 'rc',
   custom: null,
 }
 
@@ -96,7 +99,9 @@ export function suggestBucket(
   for (const name of [section, title]) {
     if (!name.trim()) continue
     const m = mapSectionName(name)
-    const code = m.confidence === 'high' ? (ENGINE_TO_BUCKET[m.bucket] ?? null) : null
+    let code = m.confidence === 'high' ? (ENGINE_TO_BUCKET[m.bucket] ?? null) : null
+    // 모객 행 중 쇼업·리드젠 표기는 ld(원가 없음 — §19.2 분할과 같은 표기)라 제안하지 않는다
+    if (code === 'rc' && RECRUIT_SHOWUP_HINT.test(text)) code = null
     if (code && cost.some((b) => b.code === code)) return { bucket_code: code, confidence: 'high' }
   }
   return { bucket_code: null, confidence: 'low' }

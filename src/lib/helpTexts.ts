@@ -53,7 +53,7 @@ export const PARTNER_KPI_HELP = {
 export const SETTLEMENT_KPI_HELP = {
   contract: '마진 기준 계약액 — 마진 계산에 들어가는 버킷의 견적액 합입니다(리드젠 제외).',
   spent: '실집행 — 원가가 있는 버킷의 실비 합입니다.',
-  margin: '최종 마진 = 항목별 마크업 + PCO 기획료 + RSVP 운영비 (리드젠 제외 — §19.1 정본).',
+  margin: '최종 마진 = 항목별 마크업(RSVP 운영비 포함) + PCO 기획료 (리드젠 제외 — §19.1 정본).',
   marginRate: '마진율 = 최종 마진 ÷ 마진 기준 계약액.',
   identity:
     '검산 — "마진 기준 계약액 − Σ실집행 = 최종 마진" 항등식을 확인합니다. 어긋나면 버킷 플래그 설정을 점검하세요.',

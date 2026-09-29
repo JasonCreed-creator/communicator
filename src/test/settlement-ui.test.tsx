@@ -49,7 +49,8 @@ describe('S-10 정산보드 화면', () => {
     renderRoute('/settlement')
     expect(await screen.findByTestId('margin-seg-variable')).toBeTruthy()
     expect(screen.getByTestId('margin-seg-s5')).toBeTruthy()
-    expect(screen.getByTestId('margin-seg-rc')).toBeTruthy()
+    // v2.22.2 — RSVP 운영비는 원가 버킷(항목 마크업 쪽)이라 고정 구간이 아니다
+    expect(screen.queryByTestId('margin-seg-rc')).toBeNull()
   })
 
   it('협력사 견적서 불러오기가 숨지 않고 pm에게 열려 있다(PR-7: 머리의 채운 버튼)', async () => {

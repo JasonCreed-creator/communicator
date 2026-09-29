@@ -42,7 +42,7 @@ import {
   toVatExcluded,
 } from '../../../lib/settlement'
 import { computeQuoteOutputs } from '../../../modules/quote/engine/quoteInput'
-import { splitRecruit } from '../../../modules/quote/import/recruitSplit'
+import { buildImportedBreakdown } from '../../../modules/quote/import/importedBreakdown'
 import type { ParsedQuoteDoc, SectionMapping } from '../../../modules/quote/import/types'
 
 type SettlementDomain = Pick<
@@ -140,16 +140,18 @@ async function itemsOfBucket(ctx: SupabaseCtx, bucketId: UUID): Promise<Settleme
  * 재유도하지 않고 **엔진 산출값(rsvpPkg·showup)을 그대로** 쓴다.
  */
 /**
- * v2.20.2 — 가져온 견적인데 모객 분할이 기록되기 전(옛 임포트)이면 가져오기 기록(quote_imports)에서 다시 나눈다.
- * 기록이 없거나 보이지 않으면 breakdown 그대로(엔진 값 0 — 화면에서 버킷 견적 금액을 손으로 고칠 수 있다 §19.2).
+ * v2.22.2 — 가져온 견적은 가져오기 기록(quote_imports의 parsed·mapping)에서 **지금 규칙으로** breakdown을 다시 만든다
+ * (총액 블록 대행료 → s5 · custom 섹션 · 모객 rc/ld 분할 — 확정과 같은 함수 buildImportedBreakdown). 옛 임포트(대행료 빠짐 ·
+ * 분할 기록 없음)도 '기준 견적 갱신' 한 번으로 바로잡힌다(실사용 2026-09-28: 세부 산출내역서 보드의 버킷 합이 공급가보다 대행료만큼 작았다).
+ * 기록이 없거나 보이지 않으면 breakdown 그대로(화면에서 버킷 견적 금액을 손으로 고칠 수 있다 §19.2).
  */
 async function breakdownForSnapshot(ctx: SupabaseCtx, quote: Quote): Promise<QuoteBreakdown> {
-  if (quote.source !== 'imported' || quote.breakdown.recruit_rsvp !== undefined || !quote.breakdown.recruit) return quote.breakdown
+  if (quote.source !== 'imported') return quote.breakdown
   try {
     const res = await ctx.sb.from('quote_imports').select('parsed, mapping').eq('quote_id', quote.id).maybeSingle()
     const imp = (res.data ?? null) as { parsed: ParsedQuoteDoc; mapping: SectionMapping[] } | null
-    const split = imp ? splitRecruit(imp.parsed, imp.mapping) : null
-    return split ? { ...quote.breakdown, recruit_rsvp: split.rsvp, recruit_showup: split.showup } : quote.breakdown
+    if (!imp || !Array.isArray(imp.parsed?.sections) || !Array.isArray(imp.mapping)) return quote.breakdown
+    return buildImportedBreakdown(imp.parsed, imp.mapping).breakdown
   } catch {
     return quote.breakdown
   }

@@ -399,7 +399,7 @@ export function VendorQuoteDialog({
                   </p>
                 ))}
               </div>
-              <p className="text-xs text-ink-cap">원가가 없는 버킷(PCO 기획료·RSVP·리드젠)은 고를 수 없습니다.</p>
+              <p className="text-xs text-ink-cap">원가가 없는 버킷(PCO 기획료·리드젠)은 고를 수 없습니다.</p>
             </div>
 
             <ErrorAlert message={confirm.error ?? discard.error} />

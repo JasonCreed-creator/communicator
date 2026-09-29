@@ -11,6 +11,8 @@
 //
 // 항등식: `마진 기준 계약액 − Σ실집행 = 최종 마진`. 어긋나면 버킷 플래그가 잘못된 것이므로
 // 화면 상단에 경고를 띄운다(§19.1).
+// (v2.22.2 · Phase 6.18) 원가 없는 기본 버킷 = s5(PCO 기획료) · ld(리드젠) 둘 — rc(RSVP 운영비)는 원가 버킷이 됐다
+// (실제로 콜센터·발송·명단 관리 협력사에 발주가 나간다 · 기획자님 #7). 식은 그대로: 실비가 없는 동안은 마크업 = 견적액 전액.
 //
 // 순수 함수만 둔다 — 화면·provider와 분리해 단위 테스트로 먼저 잠근다.
 import type { SettlementBucket, SettlementItem } from '../types/entities'
@@ -37,7 +39,7 @@ export function bucketOrdered(bucket: SettlementBucket, items: SettlementItem[])
 }
 
 /**
- * 항목 마크업. `has_cost=false` 버킷(PCO 기획료·RSVP 운영비·리드젠)은 원가가 없으므로
+ * 항목 마크업. `has_cost=false` 버킷(PCO 기획료·리드젠 — v2.22.2부터 RSVP 운영비는 원가 버킷)은 원가가 없으므로
  * 견적액 전체가 마크업이다 — 실물 시트의 실집행 합계 수식이 그 섹션들을 아예 더하지 않는다.
  */
 export function bucketMarkup(bucket: SettlementBucket, items: SettlementItem[]): number {
@@ -181,7 +183,9 @@ export function quoteBucketSpec(
     { code: 'ot', label: '추가옵션', quote_amount: breakdown.options, has_cost: true, is_margin_base: true },
     { code: 'at', label: '참관객 관리', quote_amount: breakdown.attendee, has_cost: true, is_margin_base: true },
     { code: 's5', label: 'PCO 기획료', quote_amount: breakdown.s5, has_cost: false, is_margin_base: true },
-    { code: 'rc', label: 'RSVP 운영비', quote_amount: rsvp, has_cost: false, is_margin_base: true },
+    // v2.22.2(Phase 6.18) — RSVP 운영비는 **원가 버킷**: 콜센터·리마인드 발송·명단 관리 협력사에 실제로 발주가 나간다
+    // (기획자님 #7 "정산에서 RSVP에 소요되는 비용도 발주처럼"). 마진 식은 그대로 — 실비가 없으면 마크업 = 견적액 전액(전과 같은 값)
+    { code: 'rc', label: 'RSVP 운영비', quote_amount: rsvp, has_cost: true, is_margin_base: true },
     // 리드젠(쇼업 보장)은 외부 매체비 성격이라 마진 기준 계약액에서 뺀다(§19.1)
     { code: 'ld', label: '리드젠(쇼업 보장)', quote_amount: showup, has_cost: false, is_margin_base: false },
     ...custom,
@@ -192,4 +196,34 @@ export function quoteBucketSpec(
 export function customBucketLabel(sectionName: string): string {
   const stripped = sectionName.replace(/^\s*\d+(?:[.\-]\d+)*[.)]?\s*/, '').trim()
   return stripped || sectionName.trim()
+}
+
+// ── (v2.22.2 · Phase 6.18) 주최형 손익 — 설계서 §19.9 ─────────────────────
+// 주최형(kind='host')은 발주처 계약액이 아니라 **파트너 계약액(수입) − 지출**이 관심사다(실물 워킹버짓 = 수입 표 + 지출 표).
+//   수입       = Σ 파트너 contract_amount … status='withdrawn' 제외
+//   지출 예산   = Σ 버킷 quote_amount     … 전 버킷(주최형의 기준 견적 = 예산 워크북 P형 지출 표)
+//   실집행     = Σ 실비                  … computeTotals.totalActual 그대로
+//   손익(예산) = 수입 − 지출 예산 · 손익(실집행) = 수입 − 실집행
+// 마진 식(§19.1)·버킷 플래그·항등식에는 손대지 않는다 — 별도 카드에서 읽기만(Phase 3.18 금지: S-10에 매출 버킷 주입 금지).
+// 내부 전용 — 파트너 포털·발주처 지면에는 어떤 키로도 나가지 않는다(R-H2·R-H3 · §19.7).
+export interface HostProfit {
+  /** 수입에 센 파트너 수(철회 제외) */
+  partnerCount: number
+  revenue: number
+  budget: number
+  actual: number
+  profitPlanned: number
+  profitActual: number
+}
+
+export function hostProfit(
+  partners: readonly { contract_amount: number | null; status: string }[],
+  buckets: readonly Pick<SettlementBucket, 'quote_amount'>[],
+  totals: Pick<SettlementTotals, 'totalActual'>,
+): HostProfit {
+  const counted = partners.filter((p) => p.status !== 'withdrawn')
+  const revenue = counted.reduce((s, p) => s + (p.contract_amount ?? 0), 0)
+  const budget = buckets.reduce((s, b) => s + b.quote_amount, 0)
+  const actual = totals.totalActual
+  return { partnerCount: counted.length, revenue, budget, actual, profitPlanned: revenue - budget, profitActual: revenue - actual }
 }
