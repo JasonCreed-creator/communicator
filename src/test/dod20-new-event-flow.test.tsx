@@ -26,7 +26,8 @@ describe('DoD-20 새 행사 흐름·유도', () => {
     expect(created.onboarded).toBe(false)
 
     // ① 필수 입력 채우고 다음 (코드는 자동 제안값 유지)
-    const nameInput = screen.getByLabelText('행사명') as HTMLInputElement
+    // 필드는 ProjectOverviewForm의 자체 async 로드 뒤에 붙는다(헤더보다 늦음)
+    const nameInput = (await screen.findByLabelText('행사명')) as HTMLInputElement
     expect(nameInput.value).toBe('새 행사')
     await userEvent.clear(nameInput)
     await userEvent.type(nameInput, '신규 워크숍 2026')
